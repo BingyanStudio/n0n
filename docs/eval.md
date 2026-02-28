@@ -104,6 +104,32 @@ interface ExecToolResult {
 1. ~~`type SearchSpace = "all" & "memory" & "skill" & "history"`~~ → `"all" | "memory" | "skill" | "history"`
 2. ~~`delegateTask` 返回 `TaskResult<T>` 但下方定义为 `SubagentResult<T>`~~ → 统一为 `TaskResult<T>`
 
-## 五、下一步
+## 五、已确认事项
 
-确认 demo 场景和 LLM 选型后，开始 Phase 1 脚手架和核心循环实现。
+### LLM 配置
+
+MVP 使用统一模型，通过 `.env` 配置：
+- `LLM_BASE_URL`
+- `LLM_API_KEY`
+- `LLM_MODEL`
+
+不做多 provider 适配，一个好模型跑全场。
+
+### Demo 场景（3 个）
+
+| # | 场景 | 展示能力 |
+|---|------|---------|
+| 1 | "帮我每天早上总结 Hacker News 热门并发邮件" | 定时触发 + subagent + skill 组合 |
+| 2 | "分析这个 CSV 找出异常" | exec + 数据处理 |
+| 3 | "创建一个天气查询 skill，然后在新 workflow 里用它" | 自扩展（AI 创建 skill → 使用 skill） |
+
+### 需要补充的能力：定时触发器（scheduler）
+
+demo 场景 1 意味着系统需要一个**常驻的定时触发器**：
+- 持久化的任务调度表（cron 表达式 / 一次性时间点）
+- 触发循环：到时拉起 `delegateTask` 调用流程
+- 已补充到 draft 中
+
+## 六、下一步
+
+开始 Phase 1：项目脚手架 + DomainMessage + Agent Loop + subagent 核心循环实现。
