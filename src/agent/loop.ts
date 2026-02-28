@@ -123,8 +123,23 @@ export async function agentLoop<T = unknown>(
 		// 有工具调用
 		idleCount = 0;
 
-		// 解析工具调用记录
-		const toolCalls = parseToolCalls(assistantMsg.tool_calls ?? []);
+		// 解析工具调用记录，过滤掉畸形的 tool call（空 name 或 args 解析失败）
+		const VALID_TOOLS = new Set(["exec", "write", "reminder", "submit"]);
+		const toolCalls = parseToolCalls(assistantMsg.tool_calls ?? []).filter(
+			(tc) => VALID_TOOLS.has(tc.tool) && !tc.args._parseError,
+		);
+
+		// 过滤后无有效 tool call → 视为纯文本回复
+		if (toolCalls.length === 0) {
+			const content = assistantMsg.content ?? "";
+			idleCount++;
+			messages.push({ type: "assistant_text", content });
+			if (idleCount >= config.agent.maxIdleRounds) {
+				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
+				return { result: content as T, report: "Agent terminated: max idle rounds exceeded (no tool calls)", history: messages };
+			}
+			continue;
+		}
 		const toolCallMsg: AssistantToolCallMessage = {
 			type: "assistant_tool_call",
 			content: assistantMsg.content,
