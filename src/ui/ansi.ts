@@ -29,6 +29,7 @@ export const style = {
 	cyan: pc.cyan,
 	bold: pc.bold,
 	white: pc.white,
+	bgGreen: pc.bgGreen,
 } as const;
 
 // ── 光标控制（写入 stderr） ──

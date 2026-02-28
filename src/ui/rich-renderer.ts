@@ -2,13 +2,27 @@
  * RichRenderer — 富终端 UI 渲染器
  *
  * 彩色角色标签、流式 thinking/content、diff 格式 write 显示、
- * LiveRegion 行替换（流式参数 → 最终摘要）。
+ * 工具输出渲染（超长折叠）、LiveRegion 行替换。
  */
 
 import type { ToolCallRecord, ToolResult } from "../types/domain.ts";
 import { label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
 import type { Renderer } from "./renderer.ts";
+
+/** 截断过长文本：保留头部 headLen + 尾部 tailLen，中间折叠 */
+function truncateMiddle(
+	text: string,
+	maxLen = 1000,
+	headLen = 200,
+	tailLen = 800,
+): string {
+	if (text.length <= maxLen) return text;
+	const head = text.slice(0, headLen);
+	const tail = text.slice(-tailLen);
+	const omitted = text.length - headLen - tailLen;
+	return `${head}\n${style.gray(`... (${omitted} chars omitted) ...`)}\n${tail}`;
+}
 
 export class RichRenderer implements Renderer {
 	private toolRegion = new LiveRegion();
@@ -21,15 +35,9 @@ export class RichRenderer implements Renderer {
 	}
 
 	roundStart(round: number, maxRounds: number, msgCount: number): void {
-		if (round === 1) {
-			writeln();
-			write(label.agent());
-			writeln(
-				`  ${style.gray(`round ${round}/${maxRounds} (${msgCount} msgs)`)}`,
-			);
-		} else {
-			writeln(style.gray(`  round ${round}/${maxRounds} (${msgCount} msgs)`));
-		}
+		writeln();
+		write(label.agent());
+		writeln(style.gray(`  round ${round}/${maxRounds} (${msgCount} msgs)`));
 	}
 
 	thinkingToken(token: string): void {
@@ -54,22 +62,19 @@ export class RichRenderer implements Renderer {
 			writeln(content);
 		}
 		writeln(
-			style.gray(
-				`  (text response, ${content.length} chars, idle=${idleCount})`,
-			),
+			style.gray(`(text response, ${content.length} chars, idle=${idleCount})`),
 		);
 	}
 
 	toolCallStart(tc: ToolCallRecord): void {
 		this.toolRegion.reset();
-		writeln();
 		const toolName = style.cyan(tc.tool);
 
 		switch (tc.tool) {
 			case "exec": {
 				const cmd = (tc.args as { command?: string }).command ?? "";
 				this.toolRegion.writeln(
-					`  ${style.dim("▸")} ${toolName} ${style.gray(cmd.slice(0, 100))}`,
+					`${style.dim("▸")} ${toolName} ${style.gray(cmd.slice(0, 100))}`,
 				);
 				break;
 			}
@@ -81,54 +86,51 @@ export class RichRenderer implements Renderer {
 				};
 				const path = args.path ?? "";
 				this.toolRegion.writeln(
-					`  ${style.dim("▸")} ${toolName} ${style.gray(`→ ${path}`)}`,
+					`${style.dim("▸")} ${toolName} ${style.gray(`→ ${path}`)}`,
 				);
-				// Show diff-like preview if search/replace
 				if (args.search) {
 					const searchLines = args.search.split("\n");
 					const replaceLines = (args.replace ?? "").split("\n");
 					const maxPreview = 8;
 					for (const line of searchLines.slice(0, maxPreview)) {
-						this.toolRegion.writeln(`    ${style.red(`- ${line}`)}`);
+						this.toolRegion.writeln(`  ${style.red(`- ${line}`)}`);
 					}
 					if (searchLines.length > maxPreview) {
 						this.toolRegion.writeln(
 							style.gray(
-								`    ... (${searchLines.length - maxPreview} more lines)`,
+								`  ... (${searchLines.length - maxPreview} more lines)`,
 							),
 						);
 					}
 					for (const line of replaceLines.slice(0, maxPreview)) {
-						this.toolRegion.writeln(`    ${style.green(`+ ${line}`)}`);
+						this.toolRegion.writeln(`  ${style.green(`+ ${line}`)}`);
 					}
 					if (replaceLines.length > maxPreview) {
 						this.toolRegion.writeln(
 							style.gray(
-								`    ... (${replaceLines.length - maxPreview} more lines)`,
+								`  ... (${replaceLines.length - maxPreview} more lines)`,
 							),
 						);
 					}
 				} else {
 					const lines = (args.replace ?? "").split("\n").length;
-					this.toolRegion.writeln(
-						style.gray(`    (full write, ${lines} lines)`),
-					);
+					this.toolRegion.writeln(style.gray(`  (full write, ${lines} lines)`));
 				}
 				break;
 			}
 			case "reminder": {
 				const content = (tc.args as { content?: string }).content ?? "";
 				this.toolRegion.writeln(
-					`  ${style.dim("▸")} ${toolName} ${style.gray(content.slice(0, 60))}`,
+					`${style.dim("▸")} ${toolName} ${style.gray(content.slice(0, 60))}`,
 				);
 				break;
 			}
 			case "submit": {
-				this.toolRegion.writeln(`  ${style.dim("▸")} ${toolName}`);
+				this.toolRegion.writeln(`${style.dim("▸")} ${toolName}`);
 				break;
 			}
 			default: {
-				this.toolRegion.writeln(`  ${style.dim("▸")} ${toolName}`);
+				this.toolRegion.writeln(`${style.dim("▸")} ${toolName}`);
 			}
 		}
 	}
@@ -144,18 +146,20 @@ export class RichRenderer implements Renderer {
 
 	submitAccepted(): void {
 		writeln();
-		writeln(`  ${style.green("✓")} ${style.bold("submit accepted")}`);
+		writeln(
+			`${style.bgGreen(style.bold(" ✔ DONE "))} ${style.green("submit accepted")}`,
+		);
 	}
 
 	submitRejected(attempt: number, maxAttempts: number, error: string): void {
 		writeln(
-			`  ${style.red("✗")} submit rejected (${attempt}/${maxAttempts}): ${style.gray(error)}`,
+			`${style.red("✗")} submit rejected (${attempt}/${maxAttempts}): ${style.gray(error)}`,
 		);
 	}
 
 	agentTerminated(reason: string): void {
 		writeln();
-		writeln(`  ${style.yellow("⚠")} ${style.gray(reason)}`);
+		writeln(`${style.yellow("⚠")} ${style.gray(reason)}`);
 	}
 
 	// ── 工具结果格式化 ──
@@ -172,23 +176,35 @@ export class RichRenderer implements Renderer {
 						: style.red(`exit=${result.exitCode}`);
 				const outLen = result.stdout.length + result.stderr.length;
 				const cmd = style.gray(result.command.slice(0, 80));
-				return `  ${style.green("✓")} exec ${cmd} ${duration} ${exit} ${style.gray(`${outLen} chars`)}\n`;
+				// 结果摘要行
+				let out = `${style.dim("◂")} ${style.cyan("exec")} ${cmd} ${duration} ${exit} ${style.gray(`${outLen} chars`)}\n`;
+				// 工具输出内容（缩进，表示从属）
+				const output = (
+					result.stdout + (result.stderr ? `\n${result.stderr}` : "")
+				).trim();
+				if (output) {
+					const truncated = truncateMiddle(output);
+					for (const line of truncated.split("\n")) {
+						out += `${style.gray("  │")} ${style.dim(line)}\n`;
+					}
+				}
+				return out;
 			}
 			case "write": {
 				if (!result.success) {
-					return `  ${style.red("✗")} write ${style.gray(result.path)}: ${style.red(result.error ?? "failed")}\n`;
+					return `${style.dim("◂")} ${style.cyan("write")} ${style.gray(result.path)}: ${style.red(result.error ?? "failed")}\n`;
 				}
 				if (result.searchPattern) {
 					const searchLines = result.searchPattern.split("\n").length;
-					return `  ${style.green("✓")} write ${style.gray(result.path)} ${style.gray(`(replaced ${result.replacedCount}× , ~${searchLines} lines)`)}\n`;
+					return `${style.dim("◂")} ${style.cyan("write")} ${style.gray(result.path)} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}\n`;
 				}
-				return `  ${style.green("✓")} write ${style.gray(result.path)} ${style.gray("(full write)")}\n`;
+				return `${style.dim("◂")} ${style.cyan("write")} ${style.gray(result.path)} ${style.gray("(full write)")}\n`;
 			}
 			case "reminder": {
-				return `  ${style.green("✓")} reminder ${style.gray(`(in ${result.delay} rounds)`)}\n`;
+				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)}\n`;
 			}
 			case "submit": {
-				return `  ${style.green("✓")} submit\n`;
+				return `${style.dim("◂")} ${style.cyan("submit")}\n`;
 			}
 		}
 	}

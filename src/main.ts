@@ -205,7 +205,7 @@ async function interactiveLoop(initialInput?: string) {
 			continue;
 		}
 
-		renderer.userMessage(userInput);
+		// 用户输入已通过 prompt 的 label 展示，不重复渲染
 
 		// 主动推送已有 workflow + schedule 列表
 		const [existing, schedules] = await Promise.all([
