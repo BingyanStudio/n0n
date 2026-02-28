@@ -17,7 +17,7 @@ export class RichRenderer implements Renderer {
 	userMessage(content: string): void {
 		writeln();
 		writeln(label.user());
-		writeln(`${style.white("> ")}${content}`);
+		writeln(content);
 	}
 
 	roundStart(round: number, maxRounds: number, msgCount: number): void {
@@ -38,7 +38,7 @@ export class RichRenderer implements Renderer {
 	}
 
 	contentToken(token: string): void {
-		write(style.white(token));
+		write(token);
 		this.hasStreamContent = true;
 	}
 
@@ -51,7 +51,7 @@ export class RichRenderer implements Renderer {
 
 	textResponse(content: string, idleCount: number): void {
 		if (content) {
-			writeln(style.white(content));
+			writeln(content);
 		}
 		writeln(
 			style.gray(
