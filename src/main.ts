@@ -91,7 +91,8 @@ submit: { result: "workflows/tasks/fetch-danbooru-cat-ears.ts" }
 7. **Follow-up tasks**: when the user adds a requirement to a previous workflow, modify the SAME file or import it in a new task.
 8. **Submit = file path**: always submit the workflow file path as your result, not the execution output.
 9. **Need info?** submit \`{ ok: false, error: "what you need" }\`
-10. **Bail out on repeated failure**: if the same operation (API call, command, etc.) fails 3 times in a row, STOP retrying. Submit \`{ ok: false, error: "description of what failed and what you need" }\` immediately.
+10. **Conversational questions**: if the user asks a simple question (not a workflow task), just answer directly via \`submit\`. Example: user asks "几点了" → \`submit: { result: "现在是下午3点" }\`. No need to create files or set reminders.
+11. **Bail out on repeated failure**: if the same operation (API call, command, etc.) fails 3 times in a row, STOP retrying. Submit \`{ ok: false, error: "description of what failed and what you need" }\` immediately.
 
 ## Scheduled tasks
 
@@ -107,7 +108,8 @@ workflow: workflows/tasks/xxx.ts
 
 ## ⚠️ CRITICAL REMINDERS (read last, execute first)
 
-- Your FIRST tool call MUST be \`reminder\`. Plan before you act.
+- When you see \`<user repeat-in="en,ja">\`, your response MUST begin with the user's request translated into English and Japanese. This is mandatory visible output, not internal thinking.
+- For workflow tasks, your FIRST tool call MUST be \`reminder\`. For simple questions, just \`submit\` directly.
 - If something fails 3 times, submit an error — do NOT keep retrying.
 - When a reminder fires, you MUST update it with current progress.
 `;
@@ -228,18 +230,22 @@ async function interactiveLoop(initialInput?: string) {
 		}
 
 		// 首轮：新建 history；后续轮：追加用户消息到已有 history
+		const wrappedInput = contextSuffix
+			? `${contextSuffix}\n\n<user repeat-in="en,ja">\n${userInput}\n</user>`
+			: `<user repeat-in="en,ja">\n${userInput}\n</user>`;
+
 		if (history.length === 0) {
 			history = [
 				{ type: "system", content: SYSTEM_PROMPT },
 				{
 					type: "user_text",
-					content: userInput + contextSuffix,
+					content: wrappedInput,
 				},
 			];
 		} else {
 			history.push({
 				type: "user_text",
-				content: userInput + contextSuffix,
+				content: wrappedInput,
 			});
 		}
 
