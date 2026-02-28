@@ -12,6 +12,7 @@
 import { resolve } from "node:path";
 import type { ZodType } from "zod";
 import { subagent } from "../agent/subagent.ts";
+import { ENV_INFO } from "../tools/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { RagHit } from "./rag.ts";
@@ -113,11 +114,19 @@ export async function delegateTask<T = unknown>(
 		workflowList,
 	);
 
+	const envLine = `Environment: OS=${ENV_INFO.os}, Shell=${ENV_INFO.shell}, CWD=${ENV_INFO.cwd}`;
+	const shellHint =
+		ENV_INFO.os === "Windows"
+			? "IMPORTANT: You are on Windows. Use Windows commands (e.g., `type` instead of `cat`, `dir` instead of `ls`, `findstr` instead of `grep`). Paths use backslashes. You can also use `bun -e \"...\"` for cross-platform file operations."
+			: "You are on a Unix-like system. Standard shell commands (cat, ls, grep, etc.) are available.";
+
 	const history: DomainMessage[] = [
 		{
 			type: "system",
 			content: [
 				"You are a capable AI agent executing a delegated task.",
+				envLine,
+				shellHint,
 				"You have been provided with consultation advice, relevant context, and a list of existing workflows.",
 				"If an existing workflow matches the task, run it with `exec` (bun run src/main.ts run <path>) and submit its output.",
 				"Otherwise, use the tools available to complete the task thoroughly.",
