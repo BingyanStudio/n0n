@@ -78,7 +78,8 @@ Optional prompt text (used with delegateTask if no workflow specified)
 - Every file must have a JSDoc comment describing what it does
 - Always test before submitting
 - Prefer direct code over delegateTask when the task is deterministic
-- ALWAYS check existing workflows first (ls workflows/skills/ workflows/tasks/) — reuse existing ones instead of creating duplicates
+- Existing workflows are listed in the user message — if one matches the task, run it directly instead of creating a new one
+- To run an existing workflow: use exec with \`bun run src/main.ts run <path>\` and submit its output
 `;
 
 const [command, ...args] = process.argv.slice(2);
@@ -173,11 +174,21 @@ async function interactiveLoop(initialInput?: string) {
 			continue;
 		}
 
-		console.log("\n🤖 正在创建 workflow...\n");
+		console.log("\n🤖 正在处理...\n");
+
+		// 主动推送已有 workflow 列表，避免模型浪费轮次发现
+		const existing = await discoverWorkflows();
+		const workflowContext =
+			existing.length > 0
+				? `\n\n## Existing workflows (reuse if applicable)\n${existing.map((w) => `- ${w.name}: ${w.description || "(no description)"} → ${w.path}`).join("\n")}`
+				: "";
 
 		const history: DomainMessage[] = [
 			{ type: "system", content: SYSTEM_PROMPT },
-			{ type: "user_text", content: userInput },
+			{
+				type: "user_text",
+				content: userInput + workflowContext,
+			},
 		];
 		const result = await subagent(history, { maxIterations: 30 });
 
