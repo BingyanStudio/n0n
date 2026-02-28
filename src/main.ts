@@ -17,6 +17,9 @@ import { createInterface } from "node:readline";
 import { subagent } from "./agent/index.ts";
 import { loadSchedules, startScheduler } from "./scheduler/index.ts";
 import type { DomainMessage } from "./types/domain.ts";
+import { isTTY } from "./ui/ansi.ts";
+import { PlainRenderer } from "./ui/renderer.ts";
+import { RichRenderer } from "./ui/rich-renderer.ts";
 import { discoverWorkflows, runWorkflow } from "./workflow/index.ts";
 
 const SYSTEM_PROMPT = `You are a workflow builder for the n0n engine. You create clean, working TypeScript workflow files.
@@ -167,6 +170,8 @@ async function main() {
  * error 时用户可补充信息继续 → 成功时结束
  */
 async function interactiveLoop(initialInput?: string) {
+	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
+
 	const rl = createInterface({
 		input: process.stdin,
 		output: process.stdout,
@@ -186,16 +191,16 @@ async function interactiveLoop(initialInput?: string) {
 	console.log("n0n — Natural Language Workflow Engine");
 	console.log('输入任务描述，AI 将创建可复用的 workflow。输入 "exit" 退出。\n');
 
-	let userInput = initialInput ?? (await prompt("🧑 > "));
+	let userInput = initialInput ?? (await prompt("> "));
 	let history: DomainMessage[] = [];
 
 	while (userInput.trim() !== "exit") {
 		if (!userInput.trim()) {
-			userInput = await prompt("🧑 > ");
+			userInput = await prompt("> ");
 			continue;
 		}
 
-		console.log("\n🤖 正在处理...\n");
+		renderer.userMessage(userInput);
 
 		// 主动推送已有 workflow + schedule 列表
 		const [existing, schedules] = await Promise.all([
@@ -226,7 +231,7 @@ async function interactiveLoop(initialInput?: string) {
 			});
 		}
 
-		const result = await subagent(history, { maxIterations: 30 });
+		const result = await subagent(history, { maxIterations: 30, renderer });
 		// 保留 agent 产出的完整历史，下轮继续
 		history = result.history;
 
@@ -239,26 +244,24 @@ async function interactiveLoop(initialInput?: string) {
 		if (isError) {
 			const errMsg = (result.result as Record<string, unknown>).error;
 			console.log(`\n⚠️ Agent 需要更多信息: ${errMsg}`);
-			if (result.report) console.log(`📋 ${result.report}`);
-			// 告知模型 submit 被打回
+			if (result.report) console.log(`  ${result.report}`);
 			history.push({
 				type: "user_text",
 				content: `Your submission was rejected. Error: ${errMsg}\nPlease wait for the user to provide more information.`,
 			});
 			console.log("请补充信息，或输入 'exit' 退出:\n");
-			userInput = await prompt("🧑 > ");
+			userInput = await prompt("> ");
 			continue;
 		}
 
-		console.log("\n✅ Workflow 创建完成:", result.result);
-		if (result.report) console.log(`📋 ${result.report}`);
-		// 告知模型 submit 已接受，等待下一个任务
+		console.log(`\n✅ Workflow 创建完成: ${result.result}`);
+		if (result.report) console.log(`  ${result.report}`);
 		history.push({
 			type: "user_text",
 			content: `Your submission was accepted. Result: ${typeof result.result === "string" ? result.result : JSON.stringify(result.result)}\nWaiting for the next task from the user.`,
 		});
 		console.log("\n继续输入新任务，或输入 'exit' 退出:\n");
-		userInput = await prompt("🧑 > ");
+		userInput = await prompt("> ");
 	}
 
 	rl.close();

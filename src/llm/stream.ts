@@ -8,7 +8,11 @@
  */
 
 import { config } from "../config.ts";
-import type { LLMAssistantMessage, LLMRequest, LLMToolCall } from "../types/llm.ts";
+import type {
+	LLMAssistantMessage,
+	LLMRequest,
+	LLMToolCall,
+} from "../types/llm.ts";
 import { LLMError } from "./client.ts";
 
 // ── Stream Event 类型 ──
@@ -16,7 +20,13 @@ import { LLMError } from "./client.ts";
 export type StreamEvent =
 	| { type: "thinking"; text: string }
 	| { type: "content"; text: string }
-	| { type: "tool_call_delta"; index: number; id?: string; name?: string; arguments: string }
+	| {
+			type: "tool_call_delta";
+			index: number;
+			id?: string;
+			name?: string;
+			arguments: string;
+	  }
 	| { type: "done"; finishReason: string | null };
 
 // ── SSE 流式请求 ──
@@ -68,8 +78,8 @@ export async function* chatCompletionStream(
 			buffer += decoder.decode(value, { stream: true });
 
 			// 按 SSE 事件分割（双换行）
-			let boundary: number;
-			while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+			let boundary = buffer.indexOf("\n\n");
+			while (boundary !== -1) {
 				const raw = buffer.slice(0, boundary);
 				buffer = buffer.slice(boundary + 2);
 
@@ -121,6 +131,7 @@ export async function* chatCompletionStream(
 						yield { type: "done", finishReason: finish };
 					}
 				}
+				boundary = buffer.indexOf("\n\n");
 			}
 		}
 	} finally {
@@ -156,7 +167,10 @@ interface SSEChunk {
 export class StreamAccumulator {
 	content = "";
 	reasoning = "";
-	toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
+	toolCalls = new Map<
+		number,
+		{ id: string; name: string; arguments: string }
+	>();
 	finishReason: string | null = null;
 
 	/** 处理一个 StreamEvent */
@@ -188,7 +202,9 @@ export class StreamAccumulator {
 	/** 转为与非流式兼容的 LLMAssistantMessage */
 	toMessage(): LLMAssistantMessage {
 		const toolCalls: LLMToolCall[] = [];
-		for (const [, tc] of [...this.toolCalls.entries()].sort((a, b) => a[0] - b[0])) {
+		for (const [, tc] of [...this.toolCalls.entries()].sort(
+			(a, b) => a[0] - b[0],
+		)) {
 			toolCalls.push({
 				id: tc.id,
 				type: "function",

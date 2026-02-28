@@ -8,7 +8,7 @@
 import type { ZodType } from "zod";
 import { config } from "../config.ts";
 import { toAPIMessages } from "../llm/adapter.ts";
-import { chatCompletion } from "../llm/client.ts";
+import { chatCompletionStream, StreamAccumulator } from "../llm/stream.ts";
 import type { PendingReminder } from "../tools/index.ts";
 import {
 	execTool,
@@ -63,27 +63,45 @@ export async function agentLoop<T = unknown>(
 		// 注入到期的 reminders
 		injectReminders(messages, reminders);
 
-		// 转换为 API 格式并调用 LLM
+		// 转换为 API 格式并调用 LLM（流式）
 		const apiMessages = toAPIMessages(messages);
 		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
-		const response = await chatCompletion({
+
+		const acc = new StreamAccumulator();
+		for await (const event of chatCompletionStream({
 			messages: apiMessages,
 			tools: TOOL_DEFINITIONS,
 			tool_choice: "auto",
-		});
+		})) {
+			acc.push(event);
+			switch (event.type) {
+				case "thinking":
+					renderer.thinkingToken(event.text);
+					break;
+				case "content":
+					renderer.contentToken(event.text);
+					break;
+				case "tool_call_delta":
+					renderer.toolCallArgChunk(event.index, event.arguments);
+					break;
+			}
+		}
+		renderer.contentEnd();
 
-		const choice = response.choices[0];
-		if (!choice) throw new Error("LLM returned empty choices");
-
-		const assistantMsg = choice.message;
+		const assistantMsg = acc.toMessage();
 		const hasToolCalls =
 			assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0;
 
 		// 无工具调用 — 纯文本回复
 		if (!hasToolCalls) {
 			const content = assistantMsg.content ?? "";
-			idleCount++;
-			renderer.textResponse(content, idleCount);
+			if (!acc.reasoning && !content) {
+				// 流式已经输出过内容，不重复
+				idleCount++;
+				renderer.textResponse(content, idleCount);
+			} else {
+				idleCount++;
+			}
 			const textMsg: DomainMessage = {
 				type: "assistant_text",
 				content,
@@ -92,6 +110,7 @@ export async function agentLoop<T = unknown>(
 
 			// 空转检测
 			if (idleCount >= config.agent.maxIdleRounds) {
+				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
 					result: content as T,
 					report: "Agent terminated: max idle rounds exceeded (no tool calls)",
