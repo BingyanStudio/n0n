@@ -82,7 +82,7 @@ export async function agentLoop<T = unknown>(
 					renderer.contentToken(event.text);
 					break;
 				case "tool_call_delta":
-					renderer.toolCallArgChunk(event.index, event.arguments);
+					renderer.toolCallArgChunk(event.index, event.name, event.arguments);
 					break;
 			}
 		}
@@ -136,7 +136,11 @@ export async function agentLoop<T = unknown>(
 			messages.push({ type: "assistant_text", content });
 			if (idleCount >= config.agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
-				return { result: content as T, report: "Agent terminated: max idle rounds exceeded (no tool calls)", history: messages };
+				return {
+					result: content as T,
+					report: "Agent terminated: max idle rounds exceeded (no tool calls)",
+					history: messages,
+				};
 			}
 			continue;
 		}

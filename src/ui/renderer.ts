@@ -33,7 +33,11 @@ export interface Renderer {
 	toolCallStart(tc: ToolCallRecord): void;
 
 	/** 工具调用流式参数片段（用于实时渲染参数） */
-	toolCallArgChunk(index: number, chunk: string): void;
+	toolCallArgChunk(
+		index: number,
+		name: string | undefined,
+		chunk: string,
+	): void;
 
 	/** 工具调用完成，展示结果 */
 	toolCallEnd(result: ToolResult): void;
@@ -85,7 +89,11 @@ export class PlainRenderer implements Renderer {
 		console.error(`  [agent] tool: ${tc.tool}${suffix}`);
 	}
 
-	toolCallArgChunk(_index: number, _chunk: string): void {
+	toolCallArgChunk(
+		_index: number,
+		_name: string | undefined,
+		_chunk: string,
+	): void {
 		// 非流式模式下不触发
 	}
 

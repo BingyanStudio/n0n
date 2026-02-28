@@ -28,6 +28,14 @@ export class RichRenderer implements Renderer {
 	private toolRegion = new LiveRegion();
 	private hasStreamContent = false;
 
+	/** 流式工具调用参数累积（index → { name, args }） */
+	private streamingToolCalls = new Map<
+		number,
+		{ name: string; args: string }
+	>();
+	/** 流式工具调用参数的 LiveRegion（流式阶段使用，执行阶段折叠） */
+	private streamRegion = new LiveRegion();
+
 	userMessage(content: string): void {
 		writeln();
 		writeln(label.user());
@@ -54,6 +62,11 @@ export class RichRenderer implements Renderer {
 		if (this.hasStreamContent) {
 			writeln();
 			this.hasStreamContent = false;
+		}
+		// 折叠流式工具调用参数区域（执行阶段由 toolCallStart 重新渲染紧凑摘要）
+		if (this.streamingToolCalls.size > 0) {
+			this.streamRegion.clear();
+			this.streamingToolCalls.clear();
 		}
 	}
 
@@ -133,8 +146,41 @@ export class RichRenderer implements Renderer {
 		}
 	}
 
-	toolCallArgChunk(_index: number, _chunk: string): void {
-		// Future: live streaming of tool args
+	toolCallArgChunk(
+		index: number,
+		name: string | undefined,
+		chunk: string,
+	): void {
+		// 累积参数
+		let entry = this.streamingToolCalls.get(index);
+		if (!entry) {
+			entry = { name: name ?? "?", args: "" };
+			this.streamingToolCalls.set(index, entry);
+		}
+		if (name) entry.name = name;
+		entry.args += chunk;
+
+		// 重绘整个流式区域（清除后重写所有 streaming tool calls）
+		this.streamRegion.clear();
+		for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
+			(a, b) => a[0] - b[0],
+		)) {
+			const toolName = style.cyan(tc.name);
+			this.streamRegion.writeln(
+				`${style.dim("▸")} ${toolName} ${style.gray("(streaming...)")}`,
+			);
+			// 显示参数内容（限制行数避免刷屏）
+			const lines = tc.args.split("\n");
+			const maxLines = 20;
+			for (const line of lines.slice(0, maxLines)) {
+				this.streamRegion.writeln(`  ${style.dim(line)}`);
+			}
+			if (lines.length > maxLines) {
+				this.streamRegion.writeln(
+					style.gray(`  ... (${lines.length - maxLines} more lines)`),
+				);
+			}
+		}
 	}
 
 	toolCallEnd(result: ToolResult): void {
