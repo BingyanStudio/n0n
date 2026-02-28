@@ -1,20 +1,24 @@
 /**
- * delegateTask — 任务委托流水线
+ * delegateTask — 任务委托流水线（高层 API）
  *
  * 在调用 subagent 前做三件事：
  * 1. 调用 subagent 咨询最佳实践（意图增强）
  * 2. RAG 检索相关的 memory/skill/history
  * 3. 组装所有上下文，提交给 subagent 执行
+ *
+ * Workflow 中应优先使用此函数而非底层 subagent。
  */
 
+import type { ZodType } from "zod";
 import { subagent } from "../agent/subagent.ts";
+import type { DomainMessage } from "../types/domain.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
 
 export interface TaskResult<T = unknown> {
 	result: T;
 	report: string | null;
-	history: import("../types/domain.ts").DomainMessage[];
+	history: DomainMessage[];
 }
 
 /**
@@ -23,33 +27,44 @@ export interface TaskResult<T = unknown> {
 export async function delegateTask(
 	query: string,
 	options?: {
-		validateResult?: (result: unknown) => string | null;
+		/** Zod schema 校验成功结果 */
+		schema?: ZodType;
 		skipConsultation?: boolean;
+		maxIterations?: number;
 	},
 ): Promise<TaskResult> {
 	// ── Step 1: 意图增强（咨询） ──
 	let consultAdvice = "";
 	if (!options?.skipConsultation) {
 		try {
-			const consultResult = await subagent(
-				[
-					`I want to accomplish the following task: "${query}"`,
-					"",
-					"Please provide:",
-					"1. Best practices for this task",
-					"2. Potential problems and solutions",
-					"3. A recommended step-by-step approach",
-					"",
-					"Be concise and actionable. Submit your advice as the result.",
-				].join("\n"),
-				{ maxIterations: 15 },
-			);
+			const consultHistory: DomainMessage[] = [
+				{
+					type: "system",
+					content:
+						"You are a consultant. Provide concise, actionable advice. Use submit to deliver your advice.",
+				},
+				{
+					type: "user_text",
+					content: [
+						`I want to accomplish: "${query}"`,
+						"",
+						"Please provide:",
+						"1. Best practices for this task",
+						"2. Potential problems and solutions",
+						"3. A recommended step-by-step approach",
+						"",
+						"Be concise. Submit your advice as a string.",
+					].join("\n"),
+				},
+			];
+			const consultResult = await subagent(consultHistory, {
+				maxIterations: 15,
+			});
 			consultAdvice =
 				typeof consultResult.result === "string"
 					? consultResult.result
 					: JSON.stringify(consultResult.result);
 		} catch {
-			// 咨询失败不阻塞主流程
 			consultAdvice = "(consultation unavailable)";
 		}
 	}
@@ -70,14 +85,25 @@ export async function delegateTask(
 	// ── Step 3: 组装上下文，执行 ──
 	const enrichedPrompt = buildEnrichedPrompt(query, consultAdvice, ragContext);
 
-	const result = await subagent(enrichedPrompt, {
-		systemPrompt: [
-			"You are a capable AI agent executing a delegated task.",
-			"You have been provided with consultation advice and relevant context from previous work.",
-			"Use the tools available to complete the task thoroughly.",
-			"When done, use `submit` to deliver your result.",
-		].join("\n"),
-		validateResult: options?.validateResult,
+	const history: DomainMessage[] = [
+		{
+			type: "system",
+			content: [
+				"You are a capable AI agent executing a delegated task.",
+				"You have been provided with consultation advice and relevant context from previous work.",
+				"Use the tools available to complete the task thoroughly.",
+				"When done, use `submit` to deliver your result.",
+			].join("\n"),
+		},
+		{
+			type: "user_text",
+			content: enrichedPrompt,
+		},
+	];
+
+	const result = await subagent(history, {
+		schema: options?.schema,
+		maxIterations: options?.maxIterations,
 	});
 
 	return {

@@ -5,6 +5,7 @@
  * 直到 agent 调用 submit 或达到终止条件。
  */
 
+import type { ZodType } from "zod";
 import { config } from "../config.ts";
 import { toAPIMessages } from "../llm/adapter.ts";
 import { chatCompletion } from "../llm/client.ts";
@@ -35,9 +36,11 @@ export interface AgentResult<T = unknown> {
 export interface AgentOptions {
 	/** 最大循环轮次 */
 	maxIterations?: number;
-	/** 结果校验函数，返回 null 表示通过，返回字符串表示拒绝原因 */
-	validateResult?: (result: unknown) => string | null;
+	/** Zod schema 校验 submit 结果，默认视为 string */
+	schema?: ZodType;
 }
+
+const MAX_SUBMIT_RETRIES = 4;
 
 // ── Agent Loop ──
 
@@ -49,6 +52,7 @@ export async function agentLoop(
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
+	let submitRetries = 0;
 
 	for (let iteration = 0; iteration < maxIter; iteration++) {
 		// 注入到期的 reminders
@@ -118,22 +122,35 @@ export async function agentLoop(
 
 			// 如果是 submit，校验并返回
 			if (result.tool === "submit") {
-				const validation = options?.validateResult?.(result.result);
-				if (validation) {
-					// 校验失败，注入拒绝消息，继续循环
-					console.error(`  [agent] submit rejected: ${validation}`);
-					messages.push({
-						type: "user_text",
-						content: `Your submission was rejected: ${validation}\nPlease fix and submit again.`,
-					});
-					break;
+				const validation = validateSubmit(result.result, options?.schema);
+				if (validation.ok) {
+					console.error("  [agent] submit accepted ✓");
+					return {
+						result: validation.value,
+						report: result.report,
+						history: messages,
+					};
 				}
-				console.error("  [agent] submit accepted ✓");
-				return {
-					result: result.result,
-					report: result.report,
-					history: messages,
-				};
+				// 校验失败
+				submitRetries++;
+				if (submitRetries >= MAX_SUBMIT_RETRIES) {
+					console.error(
+						`  [agent] submit rejected ${submitRetries} times, giving up`,
+					);
+					return {
+						result: result.result,
+						report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${validation.error}`,
+						history: messages,
+					};
+				}
+				console.error(
+					`  [agent] submit rejected (${submitRetries}/${MAX_SUBMIT_RETRIES}): ${validation.error}`,
+				);
+				messages.push({
+					type: "user_text",
+					content: `Your submission was rejected: ${validation.error}\nPlease fix the format and submit again. (attempt ${submitRetries}/${MAX_SUBMIT_RETRIES})`,
+				});
+				break;
 			}
 		}
 	}
@@ -199,6 +216,42 @@ async function executeTool(
 				durationMs: 0,
 			};
 	}
+}
+
+function validateSubmit(
+	raw: unknown,
+	schema?: ZodType,
+): { ok: true; value: unknown } | { ok: false; error: string } {
+	// 无 schema → 默认当 string 处理
+	if (!schema) {
+		return {
+			ok: true,
+			value: typeof raw === "string" ? raw : JSON.stringify(raw),
+		};
+	}
+
+	// 如果 raw 是 string，尝试解析为 JSON 再校验
+	let parsed: unknown = raw;
+	if (typeof raw === "string") {
+		try {
+			parsed = JSON.parse(raw);
+		} catch {
+			// 不是 JSON，直接用原始字符串校验
+		}
+	}
+
+	const result = schema.safeParse(parsed);
+	if (result.success) {
+		return { ok: true, value: result.data };
+	}
+
+	const issues = result.error.issues
+		.map((i) => `  ${String(i.path.join("."))}: ${i.message}`)
+		.join("\n");
+	return {
+		ok: false,
+		error: `Result does not match expected schema:\n${issues}`,
+	};
 }
 
 function injectReminders(

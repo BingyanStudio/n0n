@@ -21,6 +21,7 @@ import {
 	removeSchedule,
 	startScheduler,
 } from "./scheduler/index.ts";
+import type { DomainMessage } from "./types/domain.ts";
 import { discoverWorkflows, runWorkflow } from "./workflow/index.ts";
 
 const SYSTEM_PROMPT = `You are a workflow builder agent for the n0n engine.
@@ -44,16 +45,16 @@ export default async function run() {
 
 ### 2. AI-powered workflows (for tasks requiring reasoning)
 \`\`\`typescript
-import { subagent } from "../../src/index.ts";
+import { delegateTask } from "../../src/index.ts";
 /** Analyze a CSV file for anomalies */
 export default async function run() {
-  const result = await subagent("Analyze data/sample.csv for anomalies, report findings");
+  const result = await delegateTask("Analyze data/sample.csv for anomalies, report findings");
   return result.result;
 }
 \`\`\`
 
 Use direct code when the task is deterministic (API calls, data transforms, file operations).
-Use subagent when the task requires AI reasoning (analysis, summarization, creative tasks).
+Use delegateTask when the task requires AI reasoning (analysis, summarization, creative tasks).
 
 ## Your workflow
 
@@ -69,7 +70,7 @@ Use subagent when the task requires AI reasoning (analysis, summarization, creat
 - Tasks (complete workflows) go in workflows/tasks/
 - Every file must have a JSDoc comment describing what it does
 - Always test before submitting
-- Prefer direct code over subagent when the task is deterministic
+- Prefer direct code over delegateTask when the task is deterministic
 `;
 
 const [command, ...args] = process.argv.slice(2);
@@ -200,10 +201,11 @@ async function interactiveLoop(initialInput?: string) {
 
 		console.log("\n🤖 正在创建 workflow...\n");
 
-		const result = await subagent(userInput, {
-			systemPrompt: SYSTEM_PROMPT,
-			maxIterations: 30,
-		});
+		const history: DomainMessage[] = [
+			{ type: "system", content: SYSTEM_PROMPT },
+			{ type: "user_text", content: userInput },
+		];
+		const result = await subagent(history, { maxIterations: 30 });
 
 		// 检查是否为 error result
 		const isError =
