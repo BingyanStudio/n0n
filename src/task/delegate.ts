@@ -127,6 +127,7 @@ export async function delegateTask<T = unknown>(
 				"You are a capable AI agent executing a delegated task.",
 				envLine,
 				shellHint,
+				"EFFICIENCY: Call multiple tools in a single response when they have no dependencies (e.g., read several files at once, or run independent commands in parallel). Only wait for a previous result when the next call depends on it.",
 				"You have been provided with consultation advice, relevant context, and a list of existing workflows.",
 				"If an existing workflow matches the task, run it with `exec` (bun run src/main.ts run <path>) and submit its output.",
 				"Otherwise, use the tools available to complete the task thoroughly.",
