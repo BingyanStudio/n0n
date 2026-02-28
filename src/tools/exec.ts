@@ -63,7 +63,7 @@ export async function execTool(
 		const hasOutput = stdout.trim() || stderr.trim();
 		const hint =
 			!hasOutput && exitCode === 0
-				? "(no output — script may not have top-level executable code, or async operations may not have been awaited)"
+				? "(no output — script may not have top-level executable code, or async operations may not have been awaited. Workflows should be run with: bun run src/main.ts run <workflow.ts>)"
 				: "";
 
 		return {

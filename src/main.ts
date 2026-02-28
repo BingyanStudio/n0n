@@ -68,9 +68,9 @@ export default async function run() {
 }
 \`\`\`
 
-Step 3 — Test it:
+Step 3 — Test it (MUST use \`src/main.ts run\`, NOT \`bun run <file>\` directly):
 \`\`\`
-exec: bun run workflows/tasks/fetch-danbooru-cat-ears.ts
+exec: bun run src/main.ts run workflows/tasks/fetch-danbooru-cat-ears.ts
 \`\`\`
 
 Step 4 — If error, fix the SAME file (use write with search/replace), then test again.
@@ -87,7 +87,7 @@ submit: { result: "workflows/tasks/fetch-danbooru-cat-ears.ts" }
 3. **ONE file per task**: write one .ts file. If it fails, fix it — never create a second file.
 4. **Fix, don't recreate**: when a test fails, use \`write\` with search/replace on the SAME file.
 5. **Files only in workflows/**: never write files to the project root or other directories.
-6. **Existing workflows**: check the list in the user message. If one matches, run it with \`exec: bun run src/main.ts run <path>\` and submit its output.
+6. **Run workflows correctly**: ALWAYS use \`bun run src/main.ts run <path>\` to test workflows. NEVER use \`bun run <file>\` directly — it won't call the exported function.
 7. **Follow-up tasks**: when the user adds a requirement to a previous workflow, modify the SAME file or import it in a new task.
 8. **Submit = file path**: always submit the workflow file path as your result, not the execution output.
 9. **Need info?** submit \`{ ok: false, error: "what you need" }\`
