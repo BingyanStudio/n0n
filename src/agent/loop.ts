@@ -28,26 +28,26 @@ import type { LLMToolCall } from "../types/llm.ts";
 // ── 结果类型 ──
 
 export interface AgentResult<T = unknown> {
-	result: T;
+	result: T | null;
 	report: string | null;
 	history: DomainMessage[];
 }
 
-export interface AgentOptions {
+export interface AgentOptions<T = unknown> {
 	/** 最大循环轮次 */
 	maxIterations?: number;
 	/** Zod schema 校验 submit 结果，默认视为 string */
-	schema?: ZodType;
+	schema?: ZodType<T>;
 }
 
 const MAX_SUBMIT_RETRIES = 4;
 
 // ── Agent Loop ──
 
-export async function agentLoop(
+export async function agentLoop<T = unknown>(
 	history: DomainMessage[],
-	options?: AgentOptions,
-): Promise<AgentResult> {
+	options?: AgentOptions<T>,
+): Promise<AgentResult<T>> {
 	const maxIter = options?.maxIterations ?? config.agent.maxIterations;
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
@@ -92,7 +92,7 @@ export async function agentLoop(
 			idleCount++;
 			if (idleCount >= config.agent.maxIdleRounds) {
 				return {
-					result: content,
+					result: content as T,
 					report: "Agent terminated: max idle rounds exceeded (no tool calls)",
 					history: messages,
 				};
@@ -126,7 +126,7 @@ export async function agentLoop(
 				if (validation.ok) {
 					console.error("  [agent] submit accepted ✓");
 					return {
-						result: validation.value,
+						result: validation.value as T,
 						report: result.report,
 						history: messages,
 					};
@@ -138,7 +138,7 @@ export async function agentLoop(
 						`  [agent] submit rejected ${submitRetries} times, giving up`,
 					);
 					return {
-						result: result.result,
+						result: result.result as T,
 						report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${validation.error}`,
 						history: messages,
 					};

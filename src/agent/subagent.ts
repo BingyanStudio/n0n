@@ -10,9 +10,9 @@ import type { DomainMessage } from "../types/domain.ts";
 import type { AgentResult } from "./loop.ts";
 import { agentLoop } from "./loop.ts";
 
-export interface SubagentOptions {
+export interface SubagentOptions<T = unknown> {
 	/** Zod schema 校验成功结果 */
-	schema?: ZodType;
+	schema?: ZodType<T>;
 	/** 最大循环轮次 */
 	maxIterations?: number;
 }
@@ -20,10 +20,10 @@ export interface SubagentOptions {
 /**
  * 底层 subagent 调用：给定完整的 DomainMessage[] 历史
  */
-export async function subagent(
+export async function subagent<T = unknown>(
 	history: DomainMessage[],
-	options?: SubagentOptions,
-): Promise<AgentResult> {
+	options?: SubagentOptions<T>,
+): Promise<AgentResult<T>> {
 	return agentLoop(history, {
 		maxIterations: options?.maxIterations,
 		schema: options?.schema,

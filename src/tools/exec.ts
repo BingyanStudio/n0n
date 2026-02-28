@@ -43,6 +43,10 @@ export async function execTool(
 
 		const durationMs = Date.now() - start;
 
+		// 实时输出到控制台，让用户可见
+		if (stdout) process.stdout.write(stdout);
+		if (stderr) process.stderr.write(stderr);
+
 		// 截断过长输出
 		const maxLen = 30_000;
 		const truncate = (s: string) =>

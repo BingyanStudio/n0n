@@ -10,7 +10,7 @@ interface WriteArgs {
 	path: string;
 	search?: string;
 	replace: string;
-	expectedReplaceTime?: number;
+	expectedMatches?: number;
 }
 
 export async function writeTool(
@@ -19,7 +19,7 @@ export async function writeTool(
 ): Promise<WriteToolResult> {
 	const filePath = resolve(args.path);
 	const search = args.search ?? "";
-	const expectedCount = args.expectedReplaceTime ?? 1;
+	const expectedCount = args.expectedMatches ?? 1;
 
 	try {
 		if (!search) {

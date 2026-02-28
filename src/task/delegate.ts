@@ -9,6 +9,7 @@
  * Workflow 中应优先使用此函数而非底层 subagent。
  */
 
+import { resolve } from "node:path";
 import type { ZodType } from "zod";
 import { subagent } from "../agent/subagent.ts";
 import type { DomainMessage } from "../types/domain.ts";
@@ -17,7 +18,7 @@ import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
 
 export interface TaskResult<T = unknown> {
-	result: T;
+	result: T | null;
 	report: string | null;
 	history: DomainMessage[];
 }
@@ -25,15 +26,15 @@ export interface TaskResult<T = unknown> {
 /**
  * delegateTask 主入口
  */
-export async function delegateTask(
+export async function delegateTask<T = unknown>(
 	query: string,
 	options?: {
 		/** Zod schema 校验成功结果 */
-		schema?: ZodType;
+		schema?: ZodType<T>;
 		skipConsultation?: boolean;
 		maxIterations?: number;
 	},
-): Promise<TaskResult> {
+): Promise<TaskResult<T>> {
 	// ── Step 1: 意图增强（咨询） ──
 	let consultAdvice = "";
 	if (!options?.skipConsultation) {
@@ -65,7 +66,22 @@ export async function delegateTask(
 				typeof consultResult.result === "string"
 					? consultResult.result
 					: JSON.stringify(consultResult.result);
-		} catch {
+
+			// 写入 consult-result 供后续 RAG 检索复用
+			const hash = Bun.hash(query).toString(36);
+			const filePath = resolve(`workflows/consult-result/${hash}.md`);
+			const now = new Date().toISOString();
+			await Bun.write(
+				filePath,
+				`---\nquery: "${query.replaceAll('"', '\\"')}"\ncreated: ${now}\ntype: consult-result\n---\n\n${consultAdvice}`,
+			);
+		} catch (err) {
+			// 致命错误（配置错误、认证失败）直接抛出，不静默降级
+			if (err instanceof Error && "status" in err) {
+				const status = (err as { status: number }).status;
+				if (status === 401 || status === 403) throw err;
+			}
+			console.error("  [delegateTask] consultation failed:", err);
 			consultAdvice = "(consultation unavailable)";
 		}
 	}

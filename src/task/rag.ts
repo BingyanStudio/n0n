@@ -21,9 +21,14 @@ export interface RagHit {
 
 const SPACE_DIRS: Record<SearchSpace, string[]> = {
 	skill: ["workflows/skills"],
-	memory: ["workflows/memory"],
+	memory: ["workflows/memory", "workflows/consult-result"],
 	history: ["workflows/history"],
-	all: ["workflows/skills", "workflows/memory", "workflows/history"],
+	all: [
+		"workflows/skills",
+		"workflows/memory",
+		"workflows/consult-result",
+		"workflows/history",
+	],
 };
 
 /**

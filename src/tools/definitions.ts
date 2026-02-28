@@ -55,10 +55,10 @@ export const TOOL_DEFINITIONS: LLMToolDefinition[] = [
 						type: "string",
 						description: "Replacement text",
 					},
-					expectedReplaceTime: {
+					expectedMatches: {
 						type: "number",
 						description:
-							"Expected number of replacements (default: 1). Mismatch = error returned.",
+							"Expected number of matches (default: 1). Mismatch = error returned.",
 					},
 				},
 				required: ["path", "replace"],

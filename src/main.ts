@@ -172,6 +172,7 @@ async function interactiveLoop(initialInput?: string) {
 	console.log('输入任务描述，AI 将创建可复用的 workflow。输入 "exit" 退出。\n');
 
 	let userInput = initialInput ?? (await prompt("🧑 > "));
+	let history: DomainMessage[] = [];
 
 	while (userInput.trim() !== "exit") {
 		if (!userInput.trim()) {
@@ -194,14 +195,25 @@ async function interactiveLoop(initialInput?: string) {
 			contextSuffix += `\n\n## Existing schedules\n${schedules.map((s) => `- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`).join("\n")}`;
 		}
 
-		const history: DomainMessage[] = [
-			{ type: "system", content: SYSTEM_PROMPT },
-			{
+		// 首轮：新建 history；后续轮：追加用户消息到已有 history
+		if (history.length === 0) {
+			history = [
+				{ type: "system", content: SYSTEM_PROMPT },
+				{
+					type: "user_text",
+					content: userInput + contextSuffix,
+				},
+			];
+		} else {
+			history.push({
 				type: "user_text",
 				content: userInput + contextSuffix,
-			},
-		];
+			});
+		}
+
 		const result = await subagent(history, { maxIterations: 30 });
+		// 保留 agent 产出的完整历史，下轮继续
+		history = result.history;
 
 		// 检查是否为 error result
 		const isError =
@@ -213,6 +225,11 @@ async function interactiveLoop(initialInput?: string) {
 			const errMsg = (result.result as Record<string, unknown>).error;
 			console.log(`\n⚠️ Agent 需要更多信息: ${errMsg}`);
 			if (result.report) console.log(`📋 ${result.report}`);
+			// 告知模型 submit 被打回
+			history.push({
+				type: "user_text",
+				content: `Your submission was rejected. Error: ${errMsg}\nPlease wait for the user to provide more information.`,
+			});
 			console.log("请补充信息，或输入 'exit' 退出:\n");
 			userInput = await prompt("🧑 > ");
 			continue;
@@ -220,6 +237,11 @@ async function interactiveLoop(initialInput?: string) {
 
 		console.log("\n✅ Workflow 创建完成:", result.result);
 		if (result.report) console.log(`📋 ${result.report}`);
+		// 告知模型 submit 已接受，等待下一个任务
+		history.push({
+			type: "user_text",
+			content: `Your submission was accepted. Result: ${typeof result.result === "string" ? result.result : JSON.stringify(result.result)}\nWaiting for the next task from the user.`,
+		});
 		console.log("\n继续输入新任务，或输入 'exit' 退出:\n");
 		userInput = await prompt("🧑 > ");
 	}
