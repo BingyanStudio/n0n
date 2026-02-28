@@ -1,0 +1,80 @@
+/**
+ * Workflow 执行运行时
+ *
+ * Workflow = TypeScript 文件，import { subagent, delegateTask } 等原语。
+ * 运行时负责加载和执行这些文件。
+ */
+
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+export interface WorkflowMeta {
+	name: string;
+	path: string;
+	description: string;
+}
+
+/**
+ * 发现所有 workflow（扫描 workflows/ 目录）
+ */
+export async function discoverWorkflows(
+	baseDir = "workflows",
+): Promise<WorkflowMeta[]> {
+	const results: WorkflowMeta[] = [];
+	const dirs = ["skills", "tasks"];
+
+	for (const sub of dirs) {
+		const dir = resolve(baseDir, sub);
+		if (!existsSync(dir)) continue;
+
+		const proc = Bun.spawnSync(["find", dir, "-name", "*.ts", "-type", "f"], {
+			stdout: "pipe",
+		});
+
+		const files = new TextDecoder()
+			.decode(proc.stdout)
+			.trim()
+			.split("\n")
+			.filter(Boolean);
+
+		for (const file of files) {
+			// 尝试读取文件首行注释作为描述
+			const content = await Bun.file(file).text();
+			const descMatch = content.match(
+				/^\/\*\*?\s*\n?\s*\*?\s*(.+?)(?:\n|\s*\*\/)/,
+			);
+			const description = descMatch?.[1]?.trim() ?? "";
+
+			const name = file.replace(`${baseDir}/`, "").replace(/\.ts$/, "");
+
+			results.push({ name, path: file, description });
+		}
+	}
+
+	return results;
+}
+
+/**
+ * 执行一个 workflow 文件
+ */
+export async function runWorkflow(workflowPath: string): Promise<unknown> {
+	const absPath = resolve(workflowPath);
+
+	if (!existsSync(absPath)) {
+		throw new Error(`Workflow not found: ${workflowPath}`);
+	}
+
+	// Bun 原生支持动态 import .ts 文件
+	const mod = await import(absPath);
+
+	// 约定：workflow 导出 default 函数或 run 函数
+	const entryFn = mod.default ?? mod.run;
+
+	if (typeof entryFn !== "function") {
+		throw new Error(
+			`Workflow ${workflowPath} must export a default function or a 'run' function`,
+		);
+	}
+
+	return entryFn();
+}

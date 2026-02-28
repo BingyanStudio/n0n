@@ -1,2 +1,7 @@
-.roo/
+node_modules/
+dist/
 .env
+.roo/
+.cursor/
+bun.lock
+*.log
