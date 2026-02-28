@@ -61,7 +61,9 @@ Use delegateTask when the task requires AI reasoning (analysis, summarization, c
 6. If you need information you don't have, submit { ok: false, error: "what you need" }
 
 ## Scheduled tasks
-For tasks that should run on a schedule, create a .mdc file in workflows/schedules/:
+When the user wants a task to run on a schedule (e.g., "每天早上8点做X"):
+1. First create the workflow .ts file as usual
+2. Then create a .mdc file in workflows/schedules/ to register the schedule:
 \`\`\`
 ---
 name: task-name
@@ -69,8 +71,11 @@ cron: "0 8 * * *"
 enabled: true
 workflow: workflows/tasks/xxx.ts
 ---
-Optional prompt text (used with delegateTask if no workflow specified)
+Task description (fallback prompt if workflow is not specified)
 \`\`\`
+3. Submit both file paths as your result
+
+Cron format: minute hour day month weekday (e.g., "0 8 * * *" = daily at 8am, "*/30 * * * *" = every 30min)
 
 ## Rules
 - Skills (reusable components) go in workflows/skills/
@@ -176,18 +181,24 @@ async function interactiveLoop(initialInput?: string) {
 
 		console.log("\n🤖 正在处理...\n");
 
-		// 主动推送已有 workflow 列表，避免模型浪费轮次发现
-		const existing = await discoverWorkflows();
-		const workflowContext =
-			existing.length > 0
-				? `\n\n## Existing workflows (reuse if applicable)\n${existing.map((w) => `- ${w.name}: ${w.description || "(no description)"} → ${w.path}`).join("\n")}`
-				: "";
+		// 主动推送已有 workflow + schedule 列表
+		const [existing, schedules] = await Promise.all([
+			discoverWorkflows(),
+			loadSchedules(),
+		]);
+		let contextSuffix = "";
+		if (existing.length > 0) {
+			contextSuffix += `\n\n## Existing workflows (reuse if applicable)\n${existing.map((w) => `- ${w.name}: ${w.description || "(no description)"} → ${w.path}`).join("\n")}`;
+		}
+		if (schedules.length > 0) {
+			contextSuffix += `\n\n## Existing schedules\n${schedules.map((s) => `- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`).join("\n")}`;
+		}
 
 		const history: DomainMessage[] = [
 			{ type: "system", content: SYSTEM_PROMPT },
 			{
 				type: "user_text",
-				content: userInput + workflowContext,
+				content: userInput + contextSuffix,
 			},
 		];
 		const result = await subagent(history, { maxIterations: 30 });
