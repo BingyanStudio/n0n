@@ -93,7 +93,7 @@ export const TOOL_DEFINITIONS: LLMToolDefinition[] = [
 					delay: {
 						type: "number",
 						description:
-							"Number of rounds before reminder appears (default: 5)",
+							"Number of rounds before reminder appears (default: 7)",
 					},
 				},
 				required: ["content"],
