@@ -95,13 +95,13 @@ export const TOOL_DEFINITIONS: LLMToolDefinition[] = [
 		function: {
 			name: "submit",
 			description:
-				"Submit your final result. Use this when you have completed the task. If the caller specified a schema, your result must conform to it — otherwise it will be rejected and you'll need to retry.",
+				"Submit your final result. If you completed the task successfully, submit the result value. If you cannot complete the task and need more information, submit an error object like { ok: false, error: 'what went wrong and what you need' }. The caller will review and may provide additional info.",
 			parameters: {
 				type: "object",
 				properties: {
 					result: {
 						description:
-							"The result value. Must match the caller's expected schema if one was provided.",
+							"The result value. For success: the requested output. For error: { ok: false, error: string }.",
 					},
 					report: {
 						type: "string",

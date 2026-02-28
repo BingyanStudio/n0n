@@ -56,6 +56,9 @@ export async function agentLoop(
 
 		// 转换为 API 格式并调用 LLM
 		const apiMessages = toAPIMessages(messages);
+		console.error(
+			`  [agent] round ${iteration + 1}/${maxIter} (${apiMessages.length} msgs)`,
+		);
 		const response = await chatCompletion({
 			messages: apiMessages,
 			tools: TOOL_DEFINITIONS,
@@ -71,9 +74,13 @@ export async function agentLoop(
 
 		// 无工具调用 — 纯文本回复
 		if (!hasToolCalls) {
+			const content = assistantMsg.content ?? "";
+			console.error(
+				`  [agent] text response (${content.length} chars), idle=${idleCount + 1}`,
+			);
 			const textMsg: DomainMessage = {
 				type: "assistant_text",
-				content: assistantMsg.content ?? "",
+				content,
 			};
 			messages.push(textMsg);
 
@@ -81,7 +88,7 @@ export async function agentLoop(
 			idleCount++;
 			if (idleCount >= config.agent.maxIdleRounds) {
 				return {
-					result: assistantMsg.content ?? "",
+					result: content,
 					report: "Agent terminated: max idle rounds exceeded (no tool calls)",
 					history: messages,
 				};
@@ -103,6 +110,9 @@ export async function agentLoop(
 
 		// 执行每个工具
 		for (const tc of toolCalls) {
+			console.error(
+				`  [agent] tool: ${tc.tool}${tc.tool === "exec" ? ` → ${(tc.args as { command?: string }).command?.slice(0, 80)}` : ""}`,
+			);
 			const result = await executeTool(tc, reminders);
 			messages.push(result);
 
@@ -111,12 +121,14 @@ export async function agentLoop(
 				const validation = options?.validateResult?.(result.result);
 				if (validation) {
 					// 校验失败，注入拒绝消息，继续循环
+					console.error(`  [agent] submit rejected: ${validation}`);
 					messages.push({
 						type: "user_text",
 						content: `Your submission was rejected: ${validation}\nPlease fix and submit again.`,
 					});
 					break;
 				}
+				console.error("  [agent] submit accepted ✓");
 				return {
 					result: result.result,
 					report: result.report,
