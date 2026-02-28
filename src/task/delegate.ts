@@ -87,18 +87,13 @@ export async function delegateTask<T = unknown>(
 	}
 
 	// ── Step 2: RAG 检索 + workflow 发现（并行） ──
-	const [skillHits, memoryHits, historyHits, workflows] = await Promise.all([
-		ragSearch(query, "skill"),
-		ragSearch(query, "memory"),
-		ragSearch(query, "history"),
+	// LLM-as-Retriever: 单次调用检索所有 space，避免多次 LLM 请求
+	const [ragHits, workflows] = await Promise.all([
+		ragSearch(query, "all"),
 		discoverWorkflows(),
 	]);
 
-	const ragContext = formatRagResults([
-		...skillHits.results,
-		...memoryHits.results,
-		...historyHits.results,
-	]);
+	const ragContext = formatRagResults(ragHits.results);
 
 	const workflowList =
 		workflows.length > 0
