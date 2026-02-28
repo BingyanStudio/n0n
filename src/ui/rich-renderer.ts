@@ -199,7 +199,12 @@ export class RichRenderer implements Renderer {
 				return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray("(full write)")}\n`;
 			}
 			case "reminder": {
-				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)}\n`;
+				let out = `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)} ${style.gray(`${result.content.length} chars`)}\n`;
+				const truncated = truncateMiddle(result.content, 500, 200, 300);
+				for (const line of truncated.split("\n")) {
+					out += `${style.gray("  │")} ${style.dim(line)}\n`;
+				}
+				return out;
 			}
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}\n`;
