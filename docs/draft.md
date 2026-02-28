@@ -52,3 +52,84 @@ A：
 ### 定期反思
 
 > 1. 所有的推理历史 / 以及产出的 worflow（ts/js 脚本）都会被review，并且提取可用信息放进记忆中
+
+### 自我能力拓展
+
+我的想法就是所有的 workflow 都类似于 monorepo，可以互相引用和调用。
+
+至于如何发现能力，模型可以通过ls方法去做，以及每个monorepo都要求有一个readme，后续可以通过 createTask 的 workflow 步骤增强。
+
+### skill 的注册和创建
+
+和定期反思出来的记忆的处理路径基本一致，但是skill产出的内容优先级更高。
+
+## 技术简要决策
+
+### subagnt 工具
+
+我们不提供工具注册手段。每个agent都只有最基础的工具：
+1. exec 执行命令，参数：
+    - 命令内容
+    - ？执行位置，默认为项目根目录
+    - ？等待执行时长（默认为 2min，即使调用执行没结束也继续执行循环）
+2. write 写入，参数：
+    - path
+    - ？search （若不提供或者为空，则视为完整写入）
+    - replace
+    - ？expectedReplaceTime（默认为1，也即search精准匹配，和期望不符合会返回工具错误
+3. read-media 读取图片，参数：
+    - path
+    - focusX
+    - focusY
+    - scale
+4. reminder 为自己设置提醒，会在n轮后作为user消息插入
+    - content
+    - ？delay （n轮后插入，默认为7）
+5. submit 交付需要的结果：
+    - result 返回结果，一般为 `Result<T, E>` 若调用方没有要求结果，则可以是自然文本，若不符合要求，则会打回去重新调用
+    - ？report 支持返回简明的汇报，调用方选择性处理
+
+这应该能够为ai提供所有所需的能力
+
+### task 库
+
+#### subagent
+
+调用方法：
+```ts
+async function subagent(history:DomainMessage[],schema?:ZodSchema): SubagentResult<T>
+type SubagentResult<T> = {
+    result: T,
+    report: string,
+    history: DomainMessage[]
+}
+```
+
+#### ragsearch
+
+调用方法：
+```ts
+async function ragSearch(query:string,space?:SearchSpace): RagSearchResult
+type SearchSpace = "all" | "memory" | "skill" | "history"
+```
+
+#### task
+
+调用方法：
+```ts
+async function delegateTask(query:string,schema?:ZodSchema): TaskResult<T>
+type TaskResult<T> = {
+    result: T,
+    report: string,
+    history: DomainMessage[]
+}
+```
+
+在调用前我们会做：
+1. 调用 subagent 发起一次咨询："我想要做xxx，我想要想你请教一下这件事情的最佳实践、以及可能会遇到的问题和解决办法，写入文档" 要求返回文档路径。
+2. 使用 rag，对建议文档和问题查找（记忆、skill、history）所有相关的信息。其中匹配精准度逐渐提高（以为history噪声高）
+3. 组装所有的内容，提交为一次 subagent
+
+#### DomainMessage
+
+标准领域设计规范，内部只记录数据，具体提示词转换由统一处理负责，同时能够避免：cot过长；toolcall、toolresult不匹配；提示词缓存性能下降。
