@@ -12,6 +12,7 @@
 import type { ZodType } from "zod";
 import { subagent } from "../agent/subagent.ts";
 import type { DomainMessage } from "../types/domain.ts";
+import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
 
@@ -69,11 +70,12 @@ export async function delegateTask(
 		}
 	}
 
-	// ── Step 2: RAG 检索 ──
-	const [skillHits, memoryHits, historyHits] = await Promise.all([
+	// ── Step 2: RAG 检索 + workflow 发现（并行） ──
+	const [skillHits, memoryHits, historyHits, workflows] = await Promise.all([
 		ragSearch(query, "skill"),
 		ragSearch(query, "memory"),
 		ragSearch(query, "history"),
+		discoverWorkflows(),
 	]);
 
 	const ragContext = formatRagResults([
@@ -82,16 +84,32 @@ export async function delegateTask(
 		...historyHits.results,
 	]);
 
+	const workflowList =
+		workflows.length > 0
+			? workflows
+					.map(
+						(w) =>
+							`- ${w.name}: ${w.description || "(no description)"} → ${w.path}`,
+					)
+					.join("\n")
+			: "";
+
 	// ── Step 3: 组装上下文，执行 ──
-	const enrichedPrompt = buildEnrichedPrompt(query, consultAdvice, ragContext);
+	const enrichedPrompt = buildEnrichedPrompt(
+		query,
+		consultAdvice,
+		ragContext,
+		workflowList,
+	);
 
 	const history: DomainMessage[] = [
 		{
 			type: "system",
 			content: [
 				"You are a capable AI agent executing a delegated task.",
-				"You have been provided with consultation advice and relevant context from previous work.",
-				"Use the tools available to complete the task thoroughly.",
+				"You have been provided with consultation advice, relevant context, and a list of existing workflows.",
+				"If an existing workflow matches the task, run it with `exec` (bun run src/main.ts run <path>) and submit its output.",
+				"Otherwise, use the tools available to complete the task thoroughly.",
 				"When done, use `submit` to deliver your result.",
 			].join("\n"),
 		},
@@ -128,8 +146,13 @@ function buildEnrichedPrompt(
 	query: string,
 	advice: string,
 	ragContext: string,
+	workflowList: string,
 ): string {
 	const parts = [`## Task\n${query}`];
+
+	if (workflowList) {
+		parts.push(`## Available Workflows (reuse if applicable)\n${workflowList}`);
+	}
 
 	if (advice && advice !== "(consultation unavailable)") {
 		parts.push(`## Consultation Advice\n${advice}`);
