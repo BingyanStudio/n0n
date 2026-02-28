@@ -17,7 +17,7 @@ import { createInterface } from "node:readline";
 import { subagent } from "./agent/index.ts";
 import { loadSchedules, startScheduler } from "./scheduler/index.ts";
 import type { DomainMessage } from "./types/domain.ts";
-import { isTTY } from "./ui/ansi.ts";
+import { isTTY, label, style, writeln } from "./ui/ansi.ts";
 import { PlainRenderer } from "./ui/renderer.ts";
 import { RichRenderer } from "./ui/rich-renderer.ts";
 import { discoverWorkflows, runWorkflow } from "./workflow/index.ts";
@@ -188,15 +188,20 @@ async function interactiveLoop(initialInput?: string) {
 			rl.question(question, resolve);
 		});
 
-	console.log("n0n — Natural Language Workflow Engine");
-	console.log('输入任务描述，AI 将创建可复用的 workflow。输入 "exit" 退出。\n');
+	writeln(
+		style.bold("n0n") + style.gray(" — Natural Language Workflow Engine"),
+	);
+	writeln(
+		style.gray('输入任务描述，AI 将创建可复用的 workflow。输入 "exit" 退出。'),
+	);
+	writeln();
 
-	let userInput = initialInput ?? (await prompt("> "));
+	let userInput = initialInput ?? (await prompt(`${label.user()} `));
 	let history: DomainMessage[] = [];
 
 	while (userInput.trim() !== "exit") {
 		if (!userInput.trim()) {
-			userInput = await prompt("> ");
+			userInput = await prompt(`${label.user()} `);
 			continue;
 		}
 
@@ -243,29 +248,34 @@ async function interactiveLoop(initialInput?: string) {
 
 		if (isError) {
 			const errMsg = (result.result as Record<string, unknown>).error;
-			console.log(`\n⚠️ Agent 需要更多信息: ${errMsg}`);
-			if (result.report) console.log(`  ${result.report}`);
+			writeln();
+			writeln(`${style.yellow("⚠")} Agent 需要更多信息: ${errMsg}`);
+			if (result.report) writeln(style.gray(`  ${result.report}`));
 			history.push({
 				type: "user_text",
 				content: `Your submission was rejected. Error: ${errMsg}\nPlease wait for the user to provide more information.`,
 			});
-			console.log("请补充信息，或输入 'exit' 退出:\n");
-			userInput = await prompt("> ");
+			writeln(style.gray("请补充信息，或输入 'exit' 退出:"));
+			writeln();
+			userInput = await prompt(`${label.user()} `);
 			continue;
 		}
 
-		console.log(`\n✅ Workflow 创建完成: ${result.result}`);
-		if (result.report) console.log(`  ${result.report}`);
+		writeln();
+		writeln(`${style.green("✓")} Workflow 创建完成: ${result.result}`);
+		if (result.report) writeln(style.gray(`  ${result.report}`));
 		history.push({
 			type: "user_text",
 			content: `Your submission was accepted. Result: ${typeof result.result === "string" ? result.result : JSON.stringify(result.result)}\nWaiting for the next task from the user.`,
 		});
-		console.log("\n继续输入新任务，或输入 'exit' 退出:\n");
-		userInput = await prompt("> ");
+		writeln();
+		writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
+		writeln();
+		userInput = await prompt(`${label.user()} `);
 	}
 
 	rl.close();
-	console.log("Bye!");
+	writeln(style.gray("Bye!"));
 }
 
 main().catch((err) => {
