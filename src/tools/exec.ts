@@ -59,6 +59,13 @@ export async function execTool(
 				? `${s.slice(0, maxLen)}\n... [truncated, ${s.length} chars total]`
 				: s;
 
+		// 当 exit=0 但无任何输出时，追加诊断提示
+		const hasOutput = stdout.trim() || stderr.trim();
+		const hint =
+			!hasOutput && exitCode === 0
+				? "(no output — script may not have top-level executable code, or async operations may not have been awaited)"
+				: "";
+
 		return {
 			type: "tool_result",
 			callId,
@@ -66,7 +73,7 @@ export async function execTool(
 			command: args.command,
 			cwd,
 			exitCode,
-			stdout: truncate(stdout),
+			stdout: hint || truncate(stdout),
 			stderr: truncate(stderr),
 			durationMs,
 		};

@@ -17,6 +17,7 @@ export const TOOL_DEFINITIONS: LLMToolDefinition[] = [
 						"Use Windows commands: `type` (not cat), `dir` (not ls), `findstr` (not grep). No `head`, `tail`, `wc`.",
 						'Use `bun -e "..."` (double quotes only, no single quotes) for cross-platform JS one-liners.',
 						"Known issues: `curl` may fail if a proxy is required — if curl returns exit code 6 or hangs, switch to `bun -e` with fetch().",
+						"Debugging tips: use `2>&1` to merge stderr into stdout; append `&& echo __DONE__` to confirm execution completed; use `> output.txt 2>&1` to capture output to file.",
 						"If a command fails 2-3 times, stop retrying and report the issue via submit.",
 					].join("\n")
 				: "Execute a shell command. Use for running code, reading files (cat/grep/head), system operations. Returns stdout, stderr, and exit code.",
