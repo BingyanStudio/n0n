@@ -16,6 +16,7 @@
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { Glob } from "bun";
 import { delegateTask } from "../task/delegate.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
@@ -38,7 +39,7 @@ function parseMdc(content: string): {
 	meta: Record<string, string>;
 	body: string;
 } {
-	const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+	const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
 	if (!match) return { meta: {}, body: content.trim() };
 
 	const meta: Record<string, string> = {};
@@ -63,15 +64,8 @@ export async function loadSchedules(): Promise<ScheduleEntry[]> {
 	const dir = resolve(SCHEDULES_DIR);
 	if (!existsSync(dir)) return [];
 
-	const proc = Bun.spawnSync(["find", dir, "-name", "*.mdc", "-type", "f"], {
-		stdout: "pipe",
-	});
-
-	const files = new TextDecoder()
-		.decode(proc.stdout)
-		.trim()
-		.split("\n")
-		.filter(Boolean);
+	const glob = new Glob("**/*.mdc");
+	const files = Array.from(glob.scanSync({ cwd: dir, absolute: true }));
 
 	const entries: ScheduleEntry[] = [];
 

@@ -7,6 +7,7 @@
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { Glob } from "bun";
 
 export interface WorkflowMeta {
 	name: string;
@@ -29,24 +30,18 @@ export async function discoverWorkflows(
 		const dir = resolve(absBase, sub);
 		if (!existsSync(dir)) continue;
 
-		const proc = Bun.spawnSync(["find", dir, "-name", "*.ts", "-type", "f"], {
-			stdout: "pipe",
-		});
+		const glob = new Glob("**/*.ts");
+		const relFiles = Array.from(glob.scanSync({ cwd: dir }));
 
-		const files = new TextDecoder()
-			.decode(proc.stdout)
-			.trim()
-			.split("\n")
-			.filter(Boolean);
-
-		for (const file of files) {
+		for (const rel of relFiles) {
+			const file = resolve(dir, rel);
 			const content = await Bun.file(file).text();
 			const descMatch = content.match(
 				/^\/\*\*?\s*\n?\s*\*?\s*(.+?)(?:\n|\s*\*\/)/,
 			);
 			const description = descMatch?.[1]?.trim() ?? "";
 
-			const name = file.replace(`${absBase}/`, "").replace(/\.ts$/, "");
+			const name = `${sub}/${rel.replace(/\\/g, "/")}`.replace(/\.ts$/, "");
 
 			results.push({ name, path: file, description });
 		}
