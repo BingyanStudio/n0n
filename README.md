@@ -1,12 +1,12 @@
 # n0n — 自然语言驱动的工作流引擎
 
-> Code-first workflow engine: TypeScript 代码即 workflow，AI 自动编排与执行。
+> Code-first workflow engine: 用自然语言描述任务，AI 自动创建、测试、交付可复用的 TypeScript workflow。
 
 ## 核心理念
 
 - **代码即工作流** — 不用拖拽式 DAG，直接用 TypeScript 编写 workflow
-- **AI 原生** — subagent 作为核心原语，模型在代码中自主调用工具完成任务
-- **自扩展** — 写一个 .ts 文件就是注册一个 skill，import/export 即组合
+- **AI 创建 workflow** — 用户描述任务 → AI 编写 .ts 文件 → 运行验证 → 迭代修正 → 交付可复用 workflow
+- **自扩展** — 每个 .ts 文件就是一个 skill，import/export 即组合
 - **文件系统即注册表** — `workflows/skills/` 和 `workflows/tasks/` 即发现机制
 
 ## 快速开始
@@ -16,53 +16,74 @@
 bun install
 
 # 配置 .env
-LLM_BASE_URL=https://api.openai.com
+LLM_BASE_URL=https://api.example.com
 LLM_API_KEY=sk-xxx
-LLM_MODEL=gpt-4o
+LLM_MODEL=deepseek/deepseek-v3.2
 
-# 直接对话
-bun run src/main.ts chat "帮我写一个 hello world"
+# 交互式对话 — AI 自动创建 workflow
+bun start
 
-# 完整任务流水线（咨询 + RAG + 执行）
-bun run src/main.ts task "分析这个 CSV 找出异常"
+# 直接传入任务
+bun start "帮我每天早上总结 Hacker News 热门"
 
-# 运行 workflow 文件
-bun run src/main.ts run workflows/tasks/csv-analysis.ts
+# 运行已有 workflow
+bun run src/main.ts run workflows/tasks/xxx.ts
 
 # 定时任务
-bun run src/main.ts schedule add hn-daily "0 8 * * *" "总结 HN 热门并发邮件"
+bun run src/main.ts schedule add hn-daily "0 8 * * *" "总结 HN 热门"
 bun run src/main.ts scheduler start
+
+# 查看所有 workflow
+bun run src/main.ts workflows
+```
+
+## 工作流程
+
+```
+用户："帮我分析 CSV 找出异常"
+         ▼
+  workflow-builder agent
+    1. 理解任务需求
+    2. 编写 workflows/tasks/csv-analysis.ts
+    3. 运行测试: bun run <workflow>
+    4. 报错 → 修改代码 → 重新测试
+    5. 通过 → submit workflow 路径
+         ▼
+  ✅ 可复用的 .ts workflow 文件
+```
+
+## Workflow 类型
+
+### 直接代码（确定性任务）
+```typescript
+/** 获取天气信息 */
+export default async function run() {
+  const proc = Bun.spawn(["curl", "-s", "https://wttr.in/Tokyo?format=j1"], { stdout: "pipe" });
+  const data = JSON.parse(await new Response(proc.stdout).text());
+  return { city: "Tokyo", temp: data.current_condition[0].temp_C + "°C" };
+}
+```
+
+### AI 驱动（需要推理的任务）
+```typescript
+import { subagent } from "../../src/index.ts";
+/** 分析 CSV 异常数据 */
+export default async function run() {
+  const result = await subagent("分析 data/sample.csv 找出异常数据");
+  return result.result;
+}
 ```
 
 ## 架构
 
 ```
-用户（自然语言）
-       ▼
-┌─ Engine ──────────────────────────────┐
-│                                       │
-│  delegateTask 流水线：                 │
-│    1. subagent 咨询（意图增强）        │
-│    2. RAG 检索（memory/skill/history）│
-│    3. 上下文组装 → subagent 执行      │
-│                                       │
-│  Agent 工具：exec / write / reminder / submit │
-│                                       │
-│  workflows/skills/  ← 文件系统即注册表 │
-│  workflows/tasks/   ← ls + README 即发现│
-└───────────────────────────────────────┘
-```
-
-## 目录结构
-
-```
 src/
-  types/       DomainMessage 领域类型
-  llm/         LLM 客户端 + 消息适配器
-  agent/       Agent Loop + subagent
-  task/        delegateTask 流水线 + RAG
-  scheduler/   定时触发器
-  workflow/    Workflow 运行时
+  types/       DomainMessage 领域类型（判别联合，数据与提示词分离）
+  llm/         LLM 客户端 + DomainMessage → API 消息适配器
+  agent/       Agent Loop（exec/write/reminder/submit 工具）+ subagent
+  task/        delegateTask 流水线（意图增强 + RAG + 执行）
+  scheduler/   定时触发器（cron + 持久化调度表）
+  workflow/    Workflow 运行时（文件系统发现 + 动态 import）
 workflows/
   skills/      可复用的 skill（.ts 文件）
   tasks/       任务 workflow
