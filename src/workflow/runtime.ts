@@ -23,8 +23,10 @@ export async function discoverWorkflows(
 	const results: WorkflowMeta[] = [];
 	const dirs = ["skills", "tasks"];
 
+	const absBase = resolve(baseDir);
+
 	for (const sub of dirs) {
-		const dir = resolve(baseDir, sub);
+		const dir = resolve(absBase, sub);
 		if (!existsSync(dir)) continue;
 
 		const proc = Bun.spawnSync(["find", dir, "-name", "*.ts", "-type", "f"], {
@@ -38,14 +40,13 @@ export async function discoverWorkflows(
 			.filter(Boolean);
 
 		for (const file of files) {
-			// 尝试读取文件首行注释作为描述
 			const content = await Bun.file(file).text();
 			const descMatch = content.match(
 				/^\/\*\*?\s*\n?\s*\*?\s*(.+?)(?:\n|\s*\*\/)/,
 			);
 			const description = descMatch?.[1]?.trim() ?? "";
 
-			const name = file.replace(`${baseDir}/`, "").replace(/\.ts$/, "");
+			const name = file.replace(`${absBase}/`, "").replace(/\.ts$/, "");
 
 			results.push({ name, path: file, description });
 		}
