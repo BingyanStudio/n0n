@@ -11,6 +11,17 @@ interface ExecArgs {
 }
 
 const PROJECT_ROOT = process.cwd();
+const IS_WINDOWS = process.platform === "win32";
+const SHELL_CMD: [string, string] = IS_WINDOWS
+	? ["cmd", "/c"]
+	: ["sh", "-c"];
+
+/** 运行环境摘要，供 system prompt 注入 */
+export const ENV_INFO = {
+	os: IS_WINDOWS ? "Windows" : process.platform,
+	shell: IS_WINDOWS ? "cmd.exe" : "sh",
+	cwd: PROJECT_ROOT,
+} as const;
 
 export async function execTool(
 	callId: string,
@@ -21,7 +32,7 @@ export async function execTool(
 	const start = Date.now();
 
 	try {
-		const proc = Bun.spawn(["sh", "-c", args.command], {
+		const proc = Bun.spawn([...SHELL_CMD, args.command], {
 			cwd,
 			stdout: "pipe",
 			stderr: "pipe",
