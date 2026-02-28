@@ -74,7 +74,7 @@ export class RichRenderer implements Renderer {
 			case "exec": {
 				const cmd = (tc.args as { command?: string }).command ?? "";
 				this.toolRegion.writeln(
-					`${style.dim("▸")} ${toolName} ${style.gray(cmd.slice(0, 100))}`,
+					`${style.dim("▸")} ${toolName} ${cmd.slice(0, 100)}`,
 				);
 				break;
 			}
@@ -85,9 +85,7 @@ export class RichRenderer implements Renderer {
 					replace?: string;
 				};
 				const path = args.path ?? "";
-				this.toolRegion.writeln(
-					`${style.dim("▸")} ${toolName} ${style.gray(`→ ${path}`)}`,
-				);
+				this.toolRegion.writeln(`${style.dim("▸")} ${toolName} → ${path}`);
 				if (args.search) {
 					const searchLines = args.search.split("\n");
 					const replaceLines = (args.replace ?? "").split("\n");
@@ -121,7 +119,7 @@ export class RichRenderer implements Renderer {
 			case "reminder": {
 				const content = (tc.args as { content?: string }).content ?? "";
 				this.toolRegion.writeln(
-					`${style.dim("▸")} ${toolName} ${style.gray(content.slice(0, 60))}`,
+					`${style.dim("▸")} ${toolName} ${content.slice(0, 60)}`,
 				);
 				break;
 			}
@@ -175,7 +173,7 @@ export class RichRenderer implements Renderer {
 						? style.green(`exit=${result.exitCode}`)
 						: style.red(`exit=${result.exitCode}`);
 				const outLen = result.stdout.length + result.stderr.length;
-				const cmd = style.gray(result.command.slice(0, 80));
+				const cmd = result.command.slice(0, 80);
 				// 结果摘要行
 				let out = `${style.dim("◂")} ${style.cyan("exec")} ${cmd} ${duration} ${exit} ${style.gray(`${outLen} chars`)}\n`;
 				// 工具输出内容（缩进，表示从属）
@@ -192,13 +190,13 @@ export class RichRenderer implements Renderer {
 			}
 			case "write": {
 				if (!result.success) {
-					return `${style.dim("◂")} ${style.cyan("write")} ${style.gray(result.path)}: ${style.red(result.error ?? "failed")}\n`;
+					return `${style.dim("◂")} ${style.cyan("write")} ${result.path}: ${style.red(result.error ?? "failed")}\n`;
 				}
 				if (result.searchPattern) {
 					const searchLines = result.searchPattern.split("\n").length;
-					return `${style.dim("◂")} ${style.cyan("write")} ${style.gray(result.path)} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}\n`;
+					return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}\n`;
 				}
-				return `${style.dim("◂")} ${style.cyan("write")} ${style.gray(result.path)} ${style.gray("(full write)")}\n`;
+				return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray("(full write)")}\n`;
 			}
 			case "reminder": {
 				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)}\n`;
