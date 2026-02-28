@@ -1,74 +1,101 @@
 /**
- * 定时触发器 — 持久化调度表 + 触发循环
+ * 定时触发器 — MDC 文件驱动
  *
- * 调度表持久化为 JSON 文件，触发循环每分钟检查一次。
+ * 监控 workflows/schedules/ 目录下的 .mdc 文件，
+ * 按 cron 表达式触发 delegateTask 或 runWorkflow。
+ *
+ * MDC 格式：
+ * ---
+ * name: task-name
+ * cron: "0 8 * * *"
+ * enabled: true
+ * workflow: workflows/tasks/xxx.ts  # 可选，有则直接运行 workflow
+ * ---
+ * 提示词内容（当无 workflow 字段时，作为 delegateTask 的 query）
  */
 
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { delegateTask } from "../task/delegate.ts";
+import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
 
-const SCHEDULE_FILE = "data/schedules.json";
+const SCHEDULES_DIR = "workflows/schedules";
 
 export interface ScheduleEntry {
-	id: string;
 	name: string;
 	cron: string;
-	task: string;
 	enabled: boolean;
-	createdAt: string;
-	lastRunAt: string | null;
+	workflow: string | null;
+	prompt: string;
+	filePath: string;
 }
 
-// ── 调度表管理 ──
+/**
+ * 解析 MDC 文件的 frontmatter
+ */
+function parseMdc(content: string): {
+	meta: Record<string, string>;
+	body: string;
+} {
+	const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+	if (!match) return { meta: {}, body: content.trim() };
 
-async function loadSchedules(): Promise<ScheduleEntry[]> {
-	if (!existsSync(SCHEDULE_FILE)) return [];
-	try {
-		const text = await Bun.file(SCHEDULE_FILE).text();
-		return JSON.parse(text) as ScheduleEntry[];
-	} catch {
-		return [];
+	const meta: Record<string, string> = {};
+	for (const line of (match[1] ?? "").split("\n")) {
+		const colonIdx = line.indexOf(":");
+		if (colonIdx === -1) continue;
+		const key = line.slice(0, colonIdx).trim();
+		const val = line
+			.slice(colonIdx + 1)
+			.trim()
+			.replace(/^["']|["']$/g, "");
+		meta[key] = val;
 	}
+
+	return { meta, body: (match[2] ?? "").trim() };
 }
 
-async function saveSchedules(entries: ScheduleEntry[]): Promise<void> {
-	await Bun.write(SCHEDULE_FILE, JSON.stringify(entries, null, 2));
-}
+/**
+ * 扫描 schedules 目录，加载所有 .mdc 文件
+ */
+export async function loadSchedules(): Promise<ScheduleEntry[]> {
+	const dir = resolve(SCHEDULES_DIR);
+	if (!existsSync(dir)) return [];
 
-export async function addSchedule(
-	name: string,
-	cron: string,
-	task: string,
-): Promise<ScheduleEntry> {
-	// 验证 cron 表达式
-	parseCron(cron);
+	const proc = Bun.spawnSync(["find", dir, "-name", "*.mdc", "-type", "f"], {
+		stdout: "pipe",
+	});
 
-	const entries = await loadSchedules();
-	const entry: ScheduleEntry = {
-		id: crypto.randomUUID(),
-		name,
-		cron,
-		task,
-		enabled: true,
-		createdAt: new Date().toISOString(),
-		lastRunAt: null,
-	};
-	entries.push(entry);
-	await saveSchedules(entries);
-	return entry;
-}
+	const files = new TextDecoder()
+		.decode(proc.stdout)
+		.trim()
+		.split("\n")
+		.filter(Boolean);
 
-export async function removeSchedule(id: string): Promise<boolean> {
-	const entries = await loadSchedules();
-	const filtered = entries.filter((e) => e.id !== id);
-	if (filtered.length === entries.length) return false;
-	await saveSchedules(filtered);
-	return true;
-}
+	const entries: ScheduleEntry[] = [];
 
-export async function listSchedules(): Promise<ScheduleEntry[]> {
-	return loadSchedules();
+	for (const file of files) {
+		try {
+			const content = await Bun.file(file).text();
+			const { meta, body } = parseMdc(content);
+
+			if (!meta.name || !meta.cron) continue;
+
+			entries.push({
+				name: meta.name,
+				cron: meta.cron,
+				enabled: meta.enabled !== "false",
+				workflow: meta.workflow || null,
+				prompt: body,
+				filePath: file,
+			});
+		} catch {
+			// 解析失败静默跳过
+		}
+	}
+
+	return entries;
 }
 
 // ── 触发循环 ──
@@ -79,7 +106,9 @@ export async function startScheduler(): Promise<void> {
 	if (running) return;
 	running = true;
 
-	console.log("[scheduler] Started. Checking every 60s.");
+	console.log(
+		"[scheduler] Started. Watching workflows/schedules/*.mdc every 60s.",
+	);
 
 	const tick = async () => {
 		if (!running) return;
@@ -92,29 +121,41 @@ export async function startScheduler(): Promise<void> {
 
 			try {
 				const fields = parseCron(entry.cron);
-				if (cronMatches(fields, now)) {
-					console.log(`[scheduler] Triggering: ${entry.name}`);
-					entry.lastRunAt = now.toISOString();
+				if (!cronMatches(fields, now)) continue;
 
-					// 异步执行，不阻塞调度循环
-					delegateTask(entry.task, { skipConsultation: false }).then(
+				console.log(`[scheduler] Triggering: ${entry.name}`);
+
+				if (entry.workflow) {
+					// 有 workflow 文件 → 直接运行
+					runWorkflow(entry.workflow).then(
 						(result) => {
 							console.log(
-								`[scheduler] Completed: ${entry.name}`,
-								result.report,
+								`[scheduler] ✅ ${entry.name}:`,
+								typeof result === "string" ? result.slice(0, 200) : result,
 							);
 						},
 						(err) => {
-							console.error(`[scheduler] Failed: ${entry.name}`, err);
+							console.error(`[scheduler] ❌ ${entry.name}:`, err);
+						},
+					);
+				} else {
+					// 无 workflow → 用提示词 delegateTask
+					delegateTask(entry.prompt).then(
+						(result) => {
+							console.log(
+								`[scheduler] ✅ ${entry.name}:`,
+								result.report ?? result.result,
+							);
+						},
+						(err) => {
+							console.error(`[scheduler] ❌ ${entry.name}:`, err);
 						},
 					);
 				}
 			} catch (err) {
-				console.error(`[scheduler] Error checking ${entry.name}:`, err);
+				console.error(`[scheduler] Error: ${entry.name}:`, err);
 			}
 		}
-
-		await saveSchedules(entries);
 	};
 
 	// 每分钟检查
@@ -122,7 +163,6 @@ export async function startScheduler(): Promise<void> {
 	// 立即执行一次
 	await tick();
 
-	// 优雅退出
 	process.on("SIGINT", () => {
 		running = false;
 		clearInterval(interval);

@@ -15,12 +15,7 @@
 
 import { createInterface } from "node:readline";
 import { subagent } from "./agent/index.ts";
-import {
-	addSchedule,
-	listSchedules,
-	removeSchedule,
-	startScheduler,
-} from "./scheduler/index.ts";
+import { loadSchedules, startScheduler } from "./scheduler/index.ts";
 import type { DomainMessage } from "./types/domain.ts";
 import { discoverWorkflows, runWorkflow } from "./workflow/index.ts";
 
@@ -65,12 +60,25 @@ Use delegateTask when the task requires AI reasoning (analysis, summarization, c
 5. When it works, \`submit\` the workflow file path as your result
 6. If you need information you don't have, submit { ok: false, error: "what you need" }
 
+## Scheduled tasks
+For tasks that should run on a schedule, create a .mdc file in workflows/schedules/:
+\`\`\`
+---
+name: task-name
+cron: "0 8 * * *"
+enabled: true
+workflow: workflows/tasks/xxx.ts
+---
+Optional prompt text (used with delegateTask if no workflow specified)
+\`\`\`
+
 ## Rules
 - Skills (reusable components) go in workflows/skills/
 - Tasks (complete workflows) go in workflows/tasks/
 - Every file must have a JSDoc comment describing what it does
 - Always test before submitting
 - Prefer direct code over delegateTask when the task is deterministic
+- ALWAYS check existing workflows first (ls workflows/skills/ workflows/tasks/) — reuse existing ones instead of creating duplicates
 `;
 
 const [command, ...args] = process.argv.slice(2);
@@ -89,57 +97,23 @@ async function main() {
 			break;
 		}
 
-		case "schedule": {
-			const sub = args[0];
-			switch (sub) {
-				case "add": {
-					const [, name, cron, ...taskParts] = args;
-					const task = taskParts.join(" ");
-					if (!name || !cron || !task) {
-						console.error('Usage: n0n schedule add <name> "<cron>" <task>');
-						process.exit(1);
-					}
-					const entry = await addSchedule(name, cron, task);
-					console.log("✅ Schedule added:", entry);
-					break;
+		case "schedules": {
+			const entries = await loadSchedules();
+			if (entries.length === 0) {
+				console.log("No schedules. Create .mdc files in workflows/schedules/");
+			} else {
+				for (const e of entries) {
+					const target = e.workflow ?? "(delegateTask)";
+					console.log(
+						`  ${e.enabled ? "✅" : "⏸️"} ${e.cron} | ${e.name} → ${target}`,
+					);
 				}
-				case "list": {
-					const entries = await listSchedules();
-					if (entries.length === 0) {
-						console.log("No schedules.");
-					} else {
-						for (const e of entries) {
-							console.log(
-								`  ${e.enabled ? "✅" : "⏸️"} ${e.id.slice(0, 8)} | ${e.cron} | ${e.name}: ${e.task}`,
-							);
-						}
-					}
-					break;
-				}
-				case "remove": {
-					const id = args[1];
-					if (!id) {
-						console.error("Usage: n0n schedule remove <id>");
-						process.exit(1);
-					}
-					const ok = await removeSchedule(id);
-					console.log(ok ? "✅ Removed" : "❌ Not found");
-					break;
-				}
-				default:
-					console.error("Usage: n0n schedule <add|list|remove>");
-					process.exit(1);
 			}
 			break;
 		}
 
 		case "scheduler": {
-			if (args[0] === "start") {
-				await startScheduler();
-			} else {
-				console.error("Usage: n0n scheduler start");
-				process.exit(1);
-			}
+			await startScheduler();
 			break;
 		}
 

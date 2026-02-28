@@ -1,9 +1,7 @@
 export { cronMatches, parseCron } from "./cron.ts";
 export type { ScheduleEntry } from "./scheduler.ts";
 export {
-	addSchedule,
-	listSchedules,
-	removeSchedule,
+	loadSchedules,
 	startScheduler,
 	stopScheduler,
 } from "./scheduler.ts";

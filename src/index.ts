@@ -13,11 +13,7 @@ export type {
 export { subagent } from "./agent/index.ts";
 export type { ScheduleEntry } from "./scheduler/index.ts";
 // 调度
-export {
-	addSchedule,
-	listSchedules,
-	removeSchedule,
-} from "./scheduler/index.ts";
+export { loadSchedules, startScheduler } from "./scheduler/index.ts";
 export type { RagSearchResult, SearchSpace, TaskResult } from "./task/index.ts";
 // 高层 API — workflow 中优先使用
 export { delegateTask, ragSearch } from "./task/index.ts";
