@@ -86,7 +86,7 @@ submit: { result: "workflows/tasks/fetch-danbooru-cat-ears.ts" }
 2. **Research before coding**: use \`exec\` to test APIs (curl/fetch) before writing the workflow file.
 3. **ONE file per task**: write one .ts file. If it fails, fix it — never create a second file.
 4. **Fix, don't recreate**: when a test fails, use \`write\` with search/replace on the SAME file.
-5. **Files only in workflows/**: never write files to the project root or other directories.
+5. **Files only in workflows/**: never write files to the project root or other directories. Temporary test files go in \`.temp/\` (auto-cleaned on exit).
 6. **Run workflows correctly**: ALWAYS use \`bun run src/main.ts run <path>\` to test workflows. NEVER use \`bun run <file>\` directly — it won't call the exported function.
 7. **Follow-up tasks**: when the user adds a requirement to a previous workflow, modify the SAME file or import it in a new task.
 8. **Submit = file path**: always submit the workflow file path as your result, not the execution output.
@@ -290,6 +290,17 @@ async function interactiveLoop(initialInput?: string) {
 	rl.close();
 	writeln(style.gray("Bye!"));
 }
+
+import { rmSync } from "node:fs";
+
+function cleanupTemp() {
+	try {
+		rmSync(".temp", { recursive: true, force: true });
+	} catch {}
+}
+
+process.on("exit", cleanupTemp);
+process.on("SIGINT", () => { cleanupTemp(); process.exit(0); });
 
 main().catch((err) => {
 	console.error("Fatal error:", err);

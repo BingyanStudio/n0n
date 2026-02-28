@@ -5,3 +5,5 @@ dist/
 .cursor/
 bun.lock
 *.log
+.temp/
+redit-cookie.json
