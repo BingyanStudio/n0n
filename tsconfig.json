@@ -20,5 +20,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "types" : ["bun-types", "node"]
 }

@@ -117,7 +117,7 @@ export async function delegateTask<T = unknown>(
 	const envLine = `Environment: OS=${ENV_INFO.os}, Shell=${ENV_INFO.shell}, CWD=${ENV_INFO.cwd}`;
 	const shellHint =
 		ENV_INFO.os === "Windows"
-			? "IMPORTANT: You are on Windows. Use Windows commands (e.g., `type` instead of `cat`, `dir` instead of `ls`, `findstr` instead of `grep`). Paths use backslashes. You can also use `bun -e \"...\"` for cross-platform file operations."
+			? 'IMPORTANT: You are on Windows. Use Windows commands (e.g., `type` instead of `cat`, `dir` instead of `ls`, `findstr` instead of `grep`). Paths use backslashes. You can also use `bun -e "..."` for cross-platform file operations.'
 			: "You are on a Unix-like system. Standard shell commands (cat, ls, grep, etc.) are available.";
 
 	const history: DomainMessage[] = [

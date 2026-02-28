@@ -12,7 +12,7 @@ export const TOOL_DEFINITIONS: LLMToolDefinition[] = [
 		function: {
 			name: "exec",
 			description: IS_WINDOWS
-				? "Execute a command via cmd.exe on Windows. Use Windows commands: `type` (read file), `dir` (list files), `findstr` (search text). Or use `bun -e \"...\"` for cross-platform operations. Returns stdout, stderr, and exit code."
+				? 'Execute a command via cmd.exe on Windows. Use Windows commands: `type` (read file), `dir` (list files), `findstr` (search text). Or use `bun -e "..."` for cross-platform operations. Returns stdout, stderr, and exit code.'
 				: "Execute a shell command. Use for running code, reading files (cat/grep/head), system operations. Returns stdout, stderr, and exit code.",
 			parameters: {
 				type: "object",
