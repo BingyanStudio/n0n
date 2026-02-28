@@ -24,6 +24,8 @@ import type {
 	ToolResult,
 } from "../types/domain.ts";
 import type { LLMToolCall } from "../types/llm.ts";
+import type { Renderer } from "../ui/renderer.ts";
+import { PlainRenderer } from "../ui/renderer.ts";
 
 // ── 结果类型 ──
 
@@ -38,6 +40,8 @@ export interface AgentOptions<T = unknown> {
 	maxIterations?: number;
 	/** Zod schema 校验 submit 结果，默认视为 string */
 	schema?: ZodType<T>;
+	/** 渲染器，默认 PlainRenderer（向后兼容） */
+	renderer?: Renderer;
 }
 
 const MAX_SUBMIT_RETRIES = 4;
@@ -49,6 +53,7 @@ export async function agentLoop<T = unknown>(
 	options?: AgentOptions<T>,
 ): Promise<AgentResult<T>> {
 	const maxIter = options?.maxIterations ?? config.agent.maxIterations;
+	const renderer = options?.renderer ?? new PlainRenderer();
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
@@ -60,9 +65,7 @@ export async function agentLoop<T = unknown>(
 
 		// 转换为 API 格式并调用 LLM
 		const apiMessages = toAPIMessages(messages);
-		console.error(
-			`  [agent] round ${iteration + 1}/${maxIter} (${apiMessages.length} msgs)`,
-		);
+		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
 		const response = await chatCompletion({
 			messages: apiMessages,
 			tools: TOOL_DEFINITIONS,
@@ -79,9 +82,8 @@ export async function agentLoop<T = unknown>(
 		// 无工具调用 — 纯文本回复
 		if (!hasToolCalls) {
 			const content = assistantMsg.content ?? "";
-			console.error(
-				`  [agent] text response (${content.length} chars), idle=${idleCount + 1}`,
-			);
+			idleCount++;
+			renderer.textResponse(content, idleCount);
 			const textMsg: DomainMessage = {
 				type: "assistant_text",
 				content,
@@ -89,7 +91,6 @@ export async function agentLoop<T = unknown>(
 			messages.push(textMsg);
 
 			// 空转检测
-			idleCount++;
 			if (idleCount >= config.agent.maxIdleRounds) {
 				return {
 					result: content as T,
@@ -114,17 +115,16 @@ export async function agentLoop<T = unknown>(
 
 		// 执行每个工具
 		for (const tc of toolCalls) {
-			console.error(
-				`  [agent] tool: ${tc.tool}${tc.tool === "exec" ? ` → ${(tc.args as { command?: string }).command?.slice(0, 80)}` : ""}`,
-			);
+			renderer.toolCallStart(tc);
 			const result = await executeTool(tc, reminders);
+			renderer.toolCallEnd(result);
 			messages.push(result);
 
 			// 如果是 submit，校验并返回
 			if (result.tool === "submit") {
 				const validation = validateSubmit(result.result, options?.schema);
 				if (validation.ok) {
-					console.error("  [agent] submit accepted ✓");
+					renderer.submitAccepted();
 					return {
 						result: validation.value as T,
 						report: result.report,
@@ -134,8 +134,10 @@ export async function agentLoop<T = unknown>(
 				// 校验失败
 				submitRetries++;
 				if (submitRetries >= MAX_SUBMIT_RETRIES) {
-					console.error(
-						`  [agent] submit rejected ${submitRetries} times, giving up`,
+					renderer.submitRejected(
+						submitRetries,
+						MAX_SUBMIT_RETRIES,
+						`giving up after ${submitRetries} attempts`,
 					);
 					return {
 						result: result.result as T,
@@ -143,8 +145,10 @@ export async function agentLoop<T = unknown>(
 						history: messages,
 					};
 				}
-				console.error(
-					`  [agent] submit rejected (${submitRetries}/${MAX_SUBMIT_RETRIES}): ${validation.error}`,
+				renderer.submitRejected(
+					submitRetries,
+					MAX_SUBMIT_RETRIES,
+					validation.error,
 				);
 				messages.push({
 					type: "user_text",

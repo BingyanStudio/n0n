@@ -7,6 +7,7 @@
 
 import type { ZodType } from "zod";
 import type { DomainMessage } from "../types/domain.ts";
+import type { Renderer } from "../ui/renderer.ts";
 import type { AgentResult } from "./loop.ts";
 import { agentLoop } from "./loop.ts";
 
@@ -15,6 +16,8 @@ export interface SubagentOptions<T = unknown> {
 	schema?: ZodType<T>;
 	/** 最大循环轮次 */
 	maxIterations?: number;
+	/** 渲染器 */
+	renderer?: Renderer;
 }
 
 /**
@@ -27,5 +30,6 @@ export async function subagent<T = unknown>(
 	return agentLoop(history, {
 		maxIterations: options?.maxIterations,
 		schema: options?.schema,
+		renderer: options?.renderer,
 	});
 }
