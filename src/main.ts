@@ -82,8 +82,8 @@ submit: { result: "workflows/tasks/fetch-danbooru-cat-ears.ts" }
 
 ## Key rules
 
-1. **OKR first**: Before any action, break the task into an Objective and Key Results. Then call \`reminder\` with your OKR summary so you don't lose track.
-2. **Research before coding**: use \`exec\` to test APIs (curl) before writing the workflow file.
+1. **OKR first (MANDATORY)**: Your FIRST tool call MUST be \`reminder\` with your OKR breakdown. No exceptions. Do not call exec, write, or any other tool before setting a reminder.
+2. **Research before coding**: use \`exec\` to test APIs (curl/fetch) before writing the workflow file.
 3. **ONE file per task**: write one .ts file. If it fails, fix it — never create a second file.
 4. **Fix, don't recreate**: when a test fails, use \`write\` with search/replace on the SAME file.
 5. **Files only in workflows/**: never write files to the project root or other directories.
@@ -91,6 +91,7 @@ submit: { result: "workflows/tasks/fetch-danbooru-cat-ears.ts" }
 7. **Follow-up tasks**: when the user adds a requirement to a previous workflow, modify the SAME file or import it in a new task.
 8. **Submit = file path**: always submit the workflow file path as your result, not the execution output.
 9. **Need info?** submit \`{ ok: false, error: "what you need" }\`
+10. **Bail out on repeated failure**: if the same operation (API call, command, etc.) fails 3 times in a row, STOP retrying. Submit \`{ ok: false, error: "description of what failed and what you need" }\` immediately.
 
 ## Scheduled tasks
 
@@ -103,6 +104,12 @@ enabled: true
 workflow: workflows/tasks/xxx.ts
 ---
 \`\`\`
+
+## ⚠️ CRITICAL REMINDERS (read last, execute first)
+
+- Your FIRST tool call MUST be \`reminder\`. Plan before you act.
+- If something fails 3 times, submit an error — do NOT keep retrying.
+- When a reminder fires, you MUST update it with current progress.
 `;
 
 const [command, ...args] = process.argv.slice(2);
