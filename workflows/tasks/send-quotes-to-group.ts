@@ -12,8 +12,8 @@ export default async function run() {
 	}
 
 	const serverHost = config.server_host || "127.0.0.1";
-	const serverPort = parseInt(config.server_port || "9881");
-	const token = config.token || "";
+	const serverPort = parseInt(config.server_port || "9881", 10);
+	const _token = config.token || "";
 
 	console.log(`Napcat配置: ${serverHost}:${serverPort}`);
 
@@ -155,7 +155,7 @@ export default async function run() {
 							ws.removeEventListener("message", handler);
 							resolve(data);
 						}
-					} catch (e) {
+					} catch (_e) {
 						// 忽略解析错误
 					}
 				};
