@@ -73,19 +73,27 @@ export const TOOL_DEFINITIONS: LLMToolDefinition[] = [
 		type: "function",
 		function: {
 			name: "reminder",
-			description:
-				"Set a reminder for yourself. The reminder content will be injected as a user message after N rounds. Use this to avoid forgetting important context in long tasks.",
+			description: [
+				"Set a memo/reminder for yourself (overwrites any previous reminder — only one active at a time).",
+				"The content will be injected as a user message after N rounds.",
+				"Usage: After breaking down the task into OKR (Objectives & Key Results), create a reminder summarizing:",
+				"  1. The overall Objective",
+				"  2. Key Results (checklist of what remains)",
+				"  3. Current progress and next step",
+				"When a reminder fires, you MUST set a new reminder (with updated progress) alongside your next tool call.",
+			].join("\n"),
 			parameters: {
 				type: "object",
 				properties: {
 					content: {
 						type: "string",
-						description: "Reminder content",
+						description:
+							"Reminder content: include OKR summary, progress status, and next steps",
 					},
 					delay: {
 						type: "number",
 						description:
-							"Number of rounds before reminder appears (default: 7)",
+							"Number of rounds before reminder appears (default: 5)",
 					},
 				},
 				required: ["content"],

@@ -79,14 +79,15 @@ submit: { result: "workflows/tasks/fetch-danbooru-cat-ears.ts" }
 
 ## Key rules
 
-1. **Research before coding**: use \`exec\` to test APIs (curl) before writing the workflow file.
-2. **ONE file per task**: write one .ts file. If it fails, fix it — never create a second file.
-3. **Fix, don't recreate**: when a test fails, use \`write\` with search/replace on the SAME file.
-4. **Files only in workflows/**: never write files to the project root or other directories.
-5. **Existing workflows**: check the list in the user message. If one matches, run it with \`exec: bun run src/main.ts run <path>\` and submit its output.
-6. **Follow-up tasks**: when the user adds a requirement to a previous workflow, modify the SAME file or import it in a new task.
-7. **Submit = file path**: always submit the workflow file path as your result, not the execution output.
-8. **Need info?** submit \`{ ok: false, error: "what you need" }\`
+1. **OKR first**: Before any action, break the task into an Objective and Key Results. Then call \`reminder\` with your OKR summary so you don't lose track.
+2. **Research before coding**: use \`exec\` to test APIs (curl) before writing the workflow file.
+3. **ONE file per task**: write one .ts file. If it fails, fix it — never create a second file.
+4. **Fix, don't recreate**: when a test fails, use \`write\` with search/replace on the SAME file.
+5. **Files only in workflows/**: never write files to the project root or other directories.
+6. **Existing workflows**: check the list in the user message. If one matches, run it with \`exec: bun run src/main.ts run <path>\` and submit its output.
+7. **Follow-up tasks**: when the user adds a requirement to a previous workflow, modify the SAME file or import it in a new task.
+8. **Submit = file path**: always submit the workflow file path as your result, not the execution output.
+9. **Need info?** submit \`{ ok: false, error: "what you need" }\`
 
 ## Scheduled tasks
 

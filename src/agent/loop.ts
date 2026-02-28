@@ -278,7 +278,7 @@ function injectReminders(
 	for (const r of due) {
 		messages.push({
 			type: "user_text",
-			content: `⏰ REMINDER: ${r.content}`,
+			content: `⏰ REMINDER: ${r.content}\n\n⚠️ You MUST set a new reminder (with updated progress) in your next tool call response.`,
 		});
 	}
 }

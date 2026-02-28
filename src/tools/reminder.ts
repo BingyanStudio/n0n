@@ -21,7 +21,9 @@ export function reminderTool(
 	args: ReminderArgs,
 	reminders: PendingReminder[],
 ): ReminderToolResult {
-	const delay = args.delay ?? 7;
+	const delay = args.delay ?? 5;
+	// 覆盖旧 reminder（只保留最新一条）
+	reminders.length = 0;
 	reminders.push({ content: args.content, roundsLeft: delay });
 
 	return {
