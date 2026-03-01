@@ -41,6 +41,7 @@ export default async function run() {
   - Create \`workflows/skills/<name>/SKILL.md\` with YAML frontmatter (name, description) + Markdown instructions
   - Optional \`scripts/\` subfolder for executable .ts scripts (run via \`bun run\`)
   - The skill directory name must match the \`name\` field in frontmatter
+- User configurations (API keys, server addresses, tokens, etc.) go in \`workflows/memory/config/\` as \`.json\` files. When you discover user-specific config during a task, save it there for future reuse.
 - Must have a JSDoc comment on line 1
 - Must use deterministic code (fetch, Bun.spawn, Bun.write, etc.) — NOT delegateTask
 - Only use \`import { delegateTask } from "../../src/index.ts"\` when the task genuinely requires AI reasoning (analysis, creative writing)

@@ -1,19 +1,15 @@
 /** 获取随机语录并发送到指定QQ群 */
 export default async function run() {
 	// 从配置文件读取Napcat配置
-	const configText = await Bun.file("napcat-config.md").text();
-	const config: Record<string, string> = {};
+	const config = await Bun.file("workflows/memory/config/napcat.json").json() as {
+		server_host?: string;
+		server_port?: number;
+		token?: string;
+	};
 
-	for (const line of configText.split("\n")) {
-		const match = line.match(/^([^:]+):\s*(.+)$/);
-		if (match) {
-			config[match[1].trim()] = match[2].trim();
-		}
-	}
-
-	const serverHost = config.server_host || "127.0.0.1";
-	const serverPort = parseInt(config.server_port || "9881", 10);
-	const _token = config.token || "";
+	const serverHost = config.server_host ?? "127.0.0.1";
+	const serverPort = config.server_port ?? 9881;
+	const _token = config.token ?? "";
 
 	console.log(`Napcat配置: ${serverHost}:${serverPort}`);
 
