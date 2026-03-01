@@ -4,6 +4,7 @@
 
 import { config } from "../config.ts";
 import type { ExecToolResult } from "../types/domain.ts";
+import type { LLMToolDefinition } from "../types/llm.ts";
 
 interface ExecArgs {
 	command: string;
@@ -14,6 +15,43 @@ interface ExecArgs {
 const PROJECT_ROOT = process.cwd();
 const IS_WINDOWS = process.platform === "win32";
 const SHELL_CMD: [string, string] = IS_WINDOWS ? ["cmd", "/c"] : ["sh", "-c"];
+
+export const EXEC_TOOL_DEFINITION: LLMToolDefinition = {
+	type: "function",
+	function: {
+		name: "exec",
+		description: IS_WINDOWS
+			? [
+					"Execute a command via cmd.exe on Windows. Returns stdout, stderr, and exit code.",
+					"Use Windows commands: `type` (not cat), `dir` (not ls), `findstr` (not grep). No `head`, `tail`, `wc`.",
+					'Use `bun -e "..."` (double quotes only, no single quotes) for cross-platform JS one-liners.',
+					"Known issues: `curl` may fail if a proxy is required — if curl returns exit code 6 or hangs, switch to `bun -e` with fetch().",
+					"Debugging tips: use `2>&1` to merge stderr into stdout; append `&& echo __DONE__` to confirm execution completed; use `> output.txt 2>&1` to capture output to file.",
+					"If a command fails 2-3 times, stop retrying and report the issue via submit.",
+				].join("\n")
+			: "Execute a shell command. Use for running code, reading files (cat/grep/head), system operations. Returns stdout, stderr, and exit code.",
+		parameters: {
+			type: "object",
+			properties: {
+				command: {
+					type: "string",
+					description: "The shell command to execute",
+				},
+				cwd: {
+					type: "string",
+					description: "Working directory (default: project root)",
+				},
+				timeout: {
+					type: "number",
+					description:
+						"Timeout in seconds (default: 120). Process continues in background if exceeded.",
+				},
+			},
+			required: ["command"],
+			additionalProperties: false,
+		},
+	},
+};
 
 /** 运行环境摘要，供 system prompt 注入 */
 export const ENV_INFO = {

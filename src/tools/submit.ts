@@ -7,11 +7,37 @@
  */
 
 import type { SubmitToolResult } from "../types/domain.ts";
+import type { LLMToolDefinition } from "../types/llm.ts";
 
 interface SubmitArgs {
 	result: unknown;
 	report?: string;
 }
+
+export const SUBMIT_TOOL_DEFINITION: LLMToolDefinition = {
+	type: "function",
+	function: {
+		name: "submit",
+		description:
+			"Submit your final result. If you completed the task successfully, submit the result value. If you cannot complete the task and need more information, submit an error object like { ok: false, error: 'what went wrong and what you need' }. The caller will review and may provide additional info.",
+		parameters: {
+			type: "object",
+			properties: {
+				result: {
+					description:
+						"The result value. For success: the requested output. For error: { ok: false, error: string }.",
+				},
+				report: {
+					type: "string",
+					description:
+						"Optional brief report of what was done and any notable findings.",
+				},
+			},
+			required: ["result"],
+			additionalProperties: false,
+		},
+	},
+};
 
 export function submitTool(callId: string, args: SubmitArgs): SubmitToolResult {
 	return {

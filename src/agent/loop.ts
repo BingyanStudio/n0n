@@ -10,22 +10,14 @@ import { config } from "../config.ts";
 import { toAPIMessages } from "../llm/adapter.ts";
 import { chatCompletionStream, StreamAccumulator } from "../llm/stream.ts";
 import type { PendingReminder } from "../tools/index.ts";
-import {
-	execTool,
-	reminderTool,
-	submitTool,
-	TOOL_DEFINITIONS,
-	writeTool,
-} from "../tools/index.ts";
+import { TOOL_DEFINITIONS } from "../tools/index.ts";
 import type {
 	AssistantToolCallMessage,
-	DomainMessage,
-	ToolCallRecord,
-	ToolResult,
+	DomainMessage
 } from "../types/domain.ts";
-import type { LLMToolCall } from "../types/llm.ts";
 import type { Renderer } from "../ui/renderer.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
+import { executeTool, isValidToolCall, parseToolCalls } from "./tool.ts";
 
 // ── 结果类型 ──
 
@@ -126,9 +118,8 @@ export async function agentLoop<T = unknown>(
 		idleCount = 0;
 
 		// 解析工具调用记录，过滤掉畸形的 tool call（空 name 或 args 解析失败）
-		const VALID_TOOLS = new Set(["exec", "write", "reminder", "submit"]);
 		const toolCalls = parseToolCalls(assistantMsg.tool_calls ?? []).filter(
-			(tc) => VALID_TOOLS.has(tc.tool) && !tc.args._parseError,
+			isValidToolCall,
 		);
 
 		// 过滤后无有效 tool call → 视为纯文本回复
@@ -204,60 +195,6 @@ export async function agentLoop<T = unknown>(
 }
 
 // ── 辅助函数 ──
-
-function parseToolCalls(raw: LLMToolCall[]): ToolCallRecord[] {
-	return raw.map((tc) => {
-		let args: Record<string, unknown>;
-		try {
-			const parsed =
-				typeof tc.function.arguments === "string"
-					? JSON.parse(tc.function.arguments)
-					: tc.function.arguments;
-			args = parsed as Record<string, unknown>;
-		} catch {
-			args = { _parseError: true, _raw: tc.function.arguments };
-		}
-		return {
-			id: tc.id,
-			tool: tc.function.name,
-			args,
-		};
-	});
-}
-
-async function executeTool(
-	tc: ToolCallRecord,
-	reminders: PendingReminder[],
-	confirmFn?: (question: string) => Promise<string>,
-): Promise<ToolResult> {
-	const a = tc.args as unknown;
-	switch (tc.tool) {
-		case "exec":
-			return execTool(tc.id, a as Parameters<typeof execTool>[1], confirmFn);
-		case "write":
-			return writeTool(tc.id, a as Parameters<typeof writeTool>[1]);
-		case "reminder":
-			return reminderTool(
-				tc.id,
-				a as Parameters<typeof reminderTool>[1],
-				reminders,
-			);
-		case "submit":
-			return submitTool(tc.id, a as Parameters<typeof submitTool>[1]);
-		default:
-			return {
-				type: "tool_result",
-				callId: tc.id,
-				tool: "exec",
-				command: "",
-				cwd: "",
-				exitCode: 1,
-				stdout: "",
-				stderr: `Unknown tool: ${tc.tool}`,
-				durationMs: 0,
-			};
-	}
-}
 
 function validateSubmit(
 	raw: unknown,
