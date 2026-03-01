@@ -6,6 +6,7 @@
 
 import type { ReminderToolResult } from "../types/domain.ts";
 import type { LLMToolDefinition } from "../types/llm.ts";
+import type { PendingReminder, ToolPlugin } from "./plugin.ts";
 
 interface ReminderArgs {
 	content: string;
@@ -45,11 +46,6 @@ export const REMINDER_TOOL_DEFINITION: LLMToolDefinition = {
 	},
 };
 
-export interface PendingReminder {
-	content: string;
-	roundsLeft: number;
-}
-
 export function reminderTool(
 	callId: string,
 	args: ReminderArgs,
@@ -69,3 +65,9 @@ export function reminderTool(
 		acknowledged: true,
 	};
 }
+
+export const TOOL_PLUGIN: ToolPlugin<ReminderArgs> = {
+	definition: REMINDER_TOOL_DEFINITION,
+	execute: (callId, args, context) =>
+		reminderTool(callId, args, context.reminders),
+};

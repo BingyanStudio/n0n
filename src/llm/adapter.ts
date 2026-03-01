@@ -5,35 +5,46 @@
  */
 
 import type { DomainMessage, ToolResult } from "../types/domain.ts";
+import {
+    isExecToolResult,
+    isReminderToolResult,
+    isSubmitToolResult,
+    isWriteToolResult,
+} from "../types/domain.ts";
 import type { LLMRequestMessage } from "../types/llm.ts";
 
 /**
  * 将 ToolResult 转为人类可读的文本摘要
  */
 function toolResultToContent(msg: ToolResult): string {
-	switch (msg.tool) {
-		case "exec": {
-			const parts: string[] = [
-				`$ ${msg.command}`,
-				`[cwd: ${msg.cwd}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`,
-			];
-			if (msg.stdout) parts.push(msg.stdout);
-			if (msg.stderr) parts.push(`STDERR:\n${msg.stderr}`);
-			return parts.join("\n");
-		}
-		case "write": {
-			if (msg.success) {
-				return msg.searchPattern
-					? `Written to ${msg.path}: replaced ${msg.replacedCount} occurrence(s)`
-					: `Written to ${msg.path}: full file write`;
-			}
-			return `Write failed: ${msg.error}`;
-		}
-		case "reminder":
-			return `Reminder set: will appear in ${msg.delay} rounds`;
-		case "submit":
-			return `Submitted: ${JSON.stringify(msg.result)}`;
+	if (isExecToolResult(msg)) {
+		const parts: string[] = [
+			`$ ${msg.command}`,
+			`[cwd: ${msg.cwd}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`,
+		];
+		if (msg.stdout) parts.push(msg.stdout);
+		if (msg.stderr) parts.push(`STDERR:\n${msg.stderr}`);
+		return parts.join("\n");
 	}
+
+	if (isWriteToolResult(msg)) {
+		if (msg.success) {
+			return msg.searchPattern
+				? `Written to ${msg.path}: replaced ${msg.replacedCount} occurrence(s)`
+				: `Written to ${msg.path}: full file write`;
+		}
+		return `Write failed: ${msg.error}`;
+	}
+
+	if (isReminderToolResult(msg)) {
+		return `Reminder set: will appear in ${msg.delay} rounds`;
+	}
+
+	if (isSubmitToolResult(msg)) {
+		return `Submitted: ${JSON.stringify(msg.result)}`;
+	}
+
+	return `Tool ${msg.tool} finished`;
 }
 
 /**

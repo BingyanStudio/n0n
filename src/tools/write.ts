@@ -6,6 +6,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { WriteToolResult } from "../types/domain.ts";
 import type { LLMToolDefinition } from "../types/llm.ts";
+import type { ToolPlugin } from "./plugin.ts";
 
 interface WriteArgs {
 	path: string;
@@ -139,3 +140,8 @@ export async function writeTool(
 		};
 	}
 }
+
+export const TOOL_PLUGIN: ToolPlugin<WriteArgs> = {
+	definition: WRITE_TOOL_DEFINITION,
+	execute: (callId, args) => writeTool(callId, args),
+};

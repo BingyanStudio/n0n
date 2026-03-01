@@ -86,11 +86,35 @@ export interface SubmitToolResult {
 	report: string | null;
 }
 
+export interface GenericToolResult {
+	type: "tool_result";
+	callId: string;
+	tool: string;
+	[key: string]: unknown;
+}
+
 export type ToolResult =
 	| ExecToolResult
 	| WriteToolResult
 	| ReminderToolResult
-	| SubmitToolResult;
+	| SubmitToolResult
+	| GenericToolResult;
+
+export function isExecToolResult(msg: ToolResult): msg is ExecToolResult {
+	return msg.tool === "exec";
+}
+
+export function isWriteToolResult(msg: ToolResult): msg is WriteToolResult {
+	return msg.tool === "write";
+}
+
+export function isReminderToolResult(msg: ToolResult): msg is ReminderToolResult {
+	return msg.tool === "reminder";
+}
+
+export function isSubmitToolResult(msg: ToolResult): msg is SubmitToolResult {
+	return msg.tool === "submit" && "result" in msg;
+}
 
 // ── 联合类型 ──
 export type DomainMessage =

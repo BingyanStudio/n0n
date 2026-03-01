@@ -9,12 +9,13 @@ import type { ZodType } from "zod";
 import { config } from "../config.ts";
 import { toAPIMessages } from "../llm/adapter.ts";
 import { chatCompletionStream, StreamAccumulator } from "../llm/stream.ts";
-import type { PendingReminder } from "../tools/index.ts";
 import { TOOL_DEFINITIONS } from "../tools/index.ts";
+import type { PendingReminder } from "../tools/plugin.ts";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage
 } from "../types/domain.ts";
+import { isSubmitToolResult } from "../types/domain.ts";
 import type { Renderer } from "../ui/renderer.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import { executeTool, isValidToolCall, parseToolCalls } from "./tool.ts";
@@ -148,7 +149,7 @@ export async function agentLoop<T = unknown>(
 			messages.push(result);
 
 			// 如果是 submit，校验并返回
-			if (result.tool === "submit") {
+			if (isSubmitToolResult(result)) {
 				const validation = validateSubmit(result.result, options?.schema);
 				if (validation.ok) {
 					renderer.submitAccepted();

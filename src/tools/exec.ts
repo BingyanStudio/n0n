@@ -5,6 +5,7 @@
 import { config } from "../config.ts";
 import type { ExecToolResult } from "../types/domain.ts";
 import type { LLMToolDefinition } from "../types/llm.ts";
+import type { ToolPlugin } from "./plugin.ts";
 
 interface ExecArgs {
 	command: string;
@@ -223,3 +224,9 @@ export async function execTool(
 		};
 	}
 }
+
+export const TOOL_PLUGIN: ToolPlugin<ExecArgs> = {
+	definition: EXEC_TOOL_DEFINITION,
+	execute: (callId, args, context) =>
+		execTool(callId, args, context.confirmFn),
+};

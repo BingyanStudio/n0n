@@ -6,6 +6,12 @@
  */
 
 import type { ToolCallRecord, ToolResult } from "../types/domain.ts";
+import {
+    isExecToolResult,
+    isReminderToolResult,
+    isSubmitToolResult,
+    isWriteToolResult,
+} from "../types/domain.ts";
 import { label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
 import type { Renderer } from "./renderer.ts";
@@ -163,52 +169,49 @@ export class RichRenderer implements Renderer {
 	// ── 工具结果格式化 ──
 
 	private formatToolResult(result: ToolResult): string {
-		switch (result.tool) {
-			case "exec": {
-				const duration = style.gray(
-					`${(result.durationMs / 1000).toFixed(1)}s`,
-				);
-				const exit =
-					result.exitCode === 0
-						? style.green(`exit=${result.exitCode}`)
-						: style.red(`exit=${result.exitCode}`);
-				const outLen = result.stdout.length + result.stderr.length;
-				const cmd = result.command.slice(0, 80);
-				// 结果摘要行
-				let out = `${style.dim("◂")} ${style.cyan("exec")} ${cmd} ${duration} ${exit} ${style.gray(`${outLen} chars`)}\n`;
-				// 工具输出内容（缩进，表示从属）
-				const output = (
-					result.stdout + (result.stderr ? `\n${result.stderr}` : "")
-				).trim();
-				if (output) {
-					const truncated = truncateMiddle(output);
-					for (const line of truncated.split("\n")) {
-						out += `${style.gray("  │")} ${style.dim(line)}\n`;
-					}
-				}
-				return out;
-			}
-			case "write": {
-				if (!result.success) {
-					return `${style.dim("◂")} ${style.cyan("write")} ${result.path}: ${style.red(result.error ?? "failed")}\n`;
-				}
-				if (result.searchPattern) {
-					const searchLines = result.searchPattern.split("\n").length;
-					return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}\n`;
-				}
-				return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray("(full write)")}\n`;
-			}
-			case "reminder": {
-				let out = `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)} ${style.gray(`${result.content.length} chars`)}\n`;
-				const truncated = truncateMiddle(result.content, 500, 200, 300);
+		if (isExecToolResult(result)) {
+			const duration = style.gray(`${(result.durationMs / 1000).toFixed(1)}s`);
+			const exit =
+				result.exitCode === 0
+					? style.green(`exit=${result.exitCode}`)
+					: style.red(`exit=${result.exitCode}`);
+			const outLen = result.stdout.length + result.stderr.length;
+			const cmd = result.command.slice(0, 80);
+			let out = `${style.dim("◂")} ${style.cyan("exec")} ${cmd} ${duration} ${exit} ${style.gray(`${outLen} chars`)}\n`;
+			const output = (result.stdout + (result.stderr ? `\n${result.stderr}` : "")).trim();
+			if (output) {
+				const truncated = truncateMiddle(output);
 				for (const line of truncated.split("\n")) {
 					out += `${style.gray("  │")} ${style.dim(line)}\n`;
 				}
-				return out;
 			}
-			case "submit": {
-				return `${style.dim("◂")} ${style.cyan("submit")}\n`;
-			}
+			return out;
 		}
+
+		if (isWriteToolResult(result)) {
+			if (!result.success) {
+				return `${style.dim("◂")} ${style.cyan("write")} ${result.path}: ${style.red(result.error ?? "failed")}\n`;
+			}
+			if (result.searchPattern) {
+				const searchLines = result.searchPattern.split("\n").length;
+				return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}\n`;
+			}
+			return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray("(full write)")}\n`;
+		}
+
+		if (isReminderToolResult(result)) {
+			let out = `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)} ${style.gray(`${result.content.length} chars`)}\n`;
+			const truncated = truncateMiddle(result.content, 500, 200, 300);
+			for (const line of truncated.split("\n")) {
+				out += `${style.gray("  │")} ${style.dim(line)}\n`;
+			}
+			return out;
+		}
+
+		if (isSubmitToolResult(result)) {
+			return `${style.dim("◂")} ${style.cyan("submit")}\n`;
+		}
+
+		return `${style.dim("◂")} ${style.cyan(result.tool)}\n`;
 	}
 }

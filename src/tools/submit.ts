@@ -8,6 +8,7 @@
 
 import type { SubmitToolResult } from "../types/domain.ts";
 import type { LLMToolDefinition } from "../types/llm.ts";
+import type { ToolPlugin } from "./plugin.ts";
 
 interface SubmitArgs {
 	result: unknown;
@@ -48,3 +49,8 @@ export function submitTool(callId: string, args: SubmitArgs): SubmitToolResult {
 		report: args.report ?? null,
 	};
 }
+
+export const TOOL_PLUGIN: ToolPlugin<SubmitArgs> = {
+	definition: SUBMIT_TOOL_DEFINITION,
+	execute: (callId, args) => submitTool(callId, args),
+};
