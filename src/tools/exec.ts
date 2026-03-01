@@ -29,7 +29,7 @@ export const ENV_INFO = {
  */
 function extractCommandNames(command: string): string[] {
 	// Split on shell operators; match multi-char operators before single-char ones
-	const parts = command.split(/&&|\|\||;|\||&/);
+	const parts = command.split(/\r?\n|&&|\|\||;|\||&/);
 	return parts
 		.map((part) => {
 			// Strip leading env-var assignments like FOO=bar cmd …
@@ -49,11 +49,18 @@ function extractCommandNames(command: string): string[] {
 function findBlockedCommand(command: string): string | null {
 	const blocked = config.security.blockedCommands;
 	if (blocked.length === 0) return null;
+	const blockedNormalized = IS_WINDOWS
+		? blocked.map((b) => b.toLowerCase())
+		: blocked;
 	const names = extractCommandNames(command);
 	for (const name of names) {
-		// Match by basename so "/bin/rm" is still blocked when "rm" is listed
-		const basename = name.split("/").at(-1) ?? name;
-		if (blocked.includes(basename)) return basename;
+		// Match by basename so "/bin/rm" or "C:\Windows\System32\rm.exe" is still
+		// blocked when "rm" is listed
+		const basename = name.split(/[\\/]/).at(-1) ?? name;
+		const basenameNormalized = IS_WINDOWS
+			? basename.toLowerCase()
+			: basename;
+		if (blockedNormalized.includes(basenameNormalized)) return basename;
 	}
 	return null;
 }
