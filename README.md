@@ -20,6 +20,10 @@ LLM_BASE_URL=https://api.example.com
 LLM_API_KEY=sk-xxx
 LLM_MODEL=deepseek/deepseek-v3.2
 
+# (可选) 阻止特定命令执行，需人工审核后才能运行
+# 以逗号分隔的命令名列表，例如：
+BLOCKED_COMMANDS=rm,mv,dd
+
 # 交互式对话 — AI 自动创建 workflow
 bun start
 

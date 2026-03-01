@@ -2,6 +2,7 @@
  * exec 工具 — 执行 shell 命令
  */
 
+import { config } from "../config.ts";
 import type { ExecToolResult } from "../types/domain.ts";
 
 interface ExecArgs {
@@ -21,6 +22,42 @@ export const ENV_INFO = {
 	cwd: PROJECT_ROOT,
 } as const;
 
+/**
+ * Extract the command names from a shell command string.
+ * Splits on common shell operators (;, |, &&, ||, &) and returns
+ * the first token of each resulting sub-command.
+ */
+function extractCommandNames(command: string): string[] {
+	// Split on shell operators; match multi-char operators before single-char ones
+	const parts = command.split(/&&|\|\||;|\||&/);
+	return parts
+		.map((part) => {
+			// Strip leading env-var assignments like FOO=bar cmd …
+			const tokens = part.trim().split(/\s+/);
+			const firstNonAssign = tokens.find(
+				(t) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(t),
+			);
+			return firstNonAssign ?? "";
+		})
+		.filter((name) => name.length > 0);
+}
+
+/**
+ * Returns the blocked command name if the command string contains a blocked
+ * command, otherwise returns null.
+ */
+function findBlockedCommand(command: string): string | null {
+	const blocked = config.security.blockedCommands;
+	if (blocked.length === 0) return null;
+	const names = extractCommandNames(command);
+	for (const name of names) {
+		// Match by basename so "/bin/rm" is still blocked when "rm" is listed
+		const basename = name.split("/").at(-1) ?? name;
+		if (blocked.includes(basename)) return basename;
+	}
+	return null;
+}
+
 export async function execTool(
 	callId: string,
 	args: ExecArgs,
@@ -28,6 +65,22 @@ export async function execTool(
 	const cwd = args.cwd ?? PROJECT_ROOT;
 	const timeoutMs = (args.timeout ?? 120) * 1000;
 	const start = Date.now();
+
+	// Check for blocked commands before executing
+	const blockedCmd = findBlockedCommand(args.command);
+	if (blockedCmd !== null) {
+		return {
+			type: "tool_result",
+			callId,
+			tool: "exec",
+			command: args.command,
+			cwd,
+			exitCode: 1,
+			stdout: "",
+			stderr: `Command blocked: '${blockedCmd}' is in the BLOCKED_COMMANDS list and requires manual review before execution.`,
+			durationMs: 0,
+		};
+	}
 
 	try {
 		const proc = Bun.spawn([...SHELL_CMD, args.command], {
