@@ -1,18 +1,64 @@
 /**
  * RichRenderer — 富终端 UI 渲染器
  *
- * 彩色角色标签、流式 thinking/content、diff 格式 write 显示、
- * 工具输出渲染（超长折叠）、LiveRegion 行替换。
+ * 彩色角色标签、流式 thinking/content、结构化工具参数显示、
+ * 流式工具输出（exec stdout/stderr 实时）、LiveRegion 行替换。
  */
 
+import { parse as parsePartialJSON } from "partial-json";
 import type { ToolCallRecord, ToolResult } from "../types/domain.ts";
 import { label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
 import type { Renderer } from "./renderer.ts";
 
+// ── 工具参数结构化渲染 ──
+
+/** 解析可能不完整的 JSON（LLM 流式输出），返回已解析的字段 */
+function tryParseArgs(s: string): Record<string, unknown> | null {
+	try {
+		const parsed = parsePartialJSON(s);
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			return parsed as Record<string, unknown>;
+		}
+	} catch {}
+	return null;
+}
+
+/** 将工具参数渲染为结构化字段格式 */
+function renderToolArgs(
+	toolName: string,
+	args: Record<string, unknown>,
+): string[] {
+	const lines: string[] = [];
+	lines.push(`${style.dim("▸")} ${style.cyan(toolName)}`);
+
+	const entries = Object.entries(args);
+	for (const [key, value] of entries) {
+		const strValue = typeof value === "string" ? value : JSON.stringify(value);
+		lines.push(`  ${style.dim("├")} ${style.gray(key)}`);
+		// 值可能多行，每行缩进
+		const valueLines = strValue.split("\n");
+		const maxLines = 12;
+		for (const vl of valueLines.slice(0, maxLines)) {
+			lines.push(`  ${style.dim("│")} ${vl}`);
+		}
+		if (valueLines.length > maxLines) {
+			lines.push(
+				style.gray(
+					`  ${style.dim("│")} ... (${valueLines.length - maxLines} more lines)`,
+				),
+			);
+		}
+	}
+	lines.push(`  ${style.dim("├")}${style.dim("─".repeat(30))}`);
+	return lines;
+}
+
 export class RichRenderer implements Renderer {
 	private toolRegion = new LiveRegion();
 	private hasStreamContent = false;
+	/** 流式阶段已渲染参数的工具数量（跳过对应数量的 toolCallStart） */
+	private skipToolCallStarts = 0;
 
 	/** 流式工具调用参数累积（index → { name, args }） */
 	private streamingToolCalls = new Map<
@@ -49,9 +95,24 @@ export class RichRenderer implements Renderer {
 			writeln();
 			this.hasStreamContent = false;
 		}
-		// 折叠流式工具调用参数区域（执行阶段由 toolCallStart 重新渲染紧凑摘要）
+		// 折叠流式工具调用参数区域 → 替换为解析后的结构化显示
 		if (this.streamingToolCalls.size > 0) {
 			this.streamRegion.clear();
+			for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
+				(a, b) => a[0] - b[0],
+			)) {
+				const parsed = tryParseArgs(tc.args);
+				if (parsed) {
+					for (const line of renderToolArgs(tc.name, parsed)) {
+						this.streamRegion.writeln(line);
+					}
+				} else {
+					this.streamRegion.writeln(
+						`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray(tc.args.slice(0, 80))}`,
+					);
+				}
+			}
+			this.skipToolCallStarts = this.streamingToolCalls.size;
 			this.streamingToolCalls.clear();
 		}
 	}
@@ -67,68 +128,16 @@ export class RichRenderer implements Renderer {
 
 	toolCallStart(tc: ToolCallRecord): void {
 		this.toolRegion.reset();
-		const toolName = style.cyan(tc.tool);
+		// 如果 streamRegion 已经渲染了结构化参数，不重复渲染
+		// toolCallStart 只在 streamRegion 为空时（非流式回退）渲染
+		if (this.skipToolCallStarts > 0) {
+			this.skipToolCallStarts--;
+			return;
+		}
 
-		switch (tc.tool) {
-			case "exec": {
-				const cmd = (tc.args as { command?: string }).command ?? "";
-				this.toolRegion.writeln(
-					`${style.dim("▸")} ${toolName} ${cmd.slice(0, 100)}`,
-				);
-				break;
-			}
-			case "write": {
-				const args = tc.args as {
-					path?: string;
-					search?: string;
-					replace?: string;
-				};
-				const path = args.path ?? "";
-				this.toolRegion.writeln(`${style.dim("▸")} ${toolName} → ${path}`);
-				if (args.search) {
-					const searchLines = args.search.split("\n");
-					const replaceLines = (args.replace ?? "").split("\n");
-					const maxPreview = 8;
-					for (const line of searchLines.slice(0, maxPreview)) {
-						this.toolRegion.writeln(`  ${style.red(`- ${line}`)}`);
-					}
-					if (searchLines.length > maxPreview) {
-						this.toolRegion.writeln(
-							style.gray(
-								`  ... (${searchLines.length - maxPreview} more lines)`,
-							),
-						);
-					}
-					for (const line of replaceLines.slice(0, maxPreview)) {
-						this.toolRegion.writeln(`  ${style.green(`+ ${line}`)}`);
-					}
-					if (replaceLines.length > maxPreview) {
-						this.toolRegion.writeln(
-							style.gray(
-								`  ... (${replaceLines.length - maxPreview} more lines)`,
-							),
-						);
-					}
-				} else {
-					const lines = (args.replace ?? "").split("\n").length;
-					this.toolRegion.writeln(style.gray(`  (full write, ${lines} lines)`));
-				}
-				break;
-			}
-			case "reminder": {
-				const content = (tc.args as { content?: string }).content ?? "";
-				this.toolRegion.writeln(
-					`${style.dim("▸")} ${toolName} ${content.slice(0, 60)}`,
-				);
-				break;
-			}
-			case "submit": {
-				this.toolRegion.writeln(`${style.dim("▸")} ${toolName}`);
-				break;
-			}
-			default: {
-				this.toolRegion.writeln(`${style.dim("▸")} ${toolName}`);
-			}
+		// 非流式回退：直接渲染结构化参数
+		for (const line of renderToolArgs(tc.tool, tc.args)) {
+			this.toolRegion.writeln(line);
 		}
 	}
 
@@ -137,6 +146,12 @@ export class RichRenderer implements Renderer {
 		name: string | undefined,
 		chunk: string,
 	): void {
+		// 首次 chunk 前确保换行（避免粘在 content 后面）
+		if (this.hasStreamContent) {
+			writeln();
+			this.hasStreamContent = false;
+		}
+
 		// 累积参数
 		let entry = this.streamingToolCalls.get(index);
 		if (!entry) {
@@ -146,24 +161,19 @@ export class RichRenderer implements Renderer {
 		if (name) entry.name = name;
 		entry.args += chunk;
 
-		// 重绘整个流式区域（清除后重写所有 streaming tool calls）
+		// 重绘整个流式区域：尝试解析 JSON，成功则结构化显示，否则显示原始
 		this.streamRegion.clear();
 		for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
 			(a, b) => a[0] - b[0],
 		)) {
-			const toolName = style.cyan(tc.name);
-			this.streamRegion.writeln(
-				`${style.dim("▸")} ${toolName} ${style.gray("(streaming...)")}`,
-			);
-			// 显示参数内容（限制行数避免刷屏）
-			const lines = tc.args.split("\n");
-			const maxLines = 20;
-			for (const line of lines.slice(0, maxLines)) {
-				this.streamRegion.writeln(`  ${style.dim(line)}`);
-			}
-			if (lines.length > maxLines) {
+			const parsed = tryParseArgs(tc.args);
+			if (parsed && Object.keys(parsed).length > 0) {
+				for (const line of renderToolArgs(tc.name, parsed)) {
+					this.streamRegion.writeln(line);
+				}
+			} else {
 				this.streamRegion.writeln(
-					style.gray(`  ... (${lines.length - maxLines} more lines)`),
+					`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray("(streaming...")}`,
 				);
 			}
 		}
@@ -171,21 +181,23 @@ export class RichRenderer implements Renderer {
 
 	/** 流式工具输出 chunk（exec stdout/stderr 实时显示） */
 	toolResultChunk(_tool: string, chunk: string): void {
-		// 直接写入 toolRegion，逐 chunk 追加
+		// 逐 chunk 追加到 toolRegion
 		for (const line of chunk.split("\n")) {
 			if (line) {
-				this.toolRegion.writeln(`${style.gray("  │")} ${style.dim(line)}`);
+				this.toolRegion.writeln(`  ${style.dim("│")} ${style.dim(line)}`);
 			}
 		}
 	}
 
 	toolCallEnd(result: ToolResult): void {
 		const summary = this.formatToolResult(result);
-		// exec 工具：流式阶段已经输出了内容，结尾追加摘要行
+		// exec：流式阶段已输出内容，结尾追加摘要行
 		if (result.tool === "exec") {
 			this.toolRegion.writeln(summary);
 		} else {
-			this.toolRegion.replace(summary);
+			// 非流式工具：替换 streamRegion 的结构化参数为最终摘要
+			this.streamRegion.clear();
+			writeln(summary);
 		}
 	}
 
@@ -207,7 +219,7 @@ export class RichRenderer implements Renderer {
 		writeln(`${style.yellow("⚠")} ${style.gray(reason)}`);
 	}
 
-	// ── 工具结果格式化 ──
+	// ── 工具结果格式化（紧凑摘要行） ──
 
 	private formatToolResult(result: ToolResult): string {
 		switch (result.tool) {
@@ -220,8 +232,7 @@ export class RichRenderer implements Renderer {
 						? style.green(`exit=${result.exitCode}`)
 						: style.red(`exit=${result.exitCode}`);
 				const outLen = result.stdout.length + result.stderr.length;
-				const cmd = result.command.slice(0, 80);
-				return `${style.dim("◂")} ${style.cyan("exec")} ${cmd} ${duration} ${exit} ${style.gray(`${outLen} chars`)}`;
+				return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)}`;
 			}
 			case "write": {
 				if (!result.success) {
