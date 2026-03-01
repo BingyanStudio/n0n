@@ -202,6 +202,12 @@ async function interactiveLoop(initialInput?: string) {
 			rl.question(question, resolve);
 		});
 
+	const confirmFn = (question: string): Promise<string> =>
+		new Promise((resolve) => {
+			if (closed) return resolve("n");
+			rl.question(question, resolve);
+		});
+
 	writeln(
 		style.bold("n0n") + style.gray(" — Natural Language Workflow Engine"),
 	);
@@ -254,7 +260,11 @@ async function interactiveLoop(initialInput?: string) {
 			});
 		}
 
-		const result = await subagent(history, { maxIterations: 30, renderer });
+		const result = await subagent(history, {
+			maxIterations: 30,
+			renderer,
+			confirmFn,
+		});
 		// 保留 agent 产出的完整历史，下轮继续
 		history = result.history;
 

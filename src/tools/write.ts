@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { WriteToolResult } from "../types/domain.ts";
+import type { LLMToolDefinition } from "../types/llm.ts";
 
 interface WriteArgs {
 	path: string;
@@ -12,6 +13,40 @@ interface WriteArgs {
 	replace: string;
 	expectedMatches?: number;
 }
+
+export const WRITE_TOOL_DEFINITION: LLMToolDefinition = {
+	type: "function",
+	function: {
+		name: "write",
+		description:
+			"Write or edit a file. If search is provided, replaces matching text. If search is empty/omitted, writes the entire file content. Use expectedReplaceTime to assert expected number of replacements.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: {
+					type: "string",
+					description: "File path relative to project root",
+				},
+				search: {
+					type: "string",
+					description:
+						"Text to search for. Empty or omitted = full file write.",
+				},
+				replace: {
+					type: "string",
+					description: "Replacement text",
+				},
+				expectedMatches: {
+					type: "number",
+					description:
+						"Expected number of matches (default: 1). Mismatch = error returned.",
+				},
+			},
+			required: ["path", "replace"],
+			additionalProperties: false,
+		},
+	},
+};
 
 export async function writeTool(
 	callId: string,
