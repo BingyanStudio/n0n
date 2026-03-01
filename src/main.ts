@@ -45,6 +45,35 @@ export default async function run() {
 - Must have a JSDoc comment on line 1
 - Must use deterministic code (fetch, Bun.spawn, Bun.write, etc.) — NOT delegateTask
 - Only use \`import { delegateTask } from "../../src/index.ts"\` when the task genuinely requires AI reasoning (analysis, creative writing)
+- **When using delegateTask, ALWAYS pass a \`schema\` option** (Zod) to get structured, validated results. Without schema the result is free-form text — unreliable for downstream code. The engine auto-validates and retries on mismatch, so you get guaranteed types at zero extra cost.
+
+### delegateTask schema example
+
+\`\`\`typescript
+import { z } from "zod";
+import { delegateTask } from "../../src/index.ts";
+
+const StorySchema = z.object({
+  title: z.string(),
+  url: z.string().url(),
+  score: z.number(),
+});
+const DigestSchema = z.object({
+  stories: z.array(StorySchema),
+  summary: z.string(),
+});
+
+const { result } = await delegateTask(
+  "Fetch top 5 Hacker News stories and summarize them",
+  { schema: DigestSchema },
+);
+// result is typed & validated: { stories: [...], summary: "..." }
+\`\`\`
+
+Key points:
+- \`schema\` accepts any Zod schema — the agent's \`submit\` result is auto-parsed and validated against it
+- If validation fails, the agent automatically retries (up to 4 times) with the error details
+- Always define the schema to match exactly what your downstream code expects
 
 ## Complete example
 
