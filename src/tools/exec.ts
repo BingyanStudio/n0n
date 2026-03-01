@@ -61,6 +61,7 @@ function findBlockedCommand(command: string): string | null {
 export async function execTool(
 	callId: string,
 	args: ExecArgs,
+	confirmFn?: (question: string) => Promise<string>,
 ): Promise<ExecToolResult> {
 	const cwd = args.cwd ?? PROJECT_ROOT;
 	const timeoutMs = (args.timeout ?? 120) * 1000;
@@ -69,17 +70,50 @@ export async function execTool(
 	// Check for blocked commands before executing
 	const blockedCmd = findBlockedCommand(args.command);
 	if (blockedCmd !== null) {
-		return {
-			type: "tool_result",
-			callId,
-			tool: "exec",
-			command: args.command,
-			cwd,
-			exitCode: 1,
-			stdout: "",
-			stderr: `Command blocked: '${blockedCmd}' is in the BLOCKED_COMMANDS list and requires manual review before execution.`,
-			durationMs: 0,
-		};
+		if (confirmFn) {
+			// Strip control characters from the command before displaying in prompt
+			const safeCommand = [...args.command]
+				.map((ch) => {
+					const code = ch.charCodeAt(0);
+					if (code > 31 && code !== 127) return ch;
+					if (ch === "\n") return "↵";
+					if (ch === "\t") return "→";
+					return `[^${String.fromCharCode(code + 64)}]`;
+				})
+				.join("");
+			const answer = await confirmFn(
+				`\n⚠  Command requires review: '${blockedCmd}' is in BLOCKED_COMMANDS\n` +
+					`   Command: ${safeCommand}\n` +
+					`   Allow execution? [y/N] `,
+			);
+			const normalized = answer.trim().toLowerCase();
+			if (normalized !== "y" && normalized !== "yes") {
+				return {
+					type: "tool_result",
+					callId,
+					tool: "exec",
+					command: args.command,
+					cwd,
+					exitCode: 1,
+					stdout: "",
+					stderr: `Command '${blockedCmd}' was rejected by the user.`,
+					durationMs: 0,
+				};
+			}
+			// User approved — fall through to execution
+		} else {
+			return {
+				type: "tool_result",
+				callId,
+				tool: "exec",
+				command: args.command,
+				cwd,
+				exitCode: 1,
+				stdout: "",
+				stderr: `Command blocked: '${blockedCmd}' is in the BLOCKED_COMMANDS list and requires manual review before execution.`,
+				durationMs: 0,
+			};
+		}
 	}
 
 	try {
