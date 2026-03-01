@@ -27,19 +27,38 @@ Napcat server config is stored at `workflows/memory/config/napcat.json`:
 }
 ```
 
-Read this file to get connection parameters.
+## Recommended: Import as library (preferred)
 
-## How to send a group message
+When creating workflow `.ts` files, **import the functions directly** instead of reimplementing WebSocket logic:
 
-Use the helper script:
+```typescript
+import { readConfig, sendMessage } from "../skills/napcat-qq/scripts/lib.ts";
+
+const config = await readConfig();
+
+// Send group message
+const result = await sendMessage(config, {
+  action: "send_group_msg",
+  params: { group_id: 718824969, message: "Hello!" },
+});
+
+// Send private message
+const result2 = await sendMessage(config, {
+  action: "send_private_msg",
+  params: { user_id: 123456, message: "Hi!" },
+});
+```
+
+Exported functions from `scripts/lib.ts`:
+- `readConfig()` → reads `workflows/memory/config/napcat.json`, returns `{ host, port, token }`
+- `sendMessage(config, { action, params })` → connects via WebSocket, sends message, waits for response, returns `{ ok, data?, error? }`
+
+## Alternative: CLI scripts
+
+For quick one-off use via `exec`:
 
 ```bash
 bun run workflows/skills/napcat-qq/scripts/send-group-msg.ts <group_id> "message text"
-```
-
-## How to send a private message
-
-```bash
 bun run workflows/skills/napcat-qq/scripts/send-private-msg.ts <user_id> "message text"
 ```
 

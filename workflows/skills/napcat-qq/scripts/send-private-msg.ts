@@ -10,7 +10,7 @@ const userId = Number(Bun.argv[2]);
 const message = Bun.argv[3];
 
 if (!userId || !message) {
-	console.error("Usage: bun run send-private-msg.ts <user_id> \"message\"");
+	console.error('Usage: bun run send-private-msg.ts <user_id> "message"');
 	process.exit(1);
 }
 

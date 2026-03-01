@@ -55,35 +55,31 @@ export async function sendMessage(
 			const message = JSON.stringify({ ...payload, echo });
 			ws.send(message);
 
-			const response = await new Promise<Record<string, unknown>>(
-				(resolve) => {
-					const handler = (event: MessageEvent) => {
-						try {
-							const data = JSON.parse(event.data as string);
-							if (data.echo === echo) {
-								ws.removeEventListener("message", handler);
-								resolve(data as Record<string, unknown>);
-							}
-						} catch {
-							/* ignore parse errors */
+			const response = await new Promise<Record<string, unknown>>((resolve) => {
+				const handler = (event: MessageEvent) => {
+					try {
+						const data = JSON.parse(event.data as string);
+						if (data.echo === echo) {
+							ws.removeEventListener("message", handler);
+							resolve(data as Record<string, unknown>);
 						}
-					};
-					ws.addEventListener("message", handler);
-					setTimeout(() => {
-						ws.removeEventListener("message", handler);
-						resolve({ retcode: -1, status: "timeout" });
-					}, 5000);
-				},
-			);
+					} catch {
+						/* ignore parse errors */
+					}
+				};
+				ws.addEventListener("message", handler);
+				setTimeout(() => {
+					ws.removeEventListener("message", handler);
+					resolve({ retcode: -1, status: "timeout" });
+				}, 5000);
+			});
 
 			ws.close();
 
 			return response.retcode === 0
 				? { ok: true, data: response.data }
 				: { ok: false, error: `retcode=${response.retcode}` };
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 
 	return { ok: false, error: "Failed to connect to Napcat WebSocket" };

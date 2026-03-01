@@ -20,6 +20,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts"],
-  "types" : ["bun-types", "node"]
+  "include": ["src/**/*.ts", "workflows/**/*.ts"],
+  "types" : ["bun", "node"]
 }

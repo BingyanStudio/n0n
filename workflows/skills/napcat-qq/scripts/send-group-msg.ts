@@ -10,7 +10,7 @@ const groupId = Number(Bun.argv[2]);
 const message = Bun.argv[3];
 
 if (!groupId || !message) {
-	console.error("Usage: bun run send-group-msg.ts <group_id> \"message\"");
+	console.error('Usage: bun run send-group-msg.ts <group_id> "message"');
 	process.exit(1);
 }
 
