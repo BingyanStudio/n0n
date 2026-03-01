@@ -74,6 +74,17 @@ Key points:
 - \`schema\` accepts any Zod schema — the agent's \`submit\` result is auto-parsed and validated against it
 - If validation fails, the agent automatically retries (up to 4 times) with the error details
 - Always define the schema to match exactly what your downstream code expects
+- **For error-prone tasks** (external APIs, network calls, parsing), use a discriminated union schema so the delegated agent can report structured errors instead of throwing:
+
+\`\`\`typescript
+const ResultSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), data: DigestSchema }),
+  z.object({ ok: z.literal(false), error: z.string() }),
+]);
+const { result } = await delegateTask("...", { schema: ResultSchema });
+if (!result.ok) console.error(result.error); // typed error
+else console.log(result.data);               // typed data
+\`\`\`
 
 ## Complete example
 
