@@ -36,7 +36,11 @@ export default async function run() {
 }
 \`\`\`
 
-- File goes in \`workflows/tasks/<name>.ts\` (or \`workflows/skills/<name>.ts\` if user asks for a reusable skill)
+- File goes in \`workflows/tasks/<name>.ts\` for one-off tasks
+- Reusable skills go in \`workflows/skills/<name>/\` following Agent Skills format:
+  - Create \`workflows/skills/<name>/SKILL.md\` with YAML frontmatter (name, description) + Markdown instructions
+  - Optional \`scripts/\` subfolder for executable .ts scripts (run via \`bun run\`)
+  - The skill directory name must match the \`name\` field in frontmatter
 - Must have a JSDoc comment on line 1
 - Must use deterministic code (fetch, Bun.spawn, Bun.write, etc.) — NOT delegateTask
 - Only use \`import { delegateTask } from "../../src/index.ts"\` when the task genuinely requires AI reasoning (analysis, creative writing)
@@ -300,7 +304,10 @@ function cleanupTemp() {
 }
 
 process.on("exit", cleanupTemp);
-process.on("SIGINT", () => { cleanupTemp(); process.exit(0); });
+process.on("SIGINT", () => {
+	cleanupTemp();
+	process.exit(0);
+});
 
 main().catch((err) => {
 	console.error("Fatal error:", err);

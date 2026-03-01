@@ -14,6 +14,9 @@ export { subagent } from "./agent/index.ts";
 export type { ScheduleEntry } from "./scheduler/index.ts";
 // 调度
 export { loadSchedules, startScheduler } from "./scheduler/index.ts";
+export type { SkillContent, SkillMeta } from "./skills/index.ts";
+// Skills
+export { discoverSkills, loadSkillContent } from "./skills/index.ts";
 export type { RagSearchResult, SearchSpace, TaskResult } from "./task/index.ts";
 // 高层 API — workflow 中优先使用
 export { delegateTask, ragSearch } from "./task/index.ts";

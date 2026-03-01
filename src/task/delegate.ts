@@ -12,6 +12,7 @@
 import { resolve } from "node:path";
 import type { ZodType } from "zod";
 import { subagent } from "../agent/subagent.ts";
+import { discoverSkills, formatSkillSummaries } from "../skills/index.ts";
 import { ENV_INFO } from "../tools/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
@@ -36,10 +37,23 @@ export async function delegateTask<T = unknown>(
 		maxIterations?: number;
 	},
 ): Promise<TaskResult<T>> {
+	// ── Step 0: Skill 发现（轻量，只读 frontmatter） ──
+	const allSkills = await discoverSkills();
+	const skillSummaryText = formatSkillSummaries(allSkills);
+
 	// ── Step 1: 意图增强（咨询） ──
 	let consultAdvice = "";
 	if (!options?.skipConsultation) {
 		try {
+			const skillSection = skillSummaryText
+				? [
+						"",
+						"## Available Skills (in workflows/skills/)",
+						"The following skills are available. If any are relevant, mention them in your advice with their directory path so the executor can read their SKILL.md for detailed instructions.",
+						skillSummaryText,
+					].join("\n")
+				: "";
+
 			const consultHistory: DomainMessage[] = [
 				{
 					type: "system",
@@ -55,6 +69,7 @@ export async function delegateTask<T = unknown>(
 						"1. Best practices for this task",
 						"2. Potential problems and solutions",
 						"3. A recommended step-by-step approach",
+						skillSection,
 						"",
 						"Be concise. Submit your advice as a string.",
 					].join("\n"),
@@ -88,7 +103,6 @@ export async function delegateTask<T = unknown>(
 	}
 
 	// ── Step 2: RAG 检索 + workflow 发现（并行） ──
-	// LLM-as-Retriever: 单次调用检索所有 space，避免多次 LLM 请求
 	const [ragHits, workflows] = await Promise.all([
 		ragSearch(query, "all"),
 		discoverWorkflows(),

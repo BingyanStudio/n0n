@@ -94,11 +94,24 @@ async function collectCandidates(space: SearchSpace): Promise<Candidate[]> {
 
 /**
  * 从文件内容提取摘要
+ * - SKILL.md：提取 frontmatter name + description
  * - .ts/.js 文件：提取 JSDoc + export 签名
  * - .md 文件：取前 N 个字符
  * - 其他：取前 N 个字符
  */
 function extractSummary(content: string, filePath: string): string {
+	// SKILL.md：用 frontmatter 作为摘要（比前 N 字符更精准）
+	if (filePath.endsWith("SKILL.md")) {
+		const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+		if (fmMatch?.[1]) {
+			const nameMatch = fmMatch[1].match(/^name:\s*(.+)$/m);
+			const descMatch = fmMatch[1].match(/^description:\s*(.+)$/m);
+			if (nameMatch?.[1] && descMatch?.[1]) {
+				return `[Skill: ${nameMatch[1].trim()}] ${descMatch[1].trim()}`;
+			}
+		}
+	}
+
 	if (filePath.endsWith(".ts") || filePath.endsWith(".js")) {
 		// 提取 JSDoc 注释
 		const jsdocMatch = content.match(/\/\*\*[\s\S]*?\*\//);
