@@ -57,6 +57,7 @@ function renderToolArgs(
 export class RichRenderer implements Renderer {
 	private toolRegion = new LiveRegion();
 	private hasStreamContent = false;
+	private isThinking = false;
 	/** 流式阶段已渲染参数的工具数量（跳过对应数量的 toolCallStart） */
 	private skipToolCallStarts = 0;
 
@@ -83,9 +84,15 @@ export class RichRenderer implements Renderer {
 	thinkingToken(token: string): void {
 		write(style.gray(token));
 		this.hasStreamContent = true;
+		this.isThinking = true;
 	}
 
 	contentToken(token: string): void {
+		// thinking → content 切换时加换行分隔
+		if (this.isThinking) {
+			writeln();
+			this.isThinking = false;
+		}
 		write(token);
 		this.hasStreamContent = true;
 	}
@@ -95,6 +102,7 @@ export class RichRenderer implements Renderer {
 			writeln();
 			this.hasStreamContent = false;
 		}
+		this.isThinking = false;
 		// 折叠流式工具调用参数区域 → 替换为解析后的结构化显示
 		if (this.streamingToolCalls.size > 0) {
 			this.streamRegion.clear();
@@ -191,14 +199,8 @@ export class RichRenderer implements Renderer {
 
 	toolCallEnd(result: ToolResult): void {
 		const summary = this.formatToolResult(result);
-		// exec：流式阶段已输出内容，结尾追加摘要行
-		if (result.tool === "exec") {
-			this.toolRegion.writeln(summary);
-		} else {
-			// 非流式工具：替换 streamRegion 的结构化参数为最终摘要
-			this.streamRegion.clear();
-			writeln(summary);
-		}
+		// 所有工具：保留已显示的结构化参数，追加摘要行
+		writeln(summary);
 	}
 
 	submitAccepted(): void {
