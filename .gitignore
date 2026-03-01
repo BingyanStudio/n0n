@@ -6,4 +6,4 @@ dist/
 bun.lock
 *.log
 .temp/
-redit-cookie.json
+workflows/memory
