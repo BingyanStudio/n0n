@@ -18,6 +18,8 @@ export interface SubagentOptions<T = unknown> {
 	maxIterations?: number;
 	/** 渲染器 */
 	renderer?: Renderer;
+	/** Interactive confirmation callback for blocked commands */
+	confirmFn?: (question: string) => Promise<string>;
 }
 
 /**
@@ -31,5 +33,6 @@ export async function subagent<T = unknown>(
 		maxIterations: options?.maxIterations,
 		schema: options?.schema,
 		renderer: options?.renderer,
+		confirmFn: options?.confirmFn,
 	});
 }

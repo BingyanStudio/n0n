@@ -42,6 +42,8 @@ export interface AgentOptions<T = unknown> {
 	schema?: ZodType<T>;
 	/** 渲染器，默认 PlainRenderer（向后兼容） */
 	renderer?: Renderer;
+	/** Interactive confirmation callback for blocked commands */
+	confirmFn?: (question: string) => Promise<string>;
 }
 
 const MAX_SUBMIT_RETRIES = 4;
@@ -150,7 +152,7 @@ export async function agentLoop<T = unknown>(
 		// 执行每个工具
 		for (const tc of toolCalls) {
 			renderer.toolCallStart(tc);
-			const result = await executeTool(tc, reminders);
+			const result = await executeTool(tc, reminders, options?.confirmFn);
 			renderer.toolCallEnd(result);
 			messages.push(result);
 
@@ -226,11 +228,12 @@ function parseToolCalls(raw: LLMToolCall[]): ToolCallRecord[] {
 async function executeTool(
 	tc: ToolCallRecord,
 	reminders: PendingReminder[],
+	confirmFn?: (question: string) => Promise<string>,
 ): Promise<ToolResult> {
 	const a = tc.args as unknown;
 	switch (tc.tool) {
 		case "exec":
-			return execTool(tc.id, a as Parameters<typeof execTool>[1]);
+			return execTool(tc.id, a as Parameters<typeof execTool>[1], confirmFn);
 		case "write":
 			return writeTool(tc.id, a as Parameters<typeof writeTool>[1]);
 		case "reminder":
