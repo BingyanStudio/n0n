@@ -39,6 +39,9 @@ export interface Renderer {
 		chunk: string,
 	): void;
 
+	/** 工具执行过程中的流式输出 chunk（如 exec 的 stdout/stderr） */
+	toolResultChunk(tool: string, chunk: string): void;
+
 	/** 工具调用完成，展示结果 */
 	toolCallEnd(result: ToolResult): void;
 
@@ -95,6 +98,10 @@ export class PlainRenderer implements Renderer {
 		_chunk: string,
 	): void {
 		// 非流式模式下不触发
+	}
+
+	toolResultChunk(_tool: string, _chunk: string): void {
+		// PlainRenderer 不处理流式 chunk
 	}
 
 	toolCallEnd(_result: ToolResult): void {

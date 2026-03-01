@@ -14,10 +14,11 @@ import { TOOL_DEFINITIONS } from "../tools/index.ts";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
+	ToolResult,
 } from "../types/domain.ts";
 import type { Renderer } from "../ui/renderer.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
-import { executeTool, isValidToolCall, parseToolCalls } from "./tool.ts";
+import { executeToolStream, isValidToolCall, parseToolCalls } from "./tool.ts";
 
 // ── 结果类型 ──
 
@@ -144,10 +145,25 @@ export async function agentLoop<T = unknown>(
 		};
 		messages.push(toolCallMsg);
 
-		// 执行每个工具
+		// 执行每个工具（流式）
 		for (const tc of toolCalls) {
 			renderer.toolCallStart(tc);
-			const result = await executeTool(tc, reminders, options?.confirmFn);
+			let result: ToolResult | undefined;
+			for await (const event of executeToolStream(
+				tc,
+				reminders,
+				options?.confirmFn,
+			)) {
+				if (event.type === "tool_output_chunk") {
+					renderer.toolResultChunk(event.tool, event.chunk);
+				} else {
+					result = event;
+				}
+			}
+			if (!result) {
+				// 不应发生：generator 必须 yield 一个 ToolResult
+				throw new Error(`Tool ${tc.tool} stream ended without a result`);
+			}
 			renderer.toolCallEnd(result);
 			messages.push(result);
 

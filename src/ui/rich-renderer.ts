@@ -10,20 +10,6 @@ import { label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
 import type { Renderer } from "./renderer.ts";
 
-/** 截断过长文本：保留头部 headLen + 尾部 tailLen，中间折叠 */
-function truncateMiddle(
-	text: string,
-	maxLen = 1000,
-	headLen = 200,
-	tailLen = 800,
-): string {
-	if (text.length <= maxLen) return text;
-	const head = text.slice(0, headLen);
-	const tail = text.slice(-tailLen);
-	const omitted = text.length - headLen - tailLen;
-	return `${head}\n${style.gray(`... (${omitted} chars omitted) ...`)}\n${tail}`;
-}
-
 export class RichRenderer implements Renderer {
 	private toolRegion = new LiveRegion();
 	private hasStreamContent = false;
@@ -183,9 +169,24 @@ export class RichRenderer implements Renderer {
 		}
 	}
 
+	/** 流式工具输出 chunk（exec stdout/stderr 实时显示） */
+	toolResultChunk(_tool: string, chunk: string): void {
+		// 直接写入 toolRegion，逐 chunk 追加
+		for (const line of chunk.split("\n")) {
+			if (line) {
+				this.toolRegion.writeln(`${style.gray("  │")} ${style.dim(line)}`);
+			}
+		}
+	}
+
 	toolCallEnd(result: ToolResult): void {
 		const summary = this.formatToolResult(result);
-		this.toolRegion.replace(summary);
+		// exec 工具：流式阶段已经输出了内容，结尾追加摘要行
+		if (result.tool === "exec") {
+			this.toolRegion.writeln(summary);
+		} else {
+			this.toolRegion.replace(summary);
+		}
 	}
 
 	submitAccepted(): void {
@@ -220,40 +221,23 @@ export class RichRenderer implements Renderer {
 						: style.red(`exit=${result.exitCode}`);
 				const outLen = result.stdout.length + result.stderr.length;
 				const cmd = result.command.slice(0, 80);
-				// 结果摘要行
-				let out = `${style.dim("◂")} ${style.cyan("exec")} ${cmd} ${duration} ${exit} ${style.gray(`${outLen} chars`)}\n`;
-				// 工具输出内容（缩进，表示从属）
-				const output = (
-					result.stdout + (result.stderr ? `\n${result.stderr}` : "")
-				).trim();
-				if (output) {
-					const truncated = truncateMiddle(output);
-					for (const line of truncated.split("\n")) {
-						out += `${style.gray("  │")} ${style.dim(line)}\n`;
-					}
-				}
-				return out;
+				return `${style.dim("◂")} ${style.cyan("exec")} ${cmd} ${duration} ${exit} ${style.gray(`${outLen} chars`)}`;
 			}
 			case "write": {
 				if (!result.success) {
-					return `${style.dim("◂")} ${style.cyan("write")} ${result.path}: ${style.red(result.error ?? "failed")}\n`;
+					return `${style.dim("◂")} ${style.cyan("write")} ${result.path}: ${style.red(result.error ?? "failed")}`;
 				}
 				if (result.searchPattern) {
 					const searchLines = result.searchPattern.split("\n").length;
-					return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}\n`;
+					return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}`;
 				}
-				return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray("(full write)")}\n`;
+				return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray("(full write)")}`;
 			}
 			case "reminder": {
-				let out = `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)} ${style.gray(`${result.content.length} chars`)}\n`;
-				const truncated = truncateMiddle(result.content, 500, 200, 300);
-				for (const line of truncated.split("\n")) {
-					out += `${style.gray("  │")} ${style.dim(line)}\n`;
-				}
-				return out;
+				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)} ${style.gray(`${result.content.length} chars`)}`;
 			}
 			case "submit": {
-				return `${style.dim("◂")} ${style.cyan("submit")}\n`;
+				return `${style.dim("◂")} ${style.cyan("submit")}`;
 			}
 		}
 	}

@@ -92,6 +92,17 @@ export type ToolResult =
 	| ReminderToolResult
 	| SubmitToolResult;
 
+/** 工具执行过程中的流式输出 chunk（目前仅 exec 使用） */
+export interface ToolOutputChunk {
+	type: "tool_output_chunk";
+	callId: string;
+	tool: string;
+	chunk: string;
+}
+
+/** 工具流式执行产出：chunk 或最终结果 */
+export type ToolStreamEvent = ToolOutputChunk | ToolResult;
+
 // ── 联合类型 ──
 export type DomainMessage =
 	| SystemMessage

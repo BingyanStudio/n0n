@@ -1,55 +1,73 @@
 import type { PendingReminder } from "../tools/index.ts";
 import {
-	execTool,
+	execToolStream,
 	reminderTool,
 	submitTool,
 	TOOL_DEFINITIONS,
 	writeTool,
 } from "../tools/index.ts";
-import type { ToolCallRecord, ToolResult } from "../types/domain.ts";
+import type {
+	ToolCallRecord,
+	ToolResult,
+	ToolStreamEvent,
+} from "../types/domain.ts";
 import type { LLMToolCall } from "../types/llm.ts";
 
-type ToolExecutor = (
+// ── 工具执行器类型 ──
+
+/** 流式执行器：yield chunk + 最终 result */
+type StreamExecutor = (
 	tc: ToolCallRecord,
 	reminders: PendingReminder[],
 	confirmFn?: (question: string) => Promise<string>,
-) => Promise<ToolResult>;
+) => AsyncGenerator<ToolStreamEvent>;
+
+/** 同步执行器：直接返回 result */
+type SyncExecutor = (
+	tc: ToolCallRecord,
+	reminders: PendingReminder[],
+	confirmFn?: (question: string) => Promise<string>,
+) => Promise<ToolResult> | ToolResult;
+
+type ToolExecutorEntry =
+	| { stream: true; execute: StreamExecutor }
+	| { stream: false; execute: SyncExecutor };
 
 function toToolArgs<T>(args: ToolCallRecord["args"]): T {
 	return args as unknown as T;
 }
 
-function unknownToolResult(tc: ToolCallRecord): ToolResult {
-	return {
-		type: "tool_result",
-		callId: tc.id,
-		tool: "exec",
-		command: "",
-		cwd: "",
-		exitCode: 1,
-		stdout: "",
-		stderr: `Unknown tool: ${tc.tool}`,
-		durationMs: 0,
-	};
-}
+// ── 工具注册表 ──
 
-const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
-	exec: async (tc, _reminders, confirmFn) =>
-		execTool(
-			tc.id,
-			toToolArgs<Parameters<typeof execTool>[1]>(tc.args),
-			confirmFn,
-		),
-	write: async (tc) =>
-		writeTool(tc.id, toToolArgs<Parameters<typeof writeTool>[1]>(tc.args)),
-	reminder: async (tc, reminders) =>
-		reminderTool(
-			tc.id,
-			toToolArgs<Parameters<typeof reminderTool>[1]>(tc.args),
-			reminders,
-		),
-	submit: async (tc) =>
-		submitTool(tc.id, toToolArgs<Parameters<typeof submitTool>[1]>(tc.args)),
+const TOOL_EXECUTORS: Record<string, ToolExecutorEntry> = {
+	exec: {
+		stream: true,
+		execute: (tc, _reminders, confirmFn) =>
+			execToolStream(
+				tc.id,
+				toToolArgs<Parameters<typeof execToolStream>[1]>(tc.args),
+				confirmFn,
+			),
+	},
+	write: {
+		stream: false,
+		execute: (tc) =>
+			writeTool(tc.id, toToolArgs<Parameters<typeof writeTool>[1]>(tc.args)),
+	},
+	reminder: {
+		stream: false,
+		execute: (tc, reminders) =>
+			reminderTool(
+				tc.id,
+				toToolArgs<Parameters<typeof reminderTool>[1]>(tc.args),
+				reminders,
+			),
+	},
+	submit: {
+		stream: false,
+		execute: (tc) =>
+			submitTool(tc.id, toToolArgs<Parameters<typeof submitTool>[1]>(tc.args)),
+	},
 };
 
 const DEFINED_TOOLS = new Set(TOOL_DEFINITIONS.map((t) => t.function.name));
@@ -84,6 +102,8 @@ function assertToolRegistryConsistency(): void {
 
 assertToolRegistryConsistency();
 
+// ── 解析 + 校验 ──
+
 export function parseToolCalls(raw: LLMToolCall[]): ToolCallRecord[] {
 	return raw.map((tc) => {
 		let args: Record<string, unknown>;
@@ -108,15 +128,37 @@ export function isValidToolCall(tc: ToolCallRecord): boolean {
 	return DEFINED_TOOLS.has(tc.tool) && !tc.args._parseError;
 }
 
-export async function executeTool(
+// ── 统一流式执行入口 ──
+
+/**
+ * 执行工具，统一返回 AsyncGenerator<ToolStreamEvent>。
+ * 流式工具（exec）直接 yield chunk + result；
+ * 同步工具包装为只 yield 一个 result 的 generator。
+ */
+export async function* executeToolStream(
 	tc: ToolCallRecord,
 	reminders: PendingReminder[],
 	confirmFn?: (question: string) => Promise<string>,
-): Promise<ToolResult> {
-	const executor = TOOL_EXECUTORS[tc.tool];
-	if (executor) {
-		return executor(tc, reminders, confirmFn);
+): AsyncGenerator<ToolStreamEvent> {
+	const entry = TOOL_EXECUTORS[tc.tool];
+	if (!entry) {
+		yield {
+			type: "tool_result",
+			callId: tc.id,
+			tool: "exec",
+			command: "",
+			cwd: "",
+			exitCode: 1,
+			stdout: "",
+			stderr: `Unknown tool: ${tc.tool}`,
+			durationMs: 0,
+		};
+		return;
 	}
 
-	return unknownToolResult(tc);
+	if (entry.stream) {
+		yield* entry.execute(tc, reminders, confirmFn);
+	} else {
+		yield await entry.execute(tc, reminders, confirmFn);
+	}
 }

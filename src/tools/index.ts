@@ -11,7 +11,7 @@ export const TOOL_DEFINITIONS: LLMToolDefinition[] = [
 	SUBMIT_TOOL_DEFINITION,
 ];
 
-export { ENV_INFO, EXEC_TOOL_DEFINITION, execTool } from "./exec.ts";
+export { ENV_INFO, EXEC_TOOL_DEFINITION, execToolStream } from "./exec.ts";
 export type { PendingReminder } from "./reminder.ts";
 export { REMINDER_TOOL_DEFINITION, reminderTool } from "./reminder.ts";
 export { SUBMIT_TOOL_DEFINITION, submitTool } from "./submit.ts";
