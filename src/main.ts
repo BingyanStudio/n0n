@@ -75,9 +75,40 @@ export default async function run() {
   - The skill directory name must match the \`name\` field in frontmatter
 - User configurations (API keys, server addresses, tokens, etc.) go in \`workflows/memory/config/\` as \`.json\` files. When you discover user-specific config during a task, save it there for future reuse.
 - Must have a JSDoc comment on line 1
-- Must use deterministic code (fetch, Bun.spawn, Bun.write, etc.) — NOT delegateTask
-- Only use \`import { delegateTask } from "../../src/index.ts"\` when the task genuinely requires AI reasoning (analysis, creative writing)
-- **When using delegateTask, ALWAYS pass a \`schema\` option** (Zod) to get structured, validated results. Without schema the result is free-form text — unreliable for downstream code. The engine auto-validates and retries on mismatch, so you get guaranteed types at zero extra cost.
+- Must use deterministic code (fetch, Bun.spawn, Bun.write, etc.) — NOT delegateTask/generate
+- Use \`generate\` for simple AI tasks (random generation, formatting, simple reasoning) — it's lightweight (no consultation/RAG overhead)
+- Use \`delegateTask\` for complex AI tasks that benefit from consultation advice and context retrieval
+- **When using delegateTask or generate, ALWAYS pass a \`schema\` option** (Zod) to get structured, validated results. Without schema the result is free-form text — unreliable for downstream code. The engine auto-validates and retries on mismatch, so you get guaranteed types at zero extra cost.
+
+### generate vs delegateTask
+
+| | \`generate\` | \`delegateTask\` |
+|---|---|---|
+| Consultation (best practices) | ✗ | ✓ |
+| RAG context retrieval | ✗ | ✓ |
+| Agent tools (exec, write) | ✓ | ✓ |
+| Schema validation | ✓ | ✓ |
+| Use when | Simple generation, formatting | Complex tasks needing context |
+
+### generate example
+
+\`\`\`typescript
+import { z } from "zod";
+import { generate } from "../../src/index.ts";
+
+// Simple text generation
+const { result } = await generate("生成一句早安问候语");
+
+// Structured generation with schema
+const GreetingSchema = z.object({
+  greeting: z.string(),
+  emoji: z.string(),
+});
+const { result: greeting } = await generate("生成一个随机的早安问候", {
+  schema: GreetingSchema,
+});
+// greeting is typed: { greeting: "早上好！新的一天充满希望", emoji: "🌅" }
+\`\`\`
 
 ### delegateTask schema example
 

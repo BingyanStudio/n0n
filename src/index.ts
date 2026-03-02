@@ -1,7 +1,10 @@
 /**
  * n0n — 公共 API 导出
  *
- * Workflow 中优先使用 delegateTask（高层），subagent 为底层 API。
+ * API 层级（由轻到重）：
+ *   generate     — 轻量生成，走 agentLoop 但跳过 consultation + RAG
+ *   delegateTask — 完整流水线：consultation → RAG → agentLoop
+ *   subagent     — 底层 API，需要完全控制 DomainMessage[]
  */
 
 export type {
@@ -17,9 +20,15 @@ export { loadSchedules, startScheduler } from "./scheduler/index.ts";
 export type { SkillContent, SkillMeta } from "./skills/index.ts";
 // Skills
 export { discoverSkills, loadSkillContent } from "./skills/index.ts";
-export type { RagSearchResult, SearchSpace, TaskResult } from "./task/index.ts";
+export type {
+	GenerateOptions,
+	GenerateResult,
+	RagSearchResult,
+	SearchSpace,
+	TaskResult,
+} from "./task/index.ts";
 // 高层 API — workflow 中优先使用
-export { delegateTask, ragSearch } from "./task/index.ts";
+export { delegateTask, generate, ragSearch } from "./task/index.ts";
 // 类型
 export type * from "./types/index.ts";
 export type { WorkflowMeta } from "./workflow/index.ts";
