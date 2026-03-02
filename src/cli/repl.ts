@@ -13,7 +13,7 @@ import type { DomainMessage } from "../types/domain.ts";
 import { isTTY, label, style, writeln } from "../ui/ansi.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import { RichRenderer } from "../ui/rich-renderer.ts";
-import { discoverWorkflows } from "../workflow/index.ts";
+import { discoverWorkflows } from "../discovery.ts";
 import {
 	InteractiveResultSchema,
 	type InteractiveResult,

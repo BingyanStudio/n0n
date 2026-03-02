@@ -12,10 +12,13 @@
 import { resolve } from "node:path";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/index.ts";
-import { discoverSkills, formatSkillSummaries } from "../skills/index.ts";
+import {
+	discoverSkills,
+	discoverWorkflows,
+	formatSkillSummaries,
+} from "../discovery.ts";
 import { ENV_INFO } from "../tools/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
-import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
 

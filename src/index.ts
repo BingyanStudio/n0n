@@ -9,17 +9,20 @@
 export type { AgentOptions, AgentResult } from "./agent/index.ts";
 // 底层 API — 需要完全控制 DomainMessage[] 时使用
 export { agentLoop } from "./agent/index.ts";
+// 发现层 — workflow / skill 发现
+export type { SkillContent, SkillMeta, WorkflowMeta } from "./discovery.ts";
+export {
+	discoverSkills,
+	discoverWorkflows,
+	loadSkillContent,
+} from "./discovery.ts";
 export type { ScheduleEntry } from "./scheduler/index.ts";
 // 调度
 export { loadSchedules, startScheduler } from "./scheduler/index.ts";
-export type { SkillContent, SkillMeta } from "./skills/index.ts";
-// Skills
-export { discoverSkills, loadSkillContent } from "./skills/index.ts";
 export type { RagSearchResult, SearchSpace, TaskResult } from "./task/index.ts";
 // 高层 API — workflow 中优先使用
 export { delegateTask, ragSearch } from "./task/index.ts";
 // 类型
 export type * from "./types/index.ts";
-export type { WorkflowMeta } from "./workflow/index.ts";
 // Workflow 运行时
-export { discoverWorkflows, runWorkflow } from "./workflow/index.ts";
+export { runWorkflow } from "./workflow/index.ts";
