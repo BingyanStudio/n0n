@@ -6,11 +6,12 @@
  */
 
 import type { ZodType } from "zod";
+import { toJSONSchema } from "zod";
 import { config } from "../config.ts";
 import { toAPIMessages } from "../llm/adapter.ts";
 import { chatCompletionStream, StreamAccumulator } from "../llm/stream.ts";
 import type { PendingReminder } from "../tools/index.ts";
-import { TOOL_DEFINITIONS } from "../tools/index.ts";
+import { makeToolDefinitions } from "../tools/index.ts";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
@@ -49,6 +50,7 @@ export async function agentLoop<T = unknown>(
 ): Promise<AgentResult<T>> {
 	const maxIter = options?.maxIterations ?? config.agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
+	const toolDefs = makeToolDefinitions(options?.schema);
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
@@ -65,7 +67,7 @@ export async function agentLoop<T = unknown>(
 		const acc = new StreamAccumulator();
 		for await (const event of chatCompletionStream({
 			messages: apiMessages,
-			tools: TOOL_DEFINITIONS,
+			tools: toolDefs,
 			tool_choice: "auto",
 		})) {
 			acc.push(event);
@@ -246,9 +248,18 @@ function validateSubmit(
 	const issues = result.error.issues
 		.map((i) => `  ${String(i.path.join("."))}: ${i.message}`)
 		.join("\n");
+
+	// 校验失败时返回完整的 JSON Schema，而不仅仅是错误片段
+	let fullSchema: string;
+	try {
+		fullSchema = JSON.stringify(toJSONSchema(schema), null, 2);
+	} catch {
+		fullSchema = "(schema serialization failed)";
+	}
+
 	return {
 		ok: false,
-		error: `Result does not match expected schema:\n${issues}`,
+		error: `Result does not match expected schema:\n${issues}\n\nFull expected schema:\n${fullSchema}`,
 	};
 }
 
