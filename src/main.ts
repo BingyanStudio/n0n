@@ -14,6 +14,7 @@
  */
 
 import { createInterface } from "node:readline";
+import { z } from "zod";
 import { subagent } from "./agent/index.ts";
 import { loadSchedules, startScheduler } from "./scheduler/index.ts";
 import type { DomainMessage } from "./types/domain.ts";
@@ -21,6 +22,32 @@ import { isTTY, label, style, writeln } from "./ui/ansi.ts";
 import { PlainRenderer } from "./ui/renderer.ts";
 import { RichRenderer } from "./ui/rich-renderer.ts";
 import { discoverWorkflows, runWorkflow } from "./workflow/index.ts";
+
+// ── 交互模式 submit 结果 schema ──
+
+/**
+ * 交互模式下 agent 的三种结束状态：
+ * - need_info: 需要用户补充信息才能继续
+ * - completed: 任务成功完成
+ * - error: 不可恢复的错误（超过重试上限、陷入循环等）
+ */
+const InteractiveResultSchema = z.discriminatedUnion("type", [
+	z.object({
+		type: z.literal("need_info"),
+		message: z.string().describe("向用户说明需要什么信息"),
+	}),
+	z.object({
+		type: z.literal("completed"),
+		result: z.string().describe("任务产出（文件路径、回答文本等）"),
+		summary: z.string().optional().describe("简短的完成摘要"),
+	}),
+	z.object({
+		type: z.literal("error"),
+		error: z.string().describe("错误描述"),
+	}),
+]);
+
+type InteractiveResult = z.infer<typeof InteractiveResultSchema>;
 
 const SYSTEM_PROMPT = `You are a workflow builder for the n0n engine. You create clean, working TypeScript workflow files.
 
@@ -120,9 +147,9 @@ exec: bun run src/main.ts run workflows/tasks/fetch-danbooru-cat-ears.ts
 
 Step 4 — If error, fix the SAME file (use write with search/replace), then test again.
 
-Step 5 — When it works, submit the file path:
+Step 5 — When it works, submit the structured result:
 \`\`\`
-submit: { result: "workflows/tasks/fetch-danbooru-cat-ears.ts" }
+submit: { result: { type: "completed", result: "workflows/tasks/fetch-danbooru-cat-ears.ts", summary: "Created workflow to fetch cat_ears images from Danbooru API" } }
 \`\`\`
 
 ## Key rules
@@ -134,10 +161,12 @@ submit: { result: "workflows/tasks/fetch-danbooru-cat-ears.ts" }
 5. **Files only in workflows/**: never write files to the project root or other directories. Temporary test files go in \`.temp/\` (auto-cleaned on exit).
 6. **Run workflows correctly**: ALWAYS use \`bun run src/main.ts run <path>\` to test workflows. NEVER use \`bun run <file>\` directly — it won't call the exported function.
 7. **Follow-up tasks**: when the user adds a requirement to a previous workflow, modify the SAME file or import it in a new task.
-8. **Submit = file path**: always submit the workflow file path as your result, not the execution output.
-9. **Need info?** submit \`{ ok: false, error: "what you need" }\`
-10. **Conversational questions**: if the user asks a simple question (not a workflow task), just answer directly via \`submit\`. Example: user asks "几点了" → \`submit: { result: "现在是下午3点" }\`. No need to create files or set reminders.
-11. **Bail out on repeated failure**: if the same operation (API call, command, etc.) fails 3 times in a row, STOP retrying. Submit \`{ ok: false, error: "description of what failed and what you need" }\` immediately.
+8. **Submit = structured result**: always submit via the \`submit\` tool. The \`result\` field must match the schema described in the tool definition. There are three outcome types:
+   - **completed**: task done → \`{ type: "completed", result: "workflows/tasks/xxx.ts", summary: "..." }\`
+   - **need_info**: need user input → \`{ type: "need_info", message: "what you need from the user" }\`
+   - **error**: unrecoverable failure → \`{ type: "error", error: "what went wrong" }\`
+9. **Conversational questions**: if the user asks a simple question (not a workflow task), just answer directly via \`submit\`. Example: user asks "几点了" → \`submit: { result: { type: "completed", result: "现在是下午3点" } }\`. No need to create files or set reminders.
+10. **Bail out on repeated failure**: if the same operation (API call, command, etc.) fails 3 times in a row, STOP retrying. Submit \`{ result: { type: "error", error: "description of what failed and what you need" } }\` immediately.
 
 ## Scheduled tasks
 
@@ -300,46 +329,81 @@ async function interactiveLoop(initialInput?: string) {
 			});
 		}
 
-		const result = await subagent(history, {
+		const agentResult = await subagent<InteractiveResult>(history, {
 			maxIterations: 30,
 			renderer,
 			confirmFn,
+			schema: InteractiveResultSchema,
 		});
 		// 保留 agent 产出的完整历史，下轮继续
-		history = result.history;
+		history = agentResult.history;
 
-		// 检查是否为 error result
-		const isError =
-			result.result != null &&
-			typeof result.result === "object" &&
-			(result.result as Record<string, unknown>).ok === false;
+		const ir = agentResult.result;
+		writeln();
 
-		if (isError) {
-			const errMsg = (result.result as Record<string, unknown>).error;
-			writeln();
-			writeln(`${style.yellow("⚠")} Agent 需要更多信息: ${errMsg}`);
-			if (result.report) writeln(style.gray(`  ${result.report}`));
+		// ── 按结果类型分别展示 ──
+
+		if (ir == null) {
+			// agent 未能产出有效结果（超过轮次上限等）
+			writeln(`${style.red("✗")} Agent 异常终止`);
+			if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 			history.push({
 				type: "user_text",
-				content: `Your submission was rejected. Error: ${errMsg}\nPlease wait for the user to provide more information.`,
+				content: `Agent terminated without a valid result. Report: ${agentResult.report ?? "none"}\nWaiting for the next task from the user.`,
 			});
-			writeln(style.gray("请补充信息，或输入 'exit' 退出:"));
+			writeln();
+			writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
 			writeln();
 			userInput = await prompt(`${label.user()} `);
 			continue;
 		}
 
-		writeln();
-		writeln(`${style.green("✓")} Workflow 创建完成: ${result.result}`);
-		if (result.report) writeln(style.gray(`  ${result.report}`));
-		history.push({
-			type: "user_text",
-			content: `Your submission was accepted. Result: ${typeof result.result === "string" ? result.result : JSON.stringify(result.result)}\nWaiting for the next task from the user.`,
-		});
-		writeln();
-		writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
-		writeln();
-		userInput = await prompt(`${label.user()} `);
+		switch (ir.type) {
+			case "need_info": {
+				writeln(`${style.yellow("?")} Agent 需要更多信息:`);
+				writeln(`  ${ir.message}`);
+				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
+				history.push({
+					type: "user_text",
+					content: `Your submission was accepted (need_info). Waiting for the user to provide: ${ir.message}`,
+				});
+				writeln();
+				writeln(style.gray("请补充信息，或输入 'exit' 退出:"));
+				writeln();
+				userInput = await prompt(`${label.user()} `);
+				continue;
+			}
+
+			case "completed": {
+				writeln(`${style.green("✓")} 任务完成: ${ir.result}`);
+				if (ir.summary) writeln(style.gray(`  ${ir.summary}`));
+				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
+				history.push({
+					type: "user_text",
+					content: `Your submission was accepted (completed). Result: ${ir.result}\nWaiting for the next task from the user.`,
+				});
+				writeln();
+				writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
+				writeln();
+				userInput = await prompt(`${label.user()} `);
+				break;
+			}
+
+			case "error": {
+				writeln(`${style.red("✗")} Agent 报告错误:`);
+				writeln(`  ${ir.error}`);
+				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
+				history.push({
+					type: "user_text",
+					content: `Your submission was accepted (error). Error: ${ir.error}\nWaiting for the next task or additional info from the user.`,
+				});
+				writeln();
+				writeln(style.gray("可以补充信息重试，或输入 'exit' 退出:"));
+				writeln();
+				userInput = await prompt(`${label.user()} `);
+				continue;
+			}
+		}
 	}
 
 	rl.close();
