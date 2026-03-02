@@ -1,7 +1,7 @@
 /**
  * Workflow 执行运行时
  *
- * Workflow = TypeScript 文件，import { subagent, delegateTask } 等原语。
+ * Workflow = TypeScript 文件，import { agentLoop, delegateTask } 等原语。
  * 运行时负责加载和执行这些文件。
  */
 
