@@ -38,7 +38,7 @@ const InteractiveResultSchema = z.discriminatedUnion("type", [
 	}),
 	z.object({
 		type: z.literal("completed"),
-		result: z.unknown().describe("任务产出（文件路径、回答文本等）"),
+		result: z.string().describe("任务产出（文件路径、回答文本等）"),
 		summary: z.string().optional().describe("简短的完成摘要"),
 	}),
 	z.object({
@@ -375,14 +375,12 @@ async function interactiveLoop(initialInput?: string) {
 			}
 
 			case "completed": {
-				const display =
-					typeof ir.result === "string" ? ir.result : JSON.stringify(ir.result);
-				writeln(`${style.green("✓")} 任务完成: ${display}`);
+				writeln(`${style.green("✓")} 任务完成: ${ir.result}`);
 				if (ir.summary) writeln(style.gray(`  ${ir.summary}`));
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 				history.push({
 					type: "user_text",
-					content: `Your submission was accepted (completed). Result: ${display}\nWaiting for the next task from the user.`,
+					content: `Your submission was accepted (completed). Result: ${ir.result}\nWaiting for the next task from the user.`,
 				});
 				writeln();
 				writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
