@@ -17,7 +17,7 @@
  *   bun run search.ts "AI news" --count=5 --summary --freshness=oneWeek
  */
 
-import { webSearch, type SearchOptions } from "./lib.ts";
+import { type SearchOptions, webSearch } from "./lib.ts";
 
 function parseArgs(argv: string[]): SearchOptions {
 	const args = argv.slice(2); // skip bun + script path
@@ -41,7 +41,9 @@ function parseArgs(argv: string[]): SearchOptions {
 	}
 
 	if (!query) {
-		console.error("用法: bun run search.ts <query> [--count=N] [--summary] [--freshness=VALUE]");
+		console.error(
+			"用法: bun run search.ts <query> [--count=N] [--summary] [--freshness=VALUE]",
+		);
 		process.exit(1);
 	}
 

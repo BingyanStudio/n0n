@@ -5,14 +5,11 @@
  */
 
 import {
-	REGISTERED_TOOLS,
 	getToolEntry,
 	type PendingReminder,
+	REGISTERED_TOOLS,
 } from "../tools/index.ts";
-import type {
-	ToolCallRecord,
-	ToolStreamEvent,
-} from "../types/domain.ts";
+import type { ToolCallRecord, ToolStreamEvent } from "../types/domain.ts";
 import type { LLMToolCall } from "../types/llm.ts";
 
 // ── 解析 ──

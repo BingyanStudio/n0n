@@ -5,19 +5,16 @@
  * Prompt 模板和 schema 从外部注入，保持 REPL 逻辑纯粹。
  */
 
-import { createInterface } from "node:readline";
 import { resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { agentLoop } from "../agent/loop.ts";
+import { discoverWorkflows } from "../discovery.ts";
 import { loadSchedules } from "../scheduler/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
 import { isTTY, label, style, writeln } from "../ui/ansi.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import { RichRenderer } from "../ui/rich-renderer.ts";
-import { discoverWorkflows } from "../discovery.ts";
-import {
-	InteractiveResultSchema,
-	type InteractiveResult,
-} from "./schema.ts";
+import { type InteractiveResult, InteractiveResultSchema } from "./schema.ts";
 
 const PROMPT_PATH = resolve(import.meta.dir, "prompts/interactive.md");
 

@@ -7,16 +7,15 @@
  * 上层模块（task、cli）统一从此处导入发现函数。
  */
 
-// ── Workflow 发现 ──
-export type { WorkflowMeta } from "./workflow/runtime.ts";
-export { discoverWorkflows } from "./workflow/runtime.ts";
-
 // ── Skill 发现 ──
 export type { SkillContent, SkillMeta } from "./skills/discovery.ts";
 export {
 	discoverSkills,
-	formatSkillSummaries,
 	formatSkillContents,
+	formatSkillSummaries,
 	loadSkillContent,
 	loadSkillContents,
 } from "./skills/discovery.ts";
+// ── Workflow 发现 ──
+export type { WorkflowMeta } from "./workflow/runtime.ts";
+export { discoverWorkflows } from "./workflow/runtime.ts";
