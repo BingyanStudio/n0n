@@ -1,7 +1,10 @@
 /**
  * n0n — 公共 API 导出
  *
- * Workflow 中优先使用 delegateTask（高层），subagent 为底层 API。
+ * API 层级（由轻到重）：
+ *   generate     — 轻量生成，走 agentLoop 但跳过 consultation + RAG
+ *   delegateTask — 完整流水线：consultation → RAG → agentLoop
+ *   subagent     — 底层 API，需要完全控制 DomainMessage[]
  */
 
 export type {
