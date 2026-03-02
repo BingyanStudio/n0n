@@ -10,8 +10,8 @@
  */
 
 import { rmSync } from "node:fs";
-import { loadSchedules, startScheduler } from "../scheduler/index.ts";
 import { discoverWorkflows } from "../discovery.ts";
+import { loadSchedules, startScheduler } from "../scheduler/index.ts";
 import { style, writeln } from "../ui/ansi.ts";
 import { runWorkflow } from "../workflow/index.ts";
 import { startRepl } from "./repl.ts";

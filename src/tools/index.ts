@@ -14,13 +14,13 @@ import type {
 import type { LLMToolDefinition } from "../types/llm.ts";
 import { ENV_INFO, EXEC_TOOL_DEFINITION, execToolStream } from "./exec.ts";
 import {
+	type PendingReminder,
 	REMINDER_TOOL_DEFINITION,
 	reminderTool,
-	type PendingReminder,
 } from "./reminder.ts";
 import {
-	SUBMIT_TOOL_DEFINITION,
 	makeSubmitToolDefinition,
+	SUBMIT_TOOL_DEFINITION,
 	submitTool,
 } from "./submit.ts";
 import { WRITE_TOOL_DEFINITION, writeTool } from "./write.ts";
