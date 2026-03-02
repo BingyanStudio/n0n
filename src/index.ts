@@ -17,9 +17,15 @@ export { loadSchedules, startScheduler } from "./scheduler/index.ts";
 export type { SkillContent, SkillMeta } from "./skills/index.ts";
 // Skills
 export { discoverSkills, loadSkillContent } from "./skills/index.ts";
-export type { RagSearchResult, SearchSpace, TaskResult } from "./task/index.ts";
+export type {
+	GenerateOptions,
+	GenerateResult,
+	RagSearchResult,
+	SearchSpace,
+	TaskResult,
+} from "./task/index.ts";
 // 高层 API — workflow 中优先使用
-export { delegateTask, ragSearch } from "./task/index.ts";
+export { delegateTask, generate, ragSearch } from "./task/index.ts";
 // 类型
 export type * from "./types/index.ts";
 export type { WorkflowMeta } from "./workflow/index.ts";

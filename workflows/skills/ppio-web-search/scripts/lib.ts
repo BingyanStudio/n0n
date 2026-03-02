@@ -13,7 +13,13 @@ export interface SearchOptions {
 	/** 搜索关键词（必填） */
 	query: string;
 	/** 时间范围过滤，默认 noLimit */
-	freshness?: "noLimit" | "oneDay" | "oneWeek" | "oneMonth" | "oneYear" | (string & {});
+	freshness?:
+		| "noLimit"
+		| "oneDay"
+		| "oneWeek"
+		| "oneMonth"
+		| "oneYear"
+		| (string & {});
 	/** 是否返回文本摘要，默认 false */
 	summary?: boolean;
 	/** 限定搜索的域名，多个用 | 分隔 */
@@ -140,7 +146,9 @@ export function getApiKey(): string {
  * }
  * ```
  */
-export async function webSearch(options: SearchOptions): Promise<SearchResponse> {
+export async function webSearch(
+	options: SearchOptions,
+): Promise<SearchResponse> {
 	const apiKey = getApiKey();
 
 	const body: Record<string, unknown> = { query: options.query };
@@ -161,12 +169,20 @@ export async function webSearch(options: SearchOptions): Promise<SearchResponse>
 
 	if (!resp.ok) {
 		const text = await resp.text().catch(() => "");
-		throw new Error(`Web Search API 请求失败: ${resp.status} ${resp.statusText} — ${text}`);
+		throw new Error(
+			`Web Search API 请求失败: ${resp.status} ${resp.statusText} — ${text}`,
+		);
 	}
 
-	const json = (await resp.json()) as { code: number; data: SearchResponse; msg?: string };
+	const json = (await resp.json()) as {
+		code: number;
+		data: SearchResponse;
+		msg?: string;
+	};
 	if (json.code !== 200) {
-		throw new Error(`Web Search API 业务错误: code=${json.code} msg=${json.msg ?? ""}`);
+		throw new Error(
+			`Web Search API 业务错误: code=${json.code} msg=${json.msg ?? ""}`,
+		);
 	}
 
 	return json.data;
