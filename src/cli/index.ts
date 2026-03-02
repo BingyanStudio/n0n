@@ -11,8 +11,9 @@
 
 import { rmSync } from "node:fs";
 import { loadSchedules, startScheduler } from "../scheduler/index.ts";
+import { discoverWorkflows } from "../discovery.ts";
 import { style, writeln } from "../ui/ansi.ts";
-import { discoverWorkflows, runWorkflow } from "../workflow/index.ts";
+import { runWorkflow } from "../workflow/index.ts";
 import { startRepl } from "./repl.ts";
 
 // ── 子命令路由 ──
