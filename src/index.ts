@@ -1,16 +1,14 @@
 /**
  * n0n — 公共 API 导出
  *
- * Workflow 中优先使用 delegateTask（高层），subagent 为底层 API。
+ * API 层级（由轻到重）：
+ *   delegateTask — 完整流水线：consultation → RAG → agentLoop
+ *   agentLoop    — 底层 API，需要完全控制 DomainMessage[]
  */
 
-export type {
-	AgentOptions,
-	AgentResult,
-	SubagentOptions,
-} from "./agent/index.ts";
+export type { AgentOptions, AgentResult } from "./agent/index.ts";
 // 底层 API — 需要完全控制 DomainMessage[] 时使用
-export { subagent } from "./agent/index.ts";
+export { agentLoop } from "./agent/index.ts";
 export type { ScheduleEntry } from "./scheduler/index.ts";
 // 调度
 export { loadSchedules, startScheduler } from "./scheduler/index.ts";

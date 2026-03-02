@@ -1,17 +1,17 @@
 /**
  * delegateTask — 任务委托流水线（高层 API）
  *
- * 在调用 subagent 前做三件事：
+ * 在调用 agentLoop 前做三件事：
  * 1. 调用 subagent 咨询最佳实践（意图增强）
  * 2. RAG 检索相关的 memory/skill/history
- * 3. 组装所有上下文，提交给 subagent 执行
+ * 3. 组装所有上下文，提交给 agentLoop 执行
  *
- * Workflow 中应优先使用此函数而非底层 subagent。
+ * Workflow 中应优先使用此函数而非底层 agentLoop。
  */
 
 import { resolve } from "node:path";
 import type { ZodType } from "zod";
-import { subagent } from "../agent/subagent.ts";
+import { agentLoop } from "../agent/index.ts";
 import { discoverSkills, formatSkillSummaries } from "../skills/index.ts";
 import { ENV_INFO } from "../tools/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
@@ -75,7 +75,7 @@ export async function delegateTask<T = unknown>(
 					].join("\n"),
 				},
 			];
-			const consultResult = await subagent(consultHistory, {
+			const consultResult = await agentLoop(consultHistory, {
 				maxIterations: 15,
 			});
 			consultAdvice =
@@ -155,7 +155,7 @@ export async function delegateTask<T = unknown>(
 		},
 	];
 
-	const result = await subagent(history, {
+	const result = await agentLoop(history, {
 		schema: options?.schema,
 		maxIterations: options?.maxIterations,
 	});
