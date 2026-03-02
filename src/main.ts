@@ -27,11 +27,16 @@ import { discoverWorkflows, runWorkflow } from "./workflow/index.ts";
 
 /**
  * 交互模式下 agent 的三种结束状态：
+ * - chat: 对话式回复（打招呼、闲聊、讨论等非任务场景）
  * - need_info: 需要用户补充信息才能继续
  * - completed: 任务成功完成
  * - error: 不可恢复的错误（超过重试上限、陷入循环等）
  */
 const InteractiveResultSchema = z.discriminatedUnion("type", [
+	z.object({
+		type: z.literal("chat"),
+		message: z.string().describe("对话回复内容"),
+	}),
 	z.object({
 		type: z.literal("need_info"),
 		message: z.string().describe("向用户说明需要什么信息"),
@@ -161,11 +166,12 @@ submit: { result: { type: "completed", result: "workflows/tasks/fetch-danbooru-c
 5. **Files only in workflows/**: never write files to the project root or other directories. Temporary test files go in \`.temp/\` (auto-cleaned on exit).
 6. **Run workflows correctly**: ALWAYS use \`bun run src/main.ts run <path>\` to test workflows. NEVER use \`bun run <file>\` directly — it won't call the exported function.
 7. **Follow-up tasks**: when the user adds a requirement to a previous workflow, modify the SAME file or import it in a new task.
-8. **Submit = structured result**: always submit via the \`submit\` tool. The \`result\` field must match the schema described in the tool definition. There are three outcome types:
+8. **Submit = structured result**: always submit via the \`submit\` tool. The \`result\` field must match the schema described in the tool definition. There are four outcome types:
+   - **chat**: conversational reply (greetings, casual questions, discussions) → \`{ type: "chat", message: "your reply" }\`
    - **completed**: task done → \`{ type: "completed", result: "workflows/tasks/xxx.ts", summary: "..." }\`
    - **need_info**: need user input → \`{ type: "need_info", message: "what you need from the user" }\`
    - **error**: unrecoverable failure → \`{ type: "error", error: "what went wrong" }\`
-9. **Conversational questions**: if the user asks a simple question (not a workflow task), just answer directly via \`submit\`. Example: user asks "几点了" → \`submit: { result: { type: "completed", result: "现在是下午3点" } }\`. No need to create files or set reminders.
+9. **Conversational responses**: if the user greets you, asks a simple question, or chats casually (not a workflow task), use the **chat** type. Example: user says "こんばんは" → \`submit: { result: { type: "chat", message: "晚上好！有什么需要帮忙的吗？" } }\`. No need to create files or set reminders.
 10. **Bail out on repeated failure**: if the same operation (API call, command, etc.) fails 3 times in a row, STOP retrying. Submit \`{ result: { type: "error", error: "description of what failed and what you need" } }\` immediately.
 
 ## Scheduled tasks
@@ -359,6 +365,18 @@ async function interactiveLoop(initialInput?: string) {
 		}
 
 		switch (ir.type) {
+			case "chat": {
+				writeln(ir.message);
+				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
+				history.push({
+					type: "user_text",
+					content: `Your submission was accepted (chat). Waiting for the next message from the user.`,
+				});
+				writeln();
+				userInput = await prompt(`${label.user()} `);
+				continue;
+			}
+
 			case "need_info": {
 				writeln(`${style.yellow("?")} Agent 需要更多信息:`);
 				writeln(`  ${ir.message}`);
