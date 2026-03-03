@@ -27,7 +27,7 @@ BLOCKED_COMMANDS=rm,mv,dd
 # 交互式对话 — AI 自动创建 workflow
 bun start
 
-# 飞书入口服务（官方长连接 WSClient）
+# 飞书入口服务（官方长连接 WSClient，同时启动 scheduler）
 bun run src/cli/index.ts feishu start
 
 # 直接传入任务

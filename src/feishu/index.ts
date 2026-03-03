@@ -6,7 +6,7 @@ import { discoverWorkflows } from "../discovery.ts";
 import { loadSchedules } from "../scheduler/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
 import { FeishuBot, type FeishuMessageContext } from "./bot.ts";
-import { FeishuRenderer } from "./renderer.ts";
+import { FeishuConversationMessages, FeishuRenderer } from "./renderer.ts";
 
 const PROMPT_PATH = fileURLToPath(
 	new URL("../cli/prompts/interactive.md", import.meta.url),
@@ -114,7 +114,9 @@ async function runFeishuRound(
 	session: FeishuSession,
 	userInput: string,
 ): Promise<void> {
-	const renderer = new FeishuRenderer(bot, session.ctx);
+	const conversation = await FeishuConversationMessages.create(bot, session.ctx);
+	const renderer = new FeishuRenderer(conversation);
+	renderer.userMessage(userInput);
 	const [existing, schedules] = await Promise.all([
 		discoverWorkflows(),
 		loadSchedules(),
@@ -157,10 +159,10 @@ async function runFeishuRound(
 	await renderer.drain();
 
 	if (result.result == null) {
-		await bot.sendText(
-			session.ctx,
-			`✗ Agent 异常终止\n${result.report ?? "no report"}`,
+		conversation.setSummary(
+			`📌 总结\n✗ Agent 异常终止\n${result.report ?? "no report"}`,
 		);
+		await renderer.drain();
 		session.history.push({
 			type: "user_text",
 			content: `Agent terminated without a valid result. Report: ${result.report ?? "none"}\nWaiting for the next task from the user.`,
@@ -170,7 +172,8 @@ async function runFeishuRound(
 
 	switch (result.result.type) {
 		case "chat":
-			await bot.sendText(session.ctx, result.result.message);
+			conversation.setSummary(`📌 总结\n💬 ${result.result.message}`);
+			await renderer.drain();
 			session.history.push({
 				type: "user_text",
 				content:
@@ -178,26 +181,28 @@ async function runFeishuRound(
 			});
 			return;
 		case "need_info":
-			await bot.sendText(session.ctx, `需要更多信息：${result.result.message}`);
+			conversation.setSummary(`📌 总结\n需要更多信息：${result.result.message}`);
+			await renderer.drain();
 			session.history.push({
 				type: "user_text",
 				content: `Your submission was accepted (need_info). Waiting for the user to provide: ${result.result.message}`,
 			});
 			return;
 		case "completed":
-			await bot.sendText(
-				session.ctx,
-				`✓ 任务完成: ${result.result.result}${
+			conversation.setSummary(
+				`📌 总结\n✓ 任务完成: ${result.result.result}${
 					result.result.summary ? `\n${result.result.summary}` : ""
 				}`,
 			);
+			await renderer.drain();
 			session.history.push({
 				type: "user_text",
 				content: `Your submission was accepted (completed). Result: ${result.result.result}\nWaiting for the next task from the user.`,
 			});
 			return;
 		case "error":
-			await bot.sendText(session.ctx, `✗ Agent 错误: ${result.result.error}`);
+			conversation.setSummary(`📌 总结\n✗ Agent 错误: ${result.result.error}`);
+			await renderer.drain();
 			session.history.push({
 				type: "user_text",
 				content: `Your submission was accepted (error). Error: ${result.result.error}\nWaiting for the next task or additional info from the user.`,
@@ -219,8 +224,6 @@ export async function startFeishuService(): Promise<void> {
 		encryptKey,
 	}).register({
 		"im.message.receive_v1": async (data: any) => {
-
-			console.log("[feishu] received event:", JSON.stringify(data));
 			const ctx = FeishuBot.buildContext(data);
 			if (!ctx) return;
 			if (!shouldProcessMessage(ctx)) {
@@ -232,8 +235,6 @@ export async function startFeishuService(): Promise<void> {
 
 			const text = FeishuBot.readText(data);
 			if (!text) return;
-
-			console.log(`[feishu] received message: ${text}`);
 
 			const sessionKey = buildSessionKey(ctx);
 			const existing = sessions.get(sessionKey);

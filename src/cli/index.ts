@@ -82,6 +82,7 @@ async function main(): Promise<void> {
 
 		case "feishu": {
 			if (args[1] === "start" || !args[1]) {
+				await startScheduler();
 				await startFeishuService();
 				return;
 			}

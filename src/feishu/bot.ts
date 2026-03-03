@@ -24,6 +24,84 @@ export interface FeishuBotConfig {
 	domain?: "feishu" | "lark";
 }
 
+export interface FeishuPostTextElement {
+	tag: "text";
+	text: string;
+	un_escape?: boolean;
+}
+
+export interface FeishuPostLinkElement {
+	tag: "a";
+	text: string;
+	href: string;
+}
+
+export interface FeishuPostAtElement {
+	tag: "at";
+	user_id: string;
+	user_name?: string;
+}
+
+export type FeishuPostElement =
+	| FeishuPostTextElement
+	| FeishuPostLinkElement
+	| FeishuPostAtElement;
+
+export interface FeishuPostContent {
+	title: string;
+	lines: FeishuPostElement[][];
+}
+
+interface FeishuCardContent {
+	schema: "2.0";
+	config: {
+		wide_screen_mode: boolean;
+		enable_forward: boolean;
+	};
+	header: {
+		template: "blue" | "wathet" | "turquoise" | "green" | "yellow" | "orange" | "red" | "carmine" | "violet" | "purple" | "indigo" | "grey";
+		title: {
+			tag: "plain_text";
+			content: string;
+		};
+	};
+	body: {
+		elements: Array<
+		| {
+			tag: "markdown";
+			content: string;
+		}
+		| {
+			tag: "hr";
+		}
+		| {
+			tag: "collapsible_panel";
+			expanded?: boolean;
+			header: {
+				title: {
+					tag: "plain_text" | "markdown";
+					content: string;
+				};
+				icon?: {
+					tag: "standard_icon";
+					token: string;
+					color?: string;
+					size?: string;
+				};
+				icon_position?: "left" | "right" | "follow_text";
+				icon_expanded_angle?: -180 | -90 | 90 | 180;
+			};
+			padding?: string;
+			vertical_spacing?: string;
+			elements: Array<{
+				tag: "markdown";
+				content: string;
+			}>;
+		}
+		>;
+	};
+}
+
 export class FeishuBot {
 	private readonly client: any;
 
@@ -43,7 +121,6 @@ export class FeishuBot {
 		const chatId = String(event.message.chat_id ?? "");
 		const chatType = String(event.message.chat_type ?? "");
 		const messageId = String(event.message.message_id ?? "");
-		console.log(`Extracted chatId=${chatId}, chatType=${chatType}, messageId=${messageId}`);
 		if (!chatId || !messageId) return null;
 
 		const senderId = event.sender?.sender_id ?? {};
@@ -85,18 +162,238 @@ export class FeishuBot {
 	async sendText(ctx: FeishuMessageContext, text: string): Promise<void> {
 		const chunks = chunkText(text, 1800);
 		for (const chunk of chunks) {
-			await this.client.im.message.create({
-				params: {
-					receive_id_type: ctx.recipient.receiveIdType,
-				},
-				data: {
-					receive_id: ctx.recipient.receiveId,
-					msg_type: "text",
-					content: JSON.stringify({ text: chunk }),
-				},
-			});
+			await this.createTextMessage(ctx, chunk);
 		}
 	}
+
+	async createTextMessage(
+		ctx: FeishuMessageContext,
+		text: string,
+	): Promise<string> {
+		const content = JSON.stringify(buildTextCard(text));
+		const res = await this.client.im.message.create({
+			params: {
+				receive_id_type: ctx.recipient.receiveIdType,
+			},
+			data: {
+				receive_id: ctx.recipient.receiveId,
+				msg_type: "interactive",
+				content,
+			},
+		});
+		const messageId = (res as any)?.data?.message_id;
+		if (!messageId) {
+			throw new Error("Failed to create text message: missing message_id");
+		}
+		return String(messageId);
+	}
+
+	async editTextMessage(messageId: string, text: string): Promise<void> {
+		const content = JSON.stringify(buildTextCard(text));
+		await this.client.im.message.patch({
+			path: { message_id: messageId },
+			data: {
+				content,
+			},
+		});
+	}
+
+	async createPostMessage(
+		ctx: FeishuMessageContext,
+		post: FeishuPostContent,
+	): Promise<string> {
+		const content = JSON.stringify(buildPostCard(post));
+		const res = await this.client.im.message.create({
+			params: {
+				receive_id_type: ctx.recipient.receiveIdType,
+			},
+			data: {
+				receive_id: ctx.recipient.receiveId,
+				msg_type: "interactive",
+				content,
+			},
+		});
+		const messageId = (res as any)?.data?.message_id;
+		if (!messageId) {
+			throw new Error("Failed to create post message: missing message_id");
+		}
+		return String(messageId);
+	}
+
+	async editPostMessage(messageId: string, post: FeishuPostContent): Promise<void> {
+		const content = JSON.stringify(buildPostCard(post));
+		await this.client.im.message.patch({
+			path: { message_id: messageId },
+			data: {
+				content,
+			},
+		});
+	}
+
+	async createCollapsibleLogMessage(
+		ctx: FeishuMessageContext,
+		title: string,
+		panelTitle: string,
+		contentText: string,
+	): Promise<string> {
+		const content = JSON.stringify(
+			buildCollapsibleLogCard(title, panelTitle, contentText),
+		);
+		const res = await this.client.im.message.create({
+			params: {
+				receive_id_type: ctx.recipient.receiveIdType,
+			},
+			data: {
+				receive_id: ctx.recipient.receiveId,
+				msg_type: "interactive",
+				content,
+			},
+		});
+		const messageId = (res as any)?.data?.message_id;
+		if (!messageId) {
+			throw new Error("Failed to create collapsible log message: missing message_id");
+		}
+		return String(messageId);
+	}
+
+	async editCollapsibleLogMessage(
+		messageId: string,
+		title: string,
+		panelTitle: string,
+		contentText: string,
+	): Promise<void> {
+		const content = JSON.stringify(
+			buildCollapsibleLogCard(title, panelTitle, contentText),
+		);
+		await this.client.im.message.patch({
+			path: { message_id: messageId },
+			data: {
+				content,
+			},
+		});
+	}
+}
+
+function buildTextCard(text: string): FeishuCardContent {
+	return {
+		schema: "2.0",
+		config: {
+			wide_screen_mode: true,
+			enable_forward: true,
+		},
+		header: {
+			template: "blue",
+			title: {
+				tag: "plain_text",
+				content: "工作流状态",
+			},
+		},
+		body: {
+			elements: [
+				{
+					tag: "markdown",
+					content: normalizeCardMarkdown(text),
+				},
+			],
+		},
+	};
+}
+
+function buildPostCard(post: FeishuPostContent): FeishuCardContent {
+	const lines = post.lines.map((line) => postLineToMarkdown(line));
+	const markdown = lines.join("\n\n");
+	return {
+		schema: "2.0",
+		config: {
+			wide_screen_mode: true,
+			enable_forward: true,
+		},
+		header: {
+			template: "blue",
+			title: {
+				tag: "plain_text",
+				content: post.title,
+			},
+		},
+		body: {
+			elements: [
+				buildCollapsiblePanel("工具调用记录", markdown || "等待工具调用..."),
+			],
+		},
+	};
+}
+
+function buildCollapsibleLogCard(
+	title: string,
+	panelTitle: string,
+	contentText: string,
+): FeishuCardContent {
+	return {
+		schema: "2.0",
+		config: {
+			wide_screen_mode: true,
+			enable_forward: true,
+		},
+		header: {
+			template: "blue",
+			title: {
+				tag: "plain_text",
+				content: title,
+			},
+		},
+		body: {
+			elements: [
+				buildCollapsiblePanel(panelTitle, contentText || "(empty)"),
+			],
+		},
+	};
+}
+
+function buildCollapsiblePanel(title: string, markdown: string) {
+	return {
+		tag: "collapsible_panel" as const,
+		expanded: false,
+		header: {
+			title: {
+				tag: "plain_text" as const,
+				content: title,
+			},
+			icon: {
+				tag: "standard_icon" as const,
+				token: "down-small-ccm_outlined",
+				size: "16px 16px",
+			},
+			icon_position: "right" as const,
+			icon_expanded_angle: -180 as const,
+		},
+		vertical_spacing: "8px",
+		padding: "8px 8px 8px 8px",
+		elements: [
+			{
+				tag: "markdown" as const,
+				content: normalizeCardMarkdown(markdown),
+			},
+		],
+	};
+}
+
+function postLineToMarkdown(elements: FeishuPostElement[]): string {
+	return elements
+		.map((el) => {
+			switch (el.tag) {
+				case "text":
+					return el.text;
+				case "a":
+					return `[${el.text}](${el.href})`;
+				case "at":
+					return el.user_name ? `@${el.user_name}` : "@用户";
+			}
+		})
+		.join("");
+}
+
+function normalizeCardMarkdown(content: string): string {
+	return content.trim() || "(empty)";
 }
 
 function chunkText(text: string, size: number): string[] {
