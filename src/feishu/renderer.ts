@@ -102,8 +102,8 @@ export class FeishuConversationMessages {
 	setSummary(text: string): void {
 		this.summaryText = text;
 		this.enqueue(async () => {
-			const summaryMessageId = await this.bot.createTextMessage(this.ctx, "📌 总结", "处理中...");
-			await this.bot.editTextMessage(summaryMessageId, this.summaryText);
+			const summaryMessageId = await this.bot.createTextMessage(this.ctx, "处理中...", "📌 总结");
+			await this.bot.editTextMessage(summaryMessageId, this.summaryText, "📌 总结");
 		});
 	}
 
