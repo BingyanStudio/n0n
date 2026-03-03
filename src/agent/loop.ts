@@ -38,6 +38,8 @@ export interface AgentOptions<T = unknown> {
 	renderer?: Renderer;
 	/** Interactive confirmation callback for blocked commands */
 	confirmFn?: (question: string) => Promise<string>;
+	/** Abort signal for interruption */
+	signal?: AbortSignal;
 }
 
 const MAX_SUBMIT_RETRIES = 4;
@@ -57,6 +59,14 @@ export async function agentLoop<T = unknown>(
 	let submitRetries = 0;
 
 	for (let iteration = 0; iteration < maxIter; iteration++) {
+		if (options?.signal?.aborted) {
+			return {
+				result: null,
+				report: "Agent terminated: aborted",
+				history: messages,
+			};
+		}
+
 		// 注入到期的 reminders
 		injectReminders(messages, reminders);
 
@@ -69,7 +79,14 @@ export async function agentLoop<T = unknown>(
 			messages: apiMessages,
 			tools: toolDefs,
 			tool_choice: "auto",
-		})) {
+		}, { signal: options?.signal })) {
+			if (options?.signal?.aborted) {
+				return {
+					result: null,
+					report: "Agent terminated: aborted",
+					history: messages,
+				};
+			}
 			acc.push(event);
 			switch (event.type) {
 				case "thinking":
@@ -149,6 +166,13 @@ export async function agentLoop<T = unknown>(
 
 		// 执行每个工具（流式）
 		for (const tc of toolCalls) {
+			if (options?.signal?.aborted) {
+				return {
+					result: null,
+					report: "Agent terminated: aborted",
+					history: messages,
+				};
+			}
 			renderer.toolCallStart(tc);
 			let result: ToolResult | undefined;
 			for await (const event of executeToolStream(
