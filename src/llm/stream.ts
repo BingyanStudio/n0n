@@ -9,9 +9,9 @@
 
 import { config } from "../config.ts";
 import type {
-    LLMAssistantMessage,
-    LLMRequest,
-    LLMToolCall,
+	LLMAssistantMessage,
+	LLMRequest,
+	LLMToolCall,
 } from "../types/llm.ts";
 import { LLMError } from "./client.ts";
 
