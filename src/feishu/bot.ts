@@ -8,13 +8,13 @@ export interface FeishuRecipient {
 }
 
 export interface FeishuMessageContext {
-	chatId: string;
-	chatType: string;
-	senderOpenId: string | null;
+	chatId: string | null;
+	chatType: string | null;
+	senderOpenId: string;
 	senderUserId: string | null;
 	senderUnionId: string | null;
 	tenantKey: string | null;
-	messageId: string;
+	messageId: string | null;
 	recipient: FeishuRecipient;
 }
 
@@ -124,7 +124,7 @@ export class FeishuBot {
 		if (!chatId || !messageId) return null;
 
 		const senderId = event.sender?.sender_id ?? {};
-		const senderOpenId = senderId.open_id ? String(senderId.open_id) : null;
+		const senderOpenId = senderId.open_id;
 		const senderUserId = senderId.user_id ? String(senderId.user_id) : null;
 		const senderUnionId = senderId.union_id ? String(senderId.union_id) : null;
 		const tenantKey = event.sender?.tenant_key
@@ -145,6 +145,32 @@ export class FeishuBot {
 			tenantKey,
 			messageId,
 			recipient,
+		};
+	}
+
+	static buildContextForMenu(event: any): FeishuMessageContext | null {
+
+		const eventId = String(event.event_id ?? "");
+		if (!eventId) return null;
+
+		const operatorId = event.operator?.operator_id ?? {};
+		const senderOpenId = operatorId.open_id;
+		const senderUserId = operatorId.user_id ? String(operatorId.user_id) : null;
+		const senderUnionId = operatorId.union_id ? String(operatorId.union_id) : null;
+		const tenantKey = event.tenant_key
+			? String(event.tenant_key)
+			: null;
+
+
+		return {
+			chatId: null,
+			chatType: null,
+			senderOpenId,
+			senderUserId,
+			senderUnionId,
+			tenantKey,
+			messageId: null,
+			recipient: { receiveIdType: "open_id", receiveId: senderOpenId },
 		};
 	}
 
