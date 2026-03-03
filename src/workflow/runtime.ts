@@ -20,10 +20,10 @@ export interface WorkflowMeta {
  */
 export async function discoverWorkflows(
 	baseDir = "workflows",
+	includeSkills = false,
 ): Promise<WorkflowMeta[]> {
 	const results: WorkflowMeta[] = [];
-	const dirs = ["skills", "tasks"];
-
+	const dirs = includeSkills ? ["skills", "tasks"] : ["tasks"];
 	const absBase = resolve(baseDir);
 
 	for (const sub of dirs) {
