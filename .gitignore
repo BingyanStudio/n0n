@@ -4,6 +4,7 @@ dist/
 .roo/
 .cursor/
 bun.lock
+package-lock.json
 *.log
 .temp/
 workflows/memory

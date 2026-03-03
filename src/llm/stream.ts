@@ -51,15 +51,21 @@ export async function* chatCompletionStream(
 		? base
 		: `${base}/v1/chat/completions`;
 
-	const res = await fetch(url, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${config.llm.apiKey}`,
-		},
-		body: JSON.stringify(body),
-		signal: options?.signal,
-	});
+	let res: Response;
+	try {
+		res = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${config.llm.apiKey}`,
+			},
+			body: JSON.stringify(body),
+			signal: options?.signal,
+		});
+	} catch (err) {
+		if (isAbortError(err)) return;
+		throw err;
+	}
 
 	if (!res.ok) {
 		const text = await res.text();
@@ -136,9 +142,15 @@ export async function* chatCompletionStream(
 				boundary = buffer.indexOf("\n\n");
 			}
 		}
+	} catch (err) {
+		if (!isAbortError(err)) throw err;
 	} finally {
 		reader.releaseLock();
 	}
+}
+
+function isAbortError(err: unknown): boolean {
+	return err instanceof Error && err.name === "AbortError";
 }
 
 // ── SSE Chunk 类型（内部） ──
