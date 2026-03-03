@@ -73,3 +73,4 @@ bun run workflows/skills/feishu-bot/scripts/send-file.ts <receive_id_type> <rece
 - Private chat: prefer `receiveIdType: "open_id"` with sender's `open_id`
 - Group chat: use `receiveIdType: "chat_id"` with current `chat_id`
 - From Feishu-triggered tasks, current chat/sender IDs are usually provided in task context
+- DO NOT add any dashes to `receive_id_type` value

@@ -65,7 +65,7 @@ export async function uploadImageFromPath(
 			image: Buffer.from(image),
 		},
 	});
-	const imageKey = (res as any)?.data?.image_key;
+	const imageKey = (res as any)?.image_key;
 	if (!imageKey) throw new Error("Failed to upload image: missing image_key");
 	return String(imageKey);
 }
@@ -113,7 +113,7 @@ export async function uploadFileFromPath(
 			file: Buffer.from(bytes),
 		},
 	});
-	const fileKey = (res as any)?.data?.file_key;
+	const fileKey = (res as any)?.file_key;
 	if (!fileKey) throw new Error("Failed to upload file: missing file_key");
 	return String(fileKey);
 }
