@@ -13,9 +13,9 @@ import { chatCompletionStream, StreamAccumulator } from "../llm/stream.ts";
 import type { PendingReminder } from "../tools/index.ts";
 import { makeToolDefinitions } from "../tools/index.ts";
 import type {
-    AssistantToolCallMessage,
-    DomainMessage,
-    ToolResult,
+	AssistantToolCallMessage,
+	DomainMessage,
+	ToolResult,
 } from "../types/domain.ts";
 import type { Renderer } from "../ui/renderer.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
