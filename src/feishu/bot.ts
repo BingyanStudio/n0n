@@ -159,18 +159,19 @@ export class FeishuBot {
 		}
 	}
 
-	async sendText(ctx: FeishuMessageContext, text: string): Promise<void> {
+	async sendText(ctx: FeishuMessageContext, title: string, text: string): Promise<void> {
 		const chunks = chunkText(text, 1800);
 		for (const chunk of chunks) {
-			await this.createTextMessage(ctx, chunk);
+			await this.createTextMessage(ctx, chunk, title);
 		}
 	}
 
 	async createTextMessage(
 		ctx: FeishuMessageContext,
 		text: string,
+		title: string = "消息",
 	): Promise<string> {
-		const content = JSON.stringify(buildTextCard(text));
+		const content = JSON.stringify(buildTextCard(title, text));
 		const res = await this.client.im.message.create({
 			params: {
 				receive_id_type: ctx.recipient.receiveIdType,
@@ -188,8 +189,8 @@ export class FeishuBot {
 		return String(messageId);
 	}
 
-	async editTextMessage(messageId: string, text: string): Promise<void> {
-		const content = JSON.stringify(buildTextCard(text));
+	async editTextMessage(messageId: string, text: string, title: string = "消息"): Promise<void> {
+		const content = JSON.stringify(buildTextCard(title, text));
 		await this.client.im.message.patch({
 			path: { message_id: messageId },
 			data: {
@@ -274,7 +275,7 @@ export class FeishuBot {
 	}
 }
 
-function buildTextCard(text: string): FeishuCardContent {
+function buildTextCard(title: string, text: string): FeishuCardContent {
 	return {
 		schema: "2.0",
 		config: {
@@ -285,7 +286,7 @@ function buildTextCard(text: string): FeishuCardContent {
 			template: "blue",
 			title: {
 				tag: "plain_text",
-				content: "工作流状态",
+				content: title,
 			},
 		},
 		body: {

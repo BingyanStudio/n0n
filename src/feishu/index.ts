@@ -225,9 +225,8 @@ async function sendWorkflowAsCodeBlock(
 ): Promise<void> {
 	const escaped = content.replaceAll("```", "`\u200b``");
 	const chunks = splitText(escaped, 1400);
-	await bot.sendText(ctx, `workflow: ${name}`);
 	for (const chunk of chunks) {
-		await bot.sendText(ctx, `\`\`\`ts\n${chunk}\n\`\`\``);
+		await bot.sendText(ctx, `工作流：${name}`, `\`\`\`javascript\n${chunk}\n\`\`\``);
 	}
 }
 
@@ -250,6 +249,7 @@ async function handleCommand(
 		case "help": {
 			await bot.sendText(
 				session.ctx,
+				"命令帮助",
 				[
 					"可用命令：",
 					"- /help 查看命令帮助",
@@ -271,7 +271,7 @@ async function handleCommand(
 				session.currentTask.abortController.abort("/exit");
 			}
 			sessions.delete(sessionKey);
-			await bot.sendText(session.ctx, "已打断当前任务并退出会话。请发送新任务开始。");
+			await bot.sendText(session.ctx, "工作状态", "已打断当前任务并退出会话。请发送新任务开始。");
 			return true;
 		}
 		case "reset": {
@@ -280,12 +280,13 @@ async function handleCommand(
 				session.currentTask = null;
 			}
 			session.history = createInitialHistory(systemPrompt, session.ctx);
-			await bot.sendText(session.ctx, "历史消息已清空。");
+			await bot.sendText(session.ctx, "清空历史", "历史消息已清空。");
 			return true;
 		}
 		case "id": {
 			await bot.sendText(
 				session.ctx,
+				"身份信息",
 				[
 					"你的身份信息：",
 					`- user_id: ${session.ctx.senderUserId ?? "(empty)"}`,
@@ -299,24 +300,25 @@ async function handleCommand(
 		case "crons_list": {
 			const schedules = await loadSchedules();
 			if (schedules.length === 0) {
-				await bot.sendText(session.ctx, "当前没有 cron 任务。");
+				await bot.sendText(session.ctx, "Cron 任务列表", "当前没有 cron 任务。");
 				return true;
 			}
 			const lines = schedules.map(
 				(schedule) =>
 					`- [${schedule.enabled ? "enabled" : "disabled"}] ${schedule.name} | ${schedule.cron} | ${schedule.workflow ?? "delegateTask"}`,
 			);
-			await bot.sendText(session.ctx, `Cron 任务列表（含开启/关闭）：\n${lines.join("\n")}`);
+			await bot.sendText(session.ctx, "Cron 任务列表", `${lines.join("\n")}`);
 			return true;
 		}
 		case "crons_toggle": {
 			const updated = await setScheduleEnabled(command.name, command.enabled);
 			if (!updated) {
-				await bot.sendText(session.ctx, `未找到 cron 任务：${command.name}`);
+				await bot.sendText(session.ctx, "Cron 控制", `未找到 cron 任务：${command.name}`);
 				return true;
 			}
 			await bot.sendText(
 				session.ctx,
+				"Cron 控制",
 				`${command.enabled ? "已开启" : "已关闭"} cron 任务：${updated.name}`,
 			);
 			return true;
@@ -324,35 +326,36 @@ async function handleCommand(
 		case "workflows_list": {
 			const workflows = await discoverWorkflows();
 			if (workflows.length === 0) {
-				await bot.sendText(session.ctx, "当前没有可用 workflow。");
+				await bot.sendText(session.ctx, "工作流列表", "当前没有可用 workflow。");
 				return true;
 			}
 			const lines = workflows.map(
 				(wf) => `- ${wf.name}${wf.description ? `: ${wf.description}` : ""}`,
 			);
-			await bot.sendText(session.ctx, `当前 workflows：\n${lines.join("\n")}`);
+			await bot.sendText(session.ctx, "工作流列表", `${lines.join("\n")}`);
 			return true;
 		}
 		case "workflows_run": {
 			const workflows = await discoverWorkflows();
 			const wf = workflows.find((item) => item.name === command.name);
 			if (!wf) {
-				await bot.sendText(session.ctx, `未找到 workflow：${command.name}`);
+				await bot.sendText(session.ctx, "工作流运行", `未找到 workflow：${command.name}`);
 				return true;
 			}
 			const args = parseWorkflowArgs(command.argsRaw);
 			const result = await runWorkflow(wf.path, args);
 			await bot.sendText(
 				session.ctx,
-				`workflow 已运行：${wf.name}\n\`\`\`json\n${safeJson(result)}\n\`\`\``,
+				"工作流运行",
+				`工作流已运行：${wf.name}\n\`\`\`json\n${safeJson(result)}\n\`\`\``,
 			);
 			return true;
 		}
 		case "workflows_show": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows("workflows", false);
 			const wf = workflows.find((item) => item.name === command.name);
 			if (!wf) {
-				await bot.sendText(session.ctx, `未找到 workflow：${command.name}`);
+				await bot.sendText(session.ctx, "工作流展示", `未找到 workflow：${command.name}`);
 				return true;
 			}
 			const content = await Bun.file(wf.path).text();
@@ -513,6 +516,7 @@ export async function startFeishuService(): Promise<void> {
 				);
 				await bot.sendText(
 					ctx,
+					"当前任务仍在执行中",
 					`当前任务仍在执行中（${elapsedSec}s）。发送 /exit 可打断并退出。`,
 				);
 				return;
@@ -528,7 +532,7 @@ export async function startFeishuService(): Promise<void> {
 				.catch(async (err) => {
 					if (abortController.signal.aborted) return;
 					console.error("[feishu] runFeishuRound error:", err);
-					await bot.sendText(ctx, `任务执行失败：${String(err)}`);
+					await bot.sendText(ctx, "任务执行失败", `任务执行失败：${String(err)}`);
 				})
 				.finally(() => {
 					if (session.currentTask?.abortController === abortController) {

@@ -37,7 +37,7 @@ export class FeishuConversationMessages {
 		bot: FeishuBot,
 		ctx: FeishuMessageContext,
 	): Promise<FeishuConversationMessages> {
-		const roundMessageId = await bot.createTextMessage(ctx, "🤖 round 0/0 (初始化中...)");
+		const roundMessageId = await bot.createTextMessage(ctx, "Agent 工作状态", "🤖 round 0/0 (初始化中...)");
 		const toolsMessageId = await bot.createPostMessage(ctx, {
 			title: "🔧 调用工具详情",
 			lines: [[{ tag: "text", text: "等待工具调用...", un_escape: true }]],
@@ -102,7 +102,7 @@ export class FeishuConversationMessages {
 	setSummary(text: string): void {
 		this.summaryText = text;
 		this.enqueue(async () => {
-			const summaryMessageId = await this.bot.createTextMessage(this.ctx, "📌 总结\n处理中...");
+			const summaryMessageId = await this.bot.createTextMessage(this.ctx, "📌 总结", "处理中...");
 			await this.bot.editTextMessage(summaryMessageId, this.summaryText);
 		});
 	}
