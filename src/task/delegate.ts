@@ -1,23 +1,28 @@
 /**
  * delegateTask — 任务委托流水线（高层 API）
  *
- * 在调用 subagent 前做三件事：
+ * 在调用 agentLoop 前做三件事：
  * 1. 调用 subagent 咨询最佳实践（意图增强）
  * 2. RAG 检索相关的 memory/skill/history
- * 3. 组装所有上下文，提交给 subagent 执行
+ * 3. 组装所有上下文，提交给 agentLoop 执行
  *
- * Workflow 中应优先使用此函数而非底层 subagent。
+ * Workflow 中应优先使用此函数而非底层 agentLoop。
  */
 
 import { resolve } from "node:path";
 import type { ZodType } from "zod";
-import { subagent } from "../agent/subagent.ts";
-import { discoverSkills, formatSkillSummaries } from "../skills/index.ts";
+import { agentLoop } from "../agent/index.ts";
+import {
+	discoverSkills,
+	discoverWorkflows,
+	formatSkillSummaries,
+} from "../discovery.ts";
 import { ENV_INFO } from "../tools/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
-import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
+
+const PROMPT_PATH = resolve(import.meta.dir, "prompts/delegate.md");
 
 export interface TaskResult<T = unknown> {
 	result: T | null;
@@ -75,7 +80,7 @@ export async function delegateTask<T = unknown>(
 					].join("\n"),
 				},
 			];
-			const consultResult = await subagent(consultHistory, {
+			const consultResult = await agentLoop(consultHistory, {
 				maxIterations: 15,
 			});
 			consultAdvice =
@@ -134,20 +139,15 @@ export async function delegateTask<T = unknown>(
 			? 'IMPORTANT: You are on Windows. Use Windows commands (e.g., `type` instead of `cat`, `dir` instead of `ls`, `findstr` instead of `grep`). Paths use backslashes. You can also use `bun -e "..."` for cross-platform file operations.'
 			: "You are on a Unix-like system. Standard shell commands (cat, ls, grep, etc.) are available.";
 
+	const promptTemplate = await Bun.file(PROMPT_PATH).text();
+	const systemPrompt = promptTemplate
+		.replace("{{ENV_LINE}}", envLine)
+		.replace("{{SHELL_HINT}}", shellHint);
+
 	const history: DomainMessage[] = [
 		{
 			type: "system",
-			content: [
-				"You are a capable AI agent executing a delegated task.",
-				envLine,
-				shellHint,
-				"PLANNING (MANDATORY): Your FIRST tool call MUST be `reminder` with your OKR breakdown — no exceptions. When a reminder fires, you MUST update it with current progress. If the same operation fails 3 times, STOP and submit an error.",
-				"EFFICIENCY: Call multiple tools in a single response when they have no dependencies (e.g., read several files at once, or run independent commands in parallel). Only wait for a previous result when the next call depends on it.",
-				"You have been provided with consultation advice, relevant context, and a list of existing workflows.",
-				"If an existing workflow matches the task, run it with `exec` (bun run src/main.ts run <path>) and submit its output.",
-				"Otherwise, use the tools available to complete the task thoroughly.",
-				"When done, use `submit` to deliver your result.",
-			].join("\n"),
+			content: systemPrompt,
 		},
 		{
 			type: "user_text",
@@ -155,7 +155,7 @@ export async function delegateTask<T = unknown>(
 		},
 	];
 
-	const result = await subagent(history, {
+	const result = await agentLoop(history, {
 		schema: options?.schema,
 		maxIterations: options?.maxIterations,
 	});

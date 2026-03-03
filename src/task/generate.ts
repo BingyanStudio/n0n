@@ -19,7 +19,7 @@
  */
 
 import type { ZodType } from "zod";
-import { subagent } from "../agent/subagent.ts";
+import { agentLoop } from "../agent/index.ts";
 import { ENV_INFO } from "../tools/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
 
@@ -64,7 +64,7 @@ export async function generate<T = unknown>(
 		},
 	];
 
-	const result = await subagent<T>(history, {
+	const result = await agentLoop<T>(history, {
 		schema: options?.schema,
 		maxIterations: options?.maxIterations ?? 15,
 	});
