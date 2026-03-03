@@ -362,6 +362,14 @@ async function handleCommand(
 			await sendWorkflowAsCodeBlock(bot, session.ctx, wf.name, content);
 			return true;
 		}
+		default: {
+			await bot.sendText(
+				session.ctx,
+				"未知命令",
+				`收到未知命令类型：${String((command as { type?: unknown }).type)}`,
+			);
+			return true;
+		}
 	}
 }
 
