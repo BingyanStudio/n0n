@@ -45,7 +45,7 @@ function requireEnv(key: string): string {
 }
 
 function buildSessionKey(ctx: FeishuMessageContext): string {
-	return [ctx.chatId, ctx.senderOpenId ?? ctx.senderUserId ?? "unknown"].join(":");
+	return [ctx.chatId ?? "unknown", ctx.senderOpenId ?? ctx.senderUserId ?? "unknown"].join(":");
 }
 
 function buildMessageDedupKey(ctx: FeishuMessageContext): string {
@@ -226,7 +226,7 @@ async function sendWorkflowAsCodeBlock(
 	const escaped = content.replaceAll("```", "`\u200b``");
 	const chunks = splitText(escaped, 1400);
 	for (const chunk of chunks) {
-		await bot.sendText(ctx, `工作流：${name}`, `\`\`\`javascript\n${chunk}\n\`\`\``);
+		await bot.sendText(ctx, `工作流展示`, `文件名称：${name}\n\`\`\`javascript\n${chunk}\n\`\`\``);
 	}
 }
 
@@ -539,6 +539,16 @@ export async function startFeishuService(): Promise<void> {
 						session.currentTask = null;
 					}
 				});
+		},
+		"application.bot.menu_v6": async (data: any) => {
+			const ctx = FeishuBot.buildContextForMenu(data);
+			if (!ctx) return;
+
+			const sessionKey = buildSessionKey(ctx);
+			const session = getOrCreateSession(sessionKey, ctx, systemPrompt);
+
+			console.log(`[feishu] received message: ${data?.event_key} (sessionKey=${sessionKey})`);
+			await handleCommand({ type: data?.event_key }, bot, sessionKey, session, systemPrompt);			
 		},
 	});
 
