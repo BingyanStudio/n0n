@@ -3,8 +3,9 @@ import { fileURLToPath } from "node:url";
 import { agentLoop } from "../agent/loop.ts";
 import { InteractiveResultSchema, type InteractiveResult } from "../cli/schema.ts";
 import { discoverWorkflows } from "../discovery.ts";
-import { loadSchedules } from "../scheduler/index.ts";
+import { loadSchedules, setScheduleEnabled } from "../scheduler/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
+import { runWorkflow } from "../workflow/index.ts";
 import { FeishuBot, type FeishuMessageContext } from "./bot.ts";
 import { FeishuConversationMessages, FeishuRenderer } from "./renderer.ts";
 
@@ -15,7 +16,22 @@ const PROMPT_PATH = fileURLToPath(
 interface FeishuSession {
 	history: DomainMessage[];
 	ctx: FeishuMessageContext;
+	currentTask: {
+		abortController: AbortController;
+		startedAt: number;
+	} | null;
 }
+
+type FeishuCommand =
+	| { type: "help" }
+	| { type: "exit" }
+	| { type: "reset" }
+	| { type: "id" }
+	| { type: "crons_list" }
+	| { type: "crons_toggle"; enabled: boolean; name: string }
+	| { type: "workflows_list" }
+	| { type: "workflows_run"; name: string; argsRaw: string | null }
+	| { type: "workflows_show"; name: string };
 
 const sessions = new Map<string, FeishuSession>();
 const processedMessages = new Map<string, number>();
@@ -109,10 +125,248 @@ function buildWrappedInput(
 	return [contextSuffix, capabilityContext, base].filter(Boolean).join("\n\n");
 }
 
+function createInitialHistory(
+	systemPrompt: string,
+	ctx: FeishuMessageContext,
+): DomainMessage[] {
+	return [
+		{ type: "system", content: systemPrompt },
+		{ type: "system", content: buildFeishuSystemContext(ctx) },
+	];
+}
+
+function getOrCreateSession(
+	sessionKey: string,
+	ctx: FeishuMessageContext,
+	systemPrompt: string,
+): FeishuSession {
+	const existing = sessions.get(sessionKey);
+	if (existing) {
+		existing.ctx = ctx;
+		return existing;
+	}
+
+	const session: FeishuSession = {
+		history: createInitialHistory(systemPrompt, ctx),
+		ctx,
+		currentTask: null,
+	};
+	sessions.set(sessionKey, session);
+	return session;
+}
+
+function parseCommand(text: string): FeishuCommand | null {
+	const trimmed = text.trim();
+	if (!trimmed.startsWith("/")) return null;
+
+	if (/^\/help$/i.test(trimmed)) return { type: "help" };
+	if (/^\/exit$/i.test(trimmed)) return { type: "exit" };
+	if (/^\/reset$/i.test(trimmed)) return { type: "reset" };
+	if (/^\/id$/i.test(trimmed)) return { type: "id" };
+
+	if (/^\/crons$/i.test(trimmed)) {
+		return { type: "crons_list" };
+	}
+	const cronToggleMatch = trimmed.match(/^\/crons\s+(enable|disable)\s+(.+)$/i);
+	if (cronToggleMatch) {
+		return {
+			type: "crons_toggle",
+			enabled: cronToggleMatch[1]?.toLowerCase() === "enable",
+			name: (cronToggleMatch[2] ?? "").trim(),
+		};
+	}
+
+	if (/^\/workflows$/i.test(trimmed)) {
+		return { type: "workflows_list" };
+	}
+	const wfShowMatch = trimmed.match(/^\/workflows\s+show\s+(.+)$/i);
+	if (wfShowMatch) {
+		return {
+			type: "workflows_show",
+			name: (wfShowMatch[1] ?? "").trim(),
+		};
+	}
+	const wfRunMatch = trimmed.match(/^\/workflows\s+run\s+(\S+)(?:\s+([\s\S]+))?$/i);
+	if (wfRunMatch) {
+		return {
+			type: "workflows_run",
+			name: (wfRunMatch[1] ?? "").trim(),
+			argsRaw: wfRunMatch[2]?.trim() ?? null,
+		};
+	}
+
+	return null;
+}
+
+function parseWorkflowArgs(raw: string | null): unknown {
+	if (!raw) return undefined;
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return raw;
+	}
+}
+
+function splitText(text: string, maxLen: number): string[] {
+	const chunks: string[] = [];
+	let cursor = 0;
+	while (cursor < text.length) {
+		chunks.push(text.slice(cursor, cursor + maxLen));
+		cursor += maxLen;
+	}
+	return chunks.length > 0 ? chunks : [""];
+}
+
+async function sendWorkflowAsCodeBlock(
+	bot: FeishuBot,
+	ctx: FeishuMessageContext,
+	name: string,
+	content: string,
+): Promise<void> {
+	const escaped = content.replaceAll("```", "`\u200b``");
+	const chunks = splitText(escaped, 1400);
+	await bot.sendText(ctx, `workflow: ${name}`);
+	for (const chunk of chunks) {
+		await bot.sendText(ctx, `\`\`\`ts\n${chunk}\n\`\`\``);
+	}
+}
+
+function safeJson(value: unknown): string {
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return String(value);
+	}
+}
+
+async function handleCommand(
+	command: FeishuCommand,
+	bot: FeishuBot,
+	sessionKey: string,
+	session: FeishuSession,
+	systemPrompt: string,
+): Promise<boolean> {
+	switch (command.type) {
+		case "help": {
+			await bot.sendText(
+				session.ctx,
+				[
+					"可用命令：",
+					"- /help 查看命令帮助",
+					"- /exit 打断当前任务并退出会话",
+					"- /reset 清空历史消息记录",
+					"- /crons 查看所有 cron 任务（含开启/关闭）",
+					"- /crons enable {name} 开启某个 cron 任务",
+					"- /crons disable {name} 关闭某个 cron 任务",
+					"- /workflows 查看所有 workflow",
+					"- /workflows run {name} {args} 运行 workflow（args 可为 JSON 或普通字符串）",
+					"- /workflows show {name} 以代码块展示 workflow 文件",
+					"- /id 获取你的 user_id / open_id / union_id",
+				].join("\n"),
+			);
+			return true;
+		}
+		case "exit": {
+			if (session.currentTask) {
+				session.currentTask.abortController.abort("/exit");
+			}
+			sessions.delete(sessionKey);
+			await bot.sendText(session.ctx, "已打断当前任务并退出会话。请发送新任务开始。");
+			return true;
+		}
+		case "reset": {
+			if (session.currentTask) {
+				session.currentTask.abortController.abort("/reset");
+				session.currentTask = null;
+			}
+			session.history = createInitialHistory(systemPrompt, session.ctx);
+			await bot.sendText(session.ctx, "历史消息已清空。");
+			return true;
+		}
+		case "id": {
+			await bot.sendText(
+				session.ctx,
+				[
+					"你的身份信息：",
+					`- user_id: ${session.ctx.senderUserId ?? "(empty)"}`,
+					`- open_id: ${session.ctx.senderOpenId ?? "(empty)"}`,
+					`- union_id: ${session.ctx.senderUnionId ?? "(empty)"}`,
+					`- chat_id: ${session.ctx.chatId}`,
+				].join("\n"),
+			);
+			return true;
+		}
+		case "crons_list": {
+			const schedules = await loadSchedules();
+			if (schedules.length === 0) {
+				await bot.sendText(session.ctx, "当前没有 cron 任务。");
+				return true;
+			}
+			const lines = schedules.map(
+				(schedule) =>
+					`- [${schedule.enabled ? "enabled" : "disabled"}] ${schedule.name} | ${schedule.cron} | ${schedule.workflow ?? "delegateTask"}`,
+			);
+			await bot.sendText(session.ctx, `Cron 任务列表（含开启/关闭）：\n${lines.join("\n")}`);
+			return true;
+		}
+		case "crons_toggle": {
+			const updated = await setScheduleEnabled(command.name, command.enabled);
+			if (!updated) {
+				await bot.sendText(session.ctx, `未找到 cron 任务：${command.name}`);
+				return true;
+			}
+			await bot.sendText(
+				session.ctx,
+				`${command.enabled ? "已开启" : "已关闭"} cron 任务：${updated.name}`,
+			);
+			return true;
+		}
+		case "workflows_list": {
+			const workflows = await discoverWorkflows();
+			if (workflows.length === 0) {
+				await bot.sendText(session.ctx, "当前没有可用 workflow。");
+				return true;
+			}
+			const lines = workflows.map(
+				(wf) => `- ${wf.name}${wf.description ? `: ${wf.description}` : ""}`,
+			);
+			await bot.sendText(session.ctx, `当前 workflows：\n${lines.join("\n")}`);
+			return true;
+		}
+		case "workflows_run": {
+			const workflows = await discoverWorkflows();
+			const wf = workflows.find((item) => item.name === command.name);
+			if (!wf) {
+				await bot.sendText(session.ctx, `未找到 workflow：${command.name}`);
+				return true;
+			}
+			const args = parseWorkflowArgs(command.argsRaw);
+			const result = await runWorkflow(wf.path, args);
+			await bot.sendText(
+				session.ctx,
+				`workflow 已运行：${wf.name}\n\`\`\`json\n${safeJson(result)}\n\`\`\``,
+			);
+			return true;
+		}
+		case "workflows_show": {
+			const workflows = await discoverWorkflows();
+			const wf = workflows.find((item) => item.name === command.name);
+			if (!wf) {
+				await bot.sendText(session.ctx, `未找到 workflow：${command.name}`);
+				return true;
+			}
+			const content = await Bun.file(wf.path).text();
+			await sendWorkflowAsCodeBlock(bot, session.ctx, wf.name, content);
+			return true;
+		}
+	}
+}
+
 async function runFeishuRound(
 	bot: FeishuBot,
 	session: FeishuSession,
 	userInput: string,
+	abortController: AbortController,
 ): Promise<void> {
 	const conversation = await FeishuConversationMessages.create(bot, session.ctx);
 	const renderer = new FeishuRenderer(conversation);
@@ -153,7 +407,13 @@ async function runFeishuRound(
 		maxIterations: 30,
 		renderer,
 		schema: InteractiveResultSchema,
+		signal: abortController.signal,
 	});
+	if (abortController.signal.aborted) {
+		conversation.setSummary("📌 总结\n✋ 任务已中断");
+		await renderer.drain();
+		return;
+	}
 	session.history = result.history;
 
 	await renderer.drain();
@@ -237,29 +497,44 @@ export async function startFeishuService(): Promise<void> {
 			if (!text) return;
 
 			const sessionKey = buildSessionKey(ctx);
-			const existing = sessions.get(sessionKey);
-			const session: FeishuSession =
-				existing ??
-				({
-					history: [
-						{ type: "system", content: systemPrompt },
-						{ type: "system", content: buildFeishuSystemContext(ctx) },
-					],
-					ctx,
-				} as FeishuSession);
-
-			session.ctx = ctx;
-			sessions.set(sessionKey, session);
+			const session = getOrCreateSession(sessionKey, ctx, systemPrompt);
 
 			console.log(`[feishu] received message: ${text} (sessionKey=${sessionKey})`);
 
-			if (text.toLowerCase() === "exit") {
-				sessions.delete(sessionKey);
-				await bot.sendText(ctx, "会话已清理。请发送新的任务。");
+			const command = parseCommand(text);
+			if (command) {
+				await handleCommand(command, bot, sessionKey, session, systemPrompt);
 				return;
 			}
 
-			await runFeishuRound(bot, session, text);
+			if (session.currentTask) {
+				const elapsedSec = Math.floor(
+					(Date.now() - session.currentTask.startedAt) / 1000,
+				);
+				await bot.sendText(
+					ctx,
+					`当前任务仍在执行中（${elapsedSec}s）。发送 /exit 可打断并退出。`,
+				);
+				return;
+			}
+
+			const abortController = new AbortController();
+			session.currentTask = {
+				abortController,
+				startedAt: Date.now(),
+			};
+
+			runFeishuRound(bot, session, text, abortController)
+				.catch(async (err) => {
+					if (abortController.signal.aborted) return;
+					console.error("[feishu] runFeishuRound error:", err);
+					await bot.sendText(ctx, `任务执行失败：${String(err)}`);
+				})
+				.finally(() => {
+					if (session.currentTask?.abortController === abortController) {
+						session.currentTask = null;
+					}
+				});
 		},
 	});
 
