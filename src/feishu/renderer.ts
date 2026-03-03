@@ -37,7 +37,7 @@ export class FeishuConversationMessages {
 		bot: FeishuBot,
 		ctx: FeishuMessageContext,
 	): Promise<FeishuConversationMessages> {
-		const roundMessageId = await bot.createTextMessage(ctx, "Agent 工作状态", "🤖 round 0/0 (初始化中...)");
+		const roundMessageId = await bot.createTextMessage(ctx, "🤖 round 0/0 (初始化中...)", "Agent 工作状态");
 		const toolsMessageId = await bot.createPostMessage(ctx, {
 			title: "🔧 调用工具详情",
 			lines: [[{ tag: "text", text: "等待工具调用...", un_escape: true }]],
