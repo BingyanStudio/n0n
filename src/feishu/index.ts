@@ -54,7 +54,7 @@ function buildMessageDedupKey(ctx: FeishuMessageContext): string {
 
 function shouldProcessMessage(ctx: FeishuMessageContext): boolean {
 	const now = Date.now();
-	const key = buildMessageDedupKey(ctx);
+	const key = ctx.messageId!;
 	const seenAt = processedMessages.get(key);
 	if (seenAt && now - seenAt < DEDUP_TTL_MS) {
 		return false;
