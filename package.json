@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "start": "bun run src/cli/index.ts",
+    "start:feishu": "bun run src/cli/index.ts feishu start",
     "check": "bunx biome check --write .",
     "typecheck": "bun x tsc --noEmit"
   },
@@ -16,6 +17,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.59.0",
     "@types/node": "^25.3.2",
     "partial-json": "^0.1.7",
     "picocolors": "^1.1.1",

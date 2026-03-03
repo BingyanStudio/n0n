@@ -20,6 +20,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "workflows/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "workflows/**/*.ts", "workflows/**/*.d.ts"],
   "types" : ["bun", "node"]
 }

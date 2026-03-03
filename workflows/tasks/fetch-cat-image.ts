@@ -10,12 +10,12 @@ export default async function run() {
 				"x-api-key": "demo-api-key",
 				"User-Agent": "n0n-workflow/1.0",
 			},
-		},
+		}
 	);
 
 	if (!response.ok) {
 		throw new Error(
-			`The Cat API请求失败: ${response.status} ${response.statusText}`,
+			`The Cat API请求失败: ${response.status} ${response.statusText}`
 		);
 	}
 
@@ -32,7 +32,7 @@ export default async function run() {
 
 	const catImage = data[0]!;
 	console.log(
-		`获取到猫猫图片: ${catImage.id} (${catImage.width}x${catImage.height})`,
+		`获取到猫猫图片: ${catImage.id} (${catImage.width}x${catImage.height})`
 	);
 	console.log(`图片URL: ${catImage.url}`);
 
@@ -40,7 +40,7 @@ export default async function run() {
 	const imageResponse = await fetch(catImage.url);
 	if (!imageResponse.ok) {
 		throw new Error(
-			`下载图片失败: ${imageResponse.status} ${imageResponse.statusText}`,
+			`下载图片失败: ${imageResponse.status} ${imageResponse.statusText}`
 		);
 	}
 
@@ -48,7 +48,7 @@ export default async function run() {
 	const imageData = new Uint8Array(imageBuffer);
 
 	// 确定home目录路径
-	const homeDir =
+	const homeDir = 
 		process.env.HOME || process.env.USERPROFILE || process.env.HOMEPATH || ".";
 
 	// 创建文件名
@@ -75,4 +75,8 @@ export default async function run() {
 		fileSize: imageData.length,
 		timestamp: new Date().toISOString(),
 	};
+}
+
+if (import.meta.main) {
+  run().catch(console.error);
 }

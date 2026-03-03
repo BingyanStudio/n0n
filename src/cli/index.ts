@@ -11,6 +11,7 @@
 
 import { rmSync } from "node:fs";
 import { discoverWorkflows } from "../discovery.ts";
+import { startFeishuService } from "../feishu/index.ts";
 import { loadSchedules, startScheduler } from "../scheduler/index.ts";
 import { style, writeln } from "../ui/ansi.ts";
 import { runWorkflow } from "../workflow/index.ts";
@@ -75,6 +76,16 @@ async function main(): Promise<void> {
 				return;
 			}
 			console.error("Usage: bun run src/cli/index.ts scheduler start");
+			process.exit(1);
+			return;
+		}
+
+		case "feishu": {
+			if (args[1] === "start" || !args[1]) {
+				await startFeishuService();
+				return;
+			}
+			console.error("Usage: bun run src/cli/index.ts feishu start");
 			process.exit(1);
 			return;
 		}

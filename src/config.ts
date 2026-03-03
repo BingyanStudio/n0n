@@ -23,7 +23,7 @@ function parseBlockedCommands(): string[] {
 
 export const config = {
 	llm: {
-		baseUrl: requireEnv("LLM_BASE_URL").replace(/\/+$/, ""),
+		baseUrl: requireEnv("LLM_BASE_URL"), // .replace(/\/+$/, ""),
 		apiKey: requireEnv("LLM_API_KEY"),
 		model: requireEnv("LLM_MODEL"),
 	},
