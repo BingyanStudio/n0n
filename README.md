@@ -28,20 +28,20 @@ BLOCKED_COMMANDS=rm,mv,dd
 bun start
 
 # 飞书入口服务（官方长连接 WSClient，同时启动 scheduler）
-bun run src/cli/index.ts feishu start
+bun start src/cli/index.ts feishu start
 
 # 直接传入任务
 bun start "帮我每天早上总结 Hacker News 热门"
 
 # 运行已有 workflow
-bun run src/main.ts run workflows/tasks/xxx.ts
+bun start workflows/tasks/xxx.ts
 
 # 定时任务
-bun run src/main.ts schedule add hn-daily "0 8 * * *" "总结 HN 热门"
-bun run src/main.ts scheduler start
+bun start schedule add hn-daily "0 8 * * *" "总结 HN 热门"
+bun start scheduler start
 
 # 查看所有 workflow
-bun run src/main.ts workflows
+bun start workflows
 ```
 
 飞书入口所需环境变量（长连接模式）：
