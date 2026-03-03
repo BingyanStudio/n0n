@@ -27,6 +27,9 @@ BLOCKED_COMMANDS=rm,mv,dd
 # 交互式对话 — AI 自动创建 workflow
 bun start
 
+# 飞书入口服务（官方长连接 WSClient）
+bun run src/cli/index.ts feishu start
+
 # 直接传入任务
 bun start "帮我每天早上总结 Hacker News 热门"
 
@@ -39,6 +42,16 @@ bun run src/main.ts scheduler start
 
 # 查看所有 workflow
 bun run src/main.ts workflows
+```
+
+飞书入口所需环境变量（长连接模式）：
+
+```bash
+FEISHU_APP_ID=cli_xxx
+FEISHU_APP_SECRET=xxx
+# 可选
+FEISHU_ENCRYPT_KEY=xxx
+FEISHU_DOMAIN=feishu
 ```
 
 ## 工作流程
