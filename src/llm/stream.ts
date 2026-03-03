@@ -33,6 +33,7 @@ export type StreamEvent =
 
 export async function* chatCompletionStream(
 	request: Omit<LLMRequest, "model">,
+	options?: { signal?: AbortSignal },
 ): AsyncGenerator<StreamEvent> {
 	const body: LLMRequest & { stream: true } = {
 		model: config.llm.model,
@@ -57,6 +58,7 @@ export async function* chatCompletionStream(
 			Authorization: `Bearer ${config.llm.apiKey}`,
 		},
 		body: JSON.stringify(body),
+		signal: options?.signal,
 	});
 
 	if (!res.ok) {

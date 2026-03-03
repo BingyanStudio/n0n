@@ -8,13 +8,13 @@ export interface FeishuRecipient {
 }
 
 export interface FeishuMessageContext {
-	chatId: string;
-	chatType: string;
-	senderOpenId: string | null;
+	chatId: string | null;
+	chatType: string | null;
+	senderOpenId: string;
 	senderUserId: string | null;
 	senderUnionId: string | null;
 	tenantKey: string | null;
-	messageId: string;
+	messageId: string | null;
 	recipient: FeishuRecipient;
 }
 
@@ -124,7 +124,7 @@ export class FeishuBot {
 		if (!chatId || !messageId) return null;
 
 		const senderId = event.sender?.sender_id ?? {};
-		const senderOpenId = senderId.open_id ? String(senderId.open_id) : null;
+		const senderOpenId = senderId.open_id;
 		const senderUserId = senderId.user_id ? String(senderId.user_id) : null;
 		const senderUnionId = senderId.union_id ? String(senderId.union_id) : null;
 		const tenantKey = event.sender?.tenant_key
@@ -148,6 +148,32 @@ export class FeishuBot {
 		};
 	}
 
+	static buildContextForMenu(event: any): FeishuMessageContext | null {
+
+		const eventId = String(event.event_id ?? "");
+		if (!eventId) return null;
+
+		const operatorId = event.operator?.operator_id ?? {};
+		const senderOpenId = operatorId.open_id;
+		const senderUserId = operatorId.user_id ? String(operatorId.user_id) : null;
+		const senderUnionId = operatorId.union_id ? String(operatorId.union_id) : null;
+		const tenantKey = event.tenant_key
+			? String(event.tenant_key)
+			: null;
+
+
+		return {
+			chatId: null,
+			chatType: null,
+			senderOpenId,
+			senderUserId,
+			senderUnionId,
+			tenantKey,
+			messageId: null,
+			recipient: { receiveIdType: "open_id", receiveId: senderOpenId },
+		};
+	}
+
 	static readText(data: any): string {
 		const raw = data?.message?.content;
 		if (!raw || typeof raw !== "string") return "";
@@ -159,18 +185,19 @@ export class FeishuBot {
 		}
 	}
 
-	async sendText(ctx: FeishuMessageContext, text: string): Promise<void> {
+	async sendText(ctx: FeishuMessageContext, title: string, text: string): Promise<void> {
 		const chunks = chunkText(text, 1800);
 		for (const chunk of chunks) {
-			await this.createTextMessage(ctx, chunk);
+			await this.createTextMessage(ctx, chunk, title);
 		}
 	}
 
 	async createTextMessage(
 		ctx: FeishuMessageContext,
 		text: string,
+		title: string = "消息",
 	): Promise<string> {
-		const content = JSON.stringify(buildTextCard(text));
+		const content = JSON.stringify(buildTextCard(title, text));
 		const res = await this.client.im.message.create({
 			params: {
 				receive_id_type: ctx.recipient.receiveIdType,
@@ -188,8 +215,8 @@ export class FeishuBot {
 		return String(messageId);
 	}
 
-	async editTextMessage(messageId: string, text: string): Promise<void> {
-		const content = JSON.stringify(buildTextCard(text));
+	async editTextMessage(messageId: string, text: string, title: string = "消息"): Promise<void> {
+		const content = JSON.stringify(buildTextCard(title, text));
 		await this.client.im.message.patch({
 			path: { message_id: messageId },
 			data: {
@@ -274,7 +301,7 @@ export class FeishuBot {
 	}
 }
 
-function buildTextCard(text: string): FeishuCardContent {
+function buildTextCard(title: string, text: string): FeishuCardContent {
 	return {
 		schema: "2.0",
 		config: {
@@ -285,7 +312,7 @@ function buildTextCard(text: string): FeishuCardContent {
 			template: "blue",
 			title: {
 				tag: "plain_text",
-				content: "工作流状态",
+				content: title,
 			},
 		},
 		body: {
