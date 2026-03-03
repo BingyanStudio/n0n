@@ -5,9 +5,9 @@
  * 运行时负责加载和执行这些文件。
  */
 
+import { Glob } from "bun";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { Glob } from "bun";
 
 export interface WorkflowMeta {
 	name: string;
@@ -53,7 +53,10 @@ export async function discoverWorkflows(
 /**
  * 执行一个 workflow 文件
  */
-export async function runWorkflow(workflowPath: string): Promise<unknown> {
+export async function runWorkflow(
+	workflowPath: string,
+	args?: unknown,
+): Promise<unknown> {
 	const absPath = resolve(workflowPath);
 
 	if (!existsSync(absPath)) {
@@ -72,5 +75,5 @@ export async function runWorkflow(workflowPath: string): Promise<unknown> {
 		);
 	}
 
-	return entryFn();
+	return entryFn(args);
 }

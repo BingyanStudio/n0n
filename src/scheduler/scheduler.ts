@@ -14,9 +14,9 @@
  * 提示词内容（当无 workflow 字段时，作为 delegateTask 的 query）
  */
 
+import { Glob } from "bun";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { Glob } from "bun";
 import { delegateTask } from "../task/delegate.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
@@ -90,6 +90,42 @@ export async function loadSchedules(): Promise<ScheduleEntry[]> {
 	}
 
 	return entries;
+}
+
+export async function setScheduleEnabled(
+	name: string,
+	enabled: boolean,
+): Promise<ScheduleEntry | null> {
+	const entries = await loadSchedules();
+	const target = entries.find((entry) => entry.name === name);
+	if (!target) return null;
+
+	const original = await Bun.file(target.filePath).text();
+	const updated = original.replace(
+		/^---\r?\n([\s\S]*?)\r?\n---/,
+		(_match, frontmatter: string) => {
+			const lines = frontmatter.split(/\r?\n/);
+			const idx = lines.findIndex((line) => /^enabled\s*:/.test(line.trim()));
+			const enabledLine = `enabled: ${enabled ? "true" : "false"}`;
+			if (idx >= 0) {
+				lines[idx] = enabledLine;
+			} else {
+				lines.push(enabledLine);
+			}
+			return `---\n${lines.join("\n")}\n---`;
+		},
+	);
+
+	if (updated === original) {
+		throw new Error(`Failed to update schedule frontmatter: ${target.filePath}`);
+	}
+
+	await Bun.write(target.filePath, updated);
+
+	return {
+		...target,
+		enabled,
+	};
 }
 
 // ── 触发循环 ──
