@@ -17,6 +17,22 @@ export interface UserTextMessage {
 	content: string;
 }
 
+/** 真实用户输入（交互模式），adapter 负责包装 paraphrase 指令和拼接上下文 */
+export interface UserInputMessage {
+	type: "user_input";
+	content: string;
+	context: string | null;
+	capabilities: string | null;
+}
+
+/** submit 后的轮次反馈（系统注入），adapter 负责生成具体提示词 */
+export interface TurnFeedbackMessage {
+	type: "turn_feedback";
+	status: "accepted" | "rejected";
+	resultType: string;
+	detail: string;
+}
+
 export interface UserImageMessage {
 	type: "user_image";
 	text: string;
@@ -103,11 +119,21 @@ export interface ToolOutputChunk {
 /** 工具流式执行产出：chunk 或最终结果 */
 export type ToolStreamEvent = ToolOutputChunk | ToolResult;
 
+// ── 空转提示 ──
+export interface IdleNudgeMessage {
+	type: "idle_nudge";
+	idleCount: number;
+	maxIdleRounds: number;
+}
+
 // ── 联合类型 ──
 export type DomainMessage =
 	| SystemMessage
 	| UserTextMessage
+	| UserInputMessage
 	| UserImageMessage
 	| AssistantTextMessage
 	| AssistantToolCallMessage
-	| ToolResult;
+	| ToolResult
+	| IdleNudgeMessage
+	| TurnFeedbackMessage;

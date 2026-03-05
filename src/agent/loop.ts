@@ -75,11 +75,14 @@ export async function agentLoop<T = unknown>(
 		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
 
 		const acc = new StreamAccumulator();
-		for await (const event of chatCompletionStream({
-			messages: apiMessages,
-			tools: toolDefs,
-			tool_choice: "auto",
-		}, { signal: options?.signal })) {
+		for await (const event of chatCompletionStream(
+			{
+				messages: apiMessages,
+				tools: toolDefs,
+				tool_choice: "auto",
+			},
+			{ signal: options?.signal },
+		)) {
 			if (options?.signal?.aborted) {
 				return {
 					result: null,
@@ -131,6 +134,13 @@ export async function agentLoop<T = unknown>(
 					history: messages,
 				};
 			}
+
+			// 注入空转提示，打断连续 assistant 序列并引导调用工具
+			messages.push({
+				type: "idle_nudge",
+				idleCount,
+				maxIdleRounds: config.agent.maxIdleRounds,
+			});
 			continue;
 		}
 
@@ -155,6 +165,11 @@ export async function agentLoop<T = unknown>(
 					history: messages,
 				};
 			}
+			messages.push({
+				type: "idle_nudge",
+				idleCount,
+				maxIdleRounds: config.agent.maxIdleRounds,
+			});
 			continue;
 		}
 		const toolCallMsg: AssistantToolCallMessage = {
