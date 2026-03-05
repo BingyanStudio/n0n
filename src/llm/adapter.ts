@@ -86,6 +86,34 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 					content: toolResultToContent(msg),
 				});
 				break;
+
+			case "idle_nudge":
+				result.push({
+					role: "user",
+					content: `[System] You replied with plain text without calling any tool (idle ${msg.idleCount}/${msg.maxIdleRounds}). You MUST either call the \`submit\` tool to submit your result once the task is actually completed, or continue calling tools to complete the task. Do NOT output plain text without a tool call.`,
+				});
+				break;
+
+			case "user_input": {
+				const parts: string[] = [];
+				if (msg.context) parts.push(msg.context);
+				if (msg.capabilities) parts.push(msg.capabilities);
+				parts.push(`<user paraphrase-in="en,ja">\n${msg.content}\n</user>`);
+				result.push({ role: "user", content: parts.join("\n\n") });
+				break;
+			}
+
+			case "turn_feedback": {
+				const prefix =
+					msg.status === "accepted"
+						? `Your submission was ${msg.status} (${msg.resultType}).`
+						: `Your submission was ${msg.status} (${msg.resultType}).`;
+				result.push({
+					role: "user",
+					content: `${prefix} ${msg.detail}`,
+				});
+				break;
+			}
 		}
 	}
 
