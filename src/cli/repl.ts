@@ -70,26 +70,30 @@ export async function startRepl(initialInput?: string): Promise<void> {
 			discoverWorkflows(),
 			loadSchedules(),
 		]);
-		let contextSuffix = "";
+		const contextParts: string[] = [];
 		if (existing.length > 0) {
-			contextSuffix += `\n\n## Existing workflows (reuse if applicable)\n${existing.map((w) => `- ${w.name}: ${w.description || "(no description)"} → ${w.path}`).join("\n")}`;
+			contextParts.push(
+				`## Existing workflows (reuse if applicable)\n${existing.map((w) => `- ${w.name}: ${w.description || "(no description)"} → ${w.path}`).join("\n")}`,
+			);
 		}
 		if (schedules.length > 0) {
-			contextSuffix += `\n\n## Existing schedules\n${schedules.map((s) => `- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`).join("\n")}`;
+			contextParts.push(
+				`## Existing schedules\n${schedules.map((s) => `- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`).join("\n")}`,
+			);
 		}
 
-		// 首轮：新建 history；后续轮：追加用户消息到已有 history
-		const wrappedInput = contextSuffix
-			? `${contextSuffix}\n\n<user repeat-in="en,ja">\n${userInput}\n</user>`
-			: `<user repeat-in="en,ja">\n${userInput}\n</user>`;
+		const userInputMsg: DomainMessage = {
+			type: "user_input",
+			content: userInput,
+			context: contextParts.length > 0 ? contextParts.join("\n\n") : null,
+			capabilities: null,
+		};
 
+		// 首轮：新建 history；后续轮：追加用户消息到已有 history
 		if (history.length === 0) {
-			history = [
-				{ type: "system", content: systemPrompt },
-				{ type: "user_text", content: wrappedInput },
-			];
+			history = [{ type: "system", content: systemPrompt }, userInputMsg];
 		} else {
-			history.push({ type: "user_text", content: wrappedInput });
+			history.push(userInputMsg);
 		}
 
 		const agentResult = await agentLoop<InteractiveResult>(history, {
@@ -110,8 +114,10 @@ export async function startRepl(initialInput?: string): Promise<void> {
 			writeln(`${style.red("✗")} Agent 异常终止`);
 			if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 			history.push({
-				type: "user_text",
-				content: `Agent terminated without a valid result. Report: ${agentResult.report ?? "none"}\nWaiting for the next task from the user.`,
+				type: "turn_feedback",
+				status: "rejected",
+				resultType: "terminated",
+				detail: agentResult.report ?? "none",
 			});
 			writeln();
 			writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
@@ -125,9 +131,10 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				writeln(ir.message);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 				history.push({
-					type: "user_text",
-					content:
-						"Your submission was accepted (chat). Waiting for the next message from the user.",
+					type: "turn_feedback",
+					status: "accepted",
+					resultType: "chat",
+					detail: "Waiting for the next message from the user.",
 				});
 				writeln();
 				userInput = await prompt(`${label.user()} `);
@@ -139,8 +146,10 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				writeln(`  ${ir.message}`);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 				history.push({
-					type: "user_text",
-					content: `Your submission was accepted (need_info). Waiting for the user to provide: ${ir.message}`,
+					type: "turn_feedback",
+					status: "accepted",
+					resultType: "need_info",
+					detail: `Waiting for the user to provide: ${ir.message}`,
 				});
 				writeln();
 				writeln(style.gray("请补充信息，或输入 'exit' 退出:"));
@@ -154,8 +163,10 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				if (ir.summary) writeln(style.gray(`  ${ir.summary}`));
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 				history.push({
-					type: "user_text",
-					content: `Your submission was accepted (completed). Result: ${ir.result}\nWaiting for the next task from the user.`,
+					type: "turn_feedback",
+					status: "accepted",
+					resultType: "completed",
+					detail: `Result: ${ir.result}\nWaiting for the next task from the user.`,
 				});
 				writeln();
 				writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
@@ -169,8 +180,10 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				writeln(`  ${ir.error}`);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 				history.push({
-					type: "user_text",
-					content: `Your submission was accepted (error). Error: ${ir.error}\nWaiting for the next task or additional info from the user.`,
+					type: "turn_feedback",
+					status: "accepted",
+					resultType: "error",
+					detail: `Error: ${ir.error}\nWaiting for the next task or additional info from the user.`,
 				});
 				writeln();
 				writeln(style.gray("可以补充信息重试，或输入 'exit' 退出:"));

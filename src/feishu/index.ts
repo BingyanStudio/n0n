@@ -1,7 +1,10 @@
 import * as lark from "@larksuiteoapi/node-sdk";
 import { fileURLToPath } from "node:url";
 import { agentLoop } from "../agent/loop.ts";
-import { InteractiveResultSchema, type InteractiveResult } from "../cli/schema.ts";
+import {
+	InteractiveResultSchema,
+	type InteractiveResult,
+} from "../cli/schema.ts";
 import { discoverWorkflows } from "../discovery.ts";
 import { loadSchedules, setScheduleEnabled } from "../scheduler/index.ts";
 import type { DomainMessage } from "../types/domain.ts";
@@ -45,7 +48,10 @@ function requireEnv(key: string): string {
 }
 
 function buildSessionKey(ctx: FeishuMessageContext): string {
-	return [ctx.chatId ?? "unknown", ctx.senderOpenId ?? ctx.senderUserId ?? "unknown"].join(":");
+	return [
+		ctx.chatId ?? "unknown",
+		ctx.senderOpenId ?? ctx.senderUserId ?? "unknown",
+	].join(":");
 }
 
 function buildMessageDedupKey(ctx: FeishuMessageContext): string {
@@ -116,15 +122,6 @@ function buildFeishuCapabilityContext(ctx: FeishuMessageContext): string {
 	].join("\n");
 }
 
-function buildWrappedInput(
-	userInput: string,
-	contextSuffix: string,
-	capabilityContext: string,
-): string {
-	const base = `<user repeat-in=\"en,ja\">\n${userInput}\n</user>`;
-	return [contextSuffix, capabilityContext, base].filter(Boolean).join("\n\n");
-}
-
 function createInitialHistory(
 	systemPrompt: string,
 	ctx: FeishuMessageContext,
@@ -186,7 +183,9 @@ function parseCommand(text: string): FeishuCommand | null {
 			name: (wfShowMatch[1] ?? "").trim(),
 		};
 	}
-	const wfRunMatch = trimmed.match(/^\/workflows\s+run\s+(\S+)(?:\s+([\s\S]+))?$/i);
+	const wfRunMatch = trimmed.match(
+		/^\/workflows\s+run\s+(\S+)(?:\s+([\s\S]+))?$/i,
+	);
 	if (wfRunMatch) {
 		return {
 			type: "workflows_run",
@@ -226,7 +225,11 @@ async function sendWorkflowAsCodeBlock(
 	const escaped = content.replaceAll("```", "`\u200b``");
 	const chunks = splitText(escaped, 1400);
 	for (const chunk of chunks) {
-		await bot.sendText(ctx, `工作流展示`, `文件名称：${name}\n\`\`\`javascript\n${chunk}\n\`\`\``);
+		await bot.sendText(
+			ctx,
+			`工作流展示`,
+			`文件名称：${name}\n\`\`\`javascript\n${chunk}\n\`\`\``,
+		);
 	}
 }
 
@@ -271,7 +274,11 @@ async function handleCommand(
 				session.currentTask.abortController.abort("/exit");
 			}
 			sessions.delete(sessionKey);
-			await bot.sendText(session.ctx, "工作状态", "已打断当前任务并退出会话。请发送新任务开始。");
+			await bot.sendText(
+				session.ctx,
+				"工作状态",
+				"已打断当前任务并退出会话。请发送新任务开始。",
+			);
 			return true;
 		}
 		case "reset": {
@@ -300,7 +307,11 @@ async function handleCommand(
 		case "crons_list": {
 			const schedules = await loadSchedules();
 			if (schedules.length === 0) {
-				await bot.sendText(session.ctx, "Cron 任务列表", "当前没有 cron 任务。");
+				await bot.sendText(
+					session.ctx,
+					"Cron 任务列表",
+					"当前没有 cron 任务。",
+				);
 				return true;
 			}
 			const lines = schedules.map(
@@ -313,7 +324,11 @@ async function handleCommand(
 		case "crons_toggle": {
 			const updated = await setScheduleEnabled(command.name, command.enabled);
 			if (!updated) {
-				await bot.sendText(session.ctx, "Cron 控制", `未找到 cron 任务：${command.name}`);
+				await bot.sendText(
+					session.ctx,
+					"Cron 控制",
+					`未找到 cron 任务：${command.name}`,
+				);
 				return true;
 			}
 			await bot.sendText(
@@ -326,7 +341,11 @@ async function handleCommand(
 		case "workflows_list": {
 			const workflows = await discoverWorkflows();
 			if (workflows.length === 0) {
-				await bot.sendText(session.ctx, "工作流列表", "当前没有可用 workflow。");
+				await bot.sendText(
+					session.ctx,
+					"工作流列表",
+					"当前没有可用 workflow。",
+				);
 				return true;
 			}
 			const lines = workflows.map(
@@ -339,7 +358,11 @@ async function handleCommand(
 			const workflows = await discoverWorkflows();
 			const wf = workflows.find((item) => item.name === command.name);
 			if (!wf) {
-				await bot.sendText(session.ctx, "工作流运行", `未找到 workflow：${command.name}`);
+				await bot.sendText(
+					session.ctx,
+					"工作流运行",
+					`未找到 workflow：${command.name}`,
+				);
 				return true;
 			}
 			const args = parseWorkflowArgs(command.argsRaw);
@@ -355,7 +378,11 @@ async function handleCommand(
 			const workflows = await discoverWorkflows("workflows", false);
 			const wf = workflows.find((item) => item.name === command.name);
 			if (!wf) {
-				await bot.sendText(session.ctx, "工作流展示", `未找到 workflow：${command.name}`);
+				await bot.sendText(
+					session.ctx,
+					"工作流展示",
+					`未找到 workflow：${command.name}`,
+				);
 				return true;
 			}
 			const content = await Bun.file(wf.path).text();
@@ -379,7 +406,10 @@ async function runFeishuRound(
 	userInput: string,
 	abortController: AbortController,
 ): Promise<void> {
-	const conversation = await FeishuConversationMessages.create(bot, session.ctx);
+	const conversation = await FeishuConversationMessages.create(
+		bot,
+		session.ctx,
+	);
 	const renderer = new FeishuRenderer(conversation);
 	renderer.userMessage(userInput);
 	const [existing, schedules] = await Promise.all([
@@ -387,31 +417,37 @@ async function runFeishuRound(
 		loadSchedules(),
 	]);
 
-	let contextSuffix = "";
+	const contextParts: string[] = [];
 	if (existing.length > 0) {
-		contextSuffix += `## Existing workflows (reuse if applicable)\n${existing
-			.map(
-				(w) =>
-					`- ${w.name}: ${w.description || "(no description)"} → ${w.path}`,
-			)
-			.join("\n")}`;
+		contextParts.push(
+			`## Existing workflows (reuse if applicable)\n${existing
+				.map(
+					(w) =>
+						`- ${w.name}: ${w.description || "(no description)"} → ${w.path}`,
+				)
+				.join("\n")}`,
+		);
 	}
 	if (schedules.length > 0) {
-		contextSuffix += `${contextSuffix ? "\n\n" : ""}## Existing schedules\n${schedules
-			.map(
-				(s) =>
-					`- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`,
-			)
-			.join("\n")}`;
+		contextParts.push(
+			`## Existing schedules\n${schedules
+				.map(
+					(s) =>
+						`- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`,
+				)
+				.join("\n")}`,
+		);
 	}
 
-	const capabilityContext = isWorkflowCreateIntent(userInput)
+	const capabilities = isWorkflowCreateIntent(userInput)
 		? buildFeishuCapabilityContext(session.ctx)
-		: "";
+		: null;
 
 	session.history.push({
-		type: "user_text",
-		content: buildWrappedInput(userInput, contextSuffix, capabilityContext),
+		type: "user_input",
+		content: userInput,
+		context: contextParts.length > 0 ? contextParts.join("\n\n") : null,
+		capabilities,
 	});
 
 	const result = await agentLoop<InteractiveResult>(session.history, {
@@ -435,8 +471,10 @@ async function runFeishuRound(
 		);
 		await renderer.drain();
 		session.history.push({
-			type: "user_text",
-			content: `Agent terminated without a valid result. Report: ${result.report ?? "none"}\nWaiting for the next task from the user.`,
+			type: "turn_feedback",
+			status: "rejected",
+			resultType: "terminated",
+			detail: result.report ?? "none",
 		});
 		return;
 	}
@@ -446,17 +484,22 @@ async function runFeishuRound(
 			conversation.setSummary(`📌 总结\n💬 ${result.result.message}`);
 			await renderer.drain();
 			session.history.push({
-				type: "user_text",
-				content:
-					"Your submission was accepted (chat). Waiting for the next message from the user.",
+				type: "turn_feedback",
+				status: "accepted",
+				resultType: "chat",
+				detail: "Waiting for the next message from the user.",
 			});
 			return;
 		case "need_info":
-			conversation.setSummary(`📌 总结\n需要更多信息：${result.result.message}`);
+			conversation.setSummary(
+				`📌 总结\n需要更多信息：${result.result.message}`,
+			);
 			await renderer.drain();
 			session.history.push({
-				type: "user_text",
-				content: `Your submission was accepted (need_info). Waiting for the user to provide: ${result.result.message}`,
+				type: "turn_feedback",
+				status: "accepted",
+				resultType: "need_info",
+				detail: `Waiting for the user to provide: ${result.result.message}`,
 			});
 			return;
 		case "completed":
@@ -467,16 +510,20 @@ async function runFeishuRound(
 			);
 			await renderer.drain();
 			session.history.push({
-				type: "user_text",
-				content: `Your submission was accepted (completed). Result: ${result.result.result}\nWaiting for the next task from the user.`,
+				type: "turn_feedback",
+				status: "accepted",
+				resultType: "completed",
+				detail: `Result: ${result.result.result}\nWaiting for the next task from the user.`,
 			});
 			return;
 		case "error":
 			conversation.setSummary(`📌 总结\n✗ Agent 错误: ${result.result.error}`);
 			await renderer.drain();
 			session.history.push({
-				type: "user_text",
-				content: `Your submission was accepted (error). Error: ${result.result.error}\nWaiting for the next task or additional info from the user.`,
+				type: "turn_feedback",
+				status: "accepted",
+				resultType: "error",
+				detail: `Error: ${result.result.error}\nWaiting for the next task or additional info from the user.`,
 			});
 			return;
 	}
@@ -510,7 +557,9 @@ export async function startFeishuService(): Promise<void> {
 			const sessionKey = buildSessionKey(ctx);
 			const session = getOrCreateSession(sessionKey, ctx, systemPrompt);
 
-			console.log(`[feishu] received message: ${text} (sessionKey=${sessionKey})`);
+			console.log(
+				`[feishu] received message: ${text} (sessionKey=${sessionKey})`,
+			);
 
 			const command = parseCommand(text);
 			if (command) {
@@ -540,7 +589,11 @@ export async function startFeishuService(): Promise<void> {
 				.catch(async (err) => {
 					if (abortController.signal.aborted) return;
 					console.error("[feishu] runFeishuRound error:", err);
-					await bot.sendText(ctx, "任务执行失败", `任务执行失败：${String(err)}`);
+					await bot.sendText(
+						ctx,
+						"任务执行失败",
+						`任务执行失败：${String(err)}`,
+					);
 				})
 				.finally(() => {
 					if (session.currentTask?.abortController === abortController) {
@@ -555,8 +608,16 @@ export async function startFeishuService(): Promise<void> {
 			const sessionKey = buildSessionKey(ctx);
 			const session = getOrCreateSession(sessionKey, ctx, systemPrompt);
 
-			console.log(`[feishu] received message: ${data?.event_key} (sessionKey=${sessionKey})`);
-			await handleCommand({ type: data?.event_key }, bot, sessionKey, session, systemPrompt);			
+			console.log(
+				`[feishu] received message: ${data?.event_key} (sessionKey=${sessionKey})`,
+			);
+			await handleCommand(
+				{ type: data?.event_key },
+				bot,
+				sessionKey,
+				session,
+				systemPrompt,
+			);
 		},
 	});
 
