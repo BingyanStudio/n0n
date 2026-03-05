@@ -26,6 +26,7 @@ export const config = {
 		baseUrl: requireEnv("LLM_BASE_URL"), // .replace(/\/+$/, ""),
 		apiKey: requireEnv("LLM_API_KEY"),
 		model: requireEnv("LLM_MODEL"),
+		enableThinking: process.env.LLM_ENABLE_THINKING === "true",
 	},
 	agent: {
 		maxIterations: 50,

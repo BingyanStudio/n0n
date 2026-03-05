@@ -35,11 +35,15 @@ export async function* chatCompletionStream(
 	request: Omit<LLMRequest, "model">,
 	options?: { signal?: AbortSignal },
 ): AsyncGenerator<StreamEvent> {
-	const body: LLMRequest & { stream: true } = {
+	const body: LLMRequest & { stream: true; enable_thinking?: boolean } = {
 		model: config.llm.model,
 		...request,
 		stream: true,
 	};
+
+	if (config.llm.enableThinking) {
+		body.enable_thinking = true;
+	}
 
 	if (!body.tools?.length) {
 		body.tools = undefined;
