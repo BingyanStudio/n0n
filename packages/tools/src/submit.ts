@@ -3,9 +3,8 @@
  */
 
 import type { LLMToolDefinition, SubmitToolResult } from "@n0n/types";
-import { z } from "zod";
 import type { ZodType } from "zod";
-import { toJSONSchema } from "zod";
+import { toJSONSchema, z } from "zod";
 
 /** submit 工具参数 schema — 运行时校验 LLM 传入的参数 */
 export const SubmitArgsSchema = z.object({

@@ -10,9 +10,15 @@ export interface NapcatConfig {
 	token: string;
 }
 
-/** 从 workflows/memory/config/napcat.json 读取配置 */
+/**
+ * 配置文件路径 — 与 @n0n/core config.paths.memory 保持一致的默认值，
+ * 支持通过 MEMORY_DIR 环境变量覆盖（与 core 共享同一环境变量）。
+ */
+const MEMORY_DIR = process.env.MEMORY_DIR ?? "workflows/memory";
+
+/** 从 MEMORY_DIR/config/napcat.json 读取配置 */
 export async function readConfig(): Promise<NapcatConfig> {
-	const json = await Bun.file("workflows/memory/config/napcat.json").json();
+	const json = await Bun.file(`${MEMORY_DIR}/config/napcat.json`).json();
 	return {
 		host: json.server_host ?? "127.0.0.1",
 		port: Number(json.server_port ?? 9881),

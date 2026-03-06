@@ -12,7 +12,11 @@ import type {
 	ToolStreamEvent,
 } from "@n0n/types";
 import type { ZodType } from "zod";
-import { EXEC_TOOL_DEFINITION, ExecArgsSchema, execToolStream } from "./exec.ts";
+import {
+	EXEC_TOOL_DEFINITION,
+	ExecArgsSchema,
+	execToolStream,
+} from "./exec.ts";
 import {
 	type PendingReminder,
 	REMINDER_TOOL_DEFINITION,
@@ -57,8 +61,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
 	write: {
 		definition: WRITE_TOOL_DEFINITION,
 		stream: false,
-		execute: (tc) =>
-			writeTool(tc.id, WriteArgsSchema.parse(tc.args)),
+		execute: (tc) => writeTool(tc.id, WriteArgsSchema.parse(tc.args)),
 	},
 	reminder: {
 		definition: REMINDER_TOOL_DEFINITION,
@@ -69,8 +72,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
 	submit: {
 		definition: SUBMIT_TOOL_DEFINITION,
 		stream: false,
-		execute: (tc) =>
-			submitTool(tc.id, SubmitArgsSchema.parse(tc.args)),
+		execute: (tc) => submitTool(tc.id, SubmitArgsSchema.parse(tc.args)),
 	},
 };
 

@@ -4,10 +4,10 @@
 
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { Glob } from "bun";
 import { chatCompletion } from "@n0n/llm";
-import { paths } from "../config.ts";
 import type { LLMRequestMessage } from "@n0n/types";
+import { Glob } from "bun";
+import { paths } from "../config.ts";
 
 export type SearchSpace = "all" | "memory" | "skill" | "history";
 
@@ -46,8 +46,9 @@ async function collectCandidates(space: SearchSpace): Promise<Candidate[]> {
 		if (!existsSync(absDir)) continue;
 
 		const glob = new Glob("**/*");
-		const files = Array.from(glob.scanSync({ cwd: absDir, absolute: true }))
-			.filter((f) => basename(f) !== ".gitkeep");
+		const files = Array.from(
+			glob.scanSync({ cwd: absDir, absolute: true }),
+		).filter((f) => basename(f) !== ".gitkeep");
 
 		for (const file of files) {
 			try {

@@ -131,13 +131,7 @@ export async function startFeishuService(): Promise<void> {
 			console.log(
 				`[feishu] menu event: ${data?.event_key} (sessionKey=${sessionKey})`,
 			);
-			await handleCommand(
-				menuCommand,
-				bot,
-				sessionKey,
-				session,
-				systemPrompt,
-			);
+			await handleCommand(menuCommand, bot, sessionKey, session, systemPrompt);
 		},
 
 		"card.action.trigger": async (data: Record<string, unknown>) => {
