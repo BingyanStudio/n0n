@@ -5,7 +5,7 @@
  * 用法：bun run src/main.ts run workflows/tasks/create-weather-skill.ts
  */
 
-import { delegateTask } from "../../src/index.ts";
+import { delegateTask } from "@n0n/core";
 
 export default async function run() {
 	// Step 1: 创建 skill

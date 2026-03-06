@@ -1,0 +1,245 @@
+/**
+ * RAG 检索 — LLM-as-Retriever 实现
+ */
+
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { chatCompletion } from "@n0n/llm";
+import type { LLMRequestMessage } from "@n0n/types";
+
+export type SearchSpace = "all" | "memory" | "skill" | "history";
+
+export interface RagSearchResult {
+	query: string;
+	space: SearchSpace;
+	results: RagHit[];
+}
+
+export interface RagHit {
+	source: string;
+	content: string;
+	relevance: "high" | "medium" | "low";
+}
+
+interface Candidate {
+	source: string;
+	summary: string;
+}
+
+const SPACE_DIRS: Record<SearchSpace, string[]> = {
+	skill: ["workflows/skills"],
+	memory: ["workflows/memory", "workflows/consult-result"],
+	history: ["workflows/history"],
+	all: [
+		"workflows/skills",
+		"workflows/memory",
+		"workflows/consult-result",
+		"workflows/history",
+	],
+};
+
+const SUMMARY_MAX_CHARS = 600;
+
+async function collectCandidates(space: SearchSpace): Promise<Candidate[]> {
+	const dirs = SPACE_DIRS[space];
+	const candidates: Candidate[] = [];
+
+	for (const dir of dirs) {
+		const absDir = resolve(dir);
+		if (!existsSync(absDir)) continue;
+
+		const proc = Bun.spawnSync(
+			["find", absDir, "-type", "f", "!", "-name", ".gitkeep"],
+			{ stdout: "pipe" },
+		);
+		if (proc.exitCode !== 0) continue;
+
+		const files = new TextDecoder()
+			.decode(proc.stdout)
+			.trim()
+			.split("\n")
+			.filter(Boolean);
+
+		for (const file of files) {
+			try {
+				const content = await Bun.file(file).text();
+				if (!content.trim()) continue;
+
+				const summary = extractSummary(content, file);
+				candidates.push({ source: file, summary });
+			} catch {
+				// skip
+			}
+		}
+	}
+
+	return candidates;
+}
+
+function extractSummary(content: string, filePath: string): string {
+	if (filePath.endsWith("SKILL.md")) {
+		const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+		if (fmMatch?.[1]) {
+			const nameMatch = fmMatch[1].match(/^name:\s*(.+)$/m);
+			const descMatch = fmMatch[1].match(/^description:\s*(.+)$/m);
+			if (nameMatch?.[1] && descMatch?.[1]) {
+				return `[Skill: ${nameMatch[1].trim()}] ${descMatch[1].trim()}`;
+			}
+		}
+	}
+
+	if (filePath.endsWith(".ts") || filePath.endsWith(".js")) {
+		const jsdocMatch = content.match(/\/\*\*[\s\S]*?\*\//);
+		const jsdoc = jsdocMatch?.[0] ?? "";
+		const exports = content
+			.split("\n")
+			.filter((l) => l.startsWith("export "))
+			.slice(0, 5)
+			.join("\n");
+		const combined = [jsdoc, exports].filter(Boolean).join("\n");
+		return combined || content.slice(0, SUMMARY_MAX_CHARS);
+	}
+
+	return content.slice(0, SUMMARY_MAX_CHARS);
+}
+
+export async function ragSearch(
+	query: string,
+	space: SearchSpace = "all",
+): Promise<RagSearchResult> {
+	const candidates = await collectCandidates(space);
+
+	if (candidates.length === 0) {
+		return { query, space, results: [] };
+	}
+
+	const candidateList = candidates
+		.map((c, i) => `[${i}] ${c.source}\n${c.summary}`)
+		.join("\n---\n");
+
+	const messages: LLMRequestMessage[] = [
+		{
+			role: "system",
+			content: [
+				"You are a retrieval assistant. Given a query and a list of candidate documents,",
+				"select the documents most relevant to the query.",
+				"",
+				"Respond with ONLY a JSON array. Each element must have:",
+				'  - "index": number (the candidate index)',
+				'  - "relevance": "high" | "medium" | "low"',
+				'  - "reason": string (brief explanation, 1 sentence)',
+				"",
+				"Only include documents that are at least somewhat relevant. If nothing is relevant, return [].",
+				"Do NOT include any text outside the JSON array.",
+			].join("\n"),
+		},
+		{
+			role: "user",
+			content: `## Query\n${query}\n\n## Candidates\n${candidateList}`,
+		},
+	];
+
+	try {
+		const response = await chatCompletion({
+			messages,
+			temperature: 0,
+		});
+
+		const text = response.choices[0]?.message?.content?.trim() ?? "[]";
+		const selections = parseSelections(text);
+
+		const results: RagHit[] = [];
+		for (const sel of selections) {
+			const candidate = candidates[sel.index];
+			if (!candidate) continue;
+
+			try {
+				const fullContent = await Bun.file(candidate.source).text();
+				results.push({
+					source: candidate.source,
+					content:
+						fullContent.length > 2000
+							? `${fullContent.slice(0, 2000)}\n... [truncated]`
+							: fullContent,
+					relevance: sel.relevance,
+				});
+			} catch {
+				// skip
+			}
+		}
+
+		return { query, space, results };
+	} catch (err) {
+		console.error(
+			"  [ragSearch] LLM retrieval failed, falling back to keyword match:",
+			err,
+		);
+		return keywordFallback(query, candidates);
+	}
+}
+
+interface Selection {
+	index: number;
+	relevance: "high" | "medium" | "low";
+}
+
+function parseSelections(text: string): Selection[] {
+	try {
+		const jsonMatch = text.match(/\[[\s\S]*\]/);
+		if (!jsonMatch) return [];
+
+		const parsed = JSON.parse(jsonMatch[0]) as Array<{
+			index?: number;
+			relevance?: string;
+		}>;
+
+		if (!Array.isArray(parsed)) return [];
+
+		return parsed
+			.filter(
+				(item) =>
+					typeof item.index === "number" &&
+					["high", "medium", "low"].includes(item.relevance ?? ""),
+			)
+			.map((item) => ({
+				index: item.index as number,
+				relevance: item.relevance as "high" | "medium" | "low",
+			}));
+	} catch {
+		return [];
+	}
+}
+
+async function keywordFallback(
+	query: string,
+	candidates: Candidate[],
+): Promise<RagSearchResult> {
+	const keywords = query
+		.toLowerCase()
+		.split(/\s+/)
+		.filter((w) => w.length > 2);
+
+	const hits: RagHit[] = [];
+
+	for (const candidate of candidates) {
+		const lower = candidate.summary.toLowerCase();
+		const matched = keywords.some((kw) => lower.includes(kw));
+		if (!matched) continue;
+
+		try {
+			const fullContent = await Bun.file(candidate.source).text();
+			hits.push({
+				source: candidate.source,
+				content:
+					fullContent.length > 2000
+						? `${fullContent.slice(0, 2000)}\n... [truncated]`
+						: fullContent,
+				relevance: "low",
+			});
+		} catch {
+			// skip
+		}
+	}
+
+	return { query, space: "all", results: hits };
+}

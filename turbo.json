@@ -1,0 +1,12 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"tasks": {
+		"typecheck": {
+			"dependsOn": ["^typecheck"],
+			"inputs": ["src/**/*.ts", "tsconfig.json"]
+		},
+		"check": {
+			"dependsOn": ["^typecheck"]
+		}
+	}
+}

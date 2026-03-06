@@ -8,7 +8,11 @@
  * bun run workflows/skills/feishu-bot/scripts/send-image.ts chat_id oc_xxx ./output/chart.png
  */
 
-import { createFeishuClient, type ReceiveIdType, sendImageFromPath } from "./lib.ts";
+import {
+	createFeishuClient,
+	type ReceiveIdType,
+	sendImageFromPath,
+} from "./lib.ts";
 
 const receiveIdType = Bun.argv[2] as ReceiveIdType | undefined;
 const receiveId = Bun.argv[3];
