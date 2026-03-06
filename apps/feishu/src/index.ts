@@ -18,6 +18,7 @@ import { startScheduler } from "@n0n/core";
 import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
+import type { FeishuCommand } from "./commands.ts";
 import { handleCommand, parseCommand } from "./commands.ts";
 import { runFeishuRound } from "./round.ts";
 import {
@@ -50,7 +51,7 @@ export async function startFeishuService(): Promise<void> {
 	const dispatcher = new lark.EventDispatcher({
 		encryptKey,
 	}).register({
-		"im.message.receive_v1": async (data: any) => {
+		"im.message.receive_v1": async (data) => {
 			const ctx = FeishuBot.buildContext(data);
 			if (!ctx) return;
 			if (!shouldProcessMessage(ctx)) {
@@ -116,7 +117,7 @@ export async function startFeishuService(): Promise<void> {
 				});
 		},
 
-		"application.bot.menu_v6": async (data: any) => {
+		"application.bot.menu_v6": async (data) => {
 			const ctx = FeishuBot.buildContextForMenu(data);
 			if (!ctx) return;
 
@@ -127,7 +128,7 @@ export async function startFeishuService(): Promise<void> {
 				`[feishu] menu event: ${data?.event_key} (sessionKey=${sessionKey})`,
 			);
 			await handleCommand(
-				{ type: data?.event_key },
+				{ type: data?.event_key } as FeishuCommand,
 				bot,
 				sessionKey,
 				session,
@@ -135,7 +136,7 @@ export async function startFeishuService(): Promise<void> {
 			);
 		},
 
-		"card.action.trigger": async (data: any) => {
+		"card.action.trigger": async (data: Record<string, unknown>) => {
 			console.log("[feishu] card action event received");
 			await handleCardAction(bot, data);
 		},
