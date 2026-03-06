@@ -18,10 +18,13 @@ exec({ command: "bun start run workflows/tasks/greet.ts", cwd: ".", timeout: 30 
 
 ## write
 
-Create or edit a file. Full-write (empty `search`) or search-replace.
+Create or edit a file. Two modes:
+- **Full write**: omit `search`, put entire file content in `replace`
+- **Search-replace**: provide `search` text and `replace` text
 
 ```
-write({ path: "workflows/tasks/greet.ts", content: "...", search: "", replace: "" })
+write({ path: "workflows/tasks/greet.ts", replace: "/** full file content here */\nexport default async function run() { ... }" })
+write({ path: "workflows/tasks/greet.ts", search: "old code", replace: "new code" })
 ```
 
 ## reminder
