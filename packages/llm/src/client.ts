@@ -16,6 +16,13 @@ export class LLMError extends Error {
 	}
 }
 
+/** 轻量结构校验 — 确保外部 API 返回的 JSON 符合 LLMResponse 基本结构 */
+function isLLMResponse(data: unknown): data is LLMResponse {
+	if (typeof data !== "object" || data === null) return false;
+	const obj = data as Record<string, unknown>;
+	return Array.isArray(obj.choices);
+}
+
 /**
  * 发送 chat completion 请求
  * 包含退避重试逻辑（429/5xx）
@@ -72,7 +79,15 @@ export async function chatCompletion(
 				throw new LLMError(`LLM API ${res.status}: ${text}`, res.status, text);
 			}
 
-			return (await res.json()) as LLMResponse;
+			const json: unknown = await res.json();
+			if (!isLLMResponse(json)) {
+				throw new LLMError(
+					`LLM API returned unexpected structure: ${JSON.stringify(json).slice(0, 200)}`,
+					res.status,
+					json,
+				);
+			}
+			return json;
 		} catch (err) {
 			if (err instanceof LLMError) throw err;
 			lastError = err instanceof Error ? err : new Error(String(err));
