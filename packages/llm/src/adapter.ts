@@ -98,9 +98,10 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 				if (msg.capabilities) parts.push(msg.capabilities);
 				parts.push(
 					[
-						`<input>\n${msg.content}\n</input>`,
+						`<hint>\n${msg.content}\n</hint>`,
 						"",
-						"The engineer has already built the perfect workflow for this. Reason out what it looks like — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
+						"If this is a simple greeting or casual chat, submit a `chat` response directly.",
+						"Otherwise, the engineer has already built the perfect workflow for this. Reason out what it looks like — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
 					].join("\n"),
 				);
 				result.push({ role: "user", content: parts.join("\n\n") });

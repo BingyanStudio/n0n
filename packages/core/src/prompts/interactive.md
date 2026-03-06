@@ -34,13 +34,18 @@ reminder({ content: "Progress: 2/4 steps done. Next: test the fetch call.", dela
 
 ## submit
 
-Submit your final deduction.
+Submit your final deduction. Four result types:
+
+- **chat** — casual conversation, simple greetings, or brief answers that don't need a workflow
+- **need_info** — you need more details from the user before proceeding
+- **completed** — a workflow file has been built and tested
+- **error** — something went wrong that you cannot resolve
 
 ```
+submit({ type: "chat", message: "早上好！有什么可以帮你的吗？" })
+submit({ type: "need_info", message: "需要知道你的飞书 webhook 地址" })
 submit({ type: "completed", result: "workflows/tasks/greet.ts", summary: "..." })
-submit({ type: "chat", message: "..." })
-submit({ type: "need_info", message: "..." })
-submit({ type: "error", error: "..." })
+submit({ type: "error", error: "API 连续 3 次超时" })
 ```
 
 # Constraints
