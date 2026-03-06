@@ -7,7 +7,13 @@ import {
 	type PendingReminder,
 	REGISTERED_TOOLS,
 } from "@n0n/tools";
-import type { LLMToolCall, ToolCallRecord, ToolStreamEvent } from "@n0n/types";
+import type {
+	LLMToolCall,
+	ToolArgErrorMessage,
+	ToolCallRecord,
+	ToolStreamEvent,
+} from "@n0n/types";
+import { ZodError } from "zod";
 
 // ── 解析 ──
 
@@ -58,9 +64,30 @@ export async function* executeToolStream(
 		return;
 	}
 
-	if (entry.stream) {
-		yield* entry.execute(tc, reminders, confirmFn);
-	} else {
-		yield await entry.execute(tc, reminders, confirmFn);
+	try {
+		if (entry.stream) {
+			yield* entry.execute(tc, reminders, confirmFn);
+		} else {
+			yield await entry.execute(tc, reminders, confirmFn);
+		}
+	} catch (err) {
+		if (err instanceof ZodError) {
+			const argError: ToolArgErrorMessage = {
+				type: "tool_arg_error",
+				callId: tc.id,
+				tool: tc.tool,
+				error: err.issues
+					.map((i) => `${i.path.join(".")}: ${i.message}`)
+					.join("; "),
+				schema:
+					(entry.definition.function.parameters as unknown as Record<
+						string,
+						unknown
+					>) ?? {},
+			};
+			yield argError;
+			return;
+		}
+		throw err;
 	}
 }
