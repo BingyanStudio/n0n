@@ -38,6 +38,8 @@ export const paths = {
 	consultResult: process.env.CONSULT_RESULT_DIR ?? "workflows/consult-result",
 	/** 历史记录目录 */
 	history: process.env.HISTORY_DIR ?? "workflows/history",
+	/** 临时文件目录（exec 临时脚本等，进程退出时清理） */
+	temp: process.env.TEMP_DIR ?? ".temp",
 } as const;
 
 export const config = {
@@ -65,6 +67,7 @@ export function initConfig(): void {
 	initToolsConfig({
 		security: config.security,
 		agent: config.agent,
+		tempDir: paths.temp,
 	});
 }
 
