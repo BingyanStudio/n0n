@@ -1,296 +1,210 @@
+/**
+ * FeishuRenderer — 飞书流式渲染器
+ *
+ * 将 agentLoop 事件映射为按轮次分块的过程卡片。
+ * 每个 round 内部按因果顺序排列：
+ *   thinking → content → tool calls → tool results
+ *
+ * 流式 token 通过节流刷新到 activity 区域，
+ * 完成后归档为轮次内的日志行。
+ */
+
 import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
-import type {
-	FeishuBot,
-	FeishuMessageContext,
-	FeishuPostElement,
-} from "./bot.ts";
+import type { FeishuConversation } from "./conversation.ts";
 
-const MAX_AGENT_LOG_LINES = 80;
-const MAX_TOOL_ENTRIES = 40;
-const MAX_INLINE_LEN = 1000;
+const THROTTLE_MS = 1500;
+const SHORT = 160;
+const LONG = 600;
 
-export interface FeishuConversationMessageRefs {
-	roundMessageId: string;
-	toolsMessageId: string;
-	agentLogMessageId: string;
+// ── 工具函数 ──
+
+function compact(text: string, limit = SHORT): string {
+	const s = text.replace(/\s+/g, " ").trim();
+	if (!s) return "(empty)";
+	return s.length > limit ? `${s.slice(0, limit)}…` : s;
 }
 
-export class FeishuConversationMessages {
-	private queue: Promise<void> = Promise.resolve();
-	private agentLogLines: string[] = [];
-	private toolEntries: string[] = [];
-	private summaryText = "📌 总结\n处理中...";
-	private readonly refs: FeishuConversationMessageRefs;
-	private readonly ctx: FeishuMessageContext;
-
-	private constructor(
-		private readonly bot: FeishuBot,
-		refs: FeishuConversationMessageRefs,
-		ctx: FeishuMessageContext,
-	) {
-		this.refs = refs;
-		this.ctx = ctx;
-	}
-
-	static async create(
-		bot: FeishuBot,
-		ctx: FeishuMessageContext,
-	): Promise<FeishuConversationMessages> {
-		const roundMessageId = await bot.createTextMessage(
-			ctx,
-			"🤖 round 0/0 (初始化中...)",
-			"Agent 工作状态",
-		);
-		const toolsMessageId = await bot.createPostMessage(ctx, {
-			title: "🔧 调用工具详情",
-			lines: [[{ tag: "text", text: "等待工具调用...", un_escape: true }]],
-		});
-		const agentLogMessageId = await bot.createCollapsibleLogMessage(
-			ctx,
-			"🧾 agent 输出日志",
-			"日志详情",
-			"(等待输出)",
-		);
-
-		return new FeishuConversationMessages(
-			bot,
-			{
-				roundMessageId,
-				toolsMessageId,
-				agentLogMessageId,
-			},
-			ctx,
-		);
-	}
-
-	drain(): Promise<void> {
-		return this.queue;
-	}
-
-	updateRound(text: string): void {
-		this.enqueue(async () => {
-			await this.bot.editTextMessage(this.refs.roundMessageId, text);
-		});
-	}
-
-	appendAgentLog(line: string): void {
-		const cleaned = line.trim();
-		if (!cleaned) return;
-		this.agentLogLines.push(cleaned);
-		if (this.agentLogLines.length > MAX_AGENT_LOG_LINES) {
-			this.agentLogLines = this.agentLogLines.slice(-MAX_AGENT_LOG_LINES);
-		}
-		this.enqueue(async () => {
-			const body = this.agentLogLines.map((entry) => `- ${entry}`).join("\n\n");
-			await this.bot.editCollapsibleLogMessage(
-				this.refs.agentLogMessageId,
-				"🧾 agent 输出日志",
-				"日志详情",
-				body || "(等待输出)",
-			);
-		});
-	}
-
-	appendToolEntry(entry: string): void {
-		const cleaned = entry.trim();
-		if (!cleaned) return;
-		this.toolEntries.push(cleaned);
-		if (this.toolEntries.length > MAX_TOOL_ENTRIES) {
-			this.toolEntries = this.toolEntries.slice(-MAX_TOOL_ENTRIES);
-		}
-		this.enqueue(async () => {
-			await this.bot.editPostMessage(this.refs.toolsMessageId, {
-				title: "🔧 调用工具详情",
-				lines: this.toToolPostLines(),
-			});
-		});
-	}
-
-	setSummary(text: string): void {
-		this.summaryText = text;
-		this.enqueue(async () => {
-			const summaryMessageId = await this.bot.createTextMessage(
-				this.ctx,
-				"处理中...",
-				"📌 总结",
-			);
-			await this.bot.editTextMessage(
-				summaryMessageId,
-				this.summaryText,
-				"📌 总结",
-			);
-		});
-	}
-
-	private toToolPostLines(): FeishuPostElement[][] {
-		if (this.toolEntries.length === 0) {
-			return [[{ tag: "text", text: "等待工具调用...", un_escape: true }]];
-		}
-		return this.toolEntries.map((entry) => [
-			{ tag: "text", text: entry, un_escape: true },
-		]);
-	}
-
-	private enqueue(task: () => Promise<void>): void {
-		this.queue = this.queue.then(task).catch((err) => {
-			console.error("[feishu] message update failed:", err);
-		});
-	}
-}
-
-interface ActiveToolCall {
-	id: string;
-	tool: string;
-	argsText: string;
-	outputBuffer: string;
-}
-
-export class FeishuRenderer implements Renderer {
-	private thinkingBuffer = "";
-	private contentBuffer = "";
-	private readonly flushThreshold = 800;
-	private activeToolCall: ActiveToolCall | null = null;
-
-	constructor(private readonly conversation: FeishuConversationMessages) {}
-
-	async drain(): Promise<void> {
-		await this.conversation.drain();
-	}
-
-	userMessage(content: string): void {
-		this.conversation.appendAgentLog(`用户输入：${inlineCode(content)}`);
-	}
-
-	roundStart(round: number, maxRounds: number, msgCount: number): void {
-		this.conversation.updateRound(
-			`🤖 round ${round}/${maxRounds} (${msgCount} msgs)`,
-		);
-	}
-
-	thinkingToken(token: string): void {
-		this.thinkingBuffer += token;
-		if (this.thinkingBuffer.length >= this.flushThreshold) {
-			this.flushThinking();
-		}
-	}
-
-	contentToken(token: string): void {
-		this.contentBuffer += token;
-		if (this.contentBuffer.length >= this.flushThreshold) {
-			this.flushContent();
-		}
-	}
-
-	contentEnd(): void {
-		this.flushThinking();
-		this.flushContent();
-	}
-
-	textResponse(content: string, idleCount: number): void {
-		if (content) {
-			this.conversation.appendAgentLog(`助手回复：${inlineCode(content)}`);
-		}
-		this.conversation.appendAgentLog(`idle=${idleCount}`);
-	}
-
-	toolCallStart(tc: ToolCallRecord): void {
-		const argsText = safeStringify(tc.args);
-		this.activeToolCall = {
-			id: tc.id,
-			tool: tc.tool,
-			argsText,
-			outputBuffer: "",
-		};
-		this.conversation.appendToolEntry(
-			`🟡 ${tc.tool} input: ${inlineCode(argsText)}`,
-		);
-	}
-
-	toolCallArgChunk(
-		_index: number,
-		_name: string | undefined,
-		_chunk: string,
-	): void {}
-
-	toolResultChunk(_tool: string, chunk: string): void {
-		if (!this.activeToolCall) return;
-		this.activeToolCall.outputBuffer += chunk;
-	}
-
-	toolCallEnd(result: ToolResult): void {
-		const output = this.activeToolCall?.outputBuffer ?? "";
-		const summary = summarizeToolResult(result);
-		const outputPart = output.trim()
-			? ` output: ${inlineCode(output, MAX_INLINE_LEN)}`
-			: "";
-		this.conversation.appendToolEntry(
-			`🟢 ${result.tool} ${summary}${outputPart}`,
-		);
-		this.activeToolCall = null;
-	}
-
-	submitAccepted(): void {
-		this.conversation.appendAgentLog("submit accepted");
-	}
-
-	submitRejected(attempt: number, maxAttempts: number, error: string): void {
-		this.conversation.appendAgentLog(
-			`submit rejected (${attempt}/${maxAttempts}): ${inlineCode(error)}`,
-		);
-	}
-
-	agentTerminated(reason: string): void {
-		this.conversation.appendAgentLog(`agent terminated: ${inlineCode(reason)}`);
-	}
-
-	private flushThinking(): void {
-		if (!this.thinkingBuffer.trim()) return;
-		this.conversation.appendAgentLog(
-			`thinking: ${inlineCode(this.thinkingBuffer, MAX_INLINE_LEN)}`,
-		);
-		this.thinkingBuffer = "";
-	}
-
-	private flushContent(): void {
-		if (!this.contentBuffer.trim()) return;
-		this.conversation.appendAgentLog(
-			`content: ${inlineCode(this.contentBuffer, MAX_INLINE_LEN)}`,
-		);
-		this.contentBuffer = "";
-	}
-}
-
-function inlineCode(text: string, limit = 280): string {
-	const compact = text.replace(/\s+/g, " ").trim();
-	if (!compact) return "`(empty)`";
-	const clipped =
-		compact.length > limit
-			? `${compact.slice(0, limit)}...(truncated)`
-			: compact;
-	return `\`${escapeBackticks(clipped)}\``;
-}
-
-function escapeBackticks(input: string): string {
-	return input.replaceAll("`", "\\`");
-}
-
-function safeStringify(value: unknown): string {
+function json(value: unknown): string {
 	try {
-		return JSON.stringify(value, null, 2);
+		return JSON.stringify(value);
 	} catch {
 		return String(value);
 	}
 }
 
-function summarizeToolResult(result: ToolResult): string {
-	switch (result.tool) {
+function fmtArgs(args: Record<string, unknown>): string {
+	return Object.entries(args)
+		.map(([k, v]) => {
+			const val = typeof v === "string" ? v : json(v);
+			return `${k}=${compact(val, 60)}`;
+		})
+		.join(", ");
+}
+
+function fmtResult(r: ToolResult): string {
+	switch (r.tool) {
 		case "exec":
-			return `exit=${result.exitCode}, duration=${(result.durationMs / 1000).toFixed(1)}s`;
+			return `exit=${r.exitCode}  ${(r.durationMs / 1000).toFixed(1)}s`;
 		case "write":
-			return `path=${result.path}, replaced=${result.replacedCount}, success=${result.success}`;
+			return r.success
+				? `${r.path} (${r.replacedCount}× replaced)`
+				: `${r.path}: ${r.error ?? "failed"}`;
 		case "reminder":
-			return `delay=${result.delay}, acknowledged=${result.acknowledged}`;
+			return `delay=${r.delay}`;
 		case "submit":
-			return `result=${inlineCode(safeStringify(result.result), 240)}`;
+			return compact(json(r.result), 120);
+	}
+}
+
+// ── 渲染器 ──
+
+export class FeishuRenderer implements Renderer {
+	private thinkBuf = "";
+	private contentBuf = "";
+	private toolOutBuf = "";
+	private curTool = "";
+	private lastFlush = 0;
+	private timer: ReturnType<typeof setTimeout> | null = null;
+
+	constructor(private readonly conv: FeishuConversation) {}
+
+	async drain(): Promise<void> {
+		this.stopTimer();
+		this.flushBuffers();
+		await this.conv.drain();
+	}
+
+	userMessage(_content: string): void {
+		// 用户消息不单独显示，已在 round title 中体现
+	}
+
+	roundStart(round: number, maxRounds: number, msgCount: number): void {
+		this.conv.setTitle(`n0n · round ${round}/${maxRounds}`);
+		this.conv.startRound(`Round ${round}  ·  ${msgCount} msgs`);
+	}
+
+	thinkingToken(token: string): void {
+		this.thinkBuf += token;
+		this.scheduleFlush();
+	}
+
+	contentToken(token: string): void {
+		// thinking → content: 归档 thinking
+		if (this.thinkBuf) {
+			this.conv.appendLine({
+				prefix: "│",
+				text: `thinking: ${compact(this.thinkBuf, LONG)}`,
+			});
+			this.thinkBuf = "";
+		}
+		this.contentBuf += token;
+		this.scheduleFlush();
+	}
+
+	contentEnd(): void {
+		this.stopTimer();
+		if (this.thinkBuf) {
+			this.conv.appendLine({
+				prefix: "│",
+				text: `thinking: ${compact(this.thinkBuf, LONG)}`,
+			});
+			this.thinkBuf = "";
+		}
+		if (this.contentBuf.trim()) {
+			this.conv.appendLine({
+				prefix: "·",
+				text: compact(this.contentBuf, LONG),
+			});
+			this.contentBuf = "";
+		}
+		this.conv.setActivity("");
+	}
+
+	textResponse(content: string, idleCount: number): void {
+		if (content) {
+			this.conv.appendLine({
+				prefix: "·",
+				text: compact(content),
+			});
+		}
+		if (idleCount > 0) {
+			this.conv.appendLine({ prefix: "│", text: `idle=${idleCount}` });
+		}
+	}
+
+	toolCallStart(tc: ToolCallRecord): void {
+		this.curTool = tc.tool;
+		this.toolOutBuf = "";
+		this.conv.appendLine({
+			prefix: "▸",
+			text: `**${tc.tool}**  ${fmtArgs(tc.args)}`,
+		});
+	}
+
+	toolCallArgChunk(): void {}
+
+	toolResultChunk(_tool: string, chunk: string): void {
+		this.toolOutBuf += chunk;
+		this.scheduleFlush();
+	}
+
+	toolCallEnd(result: ToolResult): void {
+		this.stopTimer();
+		const summary = fmtResult(result);
+		const isErr = result.tool === "exec" && result.exitCode !== 0;
+		this.conv.appendLine({
+			prefix: isErr ? "✗" : "◂",
+			text: `**${result.tool}** → ${summary}`,
+		});
+		this.conv.setActivity("");
+		this.toolOutBuf = "";
+		this.curTool = "";
+	}
+
+	submitAccepted(): void {
+		this.conv.appendLine({ prefix: "✔", text: "submit accepted" });
+	}
+
+	submitRejected(attempt: number, maxAttempts: number, error: string): void {
+		this.conv.appendLine({
+			prefix: "✗",
+			text: `submit rejected (${attempt}/${maxAttempts}): ${compact(error)}`,
+		});
+	}
+
+	agentTerminated(reason: string): void {
+		this.conv.appendLine({ prefix: "✗", text: compact(reason) });
+	}
+
+	// ── 节流 ──
+
+	private scheduleFlush(): void {
+		if (this.timer) return;
+		const elapsed = Date.now() - this.lastFlush;
+		const delay = Math.max(0, THROTTLE_MS - elapsed);
+		this.timer = setTimeout(() => {
+			this.timer = null;
+			this.flushBuffers();
+		}, delay);
+	}
+
+	private stopTimer(): void {
+		if (this.timer) {
+			clearTimeout(this.timer);
+			this.timer = null;
+		}
+	}
+
+	private flushBuffers(): void {
+		this.lastFlush = Date.now();
+		if (this.thinkBuf) {
+			this.conv.setActivity(`│ thinking…\n│ ${compact(this.thinkBuf, 200)}`);
+		} else if (this.contentBuf) {
+			this.conv.setActivity(compact(this.contentBuf, 200));
+		} else if (this.toolOutBuf) {
+			this.conv.setActivity(
+				`│ ${this.curTool}…\n│ ${compact(this.toolOutBuf, 200)}`,
+			);
+		}
 	}
 }
