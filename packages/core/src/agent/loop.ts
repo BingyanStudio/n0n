@@ -201,8 +201,7 @@ export async function agentLoop<T = unknown>(
 				if (validation.ok) {
 					renderer.submitAccepted();
 					return {
-						// zod schema.safeParse 已校验，value 符合 T 类型
-						result: validation.value as T,
+						result: validation.value,
 						report: result.report,
 						history: messages,
 					};
@@ -245,15 +244,13 @@ export async function agentLoop<T = unknown>(
 
 // ── 辅助函数 ──
 
-function validateSubmit(
+function validateSubmit<T>(
 	raw: unknown,
-	schema?: ZodType,
-): { ok: true; value: unknown } | { ok: false; error: string } {
+	schema?: ZodType<T>,
+): { ok: true; value: T } | { ok: false; error: string } {
 	if (!schema) {
-		return {
-			ok: true,
-			value: typeof raw === "string" ? raw : JSON.stringify(raw),
-		};
+		const value = (typeof raw === "string" ? raw : JSON.stringify(raw)) as T;
+		return { ok: true, value };
 	}
 
 	let parsed: unknown = raw;
@@ -267,8 +264,6 @@ function validateSubmit(
 
 	const result = schema.safeParse(parsed);
 	if (result.success) {
-		// schema.safeParse 成功后 result.data 已经是 T 类型，
-		// 但 ZodType 的泛型在此处被擦除，所以返回 unknown 由调用方断言
 		return { ok: true, value: result.data };
 	}
 
