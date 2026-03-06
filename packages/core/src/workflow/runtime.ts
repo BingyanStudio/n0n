@@ -8,6 +8,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
+import { paths } from "../config.ts";
 
 export interface WorkflowMeta {
 	name: string;
@@ -19,7 +20,7 @@ export interface WorkflowMeta {
  * 发现所有 workflow（扫描 workflows/ 目录）
  */
 export async function discoverWorkflows(
-	baseDir = "workflows",
+	baseDir = paths.workflows,
 	includeSkills = false,
 ): Promise<WorkflowMeta[]> {
 	const results: WorkflowMeta[] = [];

@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { Glob } from "bun";
 import { chatCompletion } from "@n0n/llm";
+import { paths } from "../config.ts";
 import type { LLMRequestMessage } from "@n0n/types";
 
 export type SearchSpace = "all" | "memory" | "skill" | "history";
@@ -28,15 +29,10 @@ interface Candidate {
 }
 
 const SPACE_DIRS: Record<SearchSpace, string[]> = {
-	skill: ["workflows/skills"],
-	memory: ["workflows/memory", "workflows/consult-result"],
-	history: ["workflows/history"],
-	all: [
-		"workflows/skills",
-		"workflows/memory",
-		"workflows/consult-result",
-		"workflows/history",
-	],
+	skill: [paths.skills],
+	memory: [paths.memory, paths.consultResult],
+	history: [paths.history],
+	all: [paths.skills, paths.memory, paths.consultResult, paths.history],
 };
 
 const SUMMARY_MAX_CHARS = 600;

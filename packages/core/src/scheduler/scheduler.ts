@@ -9,7 +9,9 @@ import { delegateTask } from "../task/delegate.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
 
-const SCHEDULES_DIR = "workflows/schedules";
+import { paths } from "../config.ts";
+
+const SCHEDULES_DIR = paths.schedules;
 
 export interface ScheduleEntry {
 	name: string;

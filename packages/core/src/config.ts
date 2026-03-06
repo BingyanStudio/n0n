@@ -20,6 +20,24 @@ function parseBlockedCommands(): string[] {
 		.filter((c) => c.length > 0);
 }
 
+/**
+ * 工作流相关路径 — 统一管理，避免硬编码散布在各模块中
+ */
+export const paths = {
+	/** 工作流根目录 */
+	workflows: process.env.WORKFLOWS_DIR ?? "workflows",
+	/** Agent Skills 目录 */
+	skills: process.env.SKILLS_DIR ?? "workflows/skills",
+	/** 定时任务配置目录 */
+	schedules: process.env.SCHEDULES_DIR ?? "workflows/schedules",
+	/** 记忆/知识库目录 */
+	memory: process.env.MEMORY_DIR ?? "workflows/memory",
+	/** 咨询结果缓存目录 */
+	consultResult: "workflows/consult-result",
+	/** 历史记录目录 */
+	history: "workflows/history",
+} as const;
+
 export const config = {
 	llm: {
 		baseUrl: requireEnv("LLM_BASE_URL"),

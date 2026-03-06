@@ -46,7 +46,9 @@ export interface SkillContent extends SkillMeta {
 	scripts: string[];
 }
 
-const SKILLS_DIR = "workflows/skills";
+import { paths } from "../config.ts";
+
+const SKILLS_DIR = paths.skills;
 
 /**
  * 发现所有 skill：扫描 SKILL.md，只解析 frontmatter（轻量）

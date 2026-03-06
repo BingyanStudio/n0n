@@ -10,6 +10,9 @@
 // 确保配置在任何 API 调用前初始化
 import "./config.ts";
 
+// 路径配置
+export { paths } from "./config.ts";
+
 // Agent Loop
 export type { AgentOptions, AgentResult } from "./agent/loop.ts";
 export { agentLoop } from "./agent/loop.ts";
