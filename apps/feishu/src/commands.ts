@@ -35,6 +35,22 @@ export type FeishuCommand =
 	| { type: "workflows_run"; name: string; argsRaw: string | null }
 	| { type: "workflows_show"; name: string };
 
+/** 菜单事件允许的简单命令类型（无额外参数的命令） */
+type SimpleCommandType = "help" | "exit" | "reset" | "id" | "crons_list" | "workflows_list";
+
+const MENU_COMMAND_TYPES: ReadonlySet<string> = new Set<SimpleCommandType>([
+	"help", "exit", "reset", "id", "crons_list", "workflows_list",
+]);
+
+/**
+ * 解析飞书菜单事件的 event_key 为命令（运行时校验，不使用 as 断言）
+ */
+export function parseMenuCommand(eventKey: string | undefined): FeishuCommand | null {
+	if (!eventKey || !MENU_COMMAND_TYPES.has(eventKey)) return null;
+	// 运行时已校验 eventKey 在合法集合中，此处断言是安全的类型收窄
+	return { type: eventKey as SimpleCommandType };
+}
+
 // ── 解析 ──
 
 export function parseCommand(text: string): FeishuCommand | null {

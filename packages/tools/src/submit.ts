@@ -3,13 +3,17 @@
  */
 
 import type { LLMToolDefinition, SubmitToolResult } from "@n0n/types";
+import { z } from "zod";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 
-interface SubmitArgs {
-	result: unknown;
-	report?: string;
-}
+/** submit 工具参数 schema — 运行时校验 LLM 传入的参数 */
+export const SubmitArgsSchema = z.object({
+	result: z.unknown(),
+	report: z.string().optional(),
+});
+
+export type SubmitArgs = z.infer<typeof SubmitArgsSchema>;
 
 const DEFAULT_DESCRIPTION =
 	"Submit your final result. Use { type: 'completed', result: '...' } for success, or { type: 'error', error: 'what went wrong and what you need' }. The caller will review and may provide additional info.";

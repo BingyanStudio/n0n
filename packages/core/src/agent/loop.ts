@@ -122,8 +122,8 @@ export async function agentLoop<T = unknown>(
 			if (idleCount >= config.agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
-					result: content as T,
-					report: "Agent terminated: max idle rounds exceeded (no tool calls)",
+					result: null,
+					report: `Agent terminated: max idle rounds exceeded (no tool calls). Last content: ${content.slice(0, 200)}`,
 					history: messages,
 				};
 			}
@@ -149,8 +149,8 @@ export async function agentLoop<T = unknown>(
 			if (idleCount >= config.agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
-					result: content as T,
-					report: "Agent terminated: max idle rounds exceeded (no tool calls)",
+					result: null,
+					report: `Agent terminated: max idle rounds exceeded (no tool calls). Last content: ${content.slice(0, 200)}`,
 					history: messages,
 				};
 			}
@@ -201,6 +201,7 @@ export async function agentLoop<T = unknown>(
 				if (validation.ok) {
 					renderer.submitAccepted();
 					return {
+						// zod schema.safeParse 已校验，value 符合 T 类型
 						result: validation.value as T,
 						report: result.report,
 						history: messages,
@@ -214,7 +215,7 @@ export async function agentLoop<T = unknown>(
 						`giving up after ${submitRetries} attempts`,
 					);
 					return {
-						result: result.result as T,
+						result: null,
 						report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${validation.error}`,
 						history: messages,
 					};
@@ -266,6 +267,8 @@ function validateSubmit(
 
 	const result = schema.safeParse(parsed);
 	if (result.success) {
+		// schema.safeParse 成功后 result.data 已经是 T 类型，
+		// 但 ZodType 的泛型在此处被擦除，所以返回 unknown 由调用方断言
 		return { ok: true, value: result.data };
 	}
 
