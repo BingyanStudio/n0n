@@ -120,6 +120,14 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 				});
 				break;
 
+			case "tool_arg_error":
+				result.push({
+					role: "tool",
+					tool_call_id: msg.callId,
+					content: `Parameter error for tool "${msg.tool}": ${msg.error}\n\nCorrect schema:\n${JSON.stringify(msg.schema, null, 2)}`,
+				});
+				break;
+
 			case "submit:rejected":
 				result.push({
 					role: "user",

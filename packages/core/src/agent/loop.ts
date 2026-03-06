@@ -179,6 +179,7 @@ export async function agentLoop<T = unknown>(
 			}
 			renderer.toolCallStart(tc);
 			let result: ToolResult | undefined;
+			let argError = false;
 			for await (const event of executeToolStream(
 				tc,
 				reminders,
@@ -186,10 +187,14 @@ export async function agentLoop<T = unknown>(
 			)) {
 				if (event.type === "tool_output_chunk") {
 					renderer.toolResultChunk(event.tool, event.chunk);
+				} else if (event.type === "tool_arg_error") {
+					messages.push(event);
+					argError = true;
 				} else {
 					result = event;
 				}
 			}
+			if (argError) continue;
 			if (!result) {
 				throw new Error(`Tool ${tc.tool} stream ended without a result`);
 			}
