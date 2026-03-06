@@ -16,6 +16,6 @@
 		"indentStyle": "tab"
 	},
 	"files": {
-		"includes": ["src/**", "workflows/**"]
+		"includes": ["packages/*/src/**", "apps/*/src/**", "workflows/**"]
 	}
 }

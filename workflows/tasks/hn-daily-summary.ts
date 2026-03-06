@@ -5,7 +5,7 @@
  * 注册方式：bun run src/main.ts schedule add hn-daily "0 8 * * *" "每日HN热门摘要"
  */
 
-import { delegateTask } from "../../src/index.ts";
+import { delegateTask } from "@n0n/core";
 
 export default async function run() {
 	const result = await delegateTask(

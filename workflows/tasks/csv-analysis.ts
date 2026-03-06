@@ -5,7 +5,7 @@
  * 用法：CSV_PATH=data/sample.csv bun run src/main.ts run workflows/tasks/csv-analysis.ts
  */
 
-import { delegateTask } from "../../src/index.ts";
+import { delegateTask } from "@n0n/core";
 
 export default async function run() {
 	const csvPath = process.env.CSV_PATH ?? "data/sample.csv";

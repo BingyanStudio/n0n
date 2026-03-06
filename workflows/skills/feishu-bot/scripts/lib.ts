@@ -1,5 +1,5 @@
-import * as lark from "@larksuiteoapi/node-sdk";
 import { basename } from "node:path";
+import * as lark from "@larksuiteoapi/node-sdk";
 
 export type ReceiveIdType = "chat_id" | "open_id";
 
@@ -29,7 +29,10 @@ export function createFeishuClient(): FeishuClient {
 	if (!appId || !appSecret) {
 		throw new Error("Missing FEISHU_APP_ID or FEISHU_APP_SECRET");
 	}
-	const domain = process.env.FEISHU_DOMAIN === "lark" ? lark.Domain.Lark : lark.Domain.Feishu;
+	const domain =
+		process.env.FEISHU_DOMAIN === "lark"
+			? lark.Domain.Lark
+			: lark.Domain.Feishu;
 	return new lark.Client({
 		appId,
 		appSecret,
@@ -105,7 +108,9 @@ export async function uploadFileFromPath(
 ): Promise<string> {
 	const bytes = await Bun.file(filePath).arrayBuffer();
 	const finalName = fileName ?? basename(filePath);
-	const ext = finalName.includes(".") ? finalName.split(".").pop() ?? "stream" : "stream";
+	const ext = finalName.includes(".")
+		? (finalName.split(".").pop() ?? "stream")
+		: "stream";
 	const res = await client.im.file.create({
 		data: {
 			file_type: ext,
@@ -138,7 +143,11 @@ export async function sendFileFromPath(
 	client: FeishuClient,
 	payload: FilePathPayload,
 ): Promise<void> {
-	const fileKey = await uploadFileFromPath(client, payload.filePath, payload.fileName);
+	const fileKey = await uploadFileFromPath(
+		client,
+		payload.filePath,
+		payload.fileName,
+	);
 	await sendFile(client, {
 		receiveIdType: payload.receiveIdType,
 		receiveId: payload.receiveId,

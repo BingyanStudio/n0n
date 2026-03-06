@@ -1,0 +1,12 @@
+{
+	"name": "@n0n/llm",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"dependencies": {
+		"@n0n/types": "workspace:*"
+	}
+}
