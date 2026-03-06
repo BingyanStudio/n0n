@@ -12,9 +12,8 @@
  * - bot.ts — 飞书 API 客户端
  */
 
-import { fileURLToPath } from "node:url";
 import * as lark from "@larksuiteoapi/node-sdk";
-import { startScheduler } from "@n0n/core";
+import { INTERACTIVE_PROMPT_PATH, startScheduler } from "@n0n/core";
 import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
@@ -27,9 +26,7 @@ import {
 	shouldProcessMessage,
 } from "./session.ts";
 
-const PROMPT_PATH = fileURLToPath(
-	new URL("../../cli/src/prompts/interactive.md", import.meta.url),
-);
+const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
 
 function requireEnv(key: string): string {
 	const val = process.env[key];

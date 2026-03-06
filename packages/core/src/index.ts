@@ -13,6 +13,9 @@ import "./config.ts";
 // 路径配置
 export { paths } from "./config.ts";
 
+// Prompt 模板
+export { INTERACTIVE_PROMPT_PATH, DELEGATE_PROMPT_PATH } from "./prompts/paths.ts";
+
 // Agent Loop
 export type { AgentOptions, AgentResult } from "./agent/loop.ts";
 export { agentLoop } from "./agent/loop.ts";

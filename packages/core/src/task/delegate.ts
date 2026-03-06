@@ -15,7 +15,9 @@ import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
 
-const PROMPT_PATH = resolve(import.meta.dir, "prompts/delegate.md");
+import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
+
+const PROMPT_PATH = DELEGATE_PROMPT_PATH;
 
 export interface TaskResult<T = unknown> {
 	result: T | null;
