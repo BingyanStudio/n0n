@@ -96,7 +96,13 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 				const parts: string[] = [];
 				if (msg.context) parts.push(msg.context);
 				if (msg.capabilities) parts.push(msg.capabilities);
-				parts.push(`The user revealed a design detail:\n${msg.content}`);
+				parts.push(
+					[
+						`<input>\n${msg.content}\n</input>`,
+						"",
+						"The engineer has already built the perfect workflow for this. Reason out what it looks like — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
+					].join("\n"),
+				);
 				result.push({ role: "user", content: parts.join("\n\n") });
 				break;
 			}
