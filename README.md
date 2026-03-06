@@ -86,19 +86,41 @@ bun run apps/scheduler/src/index.ts
 
 ## 环境变量
 
-| 变量 | 必需 | 说明 |
+### LLM（必需）
+
+| 变量 | 必需 | 默认值 | 说明 |
+|---|---|---|---|
+| `LLM_BASE_URL` | ✅ | — | OpenAI 兼容 API 地址 |
+| `LLM_API_KEY` | ✅ | — | API 密钥 |
+| `LLM_MODEL` | ✅ | — | 模型标识，如 `deepseek/deepseek-v3.2` |
+| `LLM_ENABLE_THINKING` | | `false` | 设为 `true` 启用 DeepSeek extended thinking |
+
+### 飞书 Bot（仅 `apps/feishu` 需要）
+
+| 变量 | 必需 | 默认值 | 说明 |
+|---|---|---|---|
+| `FEISHU_APP_ID` | ✅ | — | 飞书应用 App ID |
+| `FEISHU_APP_SECRET` | ✅ | — | 飞书应用 App Secret |
+| `FEISHU_ENCRYPT_KEY` | | — | 事件订阅加密密钥 |
+| `FEISHU_DOMAIN` | | `feishu` | `feishu`（飞书）或 `lark`（海外） |
+
+### 安全
+
+| 变量 | 默认值 | 说明 |
 |---|---|---|
-| `LLM_BASE_URL` | ✅ | LLM API 地址 |
-| `LLM_API_KEY` | ✅ | API 密钥 |
-| `LLM_MODEL` | ✅ | 模型名称（如 `deepseek/deepseek-v3.2`） |
-| `LLM_ENABLE_THINKING` | | 设为 `true` 启用 DeepSeek thinking 模式 |
-| `BLOCKED_COMMANDS` | | 逗号分隔的禁止执行命令列表 |
-| `FEISHU_APP_ID` | 飞书 | 飞书应用 ID |
-| `FEISHU_APP_SECRET` | 飞书 | 飞书应用 Secret |
-| `FEISHU_ENCRYPT_KEY` | | 飞书事件加密密钥 |
-| `FEISHU_DOMAIN` | | `feishu`（默认）或 `lark` |
-| `WORKFLOWS_DIR` | | 工作流根目录（默认 `workflows`） |
-| `MEMORY_DIR` | | 记忆/知识库目录（默认 `workflows/memory`） |
+| `BLOCKED_COMMANDS` | — | 逗号分隔的禁止执行命令，如 `rm -rf,shutdown` |
+
+### 路径覆盖（均可选）
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `WORKFLOWS_DIR` | `workflows` | 工作流根目录 |
+| `TASKS_DIR` | `workflows/tasks` | 任务 workflow 目录 |
+| `SKILLS_DIR` | `workflows/skills` | 可复用 skill 目录 |
+| `SCHEDULES_DIR` | `workflows/schedules` | 定时任务 `.mdc` 配置目录 |
+| `MEMORY_DIR` | `workflows/memory` | 记忆 / 知识库目录 |
+| `CONSULT_RESULT_DIR` | `workflows/consult-result` | 咨询结果缓存目录 |
+| `HISTORY_DIR` | `workflows/history` | 历史记录目录 |
 
 ## 工作流程
 
