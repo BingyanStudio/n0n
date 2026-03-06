@@ -2,12 +2,12 @@
  * REPL — 交互式对话循环
  */
 
-import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 // PlainRenderer for non-TTY — import from core
 import {
 	agentLoop,
 	discoverWorkflows,
+	INTERACTIVE_PROMPT_PATH,
 	type InteractiveResult,
 	InteractiveResultSchema,
 	loadSchedules,
@@ -17,7 +17,7 @@ import type { DomainMessage } from "@n0n/types";
 import { isTTY, label, style, writeln } from "./ui/ansi.ts";
 import { RichRenderer } from "./ui/rich-renderer.ts";
 
-const PROMPT_PATH = resolve(import.meta.dir, "prompts/interactive.md");
+const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
 
 export async function startRepl(initialInput?: string): Promise<void> {
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
