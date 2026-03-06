@@ -1,0 +1,11 @@
+{
+	"name": "@n0n/feishu",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@n0n/core": "workspace:*",
+		"@n0n/types": "workspace:*",
+		"@larksuiteoapi/node-sdk": "^1.59.0"
+	}
+}

@@ -8,7 +8,11 @@
  * bun run workflows/skills/feishu-bot/scripts/send-file.ts open_id ou_xxx ./output/report.pdf report.pdf
  */
 
-import { createFeishuClient, type ReceiveIdType, sendFileFromPath } from "./lib.ts";
+import {
+	createFeishuClient,
+	type ReceiveIdType,
+	sendFileFromPath,
+} from "./lib.ts";
 
 const receiveIdType = Bun.argv[2] as ReceiveIdType | undefined;
 const receiveId = Bun.argv[3];

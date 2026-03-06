@@ -1,0 +1,15 @@
+{
+	"name": "@n0n/core",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"dependencies": {
+		"@n0n/types": "workspace:*",
+		"@n0n/llm": "workspace:*",
+		"@n0n/tools": "workspace:*",
+		"zod": "^4.3.6"
+	}
+}
