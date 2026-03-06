@@ -225,8 +225,10 @@ export async function agentLoop<T = unknown>(
 					validation.error,
 				);
 				messages.push({
-					type: "user_text",
-					content: `Your submission was rejected: ${validation.error}\nPlease fix the format and submit again. (attempt ${submitRetries}/${MAX_SUBMIT_RETRIES})`,
+					type: "submit:rejected",
+					error: validation.error,
+					attempt: submitRetries,
+					maxAttempts: MAX_SUBMIT_RETRIES,
 				});
 				break;
 			}
@@ -305,8 +307,8 @@ function injectReminders(
 
 	for (const r of due) {
 		messages.push({
-			type: "user_text",
-			content: `⏰ REMINDER: ${r.content}\n\n⚠️ You MUST set a new reminder (with updated progress) in your next tool call response.`,
+			type: "reminder:due",
+			content: r.content,
 		});
 	}
 }
