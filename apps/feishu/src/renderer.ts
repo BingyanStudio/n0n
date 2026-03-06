@@ -1,296 +1,215 @@
+/**
+ * FeishuRenderer — 飞书流式渲染器
+ *
+ * 实现 Renderer 接口，将 agentLoop 事件映射为飞书步骤流卡片更新。
+ * 模仿 CLI RichRenderer 的逐步显示效果：
+ * - 每个 round 显示为一个步骤
+ * - 工具调用显示为子步骤（带输入/输出摘要）
+ * - thinking/content 实时刷新到「当前活动」区域
+ * - 节流控制避免飞书 API 限流
+ */
+
 import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
-import type {
-	FeishuBot,
-	FeishuMessageContext,
-	FeishuPostElement,
-} from "./bot.ts";
+import type { FeishuConversation } from "./conversation.ts";
 
-const MAX_AGENT_LOG_LINES = 80;
-const MAX_TOOL_ENTRIES = 40;
-const MAX_INLINE_LEN = 1000;
+/** 刷新节流间隔（ms），避免飞书 API 限流 */
+const THROTTLE_MS = 1500;
 
-export interface FeishuConversationMessageRefs {
-	roundMessageId: string;
-	toolsMessageId: string;
-	agentLogMessageId: string;
+/** 内联文本截断长度 */
+const INLINE_LIMIT = 200;
+
+// ── 工具函数 ──
+
+function compact(text: string, limit = INLINE_LIMIT): string {
+	const s = text.replace(/\s+/g, " ").trim();
+	if (!s) return "(empty)";
+	return s.length > limit ? `${s.slice(0, limit)}...` : s;
 }
 
-export class FeishuConversationMessages {
-	private queue: Promise<void> = Promise.resolve();
-	private agentLogLines: string[] = [];
-	private toolEntries: string[] = [];
-	private summaryText = "📌 总结\n处理中...";
-	private readonly refs: FeishuConversationMessageRefs;
-	private readonly ctx: FeishuMessageContext;
-
-	private constructor(
-		private readonly bot: FeishuBot,
-		refs: FeishuConversationMessageRefs,
-		ctx: FeishuMessageContext,
-	) {
-		this.refs = refs;
-		this.ctx = ctx;
-	}
-
-	static async create(
-		bot: FeishuBot,
-		ctx: FeishuMessageContext,
-	): Promise<FeishuConversationMessages> {
-		const roundMessageId = await bot.createTextMessage(
-			ctx,
-			"🤖 round 0/0 (初始化中...)",
-			"Agent 工作状态",
-		);
-		const toolsMessageId = await bot.createPostMessage(ctx, {
-			title: "🔧 调用工具详情",
-			lines: [[{ tag: "text", text: "等待工具调用...", un_escape: true }]],
-		});
-		const agentLogMessageId = await bot.createCollapsibleLogMessage(
-			ctx,
-			"🧾 agent 输出日志",
-			"日志详情",
-			"(等待输出)",
-		);
-
-		return new FeishuConversationMessages(
-			bot,
-			{
-				roundMessageId,
-				toolsMessageId,
-				agentLogMessageId,
-			},
-			ctx,
-		);
-	}
-
-	drain(): Promise<void> {
-		return this.queue;
-	}
-
-	updateRound(text: string): void {
-		this.enqueue(async () => {
-			await this.bot.editTextMessage(this.refs.roundMessageId, text);
-		});
-	}
-
-	appendAgentLog(line: string): void {
-		const cleaned = line.trim();
-		if (!cleaned) return;
-		this.agentLogLines.push(cleaned);
-		if (this.agentLogLines.length > MAX_AGENT_LOG_LINES) {
-			this.agentLogLines = this.agentLogLines.slice(-MAX_AGENT_LOG_LINES);
-		}
-		this.enqueue(async () => {
-			const body = this.agentLogLines.map((entry) => `- ${entry}`).join("\n\n");
-			await this.bot.editCollapsibleLogMessage(
-				this.refs.agentLogMessageId,
-				"🧾 agent 输出日志",
-				"日志详情",
-				body || "(等待输出)",
-			);
-		});
-	}
-
-	appendToolEntry(entry: string): void {
-		const cleaned = entry.trim();
-		if (!cleaned) return;
-		this.toolEntries.push(cleaned);
-		if (this.toolEntries.length > MAX_TOOL_ENTRIES) {
-			this.toolEntries = this.toolEntries.slice(-MAX_TOOL_ENTRIES);
-		}
-		this.enqueue(async () => {
-			await this.bot.editPostMessage(this.refs.toolsMessageId, {
-				title: "🔧 调用工具详情",
-				lines: this.toToolPostLines(),
-			});
-		});
-	}
-
-	setSummary(text: string): void {
-		this.summaryText = text;
-		this.enqueue(async () => {
-			const summaryMessageId = await this.bot.createTextMessage(
-				this.ctx,
-				"处理中...",
-				"📌 总结",
-			);
-			await this.bot.editTextMessage(
-				summaryMessageId,
-				this.summaryText,
-				"📌 总结",
-			);
-		});
-	}
-
-	private toToolPostLines(): FeishuPostElement[][] {
-		if (this.toolEntries.length === 0) {
-			return [[{ tag: "text", text: "等待工具调用...", un_escape: true }]];
-		}
-		return this.toolEntries.map((entry) => [
-			{ tag: "text", text: entry, un_escape: true },
-		]);
-	}
-
-	private enqueue(task: () => Promise<void>): void {
-		this.queue = this.queue.then(task).catch((err) => {
-			console.error("[feishu] message update failed:", err);
-		});
+function safeStringify(value: unknown): string {
+	try {
+		return JSON.stringify(value);
+	} catch {
+		return String(value);
 	}
 }
 
-interface ActiveToolCall {
-	id: string;
-	tool: string;
-	argsText: string;
-	outputBuffer: string;
+function toolResultSummary(result: ToolResult): string {
+	switch (result.tool) {
+		case "exec":
+			return `exit=${result.exitCode}, ${(result.durationMs / 1000).toFixed(1)}s`;
+		case "write":
+			return result.success
+				? `${result.path} (replaced ${result.replacedCount}×)`
+				: `${result.path}: ${result.error ?? "failed"}`;
+		case "reminder":
+			return `delay=${result.delay}`;
+		case "submit":
+			return `result=${compact(safeStringify(result.result), 120)}`;
+	}
 }
+
+// ── 渲染器 ──
 
 export class FeishuRenderer implements Renderer {
-	private thinkingBuffer = "";
-	private contentBuffer = "";
-	private readonly flushThreshold = 800;
-	private activeToolCall: ActiveToolCall | null = null;
+	private thinkingBuf = "";
+	private contentBuf = "";
+	private lastFlush = 0;
+	private flushTimer: ReturnType<typeof setTimeout> | null = null;
+	private currentToolName = "";
+	private toolOutputBuf = "";
 
-	constructor(private readonly conversation: FeishuConversationMessages) {}
+	constructor(private readonly conv: FeishuConversation) {}
 
 	async drain(): Promise<void> {
-		await this.conversation.drain();
+		this.cancelFlushTimer();
+		this.flushBuffers();
+		await this.conv.drain();
 	}
 
 	userMessage(content: string): void {
-		this.conversation.appendAgentLog(`用户输入：${inlineCode(content)}`);
+		this.conv.addStep({
+			icon: "📝",
+			title: `用户: ${compact(content)}`,
+		});
 	}
 
 	roundStart(round: number, maxRounds: number, msgCount: number): void {
-		this.conversation.updateRound(
-			`🤖 round ${round}/${maxRounds} (${msgCount} msgs)`,
-		);
+		this.conv.setTitle(`🤖 Round ${round}/${maxRounds} (${msgCount} msgs)`);
+		this.conv.addStep({
+			icon: "⏳",
+			title: `Round ${round} — 思考中...`,
+		});
 	}
 
 	thinkingToken(token: string): void {
-		this.thinkingBuffer += token;
-		if (this.thinkingBuffer.length >= this.flushThreshold) {
-			this.flushThinking();
-		}
+		this.thinkingBuf += token;
+		this.scheduleFlush();
 	}
 
 	contentToken(token: string): void {
-		this.contentBuffer += token;
-		if (this.contentBuffer.length >= this.flushThreshold) {
-			this.flushContent();
+		// thinking → content 切换
+		if (this.thinkingBuf) {
+			this.conv.updateLastStep({
+				detail: this.thinkingBuf,
+			});
+			this.thinkingBuf = "";
 		}
+		this.contentBuf += token;
+		this.scheduleFlush();
 	}
 
 	contentEnd(): void {
-		this.flushThinking();
-		this.flushContent();
+		this.cancelFlushTimer();
+		this.flushBuffers();
+		this.conv.updateLastStep({
+			icon: "✅",
+			title: "思考完成",
+		});
 	}
 
 	textResponse(content: string, idleCount: number): void {
 		if (content) {
-			this.conversation.appendAgentLog(`助手回复：${inlineCode(content)}`);
+			this.conv.addStep({
+				icon: "💭",
+				title: `回复: ${compact(content)}`,
+				detail: content,
+			});
 		}
-		this.conversation.appendAgentLog(`idle=${idleCount}`);
+		if (idleCount > 0) {
+			this.conv.setActivity(`idle=${idleCount}`);
+		}
 	}
 
 	toolCallStart(tc: ToolCallRecord): void {
-		const argsText = safeStringify(tc.args);
-		this.activeToolCall = {
-			id: tc.id,
-			tool: tc.tool,
-			argsText,
-			outputBuffer: "",
-		};
-		this.conversation.appendToolEntry(
-			`🟡 ${tc.tool} input: ${inlineCode(argsText)}`,
-		);
+		this.currentToolName = tc.tool;
+		this.toolOutputBuf = "";
+		const argsText = compact(safeStringify(tc.args), 150);
+		this.conv.addStep({
+			icon: "🔧",
+			title: `${tc.tool}: ${argsText}`,
+		});
 	}
 
 	toolCallArgChunk(
 		_index: number,
 		_name: string | undefined,
 		_chunk: string,
-	): void {}
+	): void {
+		// 飞书卡片不支持逐字符流式，忽略参数 chunk
+	}
 
 	toolResultChunk(_tool: string, chunk: string): void {
-		if (!this.activeToolCall) return;
-		this.activeToolCall.outputBuffer += chunk;
+		this.toolOutputBuf += chunk;
+		this.scheduleFlush();
 	}
 
 	toolCallEnd(result: ToolResult): void {
-		const output = this.activeToolCall?.outputBuffer ?? "";
-		const summary = summarizeToolResult(result);
-		const outputPart = output.trim()
-			? ` output: ${inlineCode(output, MAX_INLINE_LEN)}`
-			: "";
-		this.conversation.appendToolEntry(
-			`🟢 ${result.tool} ${summary}${outputPart}`,
-		);
-		this.activeToolCall = null;
+		this.cancelFlushTimer();
+		const summary = toolResultSummary(result);
+		const isError = result.tool === "exec" && result.exitCode !== 0;
+		const detail = this.toolOutputBuf.trim()
+			? `**结果:** ${summary}\n\n\`\`\`\n${compact(this.toolOutputBuf, 600)}\n\`\`\``
+			: `**结果:** ${summary}`;
+
+		this.conv.updateLastStep({
+			icon: isError ? "❌" : "✅",
+			title: `${result.tool}: ${summary}`,
+			detail,
+		});
+		this.conv.setActivity("");
+		this.toolOutputBuf = "";
+		this.currentToolName = "";
 	}
 
 	submitAccepted(): void {
-		this.conversation.appendAgentLog("submit accepted");
+		this.conv.addStep({ icon: "✅", title: "Submit 已接受" });
 	}
 
 	submitRejected(attempt: number, maxAttempts: number, error: string): void {
-		this.conversation.appendAgentLog(
-			`submit rejected (${attempt}/${maxAttempts}): ${inlineCode(error)}`,
-		);
+		this.conv.addStep({
+			icon: "❌",
+			title: `Submit 被拒绝 (${attempt}/${maxAttempts})`,
+			detail: error,
+		});
 	}
 
 	agentTerminated(reason: string): void {
-		this.conversation.appendAgentLog(`agent terminated: ${inlineCode(reason)}`);
+		this.conv.addStep({
+			icon: "❌",
+			title: `Agent 终止: ${compact(reason)}`,
+		});
 	}
 
-	private flushThinking(): void {
-		if (!this.thinkingBuffer.trim()) return;
-		this.conversation.appendAgentLog(
-			`thinking: ${inlineCode(this.thinkingBuffer, MAX_INLINE_LEN)}`,
-		);
-		this.thinkingBuffer = "";
+	// ── 节流刷新 ──
+
+	private scheduleFlush(): void {
+		if (this.flushTimer) return;
+		const elapsed = Date.now() - this.lastFlush;
+		const delay = Math.max(0, THROTTLE_MS - elapsed);
+		this.flushTimer = setTimeout(() => {
+			this.flushTimer = null;
+			this.flushBuffers();
+		}, delay);
 	}
 
-	private flushContent(): void {
-		if (!this.contentBuffer.trim()) return;
-		this.conversation.appendAgentLog(
-			`content: ${inlineCode(this.contentBuffer, MAX_INLINE_LEN)}`,
-		);
-		this.contentBuffer = "";
+	private cancelFlushTimer(): void {
+		if (this.flushTimer) {
+			clearTimeout(this.flushTimer);
+			this.flushTimer = null;
+		}
 	}
-}
 
-function inlineCode(text: string, limit = 280): string {
-	const compact = text.replace(/\s+/g, " ").trim();
-	if (!compact) return "`(empty)`";
-	const clipped =
-		compact.length > limit
-			? `${compact.slice(0, limit)}...(truncated)`
-			: compact;
-	return `\`${escapeBackticks(clipped)}\``;
-}
-
-function escapeBackticks(input: string): string {
-	return input.replaceAll("`", "\\`");
-}
-
-function safeStringify(value: unknown): string {
-	try {
-		return JSON.stringify(value, null, 2);
-	} catch {
-		return String(value);
-	}
-}
-
-function summarizeToolResult(result: ToolResult): string {
-	switch (result.tool) {
-		case "exec":
-			return `exit=${result.exitCode}, duration=${(result.durationMs / 1000).toFixed(1)}s`;
-		case "write":
-			return `path=${result.path}, replaced=${result.replacedCount}, success=${result.success}`;
-		case "reminder":
-			return `delay=${result.delay}, acknowledged=${result.acknowledged}`;
-		case "submit":
-			return `result=${inlineCode(safeStringify(result.result), 240)}`;
+	private flushBuffers(): void {
+		this.lastFlush = Date.now();
+		if (this.thinkingBuf) {
+			this.conv.setActivity(`💭 思考中...\n${compact(this.thinkingBuf, 300)}`);
+		} else if (this.contentBuf) {
+			this.conv.setActivity(`📝 输出中...\n${compact(this.contentBuf, 300)}`);
+		} else if (this.toolOutputBuf) {
+			this.conv.setActivity(
+				`🔧 ${this.currentToolName} 执行中...\n${compact(this.toolOutputBuf, 300)}`,
+			);
+		}
 	}
 }
