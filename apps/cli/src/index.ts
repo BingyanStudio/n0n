@@ -5,18 +5,14 @@
  *   bun run apps/cli/src/index.ts                    交互式对话
  *   bun run apps/cli/src/index.ts run <workflow.ts>  运行已有 workflow
  *   bun run apps/cli/src/index.ts schedule ...       调度管理
- *   bun run apps/cli/src/index.ts scheduler start    启动调度器
- *   bun run apps/cli/src/index.ts feishu start       启动飞书服务
  *   bun run apps/cli/src/index.ts workflows          列出 workflow
+ *
+ * 其他服务独立启动：
+ *   bun run apps/feishu/src/index.ts                 飞书 Bot 服务
  */
 
 import { rmSync } from "node:fs";
-import {
-	discoverWorkflows,
-	loadSchedules,
-	runWorkflow,
-	startScheduler,
-} from "@n0n/core";
+import { discoverWorkflows, loadSchedules, runWorkflow } from "@n0n/core";
 import { startRepl } from "./repl.ts";
 import { style, writeln } from "./ui/ansi.ts";
 
@@ -70,31 +66,6 @@ async function main(): Promise<void> {
 			}
 			console.error(`Unknown schedule subcommand: ${sub}`);
 			process.exit(1);
-			return;
-		}
-
-		case "scheduler": {
-			if (args[1] === "start") {
-				await startScheduler();
-				return;
-			}
-			console.error("Usage: bun run apps/cli/src/index.ts scheduler start");
-			process.exit(1);
-			return;
-		}
-
-		case "feishu": {
-			// 动态导入 feishu app 以避免硬依赖
-			try {
-				const { startFeishuService } = await import(
-					"../../feishu/src/index.ts"
-				);
-				await startScheduler();
-				await startFeishuService();
-			} catch (err) {
-				console.error("Failed to start Feishu service:", err);
-				process.exit(1);
-			}
 			return;
 		}
 
