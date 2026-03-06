@@ -117,7 +117,10 @@ export interface ToolOutputChunk {
 }
 
 /** 工具流式执行产出：chunk 或最终结果 */
-export type ToolStreamEvent = ToolOutputChunk | ToolResult;
+export type ToolStreamEvent =
+	| ToolOutputChunk
+	| ToolResult
+	| ToolArgErrorMessage;
 
 // ── 空转提示 ──
 export interface IdleNudgeMessage {
@@ -131,6 +134,16 @@ export interface IdleNudgeMessage {
 export interface ReminderDueMessage {
 	type: "reminder:due";
 	content: string;
+}
+
+// ── 工具参数错误 ──
+/** 工具调用参数校验失败时注入的消息，包含错误详情和正确的工具 schema */
+export interface ToolArgErrorMessage {
+	type: "tool_arg_error";
+	callId: string;
+	tool: string;
+	error: string;
+	schema: Record<string, unknown>;
 }
 
 // ── 提交被拒 ──
@@ -154,4 +167,5 @@ export type DomainMessage =
 	| IdleNudgeMessage
 	| TurnFeedbackMessage
 	| ReminderDueMessage
-	| SubmitRejectedMessage;
+	| SubmitRejectedMessage
+	| ToolArgErrorMessage;
