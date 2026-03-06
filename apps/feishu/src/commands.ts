@@ -12,7 +12,13 @@ import {
 	setScheduleEnabled,
 } from "@n0n/core";
 import type { FeishuBot, FeishuMessageContext } from "./bot.ts";
-import { buildTextCard, chunkText } from "./cards/index.ts";
+import {
+	buildCronListCard,
+	buildTextCard,
+	buildWorkflowListCard,
+	type CronItem,
+	chunkText,
+} from "./cards/index.ts";
 import type { FeishuSession } from "./session.ts";
 import { resetSession } from "./session.ts";
 
@@ -119,15 +125,14 @@ export async function handleCommand(
 
 		case "crons_list": {
 			const schedules = await loadSchedules();
-			if (schedules.length === 0) {
-				await sendText(bot, ctx, "定时任务", "暂无定时任务。");
-				return;
-			}
-			const lines = schedules.map(
-				(s) =>
-					`${s.enabled ? "🟢" : "⚪"} **${s.name}** \`${s.cron}\` → ${s.workflow ?? "(delegate)"}`,
-			);
-			await sendText(bot, ctx, "定时任务列表", lines.join("\n"));
+			const crons: CronItem[] = schedules.map((s) => ({
+				name: s.name,
+				cron: s.cron,
+				workflow: s.workflow ?? null,
+				enabled: s.enabled,
+			}));
+			const card = buildCronListCard(crons);
+			await bot.createCardMessage(ctx, card);
 			return;
 		}
 
@@ -146,14 +151,13 @@ export async function handleCommand(
 
 		case "workflows_list": {
 			const workflows = await discoverWorkflows();
-			if (workflows.length === 0) {
-				await sendText(bot, ctx, "工作流", "暂无工作流。");
-				return;
-			}
-			const lines = workflows.map(
-				(w) => `📋 **${w.name}** — ${w.description || "(no description)"}`,
-			);
-			await sendText(bot, ctx, "工作流列表", lines.join("\n"));
+			const items = workflows.map((w) => ({
+				name: w.name,
+				description: w.description || "(no description)",
+				path: w.path,
+			}));
+			const card = buildWorkflowListCard(items);
+			await bot.createCardMessage(ctx, card);
 			return;
 		}
 

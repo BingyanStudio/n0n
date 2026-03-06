@@ -51,10 +51,49 @@ export interface CollapsiblePanelElement {
 	elements: MarkdownElement[];
 }
 
+// ── 交互元素 ──
+
+export interface ButtonElement {
+	tag: "button";
+	text: { tag: "plain_text"; content: string };
+	type?: "default" | "primary" | "danger" | "text";
+	size?: "medium" | "small" | "tiny";
+	width?: "default" | "fill" | string;
+	value?: Record<string, unknown>;
+	confirm?: {
+		title: { tag: "plain_text"; content: string };
+		text: { tag: "plain_text"; content: string };
+	};
+}
+
+export interface ActionElement {
+	tag: "action";
+	actions: ButtonElement[];
+	layout?: "bisected" | "trisection" | "flow";
+}
+
+export interface ColumnElement {
+	tag: "column";
+	width: "weighted" | "auto" | string;
+	weight?: number;
+	vertical_align?: "top" | "center" | "bottom";
+	elements: (MarkdownElement | ButtonElement | ActionElement)[];
+}
+
+export interface ColumnSetElement {
+	tag: "column_set";
+	flex_mode?: "none" | "stretch" | "flow" | "bisect";
+	background_style?: "default" | "grey";
+	horizontal_spacing?: "default" | "small";
+	columns: ColumnElement[];
+}
+
 export type CardBodyElement =
 	| MarkdownElement
 	| HrElement
-	| CollapsiblePanelElement;
+	| CollapsiblePanelElement
+	| ActionElement
+	| ColumnSetElement;
 
 // ── 卡片顶层结构 ──
 

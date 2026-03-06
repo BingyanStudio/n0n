@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import * as lark from "@larksuiteoapi/node-sdk";
 import { startScheduler } from "@n0n/core";
 import { FeishuBot } from "./bot.ts";
+import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
 import { handleCommand, parseCommand } from "./commands.ts";
 import { runFeishuRound } from "./round.ts";
@@ -132,6 +133,11 @@ export async function startFeishuService(): Promise<void> {
 				session,
 				systemPrompt,
 			);
+		},
+
+		"card.action.trigger": async (data: any) => {
+			console.log("[feishu] card action event received");
+			await handleCardAction(bot, data);
 		},
 	});
 

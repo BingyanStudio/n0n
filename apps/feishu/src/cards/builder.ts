@@ -20,9 +20,11 @@
  */
 
 import type {
+	ButtonElement,
 	CardBodyElement,
 	CardHeaderTemplate,
 	CollapsiblePanelElement,
+	ColumnSetElement,
 	FeishuCardContent,
 	MarkdownElement,
 } from "./types.ts";
@@ -148,6 +150,142 @@ export function buildProcessCard(opts: {
 	}
 
 	return mkCard(opts.title, opts.template ?? "grey", elements);
+}
+
+// ── 列表卡片（带操作按钮） ──
+
+function btn(
+	label: string,
+	value: Record<string, unknown>,
+	type: ButtonElement["type"] = "default",
+	confirm?: { title: string; text: string },
+): ButtonElement {
+	return {
+		tag: "button",
+		text: { tag: "plain_text", content: label },
+		type,
+		size: "small",
+		value,
+		confirm: confirm
+			? {
+					title: { tag: "plain_text", content: confirm.title },
+					text: { tag: "plain_text", content: confirm.text },
+				}
+			: undefined,
+	};
+}
+
+function listRow(info: string, buttons: ButtonElement[]): ColumnSetElement {
+	return {
+		tag: "column_set",
+		flex_mode: "stretch",
+		horizontal_spacing: "default",
+		columns: [
+			{
+				tag: "column",
+				width: "weighted",
+				weight: 3,
+				vertical_align: "center",
+				elements: [md(info)],
+			},
+			{
+				tag: "column",
+				width: "weighted",
+				weight: 1,
+				vertical_align: "center",
+				elements: [
+					{
+						tag: "action",
+						actions: buttons,
+						layout: "flow",
+					},
+				],
+			},
+		],
+	};
+}
+
+/** 工作流列表项 */
+export interface WorkflowItem {
+	name: string;
+	description: string;
+	path: string;
+}
+
+/** 构建工作流列表卡片 — 每项带"运行"按钮 */
+export function buildWorkflowListCard(
+	workflows: WorkflowItem[],
+): FeishuCardContent {
+	if (workflows.length === 0) {
+		return mkCard("工作流", "grey", [md("暂无工作流。")]);
+	}
+
+	const elements: CardBodyElement[] = [];
+	for (const wf of workflows) {
+		const info = `**${wf.name}**\n${wf.description || "(no description)"}`;
+		elements.push(
+			listRow(info, [
+				btn("运行", { action: "workflow_run", name: wf.name }, "primary", {
+					title: "确认运行",
+					text: `运行工作流: ${wf.name}？`,
+				}),
+			]),
+		);
+	}
+
+	return mkCard("工作流列表", "blue", elements);
+}
+
+/** 定时任务列表项 */
+export interface CronItem {
+	name: string;
+	cron: string;
+	workflow: string | null;
+	enabled: boolean;
+}
+
+/** 构建定时任务列表卡片 — 每项带"启用/禁用"和"立即运行"按钮 */
+export function buildCronListCard(crons: CronItem[]): FeishuCardContent {
+	if (crons.length === 0) {
+		return mkCard("定时任务", "grey", [md("暂无定时任务。")]);
+	}
+
+	const elements: CardBodyElement[] = [];
+	for (const c of crons) {
+		const status = c.enabled ? "🟢" : "⚪";
+		const info = `${status} **${c.name}**\n\`${c.cron}\` → ${c.workflow ?? "(delegate)"}`;
+
+		const toggleLabel = c.enabled ? "禁用" : "启用";
+		const toggleType: ButtonElement["type"] = c.enabled ? "danger" : "default";
+
+		elements.push(
+			listRow(info, [
+				btn(
+					toggleLabel,
+					{
+						action: "cron_toggle",
+						name: c.name,
+						enabled: !c.enabled,
+					},
+					toggleType,
+				),
+				btn(
+					"运行",
+					{
+						action: "cron_run",
+						name: c.name,
+					},
+					"primary",
+					{
+						title: "确认运行",
+						text: `立即运行定时任务: ${c.name}？`,
+					},
+				),
+			]),
+		);
+	}
+
+	return mkCard("定时任务列表", "blue", elements);
 }
 
 // ── 工具 ──
