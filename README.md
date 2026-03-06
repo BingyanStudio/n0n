@@ -1,13 +1,46 @@
-# n0n — 自然语言驱动的工作流引擎
+# n0n
 
-> Code-first workflow engine: 用自然语言描述任务，AI 自动创建、测试、交付可复用的 TypeScript workflow。
+> 自然语言驱动的 AI Agent 工作流引擎 — 用对话创建、运行、调度可复用的 TypeScript 工作流。
 
 ## 核心理念
 
 - **代码即工作流** — 不用拖拽式 DAG，直接用 TypeScript 编写 workflow
-- **AI 创建 workflow** — 用户描述任务 → AI 编写 .ts 文件 → 运行验证 → 迭代修正 → 交付可复用 workflow
-- **自扩展** — 每个 .ts 文件就是一个 skill，import/export 即组合
+- **AI 自动创建** — 描述任务 → Agent 编写 `.ts` → 运行验证 → 迭代修正 → 交付可复用 workflow
+- **自扩展** — 每个 `.ts` 文件就是一个 skill，`import`/`export` 即组合
 - **文件系统即注册表** — `workflows/skills/` 和 `workflows/tasks/` 即发现机制
+
+## 项目结构
+
+Turborepo monorepo，4 个共享包 + 3 个应用：
+
+```
+packages/
+  types/       领域消息类型（DomainMessage 判别联合）
+  llm/         LLM 客户端 + SSE 流式 + DomainMessage → API 消息适配
+  tools/       统一工具注册表（exec / write / reminder / submit）+ Zod 运行时校验
+  core/        Agent Loop · delegateTask · generate · RAG · Scheduler · Workflow 运行时
+apps/
+  cli/         交互式终端 — REPL + 富文本流式渲染
+  feishu/      飞书 Bot 服务 — WebSocket 长连接 + 流式卡片渲染
+  scheduler/   定时调度器 — cron 驱动 workflow 执行
+```
+
+### 包依赖关系
+
+```
+cli / feishu / scheduler
+        ↓
+      core  ←  tools
+     ↙    ↘      ↓
+   llm    types ←─┘
+```
+
+| 包 | 职责 |
+|---|---|
+| `@n0n/types` | 零依赖的领域类型：`DomainMessage` 判别联合、`Renderer` 接口、LLM 类型 |
+| `@n0n/llm` | LLM 客户端封装：`chatCompletion` / `chatCompletionStream`（SSE）、`StreamAccumulator`、消息适配器 |
+| `@n0n/tools` | 工具注册表：`exec`（命令执行）、`write`（文件读写）、`reminder`（OKR 备忘）、`submit`（结果提交）；参数通过 Zod schema 运行时校验 |
+| `@n0n/core` | 核心引擎：`agentLoop`（底层循环）、`generate`（轻量生成）、`delegateTask`（完整流水线：咨询→RAG→执行）、Scheduler、Workflow 运行时、Skill/Workflow 发现 |
 
 ## 快速开始
 
@@ -15,97 +48,108 @@
 # 安装依赖
 bun install
 
-# 配置 .env
+# 创建 .env（必需）
+cat > .env << 'EOF'
 LLM_BASE_URL=https://api.example.com
 LLM_API_KEY=sk-xxx
 LLM_MODEL=deepseek/deepseek-v3.2
+EOF
 
-# (可选) 阻止特定命令执行，需人工审核后才能运行
-# 以逗号分隔的命令名列表，例如：
-BLOCKED_COMMANDS=rm,mv,dd
-
-# 交互式对话 — AI 自动创建 workflow
+# 交互式对话
 bun start
-
-# 飞书入口服务（官方长连接 WSClient，同时启动 scheduler）
-bun start src/cli/index.ts feishu start
 
 # 直接传入任务
 bun start "帮我每天早上总结 Hacker News 热门"
-
-# 运行已有 workflow
-bun start workflows/tasks/xxx.ts
-
-# 定时任务
-bun start schedule add hn-daily "0 8 * * *" "总结 HN 热门"
-bun start scheduler start
-
-# 查看所有 workflow
-bun start workflows
 ```
 
-飞书入口所需环境变量（长连接模式）：
+## CLI 命令
 
 ```bash
-FEISHU_APP_ID=cli_xxx
-FEISHU_APP_SECRET=xxx
-# 可选
-FEISHU_ENCRYPT_KEY=xxx
-FEISHU_DOMAIN=feishu
+# 交互式 REPL（默认）
+bun start
+
+# 运行已有 workflow
+bun run apps/cli/src/index.ts run <workflow.ts>
+
+# 列出所有 workflow
+bun run apps/cli/src/index.ts workflows
+
+# 查看定时任务
+bun run apps/cli/src/index.ts schedule list
+
+# 启动飞书 Bot（独立进程）
+bun run apps/feishu/src/index.ts
+
+# 启动定时调度器（独立进程）
+bun run apps/scheduler/src/index.ts
 ```
+
+## 环境变量
+
+| 变量 | 必需 | 说明 |
+|---|---|---|
+| `LLM_BASE_URL` | ✅ | LLM API 地址 |
+| `LLM_API_KEY` | ✅ | API 密钥 |
+| `LLM_MODEL` | ✅ | 模型名称（如 `deepseek/deepseek-v3.2`） |
+| `LLM_ENABLE_THINKING` | | 设为 `true` 启用 DeepSeek thinking 模式 |
+| `BLOCKED_COMMANDS` | | 逗号分隔的禁止执行命令列表 |
+| `FEISHU_APP_ID` | 飞书 | 飞书应用 ID |
+| `FEISHU_APP_SECRET` | 飞书 | 飞书应用 Secret |
+| `FEISHU_ENCRYPT_KEY` | | 飞书事件加密密钥 |
+| `FEISHU_DOMAIN` | | `feishu`（默认）或 `lark` |
+| `WORKFLOWS_DIR` | | 工作流根目录（默认 `workflows`） |
+| `MEMORY_DIR` | | 记忆/知识库目录（默认 `workflows/memory`） |
 
 ## 工作流程
 
 ```
-用户："帮我分析 CSV 找出异常"
-         ▼
-  workflow-builder agent
-    1. 理解任务需求
-    2. 编写 workflows/tasks/csv-analysis.ts
-    3. 运行测试: bun run <workflow>
-    4. 报错 → 修改代码 → 重新测试
-    5. 通过 → submit workflow 路径
-         ▼
-  ✅ 可复用的 .ts workflow 文件
+用户："帮我分析这个 CSV 找出异常数据"
+         ↓
+   ┌─ Interactive REPL / 飞书 Bot ─┐
+   │  解析用户意图，注入上下文      │
+   └──────────┬───────────────────┘
+              ↓
+   ┌─ Agent Loop ─────────────────┐
+   │  LLM ↔ 工具调用循环           │
+   │  exec · write · reminder      │
+   │  submit → Zod schema 校验     │
+   │  最多 4 次重试                 │
+   └──────────┬───────────────────┘
+              ↓
+   ✅ 可复用的 .ts workflow 文件
+      workflows/tasks/csv-analysis.ts
 ```
 
-## Workflow 类型
+### API 层级（由轻到重）
 
-### 直接代码（确定性任务）
-```typescript
-/** 获取天气信息 */
-export default async function run() {
-  const proc = Bun.spawn(["curl", "-s", "https://wttr.in/Tokyo?format=j1"], { stdout: "pipe" });
-  const data = JSON.parse(await new Response(proc.stdout).text());
-  return { city: "Tokyo", temp: data.current_condition[0].temp_C + "°C" };
-}
-```
+| API | 用途 |
+|---|---|
+| `generate<T>()` | 轻量生成 — 走 agentLoop 但跳过咨询 + RAG |
+| `delegateTask<T>()` | 完整流水线 — 咨询 → RAG → agentLoop |
+| `agentLoop<T>()` | 底层 API — 需要完全控制 `DomainMessage[]` |
 
-### AI 驱动（需要推理的任务）
-```typescript
-import { subagent } from "../../src/index.ts";
-/** 分析 CSV 异常数据 */
-export default async function run() {
-  const result = await subagent("分析 data/sample.csv 找出异常数据");
-  return result.result;
-}
-```
+## 技术栈
 
-## 架构
+- **运行时** — [Bun](https://bun.sh)
+- **语言** — TypeScript（strict mode）
+- **Monorepo** — [Turborepo](https://turbo.build)
+- **Lint** — [Biome](https://biomejs.dev)
+- **Schema 校验** — [Zod](https://zod.dev)
+- **飞书 SDK** — [@larksuiteoapi/node-sdk](https://github.com/larksuite/node-sdk)
 
-```
-src/
-  types/       DomainMessage 领域类型（判别联合，数据与提示词分离）
-  llm/         LLM 客户端 + DomainMessage → API 消息适配器
-  agent/       Agent Loop（exec/write/reminder/submit 工具）+ subagent
-  task/        delegateTask 流水线（意图增强 + RAG + 执行）
-  scheduler/   定时触发器（cron + 持久化调度表）
-  workflow/    Workflow 运行时（文件系统发现 + 动态 import）
-workflows/
-  skills/      可复用的 skill（.ts 文件）
-  tasks/       任务 workflow
-  memory/      记忆存储
-  history/     历史记录
+## 开发
+
+```bash
+# 类型检查（全部包）
+bun run typecheck
+
+# Lint + 自动修复
+bun run lint
+
+# 单独启动某个 app
+bun run apps/cli/src/index.ts
+bun run apps/feishu/src/index.ts
+bun run apps/scheduler/src/index.ts
 ```
 
 ## License
