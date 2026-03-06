@@ -17,8 +17,7 @@ import { INTERACTIVE_PROMPT_PATH, startScheduler } from "@n0n/core";
 import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
-import type { FeishuCommand } from "./commands.ts";
-import { handleCommand, parseCommand } from "./commands.ts";
+import { handleCommand, parseCommand, parseMenuCommand } from "./commands.ts";
 import { runFeishuRound } from "./round.ts";
 import {
 	buildSessionKey,
@@ -121,16 +120,18 @@ export async function startFeishuService(): Promise<void> {
 			const sessionKey = buildSessionKey(ctx);
 			const session = getOrCreateSession(sessionKey, ctx, systemPrompt);
 
+			const menuCommand = parseMenuCommand(data?.event_key);
+			if (!menuCommand) {
+				console.log(
+					`[feishu] unknown menu event_key: ${data?.event_key} (sessionKey=${sessionKey})`,
+				);
+				return;
+			}
+
 			console.log(
 				`[feishu] menu event: ${data?.event_key} (sessionKey=${sessionKey})`,
 			);
-			await handleCommand(
-				{ type: data?.event_key } as FeishuCommand,
-				bot,
-				sessionKey,
-				session,
-				systemPrompt,
-			);
+			await handleCommand(menuCommand, bot, sessionKey, session, systemPrompt);
 		},
 
 		"card.action.trigger": async (data: Record<string, unknown>) => {

@@ -30,29 +30,33 @@ export interface WorkflowModule {
  * 发现所有 workflow（扫描 workflows/ 目录）
  */
 export async function discoverWorkflows(
-	baseDir = paths.workflows,
 	includeSkills = false,
 ): Promise<WorkflowMeta[]> {
-	const results: WorkflowMeta[] = [];
-	const dirs = includeSkills ? ["skills", "tasks"] : ["tasks"];
-	const absBase = resolve(baseDir);
+	const scanTargets = includeSkills
+		? [
+				{ dir: paths.tasks, label: "tasks" },
+				{ dir: paths.skills, label: "skills" },
+			]
+		: [{ dir: paths.tasks, label: "tasks" }];
 
-	for (const sub of dirs) {
-		const dir = resolve(absBase, sub);
-		if (!existsSync(dir)) continue;
+	const results: WorkflowMeta[] = [];
+
+	for (const { dir, label } of scanTargets) {
+		const absDir = resolve(dir);
+		if (!existsSync(absDir)) continue;
 
 		const glob = new Glob("**/*.ts");
-		const relFiles = Array.from(glob.scanSync({ cwd: dir }));
+		const relFiles = Array.from(glob.scanSync({ cwd: absDir }));
 
 		for (const rel of relFiles) {
-			const file = resolve(dir, rel);
+			const file = resolve(absDir, rel);
 			const content = await Bun.file(file).text();
 			const descMatch = content.match(
 				/^\/\*\*?\s*\n?\s*\*?\s*(.+?)(?:\n|\s*\*\/)/,
 			);
 			const description = descMatch?.[1]?.trim() ?? "";
 
-			const name = `${sub}/${rel.replace(/\\/g, "/")}`.replace(/\.ts$/, "");
+			const name = `${label}/${rel.replace(/\\/g, "/")}`.replace(/\.ts$/, "");
 
 			results.push({ name, path: file, description });
 		}

@@ -5,7 +5,10 @@
 import { resolve } from "node:path";
 
 /** 交互模式 system prompt 路径 */
-export const INTERACTIVE_PROMPT_PATH = resolve(import.meta.dir, "interactive.md");
+export const INTERACTIVE_PROMPT_PATH = resolve(
+	import.meta.dir,
+	"interactive.md",
+);
 
 /** delegateTask system prompt 路径 */
 export const DELEGATE_PROMPT_PATH = resolve(import.meta.dir, "delegate.md");

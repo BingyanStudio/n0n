@@ -122,8 +122,8 @@ export async function agentLoop<T = unknown>(
 			if (idleCount >= config.agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
-					result: content as T,
-					report: "Agent terminated: max idle rounds exceeded (no tool calls)",
+					result: null,
+					report: `Agent terminated: max idle rounds exceeded (no tool calls). Last content: ${content.slice(0, 200)}`,
 					history: messages,
 				};
 			}
@@ -149,8 +149,8 @@ export async function agentLoop<T = unknown>(
 			if (idleCount >= config.agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
-					result: content as T,
-					report: "Agent terminated: max idle rounds exceeded (no tool calls)",
+					result: null,
+					report: `Agent terminated: max idle rounds exceeded (no tool calls). Last content: ${content.slice(0, 200)}`,
 					history: messages,
 				};
 			}
@@ -201,7 +201,7 @@ export async function agentLoop<T = unknown>(
 				if (validation.ok) {
 					renderer.submitAccepted();
 					return {
-						result: validation.value as T,
+						result: validation.value,
 						report: result.report,
 						history: messages,
 					};
@@ -214,7 +214,7 @@ export async function agentLoop<T = unknown>(
 						`giving up after ${submitRetries} attempts`,
 					);
 					return {
-						result: result.result as T,
+						result: null,
 						report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${validation.error}`,
 						history: messages,
 					};
@@ -244,15 +244,13 @@ export async function agentLoop<T = unknown>(
 
 // ── 辅助函数 ──
 
-function validateSubmit(
+function validateSubmit<T>(
 	raw: unknown,
-	schema?: ZodType,
-): { ok: true; value: unknown } | { ok: false; error: string } {
+	schema?: ZodType<T>,
+): { ok: true; value: T } | { ok: false; error: string } {
 	if (!schema) {
-		return {
-			ok: true,
-			value: typeof raw === "string" ? raw : JSON.stringify(raw),
-		};
+		const value = (typeof raw === "string" ? raw : JSON.stringify(raw)) as T;
+		return { ok: true, value };
 	}
 
 	let parsed: unknown = raw;

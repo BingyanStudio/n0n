@@ -54,9 +54,7 @@ export function parseFrontmatter<T>(
 	content: string,
 	schema?: ZodType<T>,
 ): RawFrontmatter | TypedFrontmatter<T> | null {
-	const match = content.match(
-		/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/,
-	);
+	const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
 	if (!match) {
 		if (schema) return null;
 		return { meta: {}, body: content.trim() };
@@ -118,8 +116,7 @@ function parseSimpleYaml(yaml: string): Record<string, string> {
 	const result: Record<string, string> = {};
 
 	for (const line of yaml.split(/\r?\n/)) {
-		if (line.startsWith(" ") || line.startsWith("\t") || !line.trim())
-			continue;
+		if (line.startsWith(" ") || line.startsWith("\t") || !line.trim()) continue;
 		const parsed = parseYamlLine(line);
 		if (parsed) result[parsed.key] = parsed.value;
 	}
@@ -127,9 +124,7 @@ function parseSimpleYaml(yaml: string): Record<string, string> {
 	return result;
 }
 
-function parseYamlLine(
-	line: string,
-): { key: string; value: string } | null {
+function parseYamlLine(line: string): { key: string; value: string } | null {
 	const colonIdx = line.indexOf(":");
 	if (colonIdx === -1) return null;
 

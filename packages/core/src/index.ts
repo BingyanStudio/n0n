@@ -10,24 +10,23 @@
 // 确保配置在任何 API 调用前初始化
 import "./config.ts";
 
-// 路径配置
-export { paths } from "./config.ts";
-
-// Prompt 模板
-export { INTERACTIVE_PROMPT_PATH, DELEGATE_PROMPT_PATH } from "./prompts/paths.ts";
-
 // Agent Loop
 export type { AgentOptions, AgentResult } from "./agent/loop.ts";
 export { agentLoop } from "./agent/loop.ts";
-
+// 路径配置
+export { paths } from "./config.ts";
 // 发现层
 export type { SkillContent, SkillMeta, WorkflowMeta } from "./discovery.ts";
-export type { WorkflowModule } from "./workflow/runtime.ts";
 export {
 	discoverSkills,
 	discoverWorkflows,
 	loadSkillContent,
 } from "./discovery.ts";
+// Prompt 模板
+export {
+	DELEGATE_PROMPT_PATH,
+	INTERACTIVE_PROMPT_PATH,
+} from "./prompts/paths.ts";
 // 调度
 export type { ScheduleEntry } from "./scheduler/scheduler.ts";
 export {
@@ -54,5 +53,6 @@ export type {
 export { ragSearch } from "./task/rag.ts";
 // PlainRenderer（供需要默认渲染器的场景）
 export { PlainRenderer } from "./ui/renderer.ts";
+export type { WorkflowModule } from "./workflow/runtime.ts";
 // Workflow 运行时
 export { runWorkflow } from "./workflow/runtime.ts";

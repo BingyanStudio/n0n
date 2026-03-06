@@ -94,12 +94,15 @@ export async function* chatCompletionStream(
 						return;
 					}
 
-					let chunk: SSEChunk;
+					let chunk: unknown;
 					try {
-						chunk = JSON.parse(payload) as SSEChunk;
+						chunk = JSON.parse(payload);
 					} catch {
 						continue;
 					}
+
+					// 轻量结构校验：确保 choices 数组存在
+					if (!isSSEChunk(chunk)) continue;
 
 					const delta = chunk.choices?.[0]?.delta;
 					if (!delta) continue;
@@ -144,6 +147,13 @@ function isAbortError(err: unknown): boolean {
 }
 
 // ── SSE Chunk 类型（内部） ──
+
+/** 轻量结构校验 — 确保 SSE chunk 具有 choices 数组 */
+function isSSEChunk(data: unknown): data is SSEChunk {
+	if (typeof data !== "object" || data === null) return false;
+	const obj = data as Record<string, unknown>;
+	return !obj.choices || Array.isArray(obj.choices);
+}
 
 interface SSEChunk {
 	choices?: Array<{

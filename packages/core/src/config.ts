@@ -26,6 +26,8 @@ function parseBlockedCommands(): string[] {
 export const paths = {
 	/** 工作流根目录 */
 	workflows: process.env.WORKFLOWS_DIR ?? "workflows",
+	/** 任务工作流目录 */
+	tasks: process.env.TASKS_DIR ?? "workflows/tasks",
 	/** Agent Skills 目录 */
 	skills: process.env.SKILLS_DIR ?? "workflows/skills",
 	/** 定时任务配置目录 */
@@ -33,9 +35,9 @@ export const paths = {
 	/** 记忆/知识库目录 */
 	memory: process.env.MEMORY_DIR ?? "workflows/memory",
 	/** 咨询结果缓存目录 */
-	consultResult: "workflows/consult-result",
+	consultResult: process.env.CONSULT_RESULT_DIR ?? "workflows/consult-result",
 	/** 历史记录目录 */
-	history: "workflows/history",
+	history: process.env.HISTORY_DIR ?? "workflows/history",
 } as const;
 
 export const config = {
