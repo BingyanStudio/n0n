@@ -19,6 +19,7 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { Glob } from "bun";
+import { z } from "zod";
 import { parseFrontmatter as parseFM, extractNestedBlock, extractRawYaml } from "../utils/frontmatter.ts";
 
 /** Skill 元数据（从 SKILL.md frontmatter 解析） */
@@ -161,46 +162,49 @@ export function formatSkillContents(contents: SkillContent[]): string {
 
 // ── 内部解析函数 ──
 
+/** Skill frontmatter 的 Zod schema — 解析时自动校验 */
+const SkillFrontmatterSchema = z.object({
+	name: z.string().regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/).refine(s => !s.includes("--"), "name must not contain '--'"),
+	description: z.string(),
+	license: z.string().optional(),
+	compatibility: z.string().optional(),
+});
+
 /**
  * 解析 YAML frontmatter，提取 skill 元数据
  *
  * 支持的字段：name, description, license, compatibility, metadata
  */
 function parseSkillMeta(content: string, filePath: string): SkillMeta | null {
-	const { meta: fields } = parseFM(content);
+	const result = parseFM(content, SkillFrontmatterSchema);
+	
+	// Schema validation failed
+	if (!result) return null;
+
+	const { data } = result;
 	const rawYaml = extractRawYaml(content);
 
 	if (!rawYaml) return null;
 
-	const name = fields.name;
-	const description = fields.description;
-
-	if (!name || !description) return null;
-
-	// 验证 name 格式
-	if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name) || name.includes("--")) {
-		return null;
-	}
-
 	// 验证 name 匹配目录名
 	const dir = resolve(filePath, "..");
 	const dirName = basename(dir);
-	if (dirName !== name) {
+	if (dirName !== data.name) {
 		console.error(
-			`  [skills] name "${name}" doesn't match directory "${dirName}", skipping`,
+			`  [skills] name "${data.name}" doesn't match directory "${dirName}", skipping`,
 		);
 		return null;
 	}
 
 	const meta: SkillMeta = {
-		name,
-		description,
+		name: data.name,
+		description: data.description,
 		path: resolve(filePath),
 		dir,
 	};
 
-	if (fields.license) meta.license = fields.license;
-	if (fields.compatibility) meta.compatibility = fields.compatibility;
+	if (data.license) meta.license = data.license;
+	if (data.compatibility) meta.compatibility = data.compatibility;
 
 	// metadata 子字段（简单处理：只取顶层 key-value）
 	const metadataRaw = extractNestedBlock(rawYaml, "metadata");

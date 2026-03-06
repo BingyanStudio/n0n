@@ -5,6 +5,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
+import { z } from "zod";
 import { paths } from "../config.ts";
 import { delegateTask } from "../task/delegate.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
@@ -22,6 +23,14 @@ export interface ScheduleEntry {
 	filePath: string;
 }
 
+/** Schedule frontmatter 的 Zod schema — 解析时自动校验必填字段和类型转换 */
+const ScheduleFrontmatterSchema = z.object({
+	name: z.string(),
+	cron: z.string(),
+	enabled: z.preprocess((v) => v !== "false", z.boolean()),
+	workflow: z.string().optional(),
+});
+
 export async function loadSchedules(): Promise<ScheduleEntry[]> {
 	const dir = resolve(SCHEDULES_DIR);
 	if (!existsSync(dir)) return [];
@@ -34,16 +43,15 @@ export async function loadSchedules(): Promise<ScheduleEntry[]> {
 	for (const file of files) {
 		try {
 			const content = await Bun.file(file).text();
-			const { meta, body } = parseFrontmatter(content);
-
-			if (!meta.name || !meta.cron) continue;
+			const result = parseFrontmatter(content, ScheduleFrontmatterSchema);
+			if (!result) continue;
 
 			entries.push({
-				name: meta.name,
-				cron: meta.cron,
-				enabled: meta.enabled !== "false",
-				workflow: meta.workflow || null,
-				prompt: body,
+				name: result.data.name,
+				cron: result.data.cron,
+				enabled: result.data.enabled,
+				workflow: result.data.workflow ?? null,
+				prompt: result.body,
 				filePath: file,
 			});
 		} catch {
