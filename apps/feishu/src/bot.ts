@@ -11,6 +11,13 @@ import type { FeishuCardContent } from "./cards/index.ts";
 
 // ── 类型定义 ──
 
+export type FeishuMessageEventData = Parameters<
+	NonNullable<lark.EventHandles["im.message.receive_v1"]>
+>[0];
+export type FeishuMenuEventData = Parameters<
+	NonNullable<lark.EventHandles["application.bot.menu_v6"]>
+>[0];
+
 export type FeishuReceiveIdType = "chat_id" | "open_id";
 
 export interface FeishuRecipient {
@@ -38,7 +45,7 @@ export interface FeishuBotConfig {
 // ── Bot 客户端 ──
 
 export class FeishuBot {
-	private readonly client: any;
+	private readonly client: lark.Client;
 
 	constructor(config: FeishuBotConfig) {
 		this.client = new lark.Client({
@@ -51,7 +58,9 @@ export class FeishuBot {
 
 	// ── 事件上下文提取（静态） ──
 
-	static buildContext(event: any): FeishuMessageContext | null {
+	static buildContext(
+		event: FeishuMessageEventData,
+	): FeishuMessageContext | null {
 		if (!event?.message) return null;
 		const chatId = String(event.message.chat_id ?? "");
 		const chatType = String(event.message.chat_type ?? "");
@@ -59,7 +68,7 @@ export class FeishuBot {
 		if (!chatId || !messageId) return null;
 
 		const senderId = event.sender?.sender_id ?? {};
-		const senderOpenId = senderId.open_id;
+		const senderOpenId = String(senderId.open_id ?? "");
 		const senderUserId = senderId.user_id ? String(senderId.user_id) : null;
 		const senderUnionId = senderId.union_id ? String(senderId.union_id) : null;
 		const tenantKey = event.sender?.tenant_key
@@ -83,12 +92,14 @@ export class FeishuBot {
 		};
 	}
 
-	static buildContextForMenu(event: any): FeishuMessageContext | null {
+	static buildContextForMenu(
+		event: FeishuMenuEventData,
+	): FeishuMessageContext | null {
 		const eventId = String(event.event_id ?? "");
 		if (!eventId) return null;
 
 		const operatorId = event.operator?.operator_id ?? {};
-		const senderOpenId = operatorId.open_id;
+		const senderOpenId = String(operatorId.open_id ?? "");
 		const senderUserId = operatorId.user_id ? String(operatorId.user_id) : null;
 		const senderUnionId = operatorId.union_id
 			? String(operatorId.union_id)
@@ -107,7 +118,7 @@ export class FeishuBot {
 		};
 	}
 
-	static readText(data: any): string {
+	static readText(data: FeishuMessageEventData): string {
 		const raw = data?.message?.content;
 		if (!raw || typeof raw !== "string") return "";
 		try {
@@ -134,7 +145,7 @@ export class FeishuBot {
 				content,
 			},
 		});
-		const messageId = (res as any)?.data?.message_id;
+		const messageId = res?.data?.message_id;
 		if (!messageId) {
 			throw new Error("Failed to create card message: missing message_id");
 		}

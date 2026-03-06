@@ -5,11 +5,14 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
+import { z } from "zod";
+import { paths } from "../config.ts";
 import { delegateTask } from "../task/delegate.ts";
+import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
 
-const SCHEDULES_DIR = "workflows/schedules";
+const SCHEDULES_DIR = paths.schedules;
 
 export interface ScheduleEntry {
 	name: string;
@@ -20,27 +23,13 @@ export interface ScheduleEntry {
 	filePath: string;
 }
 
-function parseMdc(content: string): {
-	meta: Record<string, string>;
-	body: string;
-} {
-	const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-	if (!match) return { meta: {}, body: content.trim() };
-
-	const meta: Record<string, string> = {};
-	for (const line of (match[1] ?? "").split("\n")) {
-		const colonIdx = line.indexOf(":");
-		if (colonIdx === -1) continue;
-		const key = line.slice(0, colonIdx).trim();
-		const val = line
-			.slice(colonIdx + 1)
-			.trim()
-			.replace(/^["']|["']$/g, "");
-		meta[key] = val;
-	}
-
-	return { meta, body: (match[2] ?? "").trim() };
-}
+/** Schedule frontmatter 的 Zod schema — 解析时自动校验必填字段和类型转换 */
+const ScheduleFrontmatterSchema = z.object({
+	name: z.string(),
+	cron: z.string(),
+	enabled: z.preprocess((v) => v !== "false", z.boolean()),
+	workflow: z.string().optional(),
+});
 
 export async function loadSchedules(): Promise<ScheduleEntry[]> {
 	const dir = resolve(SCHEDULES_DIR);
@@ -54,16 +43,15 @@ export async function loadSchedules(): Promise<ScheduleEntry[]> {
 	for (const file of files) {
 		try {
 			const content = await Bun.file(file).text();
-			const { meta, body } = parseMdc(content);
-
-			if (!meta.name || !meta.cron) continue;
+			const result = parseFrontmatter(content, ScheduleFrontmatterSchema);
+			if (!result) continue;
 
 			entries.push({
-				name: meta.name,
-				cron: meta.cron,
-				enabled: meta.enabled !== "false",
-				workflow: meta.workflow || null,
-				prompt: body,
+				name: result.data.name,
+				cron: result.data.cron,
+				enabled: result.data.enabled,
+				workflow: result.data.workflow ?? null,
+				prompt: result.body,
 				filePath: file,
 			});
 		} catch {
@@ -118,7 +106,7 @@ export async function startScheduler(): Promise<void> {
 	running = true;
 
 	console.log(
-		"[scheduler] Started. Watching workflows/schedules/*.mdc every 60s.",
+		`[scheduler] Started. Watching ${SCHEDULES_DIR}/*.mdc every 60s.`,
 	);
 
 	const tick = async () => {

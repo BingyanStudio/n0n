@@ -9,12 +9,15 @@ import { ENV_INFO } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
+import { paths } from "../config.ts";
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
 
-const PROMPT_PATH = resolve(import.meta.dir, "prompts/delegate.md");
+import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
+
+const PROMPT_PATH = DELEGATE_PROMPT_PATH;
 
 export interface TaskResult<T = unknown> {
 	result: T | null;
@@ -39,7 +42,7 @@ export async function delegateTask<T = unknown>(
 			const skillSection = skillSummaryText
 				? [
 						"",
-						"## Available Skills (in workflows/skills/)",
+						`## Available Skills (in ${paths.skills}/)`,
 						"The following skills are available. If any are relevant, mention them in your advice with their directory path so the executor can read their SKILL.md for detailed instructions.",
 						skillSummaryText,
 					].join("\n")
@@ -75,7 +78,7 @@ export async function delegateTask<T = unknown>(
 					: JSON.stringify(consultResult.result);
 
 			const hash = Bun.hash(query).toString(36);
-			const filePath = resolve(`workflows/consult-result/${hash}.md`);
+			const filePath = resolve(`${paths.consultResult}/${hash}.md`);
 			const now = new Date().toISOString();
 			await Bun.write(
 				filePath,

@@ -21,9 +21,7 @@ export interface FilePathPayload extends Recipient {
 	fileName?: string;
 }
 
-type FeishuClient = any;
-
-export function createFeishuClient(): FeishuClient {
+export function createFeishuClient(): lark.Client {
 	const appId = process.env.FEISHU_APP_ID;
 	const appSecret = process.env.FEISHU_APP_SECRET;
 	if (!appId || !appSecret) {
@@ -42,7 +40,7 @@ export function createFeishuClient(): FeishuClient {
 }
 
 export async function sendText(
-	client: FeishuClient,
+	client: lark.Client,
 	payload: TextPayload,
 ): Promise<void> {
 	await client.im.message.create({
@@ -58,7 +56,7 @@ export async function sendText(
 }
 
 export async function uploadImageFromPath(
-	client: FeishuClient,
+	client: lark.Client,
 	imagePath: string,
 ): Promise<string> {
 	const image = await Bun.file(imagePath).arrayBuffer();
@@ -68,13 +66,13 @@ export async function uploadImageFromPath(
 			image: Buffer.from(image),
 		},
 	});
-	const imageKey = (res as any)?.image_key;
+	const imageKey = res?.image_key;
 	if (!imageKey) throw new Error("Failed to upload image: missing image_key");
 	return String(imageKey);
 }
 
 export async function sendImage(
-	client: FeishuClient,
+	client: lark.Client,
 	payload: Recipient & { imageKey: string },
 ): Promise<void> {
 	await client.im.message.create({
@@ -90,7 +88,7 @@ export async function sendImage(
 }
 
 export async function sendImageFromPath(
-	client: FeishuClient,
+	client: lark.Client,
 	payload: ImagePathPayload,
 ): Promise<void> {
 	const imageKey = await uploadImageFromPath(client, payload.imagePath);
@@ -102,7 +100,7 @@ export async function sendImageFromPath(
 }
 
 export async function uploadFileFromPath(
-	client: FeishuClient,
+	client: lark.Client,
 	filePath: string,
 	fileName?: string,
 ): Promise<string> {
@@ -113,18 +111,25 @@ export async function uploadFileFromPath(
 		: "stream";
 	const res = await client.im.file.create({
 		data: {
-			file_type: ext,
+			file_type: ext as
+				| "stream"
+				| "opus"
+				| "mp4"
+				| "pdf"
+				| "doc"
+				| "xls"
+				| "ppt",
 			file_name: finalName,
 			file: Buffer.from(bytes),
 		},
 	});
-	const fileKey = (res as any)?.file_key;
+	const fileKey = res?.file_key;
 	if (!fileKey) throw new Error("Failed to upload file: missing file_key");
 	return String(fileKey);
 }
 
 export async function sendFile(
-	client: FeishuClient,
+	client: lark.Client,
 	payload: Recipient & { fileKey: string },
 ): Promise<void> {
 	await client.im.message.create({
@@ -140,7 +145,7 @@ export async function sendFile(
 }
 
 export async function sendFileFromPath(
-	client: FeishuClient,
+	client: lark.Client,
 	payload: FilePathPayload,
 ): Promise<void> {
 	const fileKey = await uploadFileFromPath(

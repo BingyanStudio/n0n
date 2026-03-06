@@ -25,6 +25,14 @@ import {
 
 // ── 类型 ──
 
+/** 飞书卡片回调事件数据（card.action.trigger，SDK 未提供类型定义） */
+interface FeishuCardActionData {
+	operator?: { open_id?: string };
+	action?: { value?: CardActionValue };
+	open_message_id?: string;
+	context?: { open_message_id?: string };
+}
+
 interface CardActionValue {
 	action: string;
 	[key: string]: unknown;
@@ -48,24 +56,22 @@ interface CardActionContext {
  */
 export async function handleCardAction(
 	bot: FeishuBot,
-	data: Record<string, unknown>,
+	data: FeishuCardActionData,
 ): Promise<void> {
-	const operatorId = (data as any)?.operator?.open_id as string | undefined;
+	const operatorId = data.operator?.open_id;
 	if (!operatorId) {
 		console.error("[feishu] card action: missing operator open_id");
 		return;
 	}
 
-	const value = (data as any)?.action?.value as CardActionValue | undefined;
+	const value = data.action?.value;
 	if (!value?.action) {
 		console.error("[feishu] card action: missing action value");
 		return;
 	}
 
 	const messageId =
-		((data as any)?.open_message_id as string) ??
-		((data as any)?.context?.open_message_id as string) ??
-		null;
+		data.open_message_id ?? data.context?.open_message_id ?? null;
 
 	const ctx: CardActionContext = {
 		bot,

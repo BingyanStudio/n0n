@@ -19,6 +19,8 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { Glob } from "bun";
+import { z } from "zod";
+import { parseFrontmatter as parseFM, extractNestedBlock, extractRawYaml } from "../utils/frontmatter.ts";
 
 /** Skill 元数据（从 SKILL.md frontmatter 解析） */
 export interface SkillMeta {
@@ -46,7 +48,9 @@ export interface SkillContent extends SkillMeta {
 	scripts: string[];
 }
 
-const SKILLS_DIR = "workflows/skills";
+import { paths } from "../config.ts";
+
+const SKILLS_DIR = paths.skills;
 
 /**
  * 发现所有 skill：扫描 SKILL.md，只解析 frontmatter（轻量）
@@ -66,7 +70,7 @@ export async function discoverSkills(
 		const absPath = resolve(absBase, rel);
 		try {
 			const content = await Bun.file(absPath).text();
-			const meta = parseFrontmatter(content, absPath);
+			const meta = parseSkillMeta(content, absPath);
 			if (meta) skills.push(meta);
 		} catch {
 			// 读取/解析失败，静默跳过
@@ -84,10 +88,10 @@ export async function loadSkillContent(
 ): Promise<SkillContent | null> {
 	try {
 		const content = await Bun.file(skillPath).text();
-		const meta = parseFrontmatter(content, skillPath);
+		const meta = parseSkillMeta(content, skillPath);
 		if (!meta) return null;
 
-		const body = extractBody(content);
+		const { body } = parseFM(content);
 
 		// 扫描 scripts/ 目录
 		const scriptsDir = resolve(meta.dir, "scripts");
@@ -158,50 +162,52 @@ export function formatSkillContents(contents: SkillContent[]): string {
 
 // ── 内部解析函数 ──
 
+/** Skill frontmatter 的 Zod schema — 解析时自动校验 */
+const SkillFrontmatterSchema = z.object({
+	name: z.string().regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/).refine(s => !s.includes("--"), "name must not contain '--'"),
+	description: z.string(),
+	license: z.string().optional(),
+	compatibility: z.string().optional(),
+});
+
 /**
- * 解析 YAML frontmatter（简单实现，不依赖外部 YAML 库）
+ * 解析 YAML frontmatter，提取 skill 元数据
  *
  * 支持的字段：name, description, license, compatibility, metadata
  */
-function parseFrontmatter(content: string, filePath: string): SkillMeta | null {
-	const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-	if (!match?.[1]) return null;
+function parseSkillMeta(content: string, filePath: string): SkillMeta | null {
+	const result = parseFM(content, SkillFrontmatterSchema);
+	
+	// Schema validation failed
+	if (!result) return null;
 
-	const yaml = match[1];
-	const fields = parseSimpleYaml(yaml);
+	const { data } = result;
+	const rawYaml = extractRawYaml(content);
 
-	const name = fields.name;
-	const description = fields.description;
-
-	if (!name || !description) return null;
-
-	// 验证 name 格式
-	if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name) || name.includes("--")) {
-		return null;
-	}
+	if (!rawYaml) return null;
 
 	// 验证 name 匹配目录名
 	const dir = resolve(filePath, "..");
 	const dirName = basename(dir);
-	if (dirName !== name) {
+	if (dirName !== data.name) {
 		console.error(
-			`  [skills] name "${name}" doesn't match directory "${dirName}", skipping`,
+			`  [skills] name "${data.name}" doesn't match directory "${dirName}", skipping`,
 		);
 		return null;
 	}
 
 	const meta: SkillMeta = {
-		name,
-		description,
+		name: data.name,
+		description: data.description,
 		path: resolve(filePath),
 		dir,
 	};
 
-	if (fields.license) meta.license = fields.license;
-	if (fields.compatibility) meta.compatibility = fields.compatibility;
+	if (data.license) meta.license = data.license;
+	if (data.compatibility) meta.compatibility = data.compatibility;
 
 	// metadata 子字段（简单处理：只取顶层 key-value）
-	const metadataRaw = extractMetadataBlock(yaml);
+	const metadataRaw = extractNestedBlock(rawYaml, "metadata");
 	if (metadataRaw && Object.keys(metadataRaw).length > 0) {
 		meta.metadata = metadataRaw;
 	}
@@ -209,86 +215,4 @@ function parseFrontmatter(content: string, filePath: string): SkillMeta | null {
 	return meta;
 }
 
-/**
- * 提取 frontmatter 之后的 Markdown 正文
- */
-function extractBody(content: string): string {
-	const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/);
-	return match?.[1]?.trim() ?? "";
-}
 
-/**
- * 简单 YAML 解析：提取顶层 key: value 对
- * 不处理嵌套、数组等复杂结构（metadata 块单独处理）
- */
-function parseSimpleYaml(yaml: string): Record<string, string> {
-	const result: Record<string, string> = {};
-	const lines = yaml.split(/\r?\n/);
-
-	for (const line of lines) {
-		// 跳过缩进行（属于嵌套块）和空行
-		if (line.startsWith(" ") || line.startsWith("\t") || !line.trim()) continue;
-
-		const colonIdx = line.indexOf(":");
-		if (colonIdx === -1) continue;
-
-		const key = line.slice(0, colonIdx).trim();
-		let value = line.slice(colonIdx + 1).trim();
-
-		// 去除引号
-		if (
-			(value.startsWith('"') && value.endsWith('"')) ||
-			(value.startsWith("'") && value.endsWith("'"))
-		) {
-			value = value.slice(1, -1);
-		}
-
-		if (key && value) {
-			result[key] = value;
-		}
-	}
-
-	return result;
-}
-
-/**
- * 提取 metadata 嵌套块
- */
-function extractMetadataBlock(yaml: string): Record<string, string> | null {
-	const lines = yaml.split(/\r?\n/);
-	const result: Record<string, string> = {};
-	let inMetadata = false;
-
-	for (const line of lines) {
-		if (line.startsWith("metadata:")) {
-			inMetadata = true;
-			continue;
-		}
-
-		if (inMetadata) {
-			// 缩进行属于 metadata 块
-			if (line.startsWith("  ") || line.startsWith("\t")) {
-				const trimmed = line.trim();
-				const colonIdx = trimmed.indexOf(":");
-				if (colonIdx === -1) continue;
-
-				const key = trimmed.slice(0, colonIdx).trim();
-				let value = trimmed.slice(colonIdx + 1).trim();
-
-				if (
-					(value.startsWith('"') && value.endsWith('"')) ||
-					(value.startsWith("'") && value.endsWith("'"))
-				) {
-					value = value.slice(1, -1);
-				}
-
-				if (key && value) result[key] = value;
-			} else {
-				// 非缩进行 → metadata 块结束
-				break;
-			}
-		}
-	}
-
-	return Object.keys(result).length > 0 ? result : null;
-}
