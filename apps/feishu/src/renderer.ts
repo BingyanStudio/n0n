@@ -1,32 +1,30 @@
 /**
  * FeishuRenderer — 飞书流式渲染器
  *
- * 实现 Renderer 接口，将 agentLoop 事件映射为飞书步骤流卡片更新。
- * 模仿 CLI RichRenderer 的逐步显示效果：
- * - 每个 round 显示为一个步骤
- * - 工具调用显示为子步骤（带输入/输出摘要）
- * - thinking/content 实时刷新到「当前活动」区域
- * - 节流控制避免飞书 API 限流
+ * 将 agentLoop 事件映射为过程卡片的日志条目。
+ * 设计风格参考 CLI RichRenderer：
+ * - round → 粗体标题行
+ * - thinking → 折叠面板（不占主视图空间）
+ * - tool call → ▸ 开始 / ◂ 结束（紧凑摘要）
+ * - 流式 token → 节流刷新到 activity 区域
  */
 
 import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
 import type { FeishuConversation } from "./conversation.ts";
 
-/** 刷新节流间隔（ms），避免飞书 API 限流 */
 const THROTTLE_MS = 1500;
-
-/** 内联文本截断长度 */
-const INLINE_LIMIT = 200;
+const INLINE_LEN = 160;
+const DETAIL_LEN = 800;
 
 // ── 工具函数 ──
 
-function compact(text: string, limit = INLINE_LIMIT): string {
+function compact(text: string, limit = INLINE_LEN): string {
 	const s = text.replace(/\s+/g, " ").trim();
 	if (!s) return "(empty)";
-	return s.length > limit ? `${s.slice(0, limit)}...` : s;
+	return s.length > limit ? `${s.slice(0, limit)}…` : s;
 }
 
-function safeStringify(value: unknown): string {
+function stringify(value: unknown): string {
 	try {
 		return JSON.stringify(value);
 	} catch {
@@ -34,181 +32,224 @@ function safeStringify(value: unknown): string {
 	}
 }
 
-function toolResultSummary(result: ToolResult): string {
-	switch (result.tool) {
+function fmtToolResult(r: ToolResult): string {
+	switch (r.tool) {
 		case "exec":
-			return `exit=${result.exitCode}, ${(result.durationMs / 1000).toFixed(1)}s`;
+			return `exit=${r.exitCode} ${(r.durationMs / 1000).toFixed(1)}s`;
 		case "write":
-			return result.success
-				? `${result.path} (replaced ${result.replacedCount}×)`
-				: `${result.path}: ${result.error ?? "failed"}`;
+			return r.success
+				? `${r.path} (${r.replacedCount}× replaced)`
+				: `${r.path}: ${r.error ?? "failed"}`;
 		case "reminder":
-			return `delay=${result.delay}`;
+			return `delay=${r.delay}`;
 		case "submit":
-			return `result=${compact(safeStringify(result.result), 120)}`;
+			return compact(stringify(r.result), 120);
 	}
+}
+
+/** 格式化工具参数为可读的 key=value 形式 */
+function fmtToolArgs(args: Record<string, unknown>): string {
+	const parts: string[] = [];
+	for (const [k, v] of Object.entries(args)) {
+		const val = typeof v === "string" ? v : stringify(v);
+		parts.push(`${k}=${compact(val, 60)}`);
+	}
+	return parts.join(", ");
+}
+
+/** 格式化工具参数为详情面板内容（树形结构） */
+function fmtToolArgsDetail(
+	tool: string,
+	args: Record<string, unknown>,
+): string {
+	const lines: string[] = [`**${tool}**`];
+	for (const [k, v] of Object.entries(args)) {
+		const val = typeof v === "string" ? v : stringify(v);
+		lines.push(`├ **${k}**`);
+		// 多行值缩进显示
+		const valLines = val.split("\n");
+		const maxLines = 8;
+		for (const vl of valLines.slice(0, maxLines)) {
+			lines.push(`│ ${vl}`);
+		}
+		if (valLines.length > maxLines) {
+			lines.push(`│ … (${valLines.length - maxLines} more lines)`);
+		}
+	}
+	return lines.join("\n");
 }
 
 // ── 渲染器 ──
 
 export class FeishuRenderer implements Renderer {
-	private thinkingBuf = "";
+	private thinkBuf = "";
 	private contentBuf = "";
+	private toolOutBuf = "";
+	private curTool = "";
 	private lastFlush = 0;
-	private flushTimer: ReturnType<typeof setTimeout> | null = null;
-	private currentToolName = "";
-	private toolOutputBuf = "";
+	private timer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(private readonly conv: FeishuConversation) {}
 
 	async drain(): Promise<void> {
-		this.cancelFlushTimer();
+		this.stopTimer();
 		this.flushBuffers();
 		await this.conv.drain();
 	}
 
 	userMessage(content: string): void {
-		this.conv.addStep({
-			icon: "📝",
-			title: `用户: ${compact(content)}`,
-		});
+		this.conv.appendLog({ kind: "info", text: compact(content) });
 	}
 
 	roundStart(round: number, maxRounds: number, msgCount: number): void {
-		this.conv.setTitle(`🤖 Round ${round}/${maxRounds} (${msgCount} msgs)`);
-		this.conv.addStep({
-			icon: "⏳",
-			title: `Round ${round} — 思考中...`,
+		this.conv.setTitle(`n0n · round ${round}/${maxRounds}`);
+		this.conv.appendLog({
+			kind: "round",
+			text: `round ${round}/${maxRounds}  (${msgCount} msgs)`,
 		});
 	}
 
 	thinkingToken(token: string): void {
-		this.thinkingBuf += token;
+		this.thinkBuf += token;
 		this.scheduleFlush();
 	}
 
 	contentToken(token: string): void {
-		// thinking → content 切换
-		if (this.thinkingBuf) {
-			this.conv.updateLastStep({
-				detail: this.thinkingBuf,
+		// thinking → content 切换：把 thinking 存为折叠详情
+		if (this.thinkBuf) {
+			this.conv.appendLog({
+				kind: "thinking",
+				text: "thinking",
+				detail: compact(this.thinkBuf, DETAIL_LEN),
 			});
-			this.thinkingBuf = "";
+			this.thinkBuf = "";
 		}
 		this.contentBuf += token;
 		this.scheduleFlush();
 	}
 
 	contentEnd(): void {
-		this.cancelFlushTimer();
-		this.flushBuffers();
-		this.conv.updateLastStep({
-			icon: "✅",
-			title: "思考完成",
-		});
+		this.stopTimer();
+		// 残余 thinking
+		if (this.thinkBuf) {
+			this.conv.appendLog({
+				kind: "thinking",
+				text: "thinking",
+				detail: compact(this.thinkBuf, DETAIL_LEN),
+			});
+			this.thinkBuf = "";
+		}
+		// 残余 content
+		if (this.contentBuf.trim()) {
+			this.conv.appendLog({
+				kind: "content",
+				text: compact(this.contentBuf),
+			});
+			this.contentBuf = "";
+		}
+		this.conv.setActivity("");
 	}
 
 	textResponse(content: string, idleCount: number): void {
 		if (content) {
-			this.conv.addStep({
-				icon: "💭",
-				title: `回复: ${compact(content)}`,
-				detail: content,
+			this.conv.appendLog({
+				kind: "content",
+				text: compact(content),
+				detail: content.length > INLINE_LEN ? content : undefined,
 			});
 		}
 		if (idleCount > 0) {
-			this.conv.setActivity(`idle=${idleCount}`);
+			this.conv.appendLog({ kind: "info", text: `idle=${idleCount}` });
 		}
 	}
 
 	toolCallStart(tc: ToolCallRecord): void {
-		this.currentToolName = tc.tool;
-		this.toolOutputBuf = "";
-		const argsText = compact(safeStringify(tc.args), 150);
-		this.conv.addStep({
-			icon: "🔧",
-			title: `${tc.tool}: ${argsText}`,
+		this.curTool = tc.tool;
+		this.toolOutBuf = "";
+		this.conv.appendLog({
+			kind: "tool_start",
+			text: `**${tc.tool}** ${fmtToolArgs(tc.args)}`,
+			detail: fmtToolArgsDetail(tc.tool, tc.args),
 		});
 	}
 
-	toolCallArgChunk(
-		_index: number,
-		_name: string | undefined,
-		_chunk: string,
-	): void {
-		// 飞书卡片不支持逐字符流式，忽略参数 chunk
+	toolCallArgChunk(): void {
+		// 飞书卡片无法逐字符流式，忽略
 	}
 
 	toolResultChunk(_tool: string, chunk: string): void {
-		this.toolOutputBuf += chunk;
+		this.toolOutBuf += chunk;
 		this.scheduleFlush();
 	}
 
 	toolCallEnd(result: ToolResult): void {
-		this.cancelFlushTimer();
-		const summary = toolResultSummary(result);
-		const isError = result.tool === "exec" && result.exitCode !== 0;
-		const detail = this.toolOutputBuf.trim()
-			? `**结果:** ${summary}\n\n\`\`\`\n${compact(this.toolOutputBuf, 600)}\n\`\`\``
-			: `**结果:** ${summary}`;
+		this.stopTimer();
+		const summary = fmtToolResult(result);
+		const isErr = result.tool === "exec" && result.exitCode !== 0;
+		const output = this.toolOutBuf.trim();
 
-		this.conv.updateLastStep({
-			icon: isError ? "❌" : "✅",
-			title: `${result.tool}: ${summary}`,
+		let detail: string | undefined;
+		if (output) {
+			detail = `**${result.tool}** → ${summary}\n\`\`\`\n${compact(output, DETAIL_LEN)}\n\`\`\``;
+		}
+
+		this.conv.appendLog({
+			kind: isErr ? "tool_error" : "tool_end",
+			text: `**${result.tool}** → ${summary}`,
 			detail,
 		});
 		this.conv.setActivity("");
-		this.toolOutputBuf = "";
-		this.currentToolName = "";
+		this.toolOutBuf = "";
+		this.curTool = "";
 	}
 
 	submitAccepted(): void {
-		this.conv.addStep({ icon: "✅", title: "Submit 已接受" });
+		this.conv.appendLog({ kind: "result_ok", text: "submit accepted" });
 	}
 
 	submitRejected(attempt: number, maxAttempts: number, error: string): void {
-		this.conv.addStep({
-			icon: "❌",
-			title: `Submit 被拒绝 (${attempt}/${maxAttempts})`,
+		this.conv.appendLog({
+			kind: "result_err",
+			text: `submit rejected (${attempt}/${maxAttempts})`,
 			detail: error,
 		});
 	}
 
 	agentTerminated(reason: string): void {
-		this.conv.addStep({
-			icon: "❌",
-			title: `Agent 终止: ${compact(reason)}`,
+		this.conv.appendLog({
+			kind: "result_err",
+			text: compact(reason),
 		});
 	}
 
-	// ── 节流刷新 ──
+	// ── 节流 ──
 
 	private scheduleFlush(): void {
-		if (this.flushTimer) return;
+		if (this.timer) return;
 		const elapsed = Date.now() - this.lastFlush;
 		const delay = Math.max(0, THROTTLE_MS - elapsed);
-		this.flushTimer = setTimeout(() => {
-			this.flushTimer = null;
+		this.timer = setTimeout(() => {
+			this.timer = null;
 			this.flushBuffers();
 		}, delay);
 	}
 
-	private cancelFlushTimer(): void {
-		if (this.flushTimer) {
-			clearTimeout(this.flushTimer);
-			this.flushTimer = null;
+	private stopTimer(): void {
+		if (this.timer) {
+			clearTimeout(this.timer);
+			this.timer = null;
 		}
 	}
 
 	private flushBuffers(): void {
 		this.lastFlush = Date.now();
-		if (this.thinkingBuf) {
-			this.conv.setActivity(`💭 思考中...\n${compact(this.thinkingBuf, 300)}`);
+		if (this.thinkBuf) {
+			this.conv.setActivity(`│ thinking…\n│ ${compact(this.thinkBuf, 200)}`);
 		} else if (this.contentBuf) {
-			this.conv.setActivity(`📝 输出中...\n${compact(this.contentBuf, 300)}`);
-		} else if (this.toolOutputBuf) {
+			this.conv.setActivity(compact(this.contentBuf, 200));
+		} else if (this.toolOutBuf) {
 			this.conv.setActivity(
-				`🔧 ${this.currentToolName} 执行中...\n${compact(this.toolOutputBuf, 300)}`,
+				`│ ${this.curTool} 执行中…\n│ ${compact(this.toolOutBuf, 200)}`,
 			);
 		}
 	}

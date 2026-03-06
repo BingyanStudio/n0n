@@ -1,133 +1,117 @@
 /**
  * FeishuConversation — 飞书会话消息管理器
  *
- * 管理一次 agent round 中的飞书消息生命周期：
- * - 使用单张「步骤流卡片」实时更新进度（模仿 CLI 流式体验）
- * - 通过队列串行化所有飞书 API 调用，避免竞态
- * - 步骤状态可视化：⏳ 进行中 / ✅ 完成 / ❌ 失败
+ * 管理一次 agent round 的飞书消息生命周期。
+ * 核心设计：单张「过程卡片」实时更新，讲述完整因果链。
+ * - 工作中：grey header，日志流逐步追加
+ * - 完成后：彩色 header，底部总结
+ * - 所有 API 调用通过队列串行化，避免竞态
  */
 
 import type { FeishuBot, FeishuMessageContext } from "./bot.ts";
 import {
-	buildStepCard,
+	buildProcessCard,
 	buildTextCard,
 	type CardHeaderTemplate,
-	type StepEntry,
+	type LogEntry,
 } from "./cards/index.ts";
 
-/** 单张卡片内容上限（飞书限制约 28KB，留余量） */
-const MAX_DETAIL_LEN = 800;
-const MAX_STEPS = 50;
-
-/** 截断文本 */
-function truncate(text: string, limit: number): string {
-	if (text.length <= limit) return text;
-	return `${text.slice(0, limit)}...(truncated)`;
-}
+const MAX_LOGS = 60;
 
 export class FeishuConversation {
 	private queue: Promise<void> = Promise.resolve();
-	private steps: StepEntry[] = [];
-	private currentActivity = "";
-	private summaryText = "";
-	private cardTitle = "🤖 Agent 工作中...";
-	private cardTemplate: CardHeaderTemplate = "blue";
-	private cardMessageId: string | null = null;
+	private logs: LogEntry[] = [];
+	private activity = "";
+	private summary = "";
+	private title = "n0n · 处理中";
+	private template: CardHeaderTemplate = "grey";
+	private cardId: string | null = null;
 
 	private constructor(
 		private readonly bot: FeishuBot,
 		private readonly ctx: FeishuMessageContext,
 	) {}
 
-	/**
-	 * 创建会话：发送初始步骤卡片
-	 */
+	/** 创建会话：发送初始过程卡片 */
 	static async create(
 		bot: FeishuBot,
 		ctx: FeishuMessageContext,
 	): Promise<FeishuConversation> {
 		const conv = new FeishuConversation(bot, ctx);
-		const card = buildStepCard({
-			title: conv.cardTitle,
-			template: conv.cardTemplate,
-			steps: [],
-			currentActivity: "初始化中...",
+		const initCard = buildProcessCard({
+			title: conv.title,
+			template: conv.template,
+			logs: [],
+			activity: "初始化...",
 		});
-		conv.cardMessageId = await bot.createCardMessage(ctx, card);
+		conv.cardId = await bot.createCardMessage(ctx, initCard);
 		return conv;
 	}
 
-	/** 等待所有排队的消息操作完成 */
+	/** 等待所有排队操作完成 */
 	drain(): Promise<void> {
 		return this.queue;
 	}
 
-	/** 更新卡片标题 */
-	setTitle(title: string, template?: CardHeaderTemplate): void {
-		this.cardTitle = title;
-		if (template) this.cardTemplate = template;
-		this.flushCard();
-	}
-
-	/** 添加新步骤 */
-	addStep(step: StepEntry): void {
-		this.steps.push(step);
-		if (this.steps.length > MAX_STEPS) {
-			this.steps = this.steps.slice(-MAX_STEPS);
+	/** 追加日志条目 */
+	appendLog(entry: LogEntry): void {
+		this.logs.push(entry);
+		if (this.logs.length > MAX_LOGS) {
+			this.logs = this.logs.slice(-MAX_LOGS);
 		}
-		this.currentActivity = "";
-		this.flushCard();
+		this.activity = "";
+		this.flush();
 	}
 
-	/** 更新最后一个步骤的状态 */
-	updateLastStep(update: Partial<StepEntry>): void {
-		const last = this.steps[this.steps.length - 1];
+	/** 更新最后一条日志 */
+	updateLastLog(patch: Partial<LogEntry>): void {
+		const last = this.logs[this.logs.length - 1];
 		if (!last) return;
-		Object.assign(last, update);
-		this.flushCard();
+		Object.assign(last, patch);
+		this.flush();
 	}
 
-	/** 设置当前活动文本（流式思考/输出） */
+	/** 设置标题 */
+	setTitle(title: string, template?: CardHeaderTemplate): void {
+		this.title = title;
+		if (template) this.template = template;
+		this.flush();
+	}
+
+	/** 设置当前活动（流式状态文本） */
 	setActivity(text: string): void {
-		this.currentActivity = truncate(text, MAX_DETAIL_LEN);
-		this.flushCard();
+		this.activity = text;
+		this.flush();
 	}
 
-	/** 设置总结文本 */
-	setSummary(text: string): void {
-		this.summaryText = text;
-		this.flushCard();
-	}
-
-	/** 完成：更新卡片为最终状态 */
+	/** 完成：切换为最终状态 */
 	finish(title: string, template: CardHeaderTemplate, summary: string): void {
-		this.cardTitle = title;
-		this.cardTemplate = template;
-		this.summaryText = summary;
-		this.currentActivity = "";
-		this.flushCard();
+		this.title = title;
+		this.template = template;
+		this.summary = summary;
+		this.activity = "";
+		this.flush();
 	}
 
-	/** 发送独立卡片（不影响步骤流卡片） */
+	/** 发送独立文本卡片（不影响过程卡片） */
 	sendSeparateCard(title: string, text: string): void {
 		this.enqueue(async () => {
-			const card = buildTextCard(title, text);
-			await this.bot.createCardMessage(this.ctx, card);
+			await this.bot.createCardMessage(this.ctx, buildTextCard(title, text));
 		});
 	}
 
-	/** 将当前状态刷新到飞书卡片 */
-	private flushCard(): void {
+	/** 刷新过程卡片到飞书 */
+	private flush(): void {
 		this.enqueue(async () => {
-			if (!this.cardMessageId) return;
-			const card = buildStepCard({
-				title: this.cardTitle,
-				template: this.cardTemplate,
-				steps: this.steps,
-				currentActivity: this.currentActivity || undefined,
-				summary: this.summaryText || undefined,
+			if (!this.cardId) return;
+			const c = buildProcessCard({
+				title: this.title,
+				template: this.template,
+				logs: this.logs,
+				activity: this.activity || undefined,
+				summary: this.summary || undefined,
 			});
-			await this.bot.editCardMessage(this.cardMessageId, card);
+			await this.bot.editCardMessage(this.cardId, c);
 		});
 	}
 

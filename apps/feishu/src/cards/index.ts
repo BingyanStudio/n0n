@@ -3,10 +3,11 @@
  */
 
 export {
-	buildStepCard,
+	buildProcessCard,
 	buildTextCard,
 	chunkText,
+	type LogEntry,
+	type LogEntryKind,
 	mkCollapsiblePanel,
-	type StepEntry,
 } from "./builder.ts";
 export type { CardHeaderTemplate, FeishuCardContent } from "./types.ts";

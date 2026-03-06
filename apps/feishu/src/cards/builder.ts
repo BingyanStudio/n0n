@@ -1,8 +1,11 @@
 /**
  * 飞书卡片构建器
  *
- * 提供各种卡片模板的构建函数，将业务数据转换为飞书卡片 JSON。
- * 所有卡片使用 Interactive Card v2.0 schema。
+ * 设计原则：沉稳、信息分层、因果清晰。
+ * 参考 CLI RichRenderer 的排版风格：
+ * - 用符号（▸ ◂ │ ─）代替花哨 emoji 建立视觉层次
+ * - 信息密度高，通过缩进和分隔线区分层级
+ * - 折叠面板收纳详情，主视图保持简洁
  */
 
 import type {
@@ -15,15 +18,15 @@ import type {
 
 // ── 基础构建 ──
 
-function normalizeMarkdown(content: string): string {
+function norm(content: string): string {
 	return content.trim() || "(empty)";
 }
 
-function mkMarkdown(content: string): MarkdownElement {
-	return { tag: "markdown", content: normalizeMarkdown(content) };
+function md(content: string): MarkdownElement {
+	return { tag: "markdown", content: norm(content) };
 }
 
-function mkCard(
+function card(
 	title: string,
 	template: CardHeaderTemplate,
 	elements: CardBodyElement[],
@@ -56,7 +59,7 @@ export function mkCollapsiblePanel(
 		},
 		vertical_spacing: "8px",
 		padding: "8px 8px 8px 8px",
-		elements: [mkMarkdown(markdown)],
+		elements: [md(markdown)],
 	};
 }
 
@@ -67,79 +70,115 @@ export function buildTextCard(
 	text: string,
 	template: CardHeaderTemplate = "blue",
 ): FeishuCardContent {
-	return mkCard(title, template, [mkMarkdown(text)]);
+	return card(title, template, [md(text)]);
 }
 
-// ── 步骤流卡片（核心：流式显示用） ──
+// ── 日志条目类型 ──
 
-export interface StepEntry {
-	/** 步骤状态 emoji */
-	icon: "⏳" | "✅" | "❌" | "🔧" | "💭" | "📝";
-	/** 步骤标题 */
-	title: string;
-	/** 步骤详情（可选，折叠显示） */
+export type LogEntryKind =
+	| "round"
+	| "thinking"
+	| "content"
+	| "tool_start"
+	| "tool_end"
+	| "tool_error"
+	| "info"
+	| "result_ok"
+	| "result_err";
+
+export interface LogEntry {
+	kind: LogEntryKind;
+	text: string;
+	/** 可折叠的详情内容 */
 	detail?: string;
-	/** 是否展开详情 */
-	expanded?: boolean;
 }
+
+/** 将 LogEntry 渲染为单行 markdown */
+function renderLogLine(entry: LogEntry): string {
+	switch (entry.kind) {
+		case "round":
+			return `**${entry.text}**`;
+		case "thinking":
+			return `  │ ${entry.text}`;
+		case "content":
+			return `  ${entry.text}`;
+		case "tool_start":
+			return `  ▸ ${entry.text}`;
+		case "tool_end":
+			return `  ◂ ${entry.text}`;
+		case "tool_error":
+			return `  ✗ ${entry.text}`;
+		case "info":
+			return `  · ${entry.text}`;
+		case "result_ok":
+			return `**✔ ${entry.text}**`;
+		case "result_err":
+			return `**✗ ${entry.text}**`;
+	}
+}
+
+// ── 过程卡片（核心：流式显示用） ──
 
 /**
- * 构建步骤流卡片 — 模仿 CLI 的逐步显示效果
+ * 构建过程卡片 — 模仿 CLI 的信息流排版
  *
- * 卡片结构：
- * - Header: 标题 + 状态
- * - Body: 步骤列表（每步一行 markdown，带状态 emoji）
- * - 可选：当前思考/输出区域
- * - 可选：折叠的详细日志
+ * 布局：
+ * - Header: 灰色（工作中）或彩色（完成）
+ * - 主体: 日志流（每行一个事件，用符号区分类型）
+ * - 折叠面板: 工具调用详情（输入/输出）
+ * - 底部: 当前活动 或 最终总结
  */
-export function buildStepCard(opts: {
+export function buildProcessCard(opts: {
 	title: string;
 	template?: CardHeaderTemplate;
-	steps: StepEntry[];
-	currentActivity?: string;
+	logs: LogEntry[];
+	activity?: string;
 	summary?: string;
 }): FeishuCardContent {
 	const elements: CardBodyElement[] = [];
 
-	// 步骤列表
-	if (opts.steps.length > 0) {
-		const stepsMarkdown = opts.steps
-			.map((s) => `${s.icon} ${s.title}`)
-			.join("\n");
-		elements.push(mkMarkdown(stepsMarkdown));
+	// 日志流：主体信息
+	if (opts.logs.length > 0) {
+		const lines = opts.logs.map(renderLogLine).join("\n");
+		elements.push(md(lines));
 	}
 
-	// 有详情的步骤 → 折叠面板
-	const detailSteps = opts.steps.filter((s) => s.detail);
-	if (detailSteps.length > 0) {
-		elements.push({ tag: "hr" });
-		for (const s of detailSteps) {
+	// 折叠详情面板（仅展示有 detail 的条目）
+	const detailed = opts.logs.filter((e) => e.detail);
+	if (detailed.length > 0) {
+		for (const entry of detailed) {
+			const prefix =
+				entry.kind === "tool_start"
+					? "▸"
+					: entry.kind === "tool_end"
+						? "◂"
+						: "·";
 			elements.push(
 				mkCollapsiblePanel(
-					`${s.icon} ${s.title}`,
-					s.detail ?? "",
-					s.expanded ?? false,
+					`${prefix} ${entry.text}`,
+					entry.detail ?? "",
+					false,
 				),
 			);
 		}
 	}
 
-	// 当前活动（流式思考/输出）
-	if (opts.currentActivity) {
+	// 当前活动（流式状态）
+	if (opts.activity) {
 		elements.push({ tag: "hr" });
-		elements.push(mkMarkdown(`💭 ${opts.currentActivity}`));
+		elements.push(md(opts.activity));
 	}
 
-	// 总结
+	// 最终总结
 	if (opts.summary) {
 		elements.push({ tag: "hr" });
-		elements.push(mkMarkdown(opts.summary));
+		elements.push(md(opts.summary));
 	}
 
-	return mkCard(
+	return card(
 		opts.title,
-		opts.template ?? "blue",
-		elements.length > 0 ? elements : [mkMarkdown("初始化中...")],
+		opts.template ?? "grey",
+		elements.length > 0 ? elements : [md("...")],
 	);
 }
 
