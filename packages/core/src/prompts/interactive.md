@@ -95,12 +95,25 @@ export default async function run() {
 import { z } from "zod";
 import { generate } from "../../src/index.ts";
 
+// 1. Gather data deterministically
+const res = await fetch("https://hacker-news.firebaseio.com/v0/topstories.json");
+const ids = (await res.json()).slice(0, 5);
+const stories = await Promise.all(
+  ids.map((id: number) =>
+    fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`).then(r => r.json())
+  ),
+);
+
+// 2. Pass collected data to generate for AI reasoning
 const { result } = await generate(
-  "Summarize the top 5 Hacker News stories",
+  `Summarize these Hacker News stories:\n${JSON.stringify(stories, null, 2)}`,
   {
     schema: z.object({
-      title: z.string(),
-      summary: z.string(),
+      summaries: z.array(z.object({
+        title: z.string(),
+        insight: z.string(),
+      })),
+      overall: z.string(),
     }),
   },
 );

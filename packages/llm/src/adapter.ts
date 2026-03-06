@@ -96,7 +96,7 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 				const parts: string[] = [];
 				if (msg.context) parts.push(msg.context);
 				if (msg.capabilities) parts.push(msg.capabilities);
-				parts.push(`<user paraphrase-in="en,ja">\n${msg.content}\n</user>`);
+				parts.push(`The user revealed a design detail:\n${msg.content}`);
 				result.push({ role: "user", content: parts.join("\n\n") });
 				break;
 			}
