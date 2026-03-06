@@ -5,11 +5,11 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
+import { paths } from "../config.ts";
 import { delegateTask } from "../task/delegate.ts";
+import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
-
-import { paths } from "../config.ts";
 
 const SCHEDULES_DIR = paths.schedules;
 
@@ -20,28 +20,6 @@ export interface ScheduleEntry {
 	workflow: string | null;
 	prompt: string;
 	filePath: string;
-}
-
-function parseMdc(content: string): {
-	meta: Record<string, string>;
-	body: string;
-} {
-	const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-	if (!match) return { meta: {}, body: content.trim() };
-
-	const meta: Record<string, string> = {};
-	for (const line of (match[1] ?? "").split("\n")) {
-		const colonIdx = line.indexOf(":");
-		if (colonIdx === -1) continue;
-		const key = line.slice(0, colonIdx).trim();
-		const val = line
-			.slice(colonIdx + 1)
-			.trim()
-			.replace(/^["']|["']$/g, "");
-		meta[key] = val;
-	}
-
-	return { meta, body: (match[2] ?? "").trim() };
 }
 
 export async function loadSchedules(): Promise<ScheduleEntry[]> {
@@ -56,7 +34,7 @@ export async function loadSchedules(): Promise<ScheduleEntry[]> {
 	for (const file of files) {
 		try {
 			const content = await Bun.file(file).text();
-			const { meta, body } = parseMdc(content);
+			const { meta, body } = parseFrontmatter(content);
 
 			if (!meta.name || !meta.cron) continue;
 
@@ -120,7 +98,7 @@ export async function startScheduler(): Promise<void> {
 	running = true;
 
 	console.log(
-		"[scheduler] Started. Watching workflows/schedules/*.mdc every 60s.",
+		`[scheduler] Started. Watching ${SCHEDULES_DIR}/*.mdc every 60s.`,
 	);
 
 	const tick = async () => {
