@@ -1,11 +1,9 @@
 /**
  * FeishuConversation — 飞书会话消息管理器
  *
- * 管理一次 agent round 的飞书消息生命周期。
- * 核心设计：单张「过程卡片」实时更新，讲述完整因果链。
- * - 工作中：grey header，日志流逐步追加
- * - 完成后：彩色 header，底部总结
- * - 所有 API 调用通过队列串行化，避免竞态
+ * 按轮次管理过程卡片：每个 round 是一个折叠面板，
+ * 最新 round 展开，历史 round 自动折叠。
+ * 所有飞书 API 调用通过队列串行化。
  */
 
 import type { FeishuBot, FeishuMessageContext } from "./bot.ts";
@@ -13,14 +11,15 @@ import {
 	buildProcessCard,
 	buildTextCard,
 	type CardHeaderTemplate,
-	type LogEntry,
+	type LogLine,
+	type RoundBlock,
 } from "./cards/index.ts";
 
-const MAX_LOGS = 60;
+const MAX_ROUNDS = 20;
 
 export class FeishuConversation {
 	private queue: Promise<void> = Promise.resolve();
-	private logs: LogEntry[] = [];
+	private rounds: RoundBlock[] = [];
 	private activity = "";
 	private summary = "";
 	private title = "n0n · 处理中";
@@ -32,42 +31,44 @@ export class FeishuConversation {
 		private readonly ctx: FeishuMessageContext,
 	) {}
 
-	/** 创建会话：发送初始过程卡片 */
+	/** 创建会话：发送初始卡片 */
 	static async create(
 		bot: FeishuBot,
 		ctx: FeishuMessageContext,
 	): Promise<FeishuConversation> {
 		const conv = new FeishuConversation(bot, ctx);
-		const initCard = buildProcessCard({
+		const c = buildProcessCard({
 			title: conv.title,
 			template: conv.template,
-			logs: [],
+			rounds: [],
 			activity: "初始化...",
 		});
-		conv.cardId = await bot.createCardMessage(ctx, initCard);
+		conv.cardId = await bot.createCardMessage(ctx, c);
 		return conv;
 	}
 
-	/** 等待所有排队操作完成 */
 	drain(): Promise<void> {
 		return this.queue;
 	}
 
-	/** 追加日志条目 */
-	appendLog(entry: LogEntry): void {
-		this.logs.push(entry);
-		if (this.logs.length > MAX_LOGS) {
-			this.logs = this.logs.slice(-MAX_LOGS);
+	/** 开始新轮次 */
+	startRound(title: string): void {
+		// 将之前的 round 标记为非 active
+		for (const r of this.rounds) {
+			r.active = false;
+		}
+		this.rounds.push({ title, lines: [], active: true });
+		if (this.rounds.length > MAX_ROUNDS) {
+			this.rounds = this.rounds.slice(-MAX_ROUNDS);
 		}
 		this.activity = "";
 		this.flush();
 	}
 
-	/** 更新最后一条日志 */
-	updateLastLog(patch: Partial<LogEntry>): void {
-		const last = this.logs[this.logs.length - 1];
-		if (!last) return;
-		Object.assign(last, patch);
+	/** 向当前轮次追加日志行 */
+	appendLine(line: LogLine): void {
+		const cur = this.rounds[this.rounds.length - 1];
+		if (cur) cur.lines.push(line);
 		this.flush();
 	}
 
@@ -78,36 +79,39 @@ export class FeishuConversation {
 		this.flush();
 	}
 
-	/** 设置当前活动（流式状态文本） */
+	/** 设置流式活动文本 */
 	setActivity(text: string): void {
 		this.activity = text;
 		this.flush();
 	}
 
-	/** 完成：切换为最终状态 */
+	/** 完成 */
 	finish(title: string, template: CardHeaderTemplate, summary: string): void {
 		this.title = title;
 		this.template = template;
 		this.summary = summary;
 		this.activity = "";
+		// 所有 round 折叠
+		for (const r of this.rounds) {
+			r.active = false;
+		}
 		this.flush();
 	}
 
-	/** 发送独立文本卡片（不影响过程卡片） */
+	/** 发送独立卡片 */
 	sendSeparateCard(title: string, text: string): void {
 		this.enqueue(async () => {
 			await this.bot.createCardMessage(this.ctx, buildTextCard(title, text));
 		});
 	}
 
-	/** 刷新过程卡片到飞书 */
 	private flush(): void {
 		this.enqueue(async () => {
 			if (!this.cardId) return;
 			const c = buildProcessCard({
 				title: this.title,
 				template: this.template,
-				logs: this.logs,
+				rounds: this.rounds,
 				activity: this.activity || undefined,
 				summary: this.summary || undefined,
 			});
@@ -115,7 +119,6 @@ export class FeishuConversation {
 		});
 	}
 
-	/** 串行化队列 */
 	private enqueue(task: () => Promise<void>): void {
 		this.queue = this.queue.then(task).catch((err) => {
 			console.error("[feishu] message update failed:", err);

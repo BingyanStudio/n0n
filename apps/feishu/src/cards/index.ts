@@ -6,8 +6,7 @@ export {
 	buildProcessCard,
 	buildTextCard,
 	chunkText,
-	type LogEntry,
-	type LogEntryKind,
-	mkCollapsiblePanel,
+	type LogLine,
+	type RoundBlock,
 } from "./builder.ts";
 export type { CardHeaderTemplate, FeishuCardContent } from "./types.ts";

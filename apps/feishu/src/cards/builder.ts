@@ -1,11 +1,22 @@
 /**
  * 飞书卡片构建器
  *
- * 设计原则：沉稳、信息分层、因果清晰。
- * 参考 CLI RichRenderer 的排版风格：
- * - 用符号（▸ ◂ │ ─）代替花哨 emoji 建立视觉层次
- * - 信息密度高，通过缩进和分隔线区分层级
- * - 折叠面板收纳详情，主视图保持简洁
+ * 核心设计：按轮次分块展示，每个 round 是一个折叠面板。
+ * 最新 round 展开，历史 round 折叠，建立清晰的因果层级。
+ *
+ * 布局结构：
+ * ┌─ n0n · round 2/30 ─────── [grey] ─┐
+ * │                                     │
+ * │  ▸ Round 1  (collapsed)             │
+ * │                                     │
+ * │  ▾ Round 2  (expanded)              │
+ * │  │ thinking…                        │
+ * │  │ ▸ exec  command=ls               │
+ * │  │ ◂ exec → exit=0 0.3s            │
+ * │  │ response text…                   │
+ * │  ──────────────────────             │
+ * │  ✔ 任务完成: …                       │
+ * └─────────────────────────────────────┘
  */
 
 import type {
@@ -16,30 +27,30 @@ import type {
 	MarkdownElement,
 } from "./types.ts";
 
-// ── 基础构建 ──
+// ── 基础 ──
 
-function norm(content: string): string {
-	return content.trim() || "(empty)";
+function norm(s: string): string {
+	return s.trim() || "(empty)";
 }
 
-function md(content: string): MarkdownElement {
-	return { tag: "markdown", content: norm(content) };
+function md(s: string): MarkdownElement {
+	return { tag: "markdown", content: norm(s) };
 }
 
-function card(
+function mkCard(
 	title: string,
-	template: CardHeaderTemplate,
+	tpl: CardHeaderTemplate,
 	elements: CardBodyElement[],
 ): FeishuCardContent {
 	return {
 		schema: "2.0",
 		config: { wide_screen_mode: true, enable_forward: true },
-		header: { template, title: { tag: "plain_text", content: title } },
+		header: { template: tpl, title: { tag: "plain_text", content: title } },
 		body: { elements },
 	};
 }
 
-export function mkCollapsiblePanel(
+function mkPanel(
 	title: string,
 	markdown: string,
 	expanded = false,
@@ -68,104 +79,61 @@ export function mkCollapsiblePanel(
 export function buildTextCard(
 	title: string,
 	text: string,
-	template: CardHeaderTemplate = "blue",
+	tpl: CardHeaderTemplate = "blue",
 ): FeishuCardContent {
-	return card(title, template, [md(text)]);
+	return mkCard(title, tpl, [md(text)]);
 }
 
-// ── 日志条目类型 ──
+// ── 轮次数据模型 ──
 
-export type LogEntryKind =
-	| "round"
-	| "thinking"
-	| "content"
-	| "tool_start"
-	| "tool_end"
-	| "tool_error"
-	| "info"
-	| "result_ok"
-	| "result_err";
-
-export interface LogEntry {
-	kind: LogEntryKind;
+/** 轮次内的单条日志 */
+export interface LogLine {
+	/** 前缀符号控制缩进和语义 */
+	prefix: "│" | "▸" | "◂" | "✗" | "·" | "✔";
 	text: string;
-	/** 可折叠的详情内容 */
-	detail?: string;
 }
 
-/** 将 LogEntry 渲染为单行 markdown */
-function renderLogLine(entry: LogEntry): string {
-	switch (entry.kind) {
-		case "round":
-			return `**${entry.text}**`;
-		case "thinking":
-			return `  │ ${entry.text}`;
-		case "content":
-			return `  ${entry.text}`;
-		case "tool_start":
-			return `  ▸ ${entry.text}`;
-		case "tool_end":
-			return `  ◂ ${entry.text}`;
-		case "tool_error":
-			return `  ✗ ${entry.text}`;
-		case "info":
-			return `  · ${entry.text}`;
-		case "result_ok":
-			return `**✔ ${entry.text}**`;
-		case "result_err":
-			return `**✗ ${entry.text}**`;
-	}
+/** 一个完整轮次的数据 */
+export interface RoundBlock {
+	/** 轮次标题，如 "Round 1 · 2 msgs" */
+	title: string;
+	/** 轮次内的日志行 */
+	lines: LogLine[];
+	/** 是否正在进行中 */
+	active?: boolean;
 }
 
-// ── 过程卡片（核心：流式显示用） ──
+/** 将 RoundBlock 渲染为折叠面板内的 markdown */
+function renderRoundMarkdown(block: RoundBlock): string {
+	if (block.lines.length === 0) return "...";
+	return block.lines.map((l) => `${l.prefix}  ${l.text}`).join("\n");
+}
 
 /**
- * 构建过程卡片 — 模仿 CLI 的信息流排版
+ * 构建过程卡片 — 按轮次分块
  *
- * 布局：
- * - Header: 灰色（工作中）或彩色（完成）
- * - 主体: 日志流（每行一个事件，用符号区分类型）
- * - 折叠面板: 工具调用详情（输入/输出）
- * - 底部: 当前活动 或 最终总结
+ * 每个 round 是一个折叠面板：
+ * - 最新（active）round 展开
+ * - 历史 round 折叠
+ * - 底部可选 activity（流式状态）和 summary（最终结果）
  */
 export function buildProcessCard(opts: {
 	title: string;
 	template?: CardHeaderTemplate;
-	logs: LogEntry[];
+	rounds: RoundBlock[];
 	activity?: string;
 	summary?: string;
 }): FeishuCardContent {
 	const elements: CardBodyElement[] = [];
 
-	// 日志流：主体信息
-	if (opts.logs.length > 0) {
-		const lines = opts.logs.map(renderLogLine).join("\n");
-		elements.push(md(lines));
+	for (const [i, block] of opts.rounds.entries()) {
+		const isLast = i === opts.rounds.length - 1;
+		const expanded = isLast && (block.active ?? true);
+		elements.push(mkPanel(block.title, renderRoundMarkdown(block), expanded));
 	}
 
-	// 折叠详情面板（仅展示有 detail 的条目）
-	const detailed = opts.logs.filter((e) => e.detail);
-	if (detailed.length > 0) {
-		for (const entry of detailed) {
-			const prefix =
-				entry.kind === "tool_start"
-					? "▸"
-					: entry.kind === "tool_end"
-						? "◂"
-						: "·";
-			elements.push(
-				mkCollapsiblePanel(
-					`${prefix} ${entry.text}`,
-					entry.detail ?? "",
-					false,
-				),
-			);
-		}
-	}
-
-	// 当前活动（流式状态）
+	// 流式活动状态
 	if (opts.activity) {
-		elements.push({ tag: "hr" });
 		elements.push(md(opts.activity));
 	}
 
@@ -175,14 +143,14 @@ export function buildProcessCard(opts: {
 		elements.push(md(opts.summary));
 	}
 
-	return card(
-		opts.title,
-		opts.template ?? "grey",
-		elements.length > 0 ? elements : [md("...")],
-	);
+	if (elements.length === 0) {
+		elements.push(md("初始化..."));
+	}
+
+	return mkCard(opts.title, opts.template ?? "grey", elements);
 }
 
-// ── 文本分块工具 ──
+// ── 工具 ──
 
 export function chunkText(text: string, size: number): string[] {
 	if (text.length <= size) return [text];
