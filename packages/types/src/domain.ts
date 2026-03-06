@@ -17,7 +17,7 @@ export interface UserTextMessage {
 	content: string;
 }
 
-/** 真实用户输入（交互模式），adapter 负责包装 paraphrase 指令和拼接上下文 */
+/** 真实用户输入（交互模式），adapter 负责包装为设计线索并拼接上下文 */
 export interface UserInputMessage {
 	type: "user_input";
 	content: string;
