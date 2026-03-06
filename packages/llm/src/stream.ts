@@ -152,7 +152,7 @@ function isAbortError(err: unknown): boolean {
 function isSSEChunk(data: unknown): data is SSEChunk {
 	if (typeof data !== "object" || data === null) return false;
 	const obj = data as Record<string, unknown>;
-	return !obj.choices || Array.isArray(obj.choices);
+	return Array.isArray(obj.choices);
 }
 
 interface SSEChunk {

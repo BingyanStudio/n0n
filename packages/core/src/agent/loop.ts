@@ -244,11 +244,19 @@ export async function agentLoop<T = unknown>(
 
 // ── 辅助函数 ──
 
-function validateSubmit<T>(
+/**
+ * 校验 submit 结果是否符合 schema。
+ *
+ * 无 schema 时返回 string（raw 或 JSON.stringify），此时 T 应为 unknown（默认值）。
+ * 若调用方指定了具体 T，必须同时提供 schema，否则类型安全由调用方自行保证。
+ */
+function validateSubmit<T = unknown>(
 	raw: unknown,
 	schema?: ZodType<T>,
 ): { ok: true; value: T } | { ok: false; error: string } {
 	if (!schema) {
+		// 无 schema 时 T 默认为 unknown，string 可安全赋值给 unknown。
+		// 若调用方指定了具体 T 但未提供 schema，此处 as T 是有意为之的降级行为。
 		const value = (typeof raw === "string" ? raw : JSON.stringify(raw)) as T;
 		return { ok: true, value };
 	}
