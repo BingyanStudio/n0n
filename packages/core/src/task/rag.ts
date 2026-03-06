@@ -3,7 +3,8 @@
  */
 
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
+import { Glob } from "bun";
 import { chatCompletion } from "@n0n/llm";
 import type { LLMRequestMessage } from "@n0n/types";
 
@@ -48,17 +49,9 @@ async function collectCandidates(space: SearchSpace): Promise<Candidate[]> {
 		const absDir = resolve(dir);
 		if (!existsSync(absDir)) continue;
 
-		const proc = Bun.spawnSync(
-			["find", absDir, "-type", "f", "!", "-name", ".gitkeep"],
-			{ stdout: "pipe" },
-		);
-		if (proc.exitCode !== 0) continue;
-
-		const files = new TextDecoder()
-			.decode(proc.stdout)
-			.trim()
-			.split("\n")
-			.filter(Boolean);
+		const glob = new Glob("**/*");
+		const files = Array.from(glob.scanSync({ cwd: absDir, absolute: true }))
+			.filter((f) => basename(f) !== ".gitkeep");
 
 		for (const file of files) {
 			try {
