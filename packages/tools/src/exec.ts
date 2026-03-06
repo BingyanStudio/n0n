@@ -2,6 +2,9 @@
  * exec 工具 — 执行 shell 命令
  */
 
+import { unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
 	ExecToolResult,
 	LLMToolDefinition,
@@ -120,8 +123,25 @@ export async function* execToolStream(
 		}
 	}
 
+	// Windows: write command to temp .cmd file to avoid cmd.exe quote-stripping.
+	// cmd /c "bun -e \"...\"" fails because cmd.exe consumes the inner quotes.
+	// A .cmd file preserves all quoting exactly as written.
+	let tmpFile: string | null = null;
+
 	try {
-		const proc = Bun.spawn([...SHELL_CMD, args.command], {
+		let spawnCmd: string[];
+		if (IS_WINDOWS) {
+			tmpFile = join(
+				tmpdir(),
+				`_n0n_exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.cmd`,
+			);
+			await Bun.write(tmpFile, `@${args.command}\n`);
+			spawnCmd = ["cmd", "/c", tmpFile];
+		} else {
+			spawnCmd = [...SHELL_CMD, args.command];
+		}
+
+		const proc = Bun.spawn(spawnCmd, {
 			cwd,
 			stdout: "pipe",
 			stderr: "pipe",
@@ -227,6 +247,14 @@ export async function* execToolStream(
 			stderr: err instanceof Error ? err.message : String(err),
 			durationMs: Date.now() - start,
 		} satisfies ExecToolResult;
+	} finally {
+		if (tmpFile) {
+			try {
+				unlinkSync(tmpFile);
+			} catch {
+				// ignore cleanup errors
+			}
+		}
 	}
 }
 
