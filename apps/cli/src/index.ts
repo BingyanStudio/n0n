@@ -12,7 +12,12 @@
  */
 
 import { rmSync } from "node:fs";
-import { discoverWorkflows, loadSchedules, runWorkflow } from "@n0n/core";
+import {
+	discoverWorkflows,
+	loadSchedules,
+	paths,
+	runWorkflow,
+} from "@n0n/core";
 import { startRepl } from "./repl.ts";
 import { style, writeln } from "./ui/ansi.ts";
 
@@ -80,7 +85,7 @@ async function main(): Promise<void> {
 
 function cleanupTemp(): void {
 	try {
-		rmSync(".temp", { recursive: true, force: true });
+		rmSync(paths.temp, { recursive: true, force: true });
 	} catch {}
 }
 

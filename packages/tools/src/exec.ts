@@ -2,9 +2,8 @@
  * exec 工具 — 执行 shell 命令
  */
 
-import { unlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { join, resolve } from "node:path";
 import type {
 	ExecToolResult,
 	LLMToolDefinition,
@@ -131,8 +130,10 @@ export async function* execToolStream(
 	try {
 		let spawnCmd: string[];
 		if (IS_WINDOWS) {
+			const tempDir = resolve(getToolsConfig().tempDir);
+			if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
 			tmpFile = join(
-				tmpdir(),
+				tempDir,
 				`_n0n_exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.cmd`,
 			);
 			await Bun.write(tmpFile, `@${args.command}\n`);

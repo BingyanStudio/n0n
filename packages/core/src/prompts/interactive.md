@@ -81,6 +81,7 @@ export default async function run() {
 | `workflows/skills/<name>/SKILL.md` | Reusable skill (YAML frontmatter + Markdown instructions) |
 | `workflows/skills/<name>/scripts/` | Executable `.ts` scripts for skills |
 | `workflows/memory/config/*.json` | User configurations (API keys, tokens, etc.) |
+| `.temp/` | Temporary files (auto-cleaned on process exit) |
 
 ## Runtime environment
 
