@@ -5,13 +5,17 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { LLMToolDefinition, WriteToolResult } from "@n0n/types";
+import { z } from "zod";
 
-interface WriteArgs {
-	path: string;
-	search?: string;
-	replace: string;
-	expectedMatches?: number;
-}
+/** write 工具参数 schema — 运行时校验 LLM 传入的参数 */
+export const WriteArgsSchema = z.object({
+	path: z.string(),
+	search: z.string().optional(),
+	replace: z.string(),
+	expectedMatches: z.number().optional(),
+});
+
+export type WriteArgs = z.infer<typeof WriteArgsSchema>;
 
 export const WRITE_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",

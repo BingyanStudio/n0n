@@ -8,13 +8,17 @@ import type {
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
+import { z } from "zod";
 import { getToolsConfig } from "./config.ts";
 
-interface ExecArgs {
-	command: string;
-	cwd?: string;
-	timeout?: number;
-}
+/** exec 工具参数 schema — 运行时校验 LLM 传入的参数 */
+export const ExecArgsSchema = z.object({
+	command: z.string(),
+	cwd: z.string().optional(),
+	timeout: z.number().optional(),
+});
+
+export type ExecArgs = z.infer<typeof ExecArgsSchema>;
 
 const PROJECT_ROOT = process.cwd();
 const IS_WINDOWS = process.platform === "win32";
@@ -162,8 +166,11 @@ export async function* execToolStream(
 			}
 		};
 
-		pumpStream(proc.stdout as ReadableStream, stdoutChunks);
-		pumpStream(proc.stderr as ReadableStream, stderrChunks);
+		if (!proc.stdout || !proc.stderr) {
+			throw new Error("Failed to capture process streams (stdout/stderr)");
+		}
+		pumpStream(proc.stdout, stdoutChunks);
+		pumpStream(proc.stderr, stderrChunks);
 
 		while (streamsDone < 2 || pending.length > 0) {
 			if (pending.length === 0) {

@@ -10,12 +10,11 @@ import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
 import { paths } from "../config.ts";
+import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
-
-import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
 
 const PROMPT_PATH = DELEGATE_PROMPT_PATH;
 

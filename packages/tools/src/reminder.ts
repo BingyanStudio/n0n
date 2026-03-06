@@ -3,11 +3,15 @@
  */
 
 import type { LLMToolDefinition, ReminderToolResult } from "@n0n/types";
+import { z } from "zod";
 
-interface ReminderArgs {
-	content: string;
-	delay?: number;
-}
+/** reminder 工具参数 schema — 运行时校验 LLM 传入的参数 */
+export const ReminderArgsSchema = z.object({
+	content: z.string(),
+	delay: z.number().optional(),
+});
+
+export type ReminderArgs = z.infer<typeof ReminderArgsSchema>;
 
 export const REMINDER_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",

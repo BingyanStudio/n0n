@@ -20,7 +20,11 @@ import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { Glob } from "bun";
 import { z } from "zod";
-import { parseFrontmatter as parseFM, extractNestedBlock, extractRawYaml } from "../utils/frontmatter.ts";
+import {
+	extractNestedBlock,
+	extractRawYaml,
+	parseFrontmatter as parseFM,
+} from "../utils/frontmatter.ts";
 
 /** Skill 元数据（从 SKILL.md frontmatter 解析） */
 export interface SkillMeta {
@@ -164,7 +168,10 @@ export function formatSkillContents(contents: SkillContent[]): string {
 
 /** Skill frontmatter 的 Zod schema — 解析时自动校验 */
 const SkillFrontmatterSchema = z.object({
-	name: z.string().regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/).refine(s => !s.includes("--"), "name must not contain '--'"),
+	name: z
+		.string()
+		.regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/)
+		.refine((s) => !s.includes("--"), "name must not contain '--'"),
 	description: z.string(),
 	license: z.string().optional(),
 	compatibility: z.string().optional(),
@@ -177,7 +184,7 @@ const SkillFrontmatterSchema = z.object({
  */
 function parseSkillMeta(content: string, filePath: string): SkillMeta | null {
 	const result = parseFM(content, SkillFrontmatterSchema);
-	
+
 	// Schema validation failed
 	if (!result) return null;
 
@@ -214,5 +221,3 @@ function parseSkillMeta(content: string, filePath: string): SkillMeta | null {
 
 	return meta;
 }
-
-
