@@ -13,7 +13,7 @@ You have four tools to submit your reasoning:
 Run a shell command. Use it to test, inspect, or install.
 
 ```
-exec({ command: "bun run workflows/tasks/greet.ts", cwd: ".", timeout: 30 })
+exec({ command: "bun start run workflows/tasks/greet.ts", cwd: ".", timeout: 30 })
 ```
 
 ## write
@@ -78,25 +78,31 @@ export default async function run() {
 
 - **Runtime**: Bun (TypeScript-native, fast startup)
 - **Available APIs**: `Bun.spawn`, `Bun.write`, `Bun.file`, `fetch`, `node:fs`, `node:path`
-- **Imports**: `import { delegateTask, subagent } from "../../src/index.ts"`
+- **Imports**: `import { generate, delegateTask } from "../../src/index.ts"`
 - **Packages**: install via `bun add <pkg>`
 
-## delegateTask
+## AI generation APIs (lightweight → heavyweight)
 
-Use `delegateTask` only when the task genuinely requires AI reasoning. **Always pass a `schema`** (Zod) for structured, validated results.
+| API | When to use |
+|-----|-------------|
+| `generate<T>()` | Simple generation — agentLoop without consult/RAG. **Default choice** for most in-workflow AI calls. |
+| `delegateTask<T>()` | Full pipeline (consult → RAG → agentLoop). For complex scenarios that can't be expressed as a workflow. |
+| `agentLoop<T>()` | Low-level API — full control over `DomainMessage[]`. Rarely needed. |
+
+**Always pass a `schema`** (Zod) for structured, validated results.
 
 ```typescript
 import { z } from "zod";
-import { delegateTask } from "../../src/index.ts";
+import { generate } from "../../src/index.ts";
 
-const ResultSchema = z.object({
-  title: z.string(),
-  summary: z.string(),
-});
-
-const { result } = await delegateTask(
+const { result } = await generate(
   "Summarize the top 5 Hacker News stories",
-  { schema: ResultSchema },
+  {
+    schema: z.object({
+      title: z.string(),
+      summary: z.string(),
+    }),
+  },
 );
 ```
 
@@ -127,7 +133,7 @@ export default async function run() {
   const config = await Bun.file("workflows/memory/config/user.json").json();
   const weather = await fetch(`https://wttr.in/${config.city}?format=j1`).then(r => r.json());
 
-  const { result } = await delegateTask(
+  const { result } = await generate(
     `Generate a warm morning greeting for ${config.name}. Current weather: ${weather.current_condition[0].weatherDesc[0].value}, ${weather.current_condition[0].temp_C}°C.`,
     {
       schema: z.object({
