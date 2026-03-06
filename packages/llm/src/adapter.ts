@@ -112,6 +112,20 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 				});
 				break;
 			}
+
+			case "reminder:due":
+				result.push({
+					role: "user",
+					content: `⏰ REMINDER: ${msg.content}\n\n⚠️ You MUST set a new reminder (with updated progress) in your next tool call response.`,
+				});
+				break;
+
+			case "submit:rejected":
+				result.push({
+					role: "user",
+					content: `Your submission was rejected: ${msg.error}\nPlease fix the format and submit again. (attempt ${msg.attempt}/${msg.maxAttempts})`,
+				});
+				break;
 		}
 	}
 

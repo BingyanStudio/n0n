@@ -126,6 +126,22 @@ export interface IdleNudgeMessage {
 	maxIdleRounds: number;
 }
 
+// ── 到期提醒 ──
+/** reminder 到期时注入的消息，adapter 负责生成具体提示词 */
+export interface ReminderDueMessage {
+	type: "reminder:due";
+	content: string;
+}
+
+// ── 提交被拒 ──
+/** submit 校验失败时注入的消息，adapter 负责生成具体提示词 */
+export interface SubmitRejectedMessage {
+	type: "submit:rejected";
+	error: string;
+	attempt: number;
+	maxAttempts: number;
+}
+
 // ── 联合类型 ──
 export type DomainMessage =
 	| SystemMessage
@@ -136,4 +152,6 @@ export type DomainMessage =
 	| AssistantToolCallMessage
 	| ToolResult
 	| IdleNudgeMessage
-	| TurnFeedbackMessage;
+	| TurnFeedbackMessage
+	| ReminderDueMessage
+	| SubmitRejectedMessage;
