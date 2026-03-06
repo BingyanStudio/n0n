@@ -22,6 +22,7 @@ export { agentLoop } from "./agent/loop.ts";
 
 // 发现层
 export type { SkillContent, SkillMeta, WorkflowMeta } from "./discovery.ts";
+export type { WorkflowModule } from "./workflow/runtime.ts";
 export {
 	discoverSkills,
 	discoverWorkflows,

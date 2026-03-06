@@ -17,6 +17,16 @@ export interface WorkflowMeta {
 }
 
 /**
+ * Workflow 模块接口 — workflow 文件必须导出以下之一：
+ * - `export default async function(args?) { ... }`
+ * - `export async function run(args?) { ... }`
+ */
+export interface WorkflowModule {
+	default?: (args?: unknown) => Promise<unknown> | unknown;
+	run?: (args?: unknown) => Promise<unknown> | unknown;
+}
+
+/**
  * 发现所有 workflow（扫描 workflows/ 目录）
  */
 export async function discoverWorkflows(
@@ -65,14 +75,17 @@ export async function runWorkflow(
 	}
 
 	// Bun 原生支持动态 import .ts 文件
-	const mod = await import(absPath);
+	const mod = (await import(absPath)) as WorkflowModule;
 
-	// 约定：workflow 导出 default 函数或 run 函数
+	// 查找入口函数：优先 default export，其次 named export `run`
 	const entryFn = mod.default ?? mod.run;
 
 	if (typeof entryFn !== "function") {
+		const exports = Object.keys(mod).filter((k) => k !== "__esModule");
 		throw new Error(
-			`Workflow ${workflowPath} must export a default function or a 'run' function`,
+			`Workflow ${workflowPath} must export a default function or a named 'run' function.\n` +
+				`Found exports: [${exports.join(", ")}]\n` +
+				`See WorkflowModule interface in @n0n/core for the expected contract.`,
 		);
 	}
 
