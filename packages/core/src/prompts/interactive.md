@@ -60,7 +60,7 @@ export default async function run() {
 
 **Runtime**: Bun (TypeScript-native).
 - **APIs**: `Bun.spawn`, `Bun.write`, `Bun.file`, `fetch`, `node:fs`, `node:path`
-- **Imports**: `import { generate, delegateTask } from "../../src/index.ts"`
+- **Imports**: `import { generate, delegateTask } from "@n0n/core"`
 - **Packages**: `bun add <pkg>`
 
 **AI generation** (lightweight → heavyweight):
