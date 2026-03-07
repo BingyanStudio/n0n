@@ -187,3 +187,70 @@ adapter.ts 中 user 消息的行为指引顺序从：
 1. **exec/write 可解？** → completed
 2. 纯社交？ → chat
 3. 否则 → workflow 推理
+
+# 2026.03.07-2
+
+## 动态 XML Tag 风格切换
+
+### 问题
+
+不同 LLM 模型对 XML-like 标签的理解能力不同。使用模型训练时的原生标签风格可以获得更好的结构化理解效果。
+
+### 各模型 Tag 风格
+
+| 模型族 | 开标签 | 闭标签 | 示例 |
+|--------|--------|--------|------|
+| Deepseek | `<\|DSML\|tag>` | `<\|/DSML\|tag>` | `<\|DSML\|hint>内容<\|/DSML\|hint>` |
+| GLM | `<tag>` | `</tag>` | `<hint>内容</hint>` |
+| Minimax | `]~b]tag` | `[e~[` | `]~b]hint 内容 [e~[` |
+| 默认 | `<tag>` | `</tag>` | 标准 XML 风格 |
+
+### 实现方案
+
+在 `@n0n/llm` 包新增 `tags.ts` 模块：
+
+1. **`detectTagStyle(model)`** — 从 `LLM_MODEL` 字符串推断模型族
+2. **`adaptTags(text)`** — 将文本中的标准 `<tag></tag>` 替换为当前模型的风格（GLM/default 不替换）
+3. **`wrapTag(name, content)`** — 用当前模型风格包裹内容
+
+### 应用点
+
+- **system prompt**：`adapter.ts` 在转换 `system` 消息时调用 `adaptTags()` 处理 `interactive.md` 中的 XML 标签
+- **hint 包装**：`adapter.ts` 在包装 `user_input` 时使用 `wrapTag("hint", content)` 替代硬编码的 `<hint>`
+
+### 设计决策
+
+- prompt 模板（`.md` 文件）始终使用标准 XML 风格编写，运行时由 adapter 层统一转换
+- 这保持了模板的可读性，同时实现了对不同模型的适配
+- `adaptTags` 使用正则 `<(\w+)>` 和 `</(\w+)>` 匹配，不会误伤 markdown 中的 HTML 标签（因为 prompt 中不使用 HTML）
+
+# 2026.03.07-2
+
+当前各个工具的返回和上下文的组织较为松散，建议统一为 xml 和 mardown 混合的结构，结构特点：
+1. 使用 xml like 标签明确区分不同类型的内容。
+2. 使用 xml 内的文本不需要经过额外的格式化处理（比如xml转义），而是直接作为纯文本处理，闭合的前后tag仅仅是为了区分不同内容的边界，便于模型理解。
+3. 在 xml 内部可以使用 markdown 来丰富文本的表达，比如强调、列表等。
+
+xml tag 风格可以直接复用模型学习的 xml tag，不同模型使用不同的tag模式区分：
+
+
+## Deepseek
+
+<|DSML|tag> </|DSML|tag>
+
+## GLM
+
+<tag></tag>
+
+## Minimax
+
+- 开头：]~b]tag
+- 结尾：[e~[
+
+比如
+
+```
+]~b]tag
+这是内容
+[e~[
+```

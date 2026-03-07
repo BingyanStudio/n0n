@@ -5,6 +5,7 @@
  */
 
 import type { DomainMessage, LLMRequestMessage, ToolResult } from "@n0n/types";
+import { adaptTags, wrapTag } from "./tags.ts";
 
 /**
  * 将 ToolResult 转为人类可读的文本摘要
@@ -44,7 +45,7 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 	for (const msg of messages) {
 		switch (msg.type) {
 			case "system":
-				result.push({ role: "system", content: msg.content });
+				result.push({ role: "system", content: adaptTags(msg.content) });
 				break;
 
 			case "user_text":
@@ -98,7 +99,7 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 				if (msg.capabilities) parts.push(msg.capabilities);
 				parts.push(
 					[
-						`<hint>\n${msg.content}\n</hint>`,
+						wrapTag("hint", msg.content),
 						"",
 						"First, ask yourself: can I answer this by calling `exec` or `write`? If yes — do it, then submit as `completed`.",
 						"If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a `chat` response.",
