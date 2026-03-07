@@ -234,12 +234,15 @@ export class FeishuRenderer implements Renderer {
 	private flushBuffers(): void {
 		this.lastFlush = Date.now();
 		if (this.thinkBuf) {
-			this.conv.setActivity(compact(this.thinkBuf, 200));
+			// 思考文本灰色显示，与已提交的 thinking 日志行样式一致
+			this.conv.setActivity(
+				`<font color='grey'>${compact(this.thinkBuf, 200)}</font>`,
+			);
 		} else if (this.contentBuf) {
 			this.conv.setActivity(compact(this.contentBuf, 200));
 		} else if (this.toolOutBuf) {
 			this.conv.setActivity(
-				`${this.curTool}…  ${compact(this.toolOutBuf, 200)}`,
+				`<font color='grey'>${this.curTool}…  ${compact(this.toolOutBuf, 200)}</font>`,
 			);
 		}
 	}
