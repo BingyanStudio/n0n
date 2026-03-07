@@ -1,60 +1,63 @@
 /**
- * 飞书卡片构建器
+ * 飞书卡片构建器 — 严格 Card JSON 2.0
  *
- * 核心设计：按轮次分块展示，每个 round 是一个折叠面板。
- * 最新 round 展开，历史 round 折叠，建立清晰的因果层级。
- *
- * 布局结构：
- * ┌─ n0n · round 2/30 ─────── [grey] ─┐
- * │                                     │
- * │  ▸ Round 1  (collapsed)             │
- * │                                     │
- * │  ▾ Round 2  (expanded)              │
- * │  │ thinking…                        │
- * │  │ ▸ exec  command=ls               │
- * │  │ ◂ exec → exit=0 0.3s            │
- * │  │ response text…                   │
- * │  ──────────────────────             │
- * │  ✔ 任务完成: …                       │
- * └─────────────────────────────────────┘
+ * 信息层级设计（参考 CLI RichRenderer）：
+ * - 轮次标题：div 组件，灰色小字，建立时间线
+ * - thinking：折叠面板内，灰色，次要信息
+ * - 工具调用：markdown，▸/◂ 符号，结构化参数
+ * - 回复内容：markdown，正常字号，主要信息
+ * - 总结：markdown，加粗，最终结果
  */
 
 import type {
 	ButtonElement,
 	CardBodyElement,
-	CardHeaderTemplate,
+	CardTemplate,
 	CollapsiblePanelElement,
 	ColumnSetElement,
+	DivElement,
 	FeishuCardContent,
 	MarkdownElement,
 } from "./types.ts";
 
-// ── 基础 ──
+// ── 基础构建 ──
 
-function norm(s: string): string {
-	return s.trim() || "(empty)";
+function txt(s: string): MarkdownElement {
+	return { tag: "markdown", content: s.trim() || "(empty)" };
 }
 
-function md(s: string): MarkdownElement {
-	return { tag: "markdown", content: norm(s) };
+/** 灰色小字（用于元信息：round 标题、idle 等） */
+function meta(s: string): DivElement {
+	return {
+		tag: "div",
+		text: {
+			tag: "plain_text",
+			content: s,
+			text_size: "notation",
+			text_color: "grey",
+		},
+	};
 }
 
-function mkCard(
+function card(
 	title: string,
-	tpl: CardHeaderTemplate,
+	tpl: CardTemplate,
 	elements: CardBodyElement[],
 ): FeishuCardContent {
 	return {
 		schema: "2.0",
-		config: { wide_screen_mode: true, enable_forward: true },
-		header: { template: tpl, title: { tag: "plain_text", content: title } },
+		config: { update_multi: true },
+		header: {
+			template: tpl,
+			title: { tag: "plain_text", content: title },
+		},
 		body: { elements },
 	};
 }
 
-function mkPanel(
+function panel(
 	title: string,
-	markdown: string,
+	elements: CardBodyElement[],
 	expanded = false,
 ): CollapsiblePanelElement {
 	return {
@@ -70,9 +73,9 @@ function mkPanel(
 			icon_position: "right",
 			icon_expanded_angle: -180,
 		},
-		vertical_spacing: "8px",
-		padding: "8px 8px 8px 8px",
-		elements: [md(markdown)],
+		vertical_spacing: "4px",
+		padding: "4px 8px 4px 8px",
+		elements,
 	};
 }
 
@@ -81,47 +84,71 @@ function mkPanel(
 export function buildTextCard(
 	title: string,
 	text: string,
-	tpl: CardHeaderTemplate = "blue",
+	tpl: CardTemplate = "blue",
 ): FeishuCardContent {
-	return mkCard(title, tpl, [md(text)]);
+	return card(title, tpl, [txt(text)]);
 }
 
-// ── 轮次数据模型 ──
+// ── 过程卡片（Agent 轮次） ──
 
-/** 轮次内的单条日志 */
+/**
+ * 轮次内日志行。
+ * kind 控制渲染样式：
+ * - "meta": 灰色小字（round 标题、idle）
+ * - "thinking": 折叠面板，灰色内容
+ * - "tool": ▸/◂ 工具调用摘要
+ * - "content": 正文回复
+ * - "ok" / "err": 结果行
+ */
+export type LogKind = "meta" | "thinking" | "tool" | "content" | "ok" | "err";
+
 export interface LogLine {
-	/** 前缀符号控制缩进和语义 */
-	prefix: "│" | "▸" | "◂" | "✗" | "·" | "✔";
+	kind: LogKind;
 	text: string;
+	/** 可折叠的详情（仅 thinking/tool 使用） */
+	detail?: string;
 }
 
-/** 一个完整轮次的数据 */
+/** 一个完整轮次 */
 export interface RoundBlock {
-	/** 轮次标题，如 "Round 1 · 2 msgs" */
 	title: string;
-	/** 轮次内的日志行 */
 	lines: LogLine[];
-	/** 是否正在进行中 */
 	active?: boolean;
 }
 
-/** 将 RoundBlock 渲染为折叠面板内的 markdown */
-function renderRoundMarkdown(block: RoundBlock): string {
-	if (block.lines.length === 0) return "...";
-	return block.lines.map((l) => `${l.prefix}  ${l.text}`).join("\n");
+/** 将 LogLine 渲染为卡片元素 */
+function renderLine(line: LogLine): CardBodyElement {
+	switch (line.kind) {
+		case "meta":
+			return meta(line.text);
+		case "thinking":
+			// 折叠面板，灰色内容
+			return panel(`💭 ${line.text}`, [txt(line.detail ?? "(empty)")]);
+		case "tool":
+			return txt(line.text);
+		case "content":
+			return txt(line.text);
+		case "ok":
+			return txt(`**✔ ${line.text}**`);
+		case "err":
+			return txt(`**✗ ${line.text}**`);
+	}
 }
 
-/**
- * 构建过程卡片 — 按轮次分块
- *
- * 每个 round 是一个折叠面板：
- * - 最新（active）round 展开
- * - 历史 round 折叠
- * - 底部可选 activity（流式状态）和 summary（最终结果）
- */
+/** 将 RoundBlock 渲染为折叠面板 */
+function renderRound(
+	block: RoundBlock,
+	expanded: boolean,
+): CollapsiblePanelElement {
+	const elements: CardBodyElement[] =
+		block.lines.length > 0 ? block.lines.map(renderLine) : [txt("...")];
+	return panel(block.title, elements, expanded);
+}
+
+/** 构建过程卡片 — 按轮次分块，信息分层 */
 export function buildProcessCard(opts: {
 	title: string;
-	template?: CardHeaderTemplate;
+	template?: CardTemplate;
 	rounds: RoundBlock[];
 	activity?: string;
 	summary?: string;
@@ -131,28 +158,26 @@ export function buildProcessCard(opts: {
 	for (const [i, block] of opts.rounds.entries()) {
 		const isLast = i === opts.rounds.length - 1;
 		const expanded = isLast && (block.active ?? true);
-		elements.push(mkPanel(block.title, renderRoundMarkdown(block), expanded));
+		elements.push(renderRound(block, expanded));
 	}
 
-	// 流式活动状态
 	if (opts.activity) {
-		elements.push(md(opts.activity));
+		elements.push(meta(opts.activity));
 	}
 
-	// 最终总结
 	if (opts.summary) {
 		elements.push({ tag: "hr" });
-		elements.push(md(opts.summary));
+		elements.push(txt(opts.summary));
 	}
 
 	if (elements.length === 0) {
-		elements.push(md("初始化..."));
+		elements.push(meta("初始化..."));
 	}
 
-	return mkCard(opts.title, opts.template ?? "grey", elements);
+	return card(opts.title, opts.template ?? "grey", elements);
 }
 
-// ── 列表卡片（带操作按钮） ──
+// ── 列表卡片 ──
 
 function btn(
 	label: string,
@@ -178,28 +203,22 @@ function btn(
 function listRow(info: string, buttons: ButtonElement[]): ColumnSetElement {
 	return {
 		tag: "column_set",
-		flex_mode: "stretch",
-		horizontal_spacing: "default",
+		flex_mode: "bisect",
+		horizontal_spacing: "8px",
 		columns: [
 			{
 				tag: "column",
 				width: "weighted",
-				weight: 3,
+				weight: 4,
 				vertical_align: "center",
-				elements: [md(info)],
+				elements: [txt(info)],
 			},
 			{
 				tag: "column",
 				width: "weighted",
 				weight: 1,
 				vertical_align: "center",
-				elements: [
-					{
-						tag: "action",
-						actions: buttons,
-						layout: "flow",
-					},
-				],
+				elements: buttons,
 			},
 		],
 	};
@@ -212,12 +231,12 @@ export interface WorkflowItem {
 	path: string;
 }
 
-/** 构建工作流列表卡片 — 每项带"运行"按钮 */
+/** 构建工作流列表卡片 */
 export function buildWorkflowListCard(
 	workflows: WorkflowItem[],
 ): FeishuCardContent {
 	if (workflows.length === 0) {
-		return mkCard("工作流", "grey", [md("暂无工作流。")]);
+		return card("工作流", "grey", [txt("暂无工作流。")]);
 	}
 
 	const elements: CardBodyElement[] = [];
@@ -233,59 +252,125 @@ export function buildWorkflowListCard(
 		);
 	}
 
-	return mkCard("工作流列表", "blue", elements);
+	return card("工作流列表", "blue", elements);
 }
 
 /** 定时任务列表项 */
 export interface CronItem {
 	name: string;
 	cron: string;
-	workflow: string | null;
+	prompt: string;
 	enabled: boolean;
 }
 
-/** 构建定时任务列表卡片 — 每项带"启用/禁用"和"立即运行"按钮 */
+/**
+ * 构建定时任务列表卡片
+ *
+ * 信息层级：运行状态 > prompt > cron(自然语言) + name
+ * 布局：全宽单列，每项之间用分割线分隔，按钮小尺寸横排
+ */
 export function buildCronListCard(crons: CronItem[]): FeishuCardContent {
 	if (crons.length === 0) {
-		return mkCard("定时任务", "grey", [md("暂无定时任务。")]);
+		return card("定时任务", "grey", [txt("暂无定时任务。")]);
 	}
 
 	const elements: CardBodyElement[] = [];
-	for (const c of crons) {
-		const status = c.enabled ? "🟢" : "⚪";
-		const info = `${status} **${c.name}**\n\`${c.cron}\` → ${c.workflow ?? "(delegate)"}`;
+	for (const [i, c] of crons.entries()) {
+		if (i > 0) elements.push({ tag: "hr" });
 
-		const toggleLabel = c.enabled ? "禁用" : "启用";
-		const toggleType: ButtonElement["type"] = c.enabled ? "danger" : "default";
+		const statusBadge = c.enabled
+			? "<text_tag color='turquoise'>运行中</text_tag>"
+			: "<text_tag color='neutral'>已暂停</text_tag>";
+		const desc = c.prompt ? compact(c.prompt, 120) : "(无描述)";
+		const schedule = cronToNatural(c.cron);
 
 		elements.push(
-			listRow(info, [
-				btn(
-					toggleLabel,
-					{
-						action: "cron_toggle",
-						name: c.name,
-						enabled: !c.enabled,
-					},
-					toggleType,
-				),
-				btn(
-					"运行",
-					{
-						action: "cron_run",
-						name: c.name,
-					},
-					"primary",
-					{
-						title: "确认运行",
-						text: `立即运行定时任务: ${c.name}？`,
-					},
-				),
-			]),
+			txt(
+				`${statusBadge}  **${desc}**\n<font color='grey'>${c.name} · ${schedule}</font>`,
+			),
 		);
+
+		const toggleLabel = c.enabled ? "暂停" : "启用";
+		const toggleType: ButtonElement["type"] = c.enabled ? "default" : "primary";
+
+		elements.push({
+			tag: "column_set",
+			flex_mode: "none",
+			horizontal_spacing: "8px",
+			columns: [
+				{
+					tag: "column",
+					width: "auto",
+					elements: [
+						btn(
+							toggleLabel,
+							{ action: "cron_toggle", name: c.name, enabled: !c.enabled },
+							toggleType,
+						),
+					],
+				},
+				{
+					tag: "column",
+					width: "auto",
+					elements: [
+						btn("立即运行", { action: "cron_run", name: c.name }, "primary", {
+							title: "确认运行",
+							text: `立即运行「${desc}」？`,
+						}),
+					],
+				},
+			],
+		});
 	}
 
-	return mkCard("定时任务列表", "blue", elements);
+	return card("定时任务", "blue", elements);
+}
+
+// ── 工具函数 ──
+
+function compact(text: string, limit: number): string {
+	const s = text.replace(/\s+/g, " ").trim();
+	if (!s) return "(empty)";
+	return s.length > limit ? `${s.slice(0, limit)}…` : s;
+}
+
+/** 将 cron 表达式转为自然语言 */
+function cronToNatural(expr: string): string {
+	const parts = expr.trim().split(/\s+/);
+	if (parts.length !== 5) return expr;
+	const min = parts[0] ?? "*";
+	const hour = parts[1] ?? "*";
+	const day = parts[2] ?? "*";
+	const month = parts[3] ?? "*";
+	const weekday = parts[4] ?? "*";
+
+	const pad = (s: string) => s.padStart(2, "0");
+	const weekNames: Record<string, string> = {
+		"0": "周日",
+		"1": "周一",
+		"2": "周二",
+		"3": "周三",
+		"4": "周四",
+		"5": "周五",
+		"6": "周六",
+		"7": "周日",
+	};
+
+	const time = hour !== "*" && min !== "*" ? `${pad(hour)}:${pad(min)}` : null;
+
+	if (hour === "*" && min.startsWith("*/")) return `每 ${min.slice(2)} 分钟`;
+	if (hour === "*" && min === "0") return "每小时";
+	if (hour === "*" && min !== "*") return `每小时 :${pad(min)}`;
+	if (day === "*" && month === "*" && weekday !== "*" && time) {
+		return `每${weekNames[weekday] ?? `周${weekday}`} ${time}`;
+	}
+	if (day === "*" && month === "*" && weekday === "*" && time) {
+		return `每天 ${time}`;
+	}
+	if (day !== "*" && month === "*" && weekday === "*" && time) {
+		return `每月 ${day} 日 ${time}`;
+	}
+	return expr;
 }
 
 // ── 工具 ──
