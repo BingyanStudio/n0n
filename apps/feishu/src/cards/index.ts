@@ -9,8 +9,9 @@ export {
 	buildWorkflowListCard,
 	type CronItem,
 	chunkText,
+	type LogKind,
 	type LogLine,
 	type RoundBlock,
 	type WorkflowItem,
 } from "./builder.ts";
-export type { CardHeaderTemplate, FeishuCardContent } from "./types.ts";
+export type { CardTemplate, FeishuCardContent } from "./types.ts";

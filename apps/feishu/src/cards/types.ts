@@ -1,13 +1,13 @@
 /**
- * 飞书卡片类型定义
+ * 飞书卡片类型定义 — 严格遵循 Card JSON 2.0 结构
  *
- * 定义飞书消息卡片 (Interactive Card v2.0) 的结构类型，
- * 供 card builder 和 bot 层使用。
+ * 参考文档：docs/feishu/卡片 JSON 2.0 结构.md
+ * 注意：v2.0 对不支持的属性会报错，类型必须精确。
  */
 
 // ── 卡片颜色主题 ──
 
-export type CardHeaderTemplate =
+export type CardTemplate =
 	| "blue"
 	| "wathet"
 	| "turquoise"
@@ -21,22 +21,47 @@ export type CardHeaderTemplate =
 	| "indigo"
 	| "grey";
 
-// ── 卡片元素 ──
+// ── 文本元素 ──
+
+export interface PlainTextElement {
+	tag: "plain_text";
+	content: string;
+}
+
+// ── 展示类组件 ──
 
 export interface MarkdownElement {
 	tag: "markdown";
 	content: string;
+	text_align?: "left" | "center" | "right";
+	text_size?: string;
+}
+
+export interface DivElement {
+	tag: "div";
+	text: PlainTextElement & {
+		text_size?: string;
+		text_color?: string;
+		text_align?: string;
+	};
+	icon?: { tag: "standard_icon"; token: string; color?: string };
 }
 
 export interface HrElement {
 	tag: "hr";
 }
 
+// ── 容器类组件 ──
+
 export interface CollapsiblePanelElement {
 	tag: "collapsible_panel";
 	expanded?: boolean;
+	background_color?: string;
 	header: {
-		title: { tag: "plain_text" | "markdown"; content: string };
+		title: PlainTextElement | MarkdownElement;
+		background_color?: string;
+		vertical_align?: "top" | "center" | "bottom";
+		padding?: string;
 		icon?: {
 			tag: "standard_icon";
 			token: string;
@@ -46,63 +71,66 @@ export interface CollapsiblePanelElement {
 		icon_position?: "left" | "right" | "follow_text";
 		icon_expanded_angle?: -180 | -90 | 90 | 180;
 	};
+	border?: { color?: string; corner_radius?: string };
 	padding?: string;
 	vertical_spacing?: string;
-	elements: MarkdownElement[];
-}
-
-// ── 交互元素 ──
-
-export interface ButtonElement {
-	tag: "button";
-	text: { tag: "plain_text"; content: string };
-	type?: "default" | "primary" | "danger" | "text";
-	size?: "medium" | "small" | "tiny";
-	width?: "default" | "fill" | string;
-	value?: Record<string, unknown>;
-	confirm?: {
-		title: { tag: "plain_text"; content: string };
-		text: { tag: "plain_text"; content: string };
-	};
-}
-
-export interface ActionElement {
-	tag: "action";
-	actions: ButtonElement[];
-	layout?: "bisected" | "trisection" | "flow";
+	elements: CardBodyElement[];
 }
 
 export interface ColumnElement {
 	tag: "column";
-	width: "weighted" | "auto" | string;
+	width: "weighted" | "auto";
 	weight?: number;
 	vertical_align?: "top" | "center" | "bottom";
-	elements: (MarkdownElement | ButtonElement | ActionElement)[];
+	elements: CardBodyElement[];
 }
 
 export interface ColumnSetElement {
 	tag: "column_set";
 	flex_mode?: "none" | "stretch" | "flow" | "bisect";
-	background_style?: "default" | "grey";
-	horizontal_spacing?: "default" | "small";
+	horizontal_spacing?: string;
 	columns: ColumnElement[];
+	margin?: string;
 }
+
+// ── 交互类组件 ──
+
+export interface ButtonElement {
+	tag: "button";
+	text: PlainTextElement;
+	type?: "default" | "primary" | "danger" | "text";
+	size?: "medium" | "small" | "tiny";
+	width?: "default" | "fill";
+	value?: Record<string, unknown>;
+	confirm?: {
+		title: PlainTextElement;
+		text: PlainTextElement;
+	};
+}
+
+// ── 联合类型 ──
 
 export type CardBodyElement =
 	| MarkdownElement
+	| DivElement
 	| HrElement
 	| CollapsiblePanelElement
-	| ActionElement
-	| ColumnSetElement;
+	| ColumnSetElement
+	| ButtonElement;
 
-// ── 卡片顶层结构 ──
+// ── 卡片顶层结构（v2.0） ──
 
 export interface FeishuCardContent {
 	schema: "2.0";
-	config: { wide_screen_mode: boolean; enable_forward: boolean };
-	header: {
-		template: CardHeaderTemplate;
-		title: { tag: "plain_text"; content: string };
+	config: {
+		update_multi: true;
+		enable_forward?: boolean;
 	};
-	body: { elements: CardBodyElement[] };
+	header: {
+		template: CardTemplate;
+		title: PlainTextElement;
+	};
+	body: {
+		elements: CardBodyElement[];
+	};
 }

@@ -10,7 +10,7 @@ import type { FeishuBot, FeishuMessageContext } from "./bot.ts";
 import {
 	buildProcessCard,
 	buildTextCard,
-	type CardHeaderTemplate,
+	type CardTemplate,
 	type LogLine,
 	type RoundBlock,
 } from "./cards/index.ts";
@@ -23,7 +23,7 @@ export class FeishuConversation {
 	private activity = "";
 	private summary = "";
 	private title = "n0n · 处理中";
-	private template: CardHeaderTemplate = "grey";
+	private template: CardTemplate = "grey";
 	private cardId: string | null = null;
 
 	private constructor(
@@ -73,7 +73,7 @@ export class FeishuConversation {
 	}
 
 	/** 设置标题 */
-	setTitle(title: string, template?: CardHeaderTemplate): void {
+	setTitle(title: string, template?: CardTemplate): void {
 		this.title = title;
 		if (template) this.template = template;
 		this.flush();
@@ -86,7 +86,7 @@ export class FeishuConversation {
 	}
 
 	/** 完成 */
-	finish(title: string, template: CardHeaderTemplate, summary: string): void {
+	finish(title: string, template: CardTemplate, summary: string): void {
 		this.title = title;
 		this.template = template;
 		this.summary = summary;
