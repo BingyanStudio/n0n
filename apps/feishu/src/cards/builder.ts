@@ -154,9 +154,13 @@ function renderLine(line: LogLine): CardBodyElement {
 function renderRound(
 	block: RoundBlock,
 	expanded: boolean,
+	/** 追加到面板末尾的额外元素（如流式活动文本） */
+	trailingElements?: CardBodyElement[],
 ): CollapsiblePanelElement {
 	const elements: CardBodyElement[] =
-		block.lines.length > 0 ? block.lines.map(renderLine) : [txt("...")];
+		block.lines.length > 0 ? block.lines.map(renderLine) : [];
+	if (trailingElements) elements.push(...trailingElements);
+	if (elements.length === 0) elements.push(txt("..."));
 
 	// 从 title 中提取消息数（如 "Round 1  ·  6 msgs" → title="Round 1", badge="6 msgs"）
 	const sep = block.title.indexOf("·");
@@ -202,16 +206,24 @@ export function buildProcessCard(opts: {
 }): FeishuCardContent {
 	const elements: CardBodyElement[] = [];
 
+	// 构建流式活动元素（放入当前活跃轮次面板内部）
+	let streamEl: MarkdownElement | undefined;
+	if (opts.activity || opts.streamElementId) {
+		streamEl = txt(opts.activity || "...");
+		if (opts.streamElementId) streamEl.element_id = opts.streamElementId;
+	}
+
 	for (const [i, block] of opts.rounds.entries()) {
 		const isLast = i === opts.rounds.length - 1;
 		const expanded = isLast && (block.active ?? true);
-		elements.push(renderRound(block, expanded));
+		// 将流式元素追加到最后一个活跃轮次的面板内部
+		const trailing = isLast && expanded && streamEl ? [streamEl] : undefined;
+		elements.push(renderRound(block, expanded, trailing));
 	}
 
-	if (opts.activity || opts.streamElementId) {
-		const el = txt(opts.activity || "...");
-		if (opts.streamElementId) el.element_id = opts.streamElementId;
-		elements.push(el);
+	// 如果没有轮次但有流式元素，放在卡片顶层
+	if (opts.rounds.length === 0 && streamEl) {
+		elements.push(streamEl);
 	}
 
 	if (opts.summary) {
