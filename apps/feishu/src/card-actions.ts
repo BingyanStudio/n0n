@@ -119,18 +119,16 @@ async function onWorkflowRun(ctx: CardActionContext): Promise<void> {
 		return;
 	}
 
+	// 先发送"运行中"反馈，再异步执行工作流（避免卡片回调超时）
 	await sendFeedback(ctx, "工作流", `⏳ 正在运行: ${name}...`);
-	try {
-		const result = await runWorkflow(wf.path);
-		await sendFeedback(
-			ctx,
-			`✅ ${name}`,
-			`\`\`\`\n${JSON.stringify(result, null, 2)}\n\`\`\``,
-			"green",
-		);
-	} catch (err) {
-		await sendFeedback(ctx, `❌ ${name}`, String(err), "red");
-	}
+	runWorkflow(wf.path).then(
+		async (result) => {
+			await sendFeedback(ctx, `✅ ${name}`, formatResult(result), "green");
+		},
+		async (err) => {
+			await sendFeedback(ctx, `❌ ${name}`, String(err), "red");
+		},
+	);
 }
 
 async function onCronToggle(ctx: CardActionContext): Promise<void> {
@@ -186,23 +184,39 @@ async function onCronRun(ctx: CardActionContext): Promise<void> {
 		return;
 	}
 
-	// schedule.workflow 格式为 "workflows/tasks/foo.ts"，
-	// 直接用 runWorkflow() 按路径执行，无需通过 discoverWorkflows 匹配名称
+	// 先发送"运行中"反馈，再异步执行工作流（避免卡片回调超时）
 	await sendFeedback(ctx, "定时任务", `⏳ 正在运行: ${name}...`);
-	try {
-		const result = await runWorkflow(schedule.workflow);
-		await sendFeedback(
-			ctx,
-			`✅ ${name}`,
-			`\`\`\`\n${JSON.stringify(result, null, 2)}\n\`\`\``,
-			"green",
-		);
-	} catch (err) {
-		await sendFeedback(ctx, `❌ ${name}`, String(err), "red");
-	}
+	runWorkflow(schedule.workflow).then(
+		async (result) => {
+			await sendFeedback(ctx, `✅ ${name}`, formatResult(result), "green");
+		},
+		async (err) => {
+			await sendFeedback(ctx, `❌ ${name}`, String(err), "red");
+		},
+	);
 }
 
 // ── 辅助 ──
+
+/**
+ * 将工作流执行结果格式化为可读的 Markdown 文本。
+ * - string: 直接展示（通常已是 markdown）
+ * - object with report/result/message: 提取文本字段展示
+ * - 其他 object: JSON 代码块
+ */
+function formatResult(result: unknown): string {
+	if (result == null) return "(无返回值)";
+	if (typeof result === "string") return result || "(空字符串)";
+
+	if (typeof result === "object" && !Array.isArray(result)) {
+		const obj = result as Record<string, unknown>;
+		// 优先提取常见的文本字段
+		const text = obj.report ?? obj.result ?? obj.message ?? obj.content;
+		if (typeof text === "string" && text.trim()) return text;
+	}
+
+	return `\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``;
+}
 
 async function sendFeedback(
 	ctx: CardActionContext,
