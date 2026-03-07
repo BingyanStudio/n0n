@@ -21,6 +21,21 @@ import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
 const PROMPT_PATH = resolve(import.meta.dir, "prompts", "code.md");
 
+/**
+ * 读取目标项目的 AGENTS.md（项目级编码规范）。
+ * 支持 AGENTS.md 和 .agents.md 两种命名。
+ */
+async function loadAgentsMd(): Promise<string | null> {
+	for (const name of ["AGENTS.md", ".agents.md"]) {
+		const file = Bun.file(resolve(process.cwd(), name));
+		if (await file.exists()) {
+			const content = await file.text();
+			if (content.trim()) return content.trim();
+		}
+	}
+	return null;
+}
+
 /** 获取项目上下文（git status + 目录结构） */
 async function gatherContext(): Promise<string | null> {
 	const parts: string[] = [];
@@ -60,6 +75,7 @@ export async function startCodeRepl(
 	paths: WorkspacePaths = defaultPaths,
 ): Promise<void> {
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
+	const agentsMd = await loadAgentsMd();
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
 
 	const rl = createInterface({
@@ -84,8 +100,17 @@ export async function startCodeRepl(
 		});
 
 	let userInput = initialInput ?? (await prompt(`${label.user()} `));
-	let history: DomainMessage[] = [
+	const systemMessages: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
+	];
+	if (agentsMd) {
+		systemMessages.push({
+			type: "system",
+			content: `<project_rules>\n${agentsMd}\n</project_rules>`,
+		});
+	}
+	let history: DomainMessage[] = [
+		...systemMessages,
 		{
 			type: "user_input",
 			content: userInput,
