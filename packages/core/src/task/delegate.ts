@@ -9,7 +9,7 @@ import { ENV_INFO } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
-import { paths } from "../config.ts";
+import { defaultPaths, type WorkspacePaths } from "../config.ts";
 import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
@@ -30,9 +30,11 @@ export async function delegateTask<T = unknown>(
 		schema?: ZodType<T>;
 		skipConsultation?: boolean;
 		maxIterations?: number;
+		paths?: WorkspacePaths;
 	},
 ): Promise<TaskResult<T>> {
-	const allSkills = await discoverSkills();
+	const paths = options?.paths ?? defaultPaths;
+	const allSkills = await discoverSkills(paths);
 	const skillSummaryText = formatSkillSummaries(allSkills);
 
 	let consultAdvice = "";
@@ -70,6 +72,7 @@ export async function delegateTask<T = unknown>(
 			];
 			const consultResult = await agentLoop(consultHistory, {
 				maxIterations: 15,
+				paths,
 			});
 			consultAdvice =
 				typeof consultResult.result === "string"
@@ -94,8 +97,8 @@ export async function delegateTask<T = unknown>(
 	}
 
 	const [ragHits, workflows] = await Promise.all([
-		ragSearch(query, "all"),
-		discoverWorkflows(),
+		ragSearch(query, "all", paths),
+		discoverWorkflows(paths),
 	]);
 
 	const ragContext = formatRagResults(ragHits.results);
@@ -136,6 +139,7 @@ export async function delegateTask<T = unknown>(
 	const result = await agentLoop(history, {
 		schema: options?.schema,
 		maxIterations: options?.maxIterations,
+		paths,
 	});
 
 	return {

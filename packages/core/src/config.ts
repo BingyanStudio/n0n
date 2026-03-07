@@ -21,26 +21,52 @@ function parseBlockedCommands(): string[] {
 }
 
 /**
- * 工作流相关路径 — 统一管理，避免硬编码散布在各模块中
+ * Workspace 路径集合 — 每个 workspace 实例拥有独立的目录结构
  */
-export const paths = {
-	/** 工作流根目录 */
-	workflows: process.env.WORKFLOWS_DIR ?? "workflows",
+export interface WorkspacePaths {
+	/** workspace 根目录 */
+	root: string;
 	/** 任务工作流目录 */
-	tasks: process.env.TASKS_DIR ?? "workflows/tasks",
+	tasks: string;
 	/** Agent Skills 目录 */
-	skills: process.env.SKILLS_DIR ?? "workflows/skills",
+	skills: string;
 	/** 定时任务配置目录 */
-	schedules: process.env.SCHEDULES_DIR ?? "workflows/schedules",
+	schedules: string;
 	/** 记忆/知识库目录 */
-	memory: process.env.MEMORY_DIR ?? "workflows/memory",
+	memory: string;
 	/** 咨询结果缓存目录 */
-	consultResult: process.env.CONSULT_RESULT_DIR ?? "workflows/consult-result",
+	consultResult: string;
 	/** 历史记录目录 */
-	history: process.env.HISTORY_DIR ?? "workflows/history",
+	history: string;
 	/** 临时文件目录（exec 临时脚本等，进程退出时清理） */
-	temp: process.env.TEMP_DIR ?? ".temp",
-} as const;
+	temp: string;
+}
+
+/**
+ * 根据 workspace 根目录生成完整路径集合
+ */
+export function resolvePaths(workspace: string): WorkspacePaths {
+	return {
+		root: workspace,
+		tasks: `${workspace}/tasks`,
+		skills: `${workspace}/skills`,
+		schedules: `${workspace}/schedules`,
+		memory: `${workspace}/memory`,
+		consultResult: `${workspace}/consult-result`,
+		history: `${workspace}/history`,
+		temp: `${workspace}/.temp`,
+	};
+}
+
+/** 默认路径（向后兼容，供未迁移的调用方使用） */
+export const defaultPaths: WorkspacePaths = resolvePaths(
+	process.env.WORKFLOWS_DIR ?? ".runtime/workflows",
+);
+
+/**
+ * @deprecated 使用 resolvePaths(workspace) 代替。将在清理阶段移除。
+ */
+export const paths = defaultPaths;
 
 export const config = {
 	llm: {
@@ -67,7 +93,7 @@ export function initConfig(): void {
 	initToolsConfig({
 		security: config.security,
 		agent: config.agent,
-		tempDir: paths.temp,
+		tempDir: defaultPaths.temp,
 	});
 }
 

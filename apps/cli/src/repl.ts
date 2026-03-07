@@ -7,22 +7,24 @@ import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 // PlainRenderer for non-TTY — import from core
 import {
 	agentLoop,
+	defaultPaths,
 	discoverWorkflows,
 	INTERACTIVE_PROMPT_PATH,
 	type InteractiveResult,
 	InteractiveResultSchema,
 	loadSchedules,
 	PlainRenderer,
+	type WorkspacePaths,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 
 const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
 
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
-async function gatherContext(): Promise<string | null> {
+async function gatherContext(paths: WorkspacePaths): Promise<string | null> {
 	const [existing, schedules] = await Promise.all([
-		discoverWorkflows(),
-		loadSchedules(),
+		discoverWorkflows(paths),
+		loadSchedules(paths),
 	]);
 	const parts: string[] = [];
 	if (existing.length > 0) {
@@ -46,7 +48,10 @@ async function gatherContext(): Promise<string | null> {
 	return parts.length > 0 ? parts.join("\n") : null;
 }
 
-export async function startRepl(initialInput?: string): Promise<void> {
+export async function startRepl(
+	initialInput?: string,
+	paths: WorkspacePaths = defaultPaths,
+): Promise<void> {
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
 
@@ -87,7 +92,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 		{
 			type: "user_input",
 			content: userInput,
-			context: await gatherContext(),
+			context: await gatherContext(paths),
 			capabilities: null,
 		},
 	];
@@ -98,6 +103,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 			renderer,
 			confirmFn,
 			schema: InteractiveResultSchema,
+			paths,
 		});
 		history = agentResult.history;
 
@@ -114,7 +120,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 			history.push({
 				type: "user_input",
 				content: userInput,
-				context: await gatherContext(),
+				context: await gatherContext(paths),
 				capabilities: null,
 			});
 			continue;
@@ -155,7 +161,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				history.push({
 					type: "user_input",
 					content: userInput,
-					context: await gatherContext(),
+					context: await gatherContext(paths),
 					capabilities: null,
 				});
 				break;
@@ -172,7 +178,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				history.push({
 					type: "user_input",
 					content: userInput,
-					context: await gatherContext(),
+					context: await gatherContext(paths),
 					capabilities: null,
 				});
 				continue;

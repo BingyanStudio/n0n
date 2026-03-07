@@ -8,6 +8,7 @@
 import {
 	discoverWorkflows,
 	loadSchedules,
+	resolvePaths,
 	runWorkflow,
 	setScheduleEnabled,
 } from "@n0n/core";
@@ -118,6 +119,8 @@ export async function handleCommand(
 	systemPrompt: string,
 ): Promise<void> {
 	const ctx = session.ctx;
+	const senderOpenId = ctx.senderOpenId ?? "anonymous";
+	const paths = resolvePaths(`.runtime/feishu/${senderOpenId}`);
 
 	switch (cmd.type) {
 		case "help":
@@ -184,7 +187,7 @@ export async function handleCommand(
 			return;
 
 		case "crons_list": {
-			const schedules = await loadSchedules();
+			const schedules = await loadSchedules(paths);
 			const crons: CronItem[] = schedules.map((s) => ({
 				name: s.name,
 				cron: s.cron,
@@ -197,7 +200,7 @@ export async function handleCommand(
 		}
 
 		case "crons_toggle": {
-			const ok = await setScheduleEnabled(cmd.name, cmd.enabled);
+			const ok = await setScheduleEnabled(cmd.name, cmd.enabled, paths);
 			await sendText(
 				bot,
 				ctx,
@@ -210,7 +213,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_list": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows(paths);
 			const items = workflows.map((w) => ({
 				name: w.name,
 				description: w.description || "(no description)",
@@ -222,7 +225,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_show": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows(paths);
 			const wf = workflows.find((w) => w.name === cmd.name);
 			if (!wf) {
 				await sendText(bot, ctx, "工作流", `❌ 未找到: ${cmd.name}`);
@@ -238,7 +241,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_run": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows(paths);
 			const wf = workflows.find((w) => w.name === cmd.name);
 			if (!wf) {
 				await sendText(bot, ctx, "工作流", `❌ 未找到: ${cmd.name}`);

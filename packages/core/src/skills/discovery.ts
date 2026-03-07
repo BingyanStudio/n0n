@@ -52,17 +52,15 @@ export interface SkillContent extends SkillMeta {
 	scripts: string[];
 }
 
-import { paths } from "../config.ts";
-
-const SKILLS_DIR = paths.skills;
+import { defaultPaths, type WorkspacePaths } from "../config.ts";
 
 /**
  * 发现所有 skill：扫描 SKILL.md，只解析 frontmatter（轻量）
  */
 export async function discoverSkills(
-	baseDir = SKILLS_DIR,
+	paths: WorkspacePaths = defaultPaths,
 ): Promise<SkillMeta[]> {
-	const absBase = resolve(baseDir);
+	const absBase = resolve(paths.skills);
 	if (!existsSync(absBase)) return [];
 
 	const glob = new Glob("*/SKILL.md");

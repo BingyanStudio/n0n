@@ -11,10 +11,7 @@ import { describe, expect, test } from "bun:test";
 import { ExecArgsSchema, execToolStream } from "../exec.ts";
 
 /** 收集 exec 流式输出的最终结果 */
-async function collectExecResult(
-	script: string,
-	runtime?: string,
-) {
+async function collectExecResult(script: string, runtime?: string) {
 	const args = ExecArgsSchema.parse({ script, runtime });
 	let stdout = "";
 	let stderr = "";
@@ -38,20 +35,15 @@ describe("exec tool — script+runtime model", () => {
 	});
 
 	test("bun runtime executes TypeScript", async () => {
-		const result = await collectExecResult(
-			'console.log("from bun")',
-			"bun",
-		);
+		const result = await collectExecResult('console.log("from bun")', "bun");
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout.trim()).toBe("from bun");
 	});
 
 	test("bun runtime with multi-line script", async () => {
-		const script = [
-			"const a = 1;",
-			"const b = 2;",
-			"console.log(a + b);",
-		].join("\n");
+		const script = ["const a = 1;", "const b = 2;", "console.log(a + b);"].join(
+			"\n",
+		);
 		const result = await collectExecResult(script, "bun");
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout.trim()).toBe("3");
