@@ -34,4 +34,4 @@ writeln(
 );
 writeln();
 
-startCodeRepl(initialInput);
+await startCodeRepl(initialInput);
