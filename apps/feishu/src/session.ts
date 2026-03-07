@@ -66,6 +66,60 @@ export function deleteSession(sessionKey: string): void {
 	sessions.delete(sessionKey);
 }
 
+/**
+ * 根据用户 ID 查找所有关联的 session key。
+ * 用于菜单事件等缺少 chatId 的场景，通过 senderOpenId 后缀匹配。
+ */
+export function findSessionKeysByUser(senderOpenId: string): string[] {
+	const suffix = `:${senderOpenId}`;
+	const keys: string[] = [];
+	for (const key of sessions.keys()) {
+		if (key.endsWith(suffix)) keys.push(key);
+	}
+	return keys;
+}
+
+/**
+ * 重置指定用户的所有会话（跨 chat）。
+ * 当菜单事件无 chatId 时，遍历该用户所有 session 并重置。
+ */
+export function resetSessionsByUser(
+	senderOpenId: string,
+	systemPrompt: string,
+): number {
+	const keys = findSessionKeysByUser(senderOpenId);
+	for (const key of keys) {
+		const existing = sessions.get(key);
+		if (!existing) continue;
+		if (existing.currentTask) {
+			existing.currentTask.abortController.abort();
+			existing.currentTask = null;
+		}
+		existing.history = [
+			{ type: "system", content: systemPrompt },
+			{ type: "system", content: buildFeishuSystemContext(existing.ctx) },
+		];
+	}
+	return keys.length;
+}
+
+/**
+ * 中断指定用户所有会话的当前任务。
+ * 当菜单事件无 chatId 时，遍历该用户所有 session 并 abort。
+ */
+export function abortSessionsByUser(senderOpenId: string): number {
+	const keys = findSessionKeysByUser(senderOpenId);
+	let aborted = 0;
+	for (const key of keys) {
+		const existing = sessions.get(key);
+		if (!existing?.currentTask) continue;
+		existing.currentTask.abortController.abort();
+		existing.currentTask = null;
+		aborted++;
+	}
+	return aborted;
+}
+
 // ── 消息去重 ──
 
 const processedMessages = new Map<string, number>();
