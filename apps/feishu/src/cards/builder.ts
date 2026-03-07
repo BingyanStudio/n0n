@@ -14,7 +14,6 @@ import type {
 	CardBodyElement,
 	CardTemplate,
 	CollapsiblePanelElement,
-	ColumnSetElement,
 	DivElement,
 	FeishuCardContent,
 	MarkdownElement,
@@ -200,30 +199,6 @@ function btn(
 	};
 }
 
-function listRow(info: string, buttons: ButtonElement[]): ColumnSetElement {
-	return {
-		tag: "column_set",
-		flex_mode: "bisect",
-		horizontal_spacing: "8px",
-		columns: [
-			{
-				tag: "column",
-				width: "weighted",
-				weight: 4,
-				vertical_align: "center",
-				elements: [txt(info)],
-			},
-			{
-				tag: "column",
-				width: "weighted",
-				weight: 1,
-				vertical_align: "center",
-				elements: buttons,
-			},
-		],
-	};
-}
-
 /** 工作流列表项 */
 export interface WorkflowItem {
 	name: string;
@@ -231,7 +206,12 @@ export interface WorkflowItem {
 	path: string;
 }
 
-/** 构建工作流列表卡片 */
+/**
+ * 构建工作流列表卡片
+ *
+ * 信息层级：description > name(灰色)
+ * 布局：全宽单列，hr 分隔，按钮 auto 宽度
+ */
 export function buildWorkflowListCard(
 	workflows: WorkflowItem[],
 ): FeishuCardContent {
@@ -240,19 +220,31 @@ export function buildWorkflowListCard(
 	}
 
 	const elements: CardBodyElement[] = [];
-	for (const wf of workflows) {
-		const info = `**${wf.name}**\n${wf.description || "(no description)"}`;
-		elements.push(
-			listRow(info, [
-				btn("运行", { action: "workflow_run", name: wf.name }, "primary", {
-					title: "确认运行",
-					text: `运行工作流: ${wf.name}？`,
-				}),
-			]),
-		);
+	for (const [i, wf] of workflows.entries()) {
+		if (i > 0) elements.push({ tag: "hr" });
+
+		const desc = wf.description || "(no description)";
+		elements.push(txt(`**${desc}**\n<font color='grey'>${wf.name}</font>`));
+		elements.push({
+			tag: "column_set",
+			flex_mode: "none",
+			horizontal_spacing: "8px",
+			columns: [
+				{
+					tag: "column",
+					width: "auto",
+					elements: [
+						btn("运行", { action: "workflow_run", name: wf.name }, "primary", {
+							title: "确认运行",
+							text: `运行工作流「${desc}」？`,
+						}),
+					],
+				},
+			],
+		});
 	}
 
-	return card("工作流列表", "blue", elements);
+	return card("工作流", "blue", elements);
 }
 
 /** 定时任务列表项 */
