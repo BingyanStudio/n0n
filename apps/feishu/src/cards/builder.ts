@@ -197,6 +197,8 @@ export function buildProcessCard(opts: {
 	rounds: RoundBlock[];
 	activity?: string;
 	summary?: string;
+	/** 为活动文本元素指定 element_id（CardKit 流式更新用） */
+	streamElementId?: string;
 }): FeishuCardContent {
 	const elements: CardBodyElement[] = [];
 
@@ -206,8 +208,10 @@ export function buildProcessCard(opts: {
 		elements.push(renderRound(block, expanded));
 	}
 
-	if (opts.activity) {
-		elements.push(meta(opts.activity));
+	if (opts.activity || opts.streamElementId) {
+		const el = txt(opts.activity || "...");
+		if (opts.streamElementId) el.element_id = opts.streamElementId;
+		elements.push(el);
 	}
 
 	if (opts.summary) {
