@@ -9,7 +9,12 @@
 
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
-import { agentLoop, PlainRenderer } from "@n0n/core";
+import {
+	agentLoop,
+	defaultPaths,
+	PlainRenderer,
+	type WorkspacePaths,
+} from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
@@ -49,7 +54,10 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 	}
 }
 
-export async function startCodeRepl(initialInput?: string): Promise<void> {
+export async function startCodeRepl(
+	initialInput?: string,
+	paths: WorkspacePaths = defaultPaths,
+): Promise<void> {
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
 
@@ -91,6 +99,7 @@ export async function startCodeRepl(initialInput?: string): Promise<void> {
 			renderer,
 			confirmFn,
 			schema: CodeResultSchema,
+			paths,
 		});
 		history = agentResult.history;
 		const ir = agentResult.result;

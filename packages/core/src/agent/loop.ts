@@ -20,7 +20,7 @@ import type {
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
-import { config } from "../config.ts";
+import { config, type WorkspacePaths } from "../config.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import { executeToolStream, isValidToolCall, parseToolCalls } from "./tool.ts";
 
@@ -38,6 +38,8 @@ export interface AgentOptions<T = unknown> {
 	renderer?: Renderer;
 	confirmFn?: (question: string) => Promise<string>;
 	signal?: AbortSignal;
+	/** Workspace 路径集合（不传则使用 defaultPaths） */
+	paths?: WorkspacePaths;
 }
 
 const MAX_SUBMIT_RETRIES = 4;

@@ -16,10 +16,13 @@ import { style, writeln } from "@n0n/cli-ui";
 import {
 	discoverWorkflows,
 	loadSchedules,
-	paths,
+	resolvePaths,
 	runWorkflow,
 } from "@n0n/core";
 import { startRepl } from "./repl.ts";
+
+/** CLI 默认 workspace */
+const paths = resolvePaths(".runtime/workflows");
 
 // ── 子命令路由 ──
 
@@ -40,7 +43,7 @@ async function main(): Promise<void> {
 		}
 
 		case "workflows": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows(paths);
 			if (workflows.length === 0) {
 				writeln(style.gray("No workflows found."));
 				return;
@@ -56,7 +59,7 @@ async function main(): Promise<void> {
 		case "schedule": {
 			const sub = args[1];
 			if (sub === "list" || !sub) {
-				const schedules = await loadSchedules();
+				const schedules = await loadSchedules(paths);
 				if (schedules.length === 0) {
 					writeln(style.gray("No schedules found."));
 					return;
@@ -76,7 +79,7 @@ async function main(): Promise<void> {
 
 		default: {
 			const initialInput = args.length > 0 ? args.join(" ") : undefined;
-			await startRepl(initialInput);
+			await startRepl(initialInput, paths);
 		}
 	}
 }

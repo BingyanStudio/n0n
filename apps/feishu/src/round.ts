@@ -14,6 +14,7 @@ import {
 	type InteractiveResult,
 	InteractiveResultSchema,
 	loadSchedules,
+	resolvePaths,
 } from "@n0n/core";
 import type { FeishuBot } from "./bot.ts";
 import { FeishuConversation } from "./conversation.ts";
@@ -52,6 +53,10 @@ export async function runFeishuRound(
 	userInput: string,
 	abortController: AbortController,
 ): Promise<void> {
+	// 0. 计算 per-user workspace 路径
+	const senderOpenId = session.ctx.senderOpenId ?? "anonymous";
+	const paths = resolvePaths(`.runtime/feishu/${senderOpenId}`);
+
 	// 1. 创建会话消息管理器 + 渲染器
 	const conv = await FeishuConversation.create(bot, session.ctx);
 	const renderer = new FeishuRenderer(conv);
@@ -59,8 +64,8 @@ export async function runFeishuRound(
 
 	// 2. 收集上下文
 	const [existing, schedules] = await Promise.all([
-		discoverWorkflows(),
-		loadSchedules(),
+		discoverWorkflows(paths),
+		loadSchedules(paths),
 	]);
 
 	const contextParts: string[] = [];
@@ -102,6 +107,7 @@ export async function runFeishuRound(
 		renderer,
 		schema: InteractiveResultSchema,
 		signal: abortController.signal,
+		paths,
 	});
 
 	if (abortController.signal.aborted) {
