@@ -2,38 +2,51 @@
  * DomainMessage ↔ LLM API 消息转换
  *
  * 领域消息是结构化数据记录，这里负责转换为 LLM provider 需要的格式。
+ * 所有输出统一为 XML + Markdown 混合结构：
+ * - XML 标签划分内容边界，便于模型理解结构
+ * - 标签内部为纯文本 / Markdown，无需 XML 转义
  */
 
 import type { DomainMessage, LLMRequestMessage, ToolResult } from "@n0n/types";
+import { adaptTags, wrapTag } from "./tags.ts";
 
-/**
- * 将 ToolResult 转为人类可读的文本摘要
- */
+/* ── tool result 格式化 ── */
+
+function formatExecResult(msg: ToolResult & { tool: "exec" }): string {
+	const meta = `$ ${msg.command}\n[cwd: ${msg.cwd}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`;
+	const parts = [wrapTag("exec_meta", meta)];
+	if (msg.stdout) parts.push(wrapTag("stdout", msg.stdout));
+	if (msg.stderr) parts.push(wrapTag("stderr", msg.stderr));
+	return parts.join("\n");
+}
+
+function formatWriteResult(msg: ToolResult & { tool: "write" }): string {
+	if (msg.success) {
+		const detail = msg.searchPattern
+			? `Replaced ${msg.replacedCount} occurrence(s) in \`${msg.path}\``
+			: `Full file write to \`${msg.path}\``;
+		return wrapTag("write_result", detail);
+	}
+	return wrapTag("error", `Write failed: ${msg.error}`);
+}
+
 function toolResultToContent(msg: ToolResult): string {
 	switch (msg.tool) {
-		case "exec": {
-			const parts: string[] = [
-				`$ ${msg.command}`,
-				`[cwd: ${msg.cwd}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`,
-			];
-			if (msg.stdout) parts.push(msg.stdout);
-			if (msg.stderr) parts.push(`STDERR:\n${msg.stderr}`);
-			return parts.join("\n");
-		}
-		case "write": {
-			if (msg.success) {
-				return msg.searchPattern
-					? `Written to ${msg.path}: replaced ${msg.replacedCount} occurrence(s)`
-					: `Written to ${msg.path}: full file write`;
-			}
-			return `Write failed: ${msg.error}`;
-		}
+		case "exec":
+			return formatExecResult(msg as ToolResult & { tool: "exec" });
+		case "write":
+			return formatWriteResult(msg as ToolResult & { tool: "write" });
 		case "reminder":
-			return `Reminder set: will appear in ${msg.delay} rounds`;
+			return wrapTag(
+				"result",
+				`Reminder set: will appear in ${msg.delay} rounds`,
+			);
 		case "submit":
-			return `Submitted: ${JSON.stringify(msg.result)}`;
+			return wrapTag("result", `Submitted: ${JSON.stringify(msg.result)}`);
 	}
 }
+
+/* ── 主转换函数 ── */
 
 /**
  * DomainMessage[] → LLMRequestMessage[]
@@ -44,7 +57,7 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 	for (const msg of messages) {
 		switch (msg.type) {
 			case "system":
-				result.push({ role: "system", content: msg.content });
+				result.push({ role: "system", content: adaptTags(msg.content) });
 				break;
 
 			case "user_text":
@@ -88,19 +101,24 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 			case "idle_nudge":
 				result.push({
 					role: "user",
-					content: `[System] You replied with plain text without calling any tool (idle ${msg.idleCount}/${msg.maxIdleRounds}). You MUST either call the \`submit\` tool to submit your result once the task is actually completed, or continue calling tools to complete the task. Do NOT output plain text without a tool call.`,
+					content: wrapTag(
+						"system_warning",
+						`You replied with plain text without calling any tool (idle ${msg.idleCount}/${msg.maxIdleRounds}).\n\nYou **must** either call \`submit\` to submit your result, or continue calling tools. Do NOT output plain text without a tool call.`,
+					),
 				});
 				break;
 
 			case "user_input": {
 				const parts: string[] = [];
-				if (msg.context) parts.push(msg.context);
-				if (msg.capabilities) parts.push(msg.capabilities);
+				if (msg.context) parts.push(wrapTag("context", msg.context));
+				if (msg.capabilities)
+					parts.push(wrapTag("capabilities", msg.capabilities));
 				parts.push(
 					[
-						`<hint>\n${msg.content}\n</hint>`,
+						wrapTag("hint", msg.content),
 						"",
-						"If this is a simple greeting or casual chat, submit a `chat` response directly.",
+						"First, ask yourself: can I answer this by calling `exec` or `write`? If yes — do it, then submit as `completed`.",
+						"If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a `chat` response.",
 						"Otherwise, the engineer has already built the perfect workflow for this. Reason out what it looks like — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
 					].join("\n"),
 				);
@@ -108,22 +126,23 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 				break;
 			}
 
-			case "turn_feedback": {
-				const prefix =
-					msg.status === "accepted"
-						? `Your submission was ${msg.status} (${msg.resultType}).`
-						: `Your submission was ${msg.status} (${msg.resultType}).`;
+			case "turn_feedback":
 				result.push({
 					role: "user",
-					content: `${prefix} ${msg.detail}`,
+					content: wrapTag(
+						"feedback",
+						`**${msg.status}** (${msg.resultType})\n\n${msg.detail}`,
+					),
 				});
 				break;
-			}
 
 			case "reminder:due":
 				result.push({
 					role: "user",
-					content: `⏰ REMINDER: ${msg.content}\n\n⚠️ You MUST set a new reminder (with updated progress) in your next tool call response.`,
+					content: wrapTag(
+						"reminder",
+						`${msg.content}\n\n⚠️ You **must** set a new reminder (with updated progress) in your next tool call.`,
+					),
 				});
 				break;
 
@@ -131,14 +150,23 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 				result.push({
 					role: "tool",
 					tool_call_id: msg.callId,
-					content: `Parameter error for tool "${msg.tool}": ${msg.error}\n\nCorrect schema:\n${JSON.stringify(msg.schema, null, 2)}`,
+					content: [
+						wrapTag(
+							"error",
+							`Parameter error for tool \`${msg.tool}\`: ${msg.error}`,
+						),
+						wrapTag("schema", JSON.stringify(msg.schema, null, 2)),
+					].join("\n\n"),
 				});
 				break;
 
 			case "submit:rejected":
 				result.push({
 					role: "user",
-					content: `Your submission was rejected: ${msg.error}\nPlease fix the format and submit again. (attempt ${msg.attempt}/${msg.maxAttempts})`,
+					content: wrapTag(
+						"rejected",
+						`${msg.error}\n\nFix the format and submit again. (attempt ${msg.attempt}/${msg.maxAttempts})`,
+					),
 				});
 				break;
 		}
