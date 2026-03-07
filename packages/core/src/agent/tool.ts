@@ -3,9 +3,9 @@
  */
 
 import {
-	getToolEntry,
 	type PendingReminder,
 	REGISTERED_TOOLS,
+	type ToolEntry,
 } from "@n0n/tools";
 import type {
 	LLMToolCall,
@@ -14,6 +14,9 @@ import type {
 	ToolStreamEvent,
 } from "@n0n/types";
 import { ZodError } from "zod";
+
+/** 工具查找函数类型 — 由 Toolkit 提供 */
+export type GetToolEntry = (name: string) => ToolEntry | undefined;
 
 // ── 解析 ──
 
@@ -47,8 +50,10 @@ export async function* executeToolStream(
 	tc: ToolCallRecord,
 	reminders: PendingReminder[],
 	confirmFn?: (question: string) => Promise<string>,
+	getEntry?: GetToolEntry,
 ): AsyncGenerator<ToolStreamEvent> {
-	const entry = getToolEntry(tc.tool);
+	const resolve = getEntry ?? ((_name: string) => undefined);
+	const entry = resolve(tc.tool);
 	if (!entry) {
 		yield {
 			type: "tool_result",
