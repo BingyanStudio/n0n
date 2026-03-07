@@ -92,6 +92,8 @@ function fmtResult(r: ToolResult): string {
 		case "exec":
 			return `exit=${r.exitCode}  ${(r.durationMs / 1000).toFixed(1)}s`;
 		case "write":
+			return r.success ? r.path : `${r.path}: ${r.error ?? "failed"}`;
+		case "edit":
 			return r.success
 				? `${r.path} (${r.replacedCount}× replaced)`
 				: `${r.path}: ${r.error ?? "failed"}`;

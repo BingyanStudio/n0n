@@ -1,8 +1,15 @@
 /**
  * @n0n/tools — 统一工具注册表
  *
+ * 工具集：
+ * - write: 文件创建/覆盖
+ * - edit: 文件内容修改（search & replace）
+ * - exec: 脚本执行（script + runtime）
+ * - reminder: 延迟提醒
+ * - submit: 提交结果（动态生成）
+ *
  * 每个工具在此绑定：LLM 定义 + 执行器。
- * 工具参数通过 Zod schema 做运行时校验，消除 as 断言。
+ * 工具参数通过 Zod schema 做运行时校验。
  */
 
 import type {
@@ -12,6 +19,7 @@ import type {
 	ToolStreamEvent,
 } from "@n0n/types";
 import type { ZodType } from "zod";
+import { EDIT_TOOL_DEFINITION, EditArgsSchema, editTool } from "./edit.ts";
 import {
 	EXEC_TOOL_DEFINITION,
 	ExecArgsSchema,
@@ -61,6 +69,11 @@ const BASE_REGISTRY: Record<string, ToolEntry> = {
 		definition: WRITE_TOOL_DEFINITION,
 		stream: false,
 		execute: (tc) => writeTool(tc.id, WriteArgsSchema.parse(tc.args)),
+	},
+	edit: {
+		definition: EDIT_TOOL_DEFINITION,
+		stream: false,
+		execute: (tc) => editTool(tc.id, EditArgsSchema.parse(tc.args)),
 	},
 	reminder: {
 		definition: REMINDER_TOOL_DEFINITION,

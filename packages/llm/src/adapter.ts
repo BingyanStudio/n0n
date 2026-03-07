@@ -13,7 +13,7 @@ import { adaptTags, wrapTag } from "./tags.ts";
 /* ── tool result 格式化 ── */
 
 function formatExecResult(msg: ToolResult & { tool: "exec" }): string {
-	const meta = `$ ${msg.command}\n[cwd: ${msg.cwd}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`;
+	const meta = `[${msg.runtime}] [cwd: ${msg.cwd}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`;
 	const parts = [wrapTag("exec_meta", meta)];
 	if (msg.stdout) parts.push(wrapTag("stdout", msg.stdout));
 	if (msg.stderr) parts.push(wrapTag("stderr", msg.stderr));
@@ -22,12 +22,19 @@ function formatExecResult(msg: ToolResult & { tool: "exec" }): string {
 
 function formatWriteResult(msg: ToolResult & { tool: "write" }): string {
 	if (msg.success) {
-		const detail = msg.searchPattern
-			? `Replaced ${msg.replacedCount} occurrence(s) in \`${msg.path}\``
-			: `Full file write to \`${msg.path}\``;
-		return wrapTag("write_result", detail);
+		return wrapTag("write_result", `Written to \`${msg.path}\``);
 	}
 	return wrapTag("error", `Write failed: ${msg.error}`);
+}
+
+function formatEditResult(msg: ToolResult & { tool: "edit" }): string {
+	if (msg.success) {
+		return wrapTag(
+			"edit_result",
+			`Replaced ${msg.replacedCount} occurrence(s) in \`${msg.path}\``,
+		);
+	}
+	return wrapTag("error", `Edit failed: ${msg.error}`);
 }
 
 function toolResultToContent(msg: ToolResult): string {
@@ -36,6 +43,8 @@ function toolResultToContent(msg: ToolResult): string {
 			return formatExecResult(msg as ToolResult & { tool: "exec" });
 		case "write":
 			return formatWriteResult(msg as ToolResult & { tool: "write" });
+		case "edit":
+			return formatEditResult(msg as ToolResult & { tool: "edit" });
 		case "reminder":
 			return wrapTag(
 				"result",
@@ -117,7 +126,7 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 					[
 						wrapTag("hint", msg.content),
 						"",
-						"First, ask yourself: can I answer this by calling `exec` or `write`? If yes — do it, then submit as `completed`.",
+						"First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.",
 						"If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a `chat` response.",
 						"Otherwise, the engineer has already built the perfect workflow for this. Reason out what it looks like — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
 					].join("\n"),

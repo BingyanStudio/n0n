@@ -66,7 +66,8 @@ export interface ExecToolResult {
 	type: "tool_result";
 	callId: string;
 	tool: "exec";
-	command: string;
+	script: string;
+	runtime: string;
 	cwd: string;
 	exitCode: number;
 	stdout: string;
@@ -78,6 +79,15 @@ export interface WriteToolResult {
 	type: "tool_result";
 	callId: string;
 	tool: "write";
+	path: string;
+	success: boolean;
+	error: string | null;
+}
+
+export interface EditToolResult {
+	type: "tool_result";
+	callId: string;
+	tool: "edit";
 	path: string;
 	searchPattern: string;
 	replacedCount: number;
@@ -105,6 +115,7 @@ export interface SubmitToolResult {
 export type ToolResult =
 	| ExecToolResult
 	| WriteToolResult
+	| EditToolResult
 	| ReminderToolResult
 	| SubmitToolResult;
 
