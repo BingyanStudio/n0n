@@ -25,7 +25,6 @@ import {
 } from "./reminder.ts";
 import {
 	makeSubmitToolDefinition,
-	SUBMIT_TOOL_DEFINITION,
 	SubmitArgsSchema,
 	submitTool,
 } from "./submit.ts";
@@ -49,9 +48,9 @@ export type ToolEntry =
 	| { definition: LLMToolDefinition; stream: true; execute: StreamExecutor }
 	| { definition: LLMToolDefinition; stream: false; execute: SyncExecutor };
 
-// ── 注册表 ──
+// ── 基础注册表（不含 submit，submit 由 makeToolkit 动态生成） ──
 
-const TOOL_REGISTRY: Record<string, ToolEntry> = {
+const BASE_REGISTRY: Record<string, ToolEntry> = {
 	exec: {
 		definition: EXEC_TOOL_DEFINITION,
 		stream: true,
@@ -69,28 +68,50 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
 		execute: (tc, reminders) =>
 			reminderTool(tc.id, ReminderArgsSchema.parse(tc.args), reminders),
 	},
-	submit: {
-		definition: SUBMIT_TOOL_DEFINITION,
-		stream: false,
-		execute: (tc) => submitTool(tc.id, SubmitArgsSchema.parse(tc.args)),
-	},
 };
 
-// ── 公共 API ──
+// ── Toolkit：包含工具定义列表 + 按名称查找入口 ──
 
-export const REGISTERED_TOOLS = new Set(Object.keys(TOOL_REGISTRY));
-
-export function getToolEntry(name: string): ToolEntry | undefined {
-	return TOOL_REGISTRY[name];
+export interface Toolkit {
+	definitions: LLMToolDefinition[];
+	getEntry(name: string): ToolEntry | undefined;
 }
 
-export function makeToolDefinitions(schema?: ZodType): LLMToolDefinition[] {
-	return Object.entries(TOOL_REGISTRY).map(([name, entry]) => {
-		if (name === "submit" && schema) {
-			return makeSubmitToolDefinition(schema);
-		}
-		return entry.definition;
-	});
+export const REGISTERED_TOOLS = new Set([
+	...Object.keys(BASE_REGISTRY),
+	"submit",
+]);
+
+/**
+ * 构建完整的工具集（含 submit）。
+ *
+ * @param schema 可选的 Zod schema，用于约束 submit 的参数结构。
+ *   有 schema 时，schema 属性直接展开到 submit 的 parameters 顶层；
+ *   无 schema 时，submit 使用 `{ result: unknown, report?: string }` 结构。
+ */
+export function makeToolkit(schema?: ZodType): Toolkit {
+	const hasSchema = !!schema;
+
+	const submitEntry: ToolEntry = {
+		definition: makeSubmitToolDefinition(schema),
+		stream: false,
+		execute: (tc) => {
+			// 有 schema 时跳过 SubmitArgsSchema（结构已不同），直接传 args
+			// 无 schema 时仍用 SubmitArgsSchema 校验 { result, report? }
+			const args = hasSchema ? tc.args : SubmitArgsSchema.parse(tc.args);
+			return submitTool(tc.id, args as Record<string, unknown>, hasSchema);
+		},
+	};
+
+	const registry: Record<string, ToolEntry> = {
+		...BASE_REGISTRY,
+		submit: submitEntry,
+	};
+
+	return {
+		definitions: Object.values(registry).map((e) => e.definition),
+		getEntry: (name) => registry[name],
+	};
 }
 
 // ── Re-exports ──

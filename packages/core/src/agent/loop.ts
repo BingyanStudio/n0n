@@ -11,7 +11,7 @@ import {
 	toAPIMessages,
 } from "@n0n/llm";
 import type { PendingReminder } from "@n0n/tools";
-import { makeToolDefinitions } from "@n0n/tools";
+import { makeToolkit } from "@n0n/tools";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
@@ -50,7 +50,7 @@ export async function agentLoop<T = unknown>(
 ): Promise<AgentResult<T>> {
 	const maxIter = options?.maxIterations ?? config.agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
-	const toolDefs = makeToolDefinitions(options?.schema);
+	const toolkit = makeToolkit(options?.schema);
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
@@ -74,7 +74,7 @@ export async function agentLoop<T = unknown>(
 		for await (const event of chatCompletionStream(
 			{
 				messages: apiMessages,
-				tools: toolDefs,
+				tools: toolkit.definitions,
 				tool_choice: "auto",
 			},
 			{ signal: options?.signal },
@@ -184,6 +184,7 @@ export async function agentLoop<T = unknown>(
 				tc,
 				reminders,
 				options?.confirmFn,
+				toolkit.getEntry,
 			)) {
 				if (event.type === "tool_output_chunk") {
 					renderer.toolResultChunk(event.tool, event.chunk);
@@ -252,30 +253,22 @@ export async function agentLoop<T = unknown>(
 /**
  * 校验 submit 结果是否符合 schema。
  *
- * 无 schema 时返回 string（raw 或 JSON.stringify），此时 T 应为 unknown（默认值）。
- * 若调用方指定了具体 T，必须同时提供 schema，否则类型安全由调用方自行保证。
+ * LLM tool call arguments 始终是 JSON 对象（由 API 规范保证），
+ * 经 parseToolCalls → extractSubmitResult 后 raw 已经是正确的 JS 对象，
+ * 无需再做 string → JSON.parse 转换。
+ *
+ * - 无 schema 时：直接通过，T 默认为 unknown。
+ * - 有 schema 时：用 Zod safeParse 校验，失败则返回详细错误。
  */
 function validateSubmit<T = unknown>(
 	raw: unknown,
 	schema?: ZodType<T>,
 ): { ok: true; value: T } | { ok: false; error: string } {
 	if (!schema) {
-		// 无 schema 时 T 默认为 unknown，string 可安全赋值给 unknown。
-		// 若调用方指定了具体 T 但未提供 schema，此处 as T 是有意为之的降级行为。
-		const value = (typeof raw === "string" ? raw : JSON.stringify(raw)) as T;
-		return { ok: true, value };
+		return { ok: true, value: raw as T };
 	}
 
-	let parsed: unknown = raw;
-	if (typeof raw === "string") {
-		try {
-			parsed = JSON.parse(raw);
-		} catch {
-			// not JSON, use raw string
-		}
-	}
-
-	const result = schema.safeParse(parsed);
+	const result = schema.safeParse(raw);
 	if (result.success) {
 		return { ok: true, value: result.data };
 	}
