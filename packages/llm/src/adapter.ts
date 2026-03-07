@@ -100,7 +100,8 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 					[
 						`<hint>\n${msg.content}\n</hint>`,
 						"",
-						"If this is a simple greeting or casual chat, submit a `chat` response directly.",
+						"First, ask yourself: can I answer this by calling `exec` or `write`? If yes — do it, then submit as `completed`.",
+						"If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a `chat` response.",
 						"Otherwise, the engineer has already built the perfect workflow for this. Reason out what it looks like — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
 					].join("\n"),
 				);
