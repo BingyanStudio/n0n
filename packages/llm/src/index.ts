@@ -8,3 +8,4 @@ export type { LLMConfig } from "./config.ts";
 export { getLLMConfig, initLLMConfig } from "./config.ts";
 export type { StreamEvent } from "./stream.ts";
 export { chatCompletionStream, StreamAccumulator } from "./stream.ts";
+export { adaptTags, wrapTag } from "./tags.ts";
