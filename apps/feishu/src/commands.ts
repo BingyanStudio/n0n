@@ -157,7 +157,7 @@ export async function handleCommand(
 			const crons: CronItem[] = schedules.map((s) => ({
 				name: s.name,
 				cron: s.cron,
-				workflow: s.workflow ?? null,
+				prompt: s.prompt,
 				enabled: s.enabled,
 			}));
 			const card = buildCronListCard(crons);

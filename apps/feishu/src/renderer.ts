@@ -2,11 +2,12 @@
  * FeishuRenderer — 飞书流式渲染器
  *
  * 将 agentLoop 事件映射为按轮次分块的过程卡片。
- * 每个 round 内部按因果顺序排列：
- *   thinking → content → tool calls → tool results
- *
- * 流式 token 通过节流刷新到 activity 区域，
- * 完成后归档为轮次内的日志行。
+ * 信息层级：
+ * - meta（灰色小字）：round 标题、idle 计数
+ * - thinking（折叠面板）：LLM 思考过程，次要信息
+ * - tool（markdown）：▸ 开始 / ◂ 结束，结构化摘要
+ * - content（markdown）：LLM 回复，主要信息
+ * - ok/err（加粗）：最终结果
  */
 
 import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
@@ -15,8 +16,6 @@ import type { FeishuConversation } from "./conversation.ts";
 const THROTTLE_MS = 1500;
 const SHORT = 160;
 const LONG = 600;
-
-// ── 工具函数 ──
 
 function compact(text: string, limit = SHORT): string {
 	const s = text.replace(/\s+/g, " ").trim();
@@ -32,13 +31,59 @@ function json(value: unknown): string {
 	}
 }
 
-function fmtArgs(args: Record<string, unknown>): string {
-	return Object.entries(args)
-		.map(([k, v]) => {
-			const val = typeof v === "string" ? v : json(v);
-			return `${k}=${compact(val, 60)}`;
-		})
-		.join(", ");
+/**
+ * 提取工具调用的标题摘要和展开详情
+ *
+ * 标题：工具名 + 最关键的参数（用户一眼能看到在做什么）
+ * 详情：完整参数列表（展开后查看）
+ */
+function fmtToolCall(
+	tool: string,
+	args: Record<string, unknown>,
+): { summary: string; detail: string } {
+	// 按工具类型提取关键参数作为标题
+	const str = (k: string) => {
+		const v = args[k];
+		return typeof v === "string" ? v : v != null ? json(v) : "";
+	};
+
+	let summary: string;
+	switch (tool) {
+		case "exec":
+			summary = `▸ **exec**  \`${compact(str("command"), 80)}\``;
+			break;
+		case "write":
+			summary = `▸ **write**  ${compact(str("path"), 80)}`;
+			break;
+		case "submit":
+			summary = `▸ **submit**  ${compact(str("result") || str("message"), 60)}`;
+			break;
+		case "reminder":
+			summary = `▸ **reminder**  ${compact(str("content"), 60)}`;
+			break;
+		default:
+			summary = `▸ **${tool}**`;
+	}
+
+	// 完整参数作为展开详情
+	const lines: string[] = [];
+	for (const [key, value] of Object.entries(args)) {
+		const strVal = typeof value === "string" ? value : json(value);
+		const valLines = strVal.split("\n");
+		if (valLines.length <= 1) {
+			lines.push(`**${key}**: ${compact(strVal, 200)}`);
+		} else {
+			lines.push(`**${key}**:`);
+			for (const vl of valLines.slice(0, 15)) {
+				lines.push(`  ${vl}`);
+			}
+			if (valLines.length > 15) {
+				lines.push(`  ... (${valLines.length - 15} more lines)`);
+			}
+		}
+	}
+
+	return { summary, detail: lines.join("\n") };
 }
 
 function fmtResult(r: ToolResult): string {
@@ -56,8 +101,6 @@ function fmtResult(r: ToolResult): string {
 	}
 }
 
-// ── 渲染器 ──
-
 export class FeishuRenderer implements Renderer {
 	private thinkBuf = "";
 	private contentBuf = "";
@@ -74,9 +117,7 @@ export class FeishuRenderer implements Renderer {
 		await this.conv.drain();
 	}
 
-	userMessage(_content: string): void {
-		// 用户消息不单独显示，已在 round title 中体现
-	}
+	userMessage(_content: string): void {}
 
 	roundStart(round: number, maxRounds: number, msgCount: number): void {
 		this.conv.setTitle(`n0n · round ${round}/${maxRounds}`);
@@ -89,11 +130,11 @@ export class FeishuRenderer implements Renderer {
 	}
 
 	contentToken(token: string): void {
-		// thinking → content: 归档 thinking
 		if (this.thinkBuf) {
 			this.conv.appendLine({
-				prefix: "│",
-				text: `thinking: ${compact(this.thinkBuf, LONG)}`,
+				kind: "thinking",
+				text: "thinking",
+				detail: compact(this.thinkBuf, LONG),
 			});
 			this.thinkBuf = "";
 		}
@@ -105,14 +146,15 @@ export class FeishuRenderer implements Renderer {
 		this.stopTimer();
 		if (this.thinkBuf) {
 			this.conv.appendLine({
-				prefix: "│",
-				text: `thinking: ${compact(this.thinkBuf, LONG)}`,
+				kind: "thinking",
+				text: "thinking",
+				detail: compact(this.thinkBuf, LONG),
 			});
 			this.thinkBuf = "";
 		}
 		if (this.contentBuf.trim()) {
 			this.conv.appendLine({
-				prefix: "·",
+				kind: "content",
 				text: compact(this.contentBuf, LONG),
 			});
 			this.contentBuf = "";
@@ -122,23 +164,18 @@ export class FeishuRenderer implements Renderer {
 
 	textResponse(content: string, idleCount: number): void {
 		if (content) {
-			this.conv.appendLine({
-				prefix: "·",
-				text: compact(content),
-			});
+			this.conv.appendLine({ kind: "content", text: compact(content) });
 		}
 		if (idleCount > 0) {
-			this.conv.appendLine({ prefix: "│", text: `idle=${idleCount}` });
+			this.conv.appendLine({ kind: "meta", text: `idle=${idleCount}` });
 		}
 	}
 
 	toolCallStart(tc: ToolCallRecord): void {
 		this.curTool = tc.tool;
 		this.toolOutBuf = "";
-		this.conv.appendLine({
-			prefix: "▸",
-			text: `**${tc.tool}**  ${fmtArgs(tc.args)}`,
-		});
+		const { summary, detail } = fmtToolCall(tc.tool, tc.args);
+		this.conv.appendLine({ kind: "tool", text: summary, detail });
 	}
 
 	toolCallArgChunk(): void {}
@@ -153,8 +190,8 @@ export class FeishuRenderer implements Renderer {
 		const summary = fmtResult(result);
 		const isErr = result.tool === "exec" && result.exitCode !== 0;
 		this.conv.appendLine({
-			prefix: isErr ? "✗" : "◂",
-			text: `**${result.tool}** → ${summary}`,
+			kind: isErr ? "err" : "tool",
+			text: `◂ **${result.tool}** → ${summary}`,
 		});
 		this.conv.setActivity("");
 		this.toolOutBuf = "";
@@ -162,21 +199,19 @@ export class FeishuRenderer implements Renderer {
 	}
 
 	submitAccepted(): void {
-		this.conv.appendLine({ prefix: "✔", text: "submit accepted" });
+		this.conv.appendLine({ kind: "ok", text: "submit accepted" });
 	}
 
 	submitRejected(attempt: number, maxAttempts: number, error: string): void {
 		this.conv.appendLine({
-			prefix: "✗",
+			kind: "err",
 			text: `submit rejected (${attempt}/${maxAttempts}): ${compact(error)}`,
 		});
 	}
 
 	agentTerminated(reason: string): void {
-		this.conv.appendLine({ prefix: "✗", text: compact(reason) });
+		this.conv.appendLine({ kind: "err", text: compact(reason) });
 	}
-
-	// ── 节流 ──
 
 	private scheduleFlush(): void {
 		if (this.timer) return;
@@ -198,12 +233,12 @@ export class FeishuRenderer implements Renderer {
 	private flushBuffers(): void {
 		this.lastFlush = Date.now();
 		if (this.thinkBuf) {
-			this.conv.setActivity(`│ thinking…\n│ ${compact(this.thinkBuf, 200)}`);
+			this.conv.setActivity(`thinking…  ${compact(this.thinkBuf, 200)}`);
 		} else if (this.contentBuf) {
 			this.conv.setActivity(compact(this.contentBuf, 200));
 		} else if (this.toolOutBuf) {
 			this.conv.setActivity(
-				`│ ${this.curTool}…\n│ ${compact(this.toolOutBuf, 200)}`,
+				`${this.curTool}…  ${compact(this.toolOutBuf, 200)}`,
 			);
 		}
 	}
