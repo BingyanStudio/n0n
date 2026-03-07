@@ -186,21 +186,11 @@ async function onCronRun(ctx: CardActionContext): Promise<void> {
 		return;
 	}
 
-	const workflows = await discoverWorkflows();
-	const wf = workflows.find((w) => w.name === schedule.workflow);
-	if (!wf) {
-		await sendFeedback(
-			ctx,
-			"定时任务",
-			`❌ 关联工作流 ${schedule.workflow} 未找到`,
-			"red",
-		);
-		return;
-	}
-
+	// schedule.workflow 格式为 "workflows/tasks/foo.ts"，
+	// 直接用 runWorkflow() 按路径执行，无需通过 discoverWorkflows 匹配名称
 	await sendFeedback(ctx, "定时任务", `⏳ 正在运行: ${name}...`);
 	try {
-		const result = await runWorkflow(wf.path);
+		const result = await runWorkflow(schedule.workflow);
 		await sendFeedback(
 			ctx,
 			`✅ ${name}`,
