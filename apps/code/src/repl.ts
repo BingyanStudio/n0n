@@ -1,0 +1,158 @@
+/**
+ * Code REPL — 代码编写场景的交互循环
+ *
+ * 与 cli REPL 的区别：
+ * - System prompt 为 code.md（代码 agent 而非 workflow builder）
+ * - Submit schema 为 CodeResultSchema（completed/need_info/error）
+ * - Context 注入项目结构和 git 状态，而非 workflow 列表
+ */
+
+import { createInterface } from "node:readline";
+import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
+import { agentLoop, PlainRenderer } from "@n0n/core";
+import type { DomainMessage, SubmitToolResult } from "@n0n/types";
+import { type CodeResult, CodeResultSchema } from "./schema.ts";
+
+const PROMPT_PATH = new URL("./prompts/code.md", import.meta.url).pathname;
+
+/** 获取项目上下文（git status + 目录结构） */
+async function gatherContext(): Promise<string | null> {
+	const parts: string[] = [];
+	try {
+		const gitStatus = Bun.spawnSync(["git", "status", "--short"]);
+		const status = gitStatus.stdout.toString().trim();
+		if (status) {
+			parts.push(`<git_status>\n${status}\n</git_status>`);
+		}
+		const gitBranch = Bun.spawnSync(["git", "branch", "--show-current"]);
+		const branch = gitBranch.stdout.toString().trim();
+		if (branch) {
+			parts.push(`<git_branch>${branch}</git_branch>`);
+		}
+	} catch {}
+	return parts.length > 0 ? parts.join("\n") : null;
+}
+
+/** 将用户回答注入到 history 中最后一个 SubmitToolResult */
+function injectUserResponse(history: DomainMessage[], response: string): void {
+	for (let i = history.length - 1; i >= 0; i--) {
+		const msg = history[i];
+		if (
+			msg !== undefined &&
+			msg.type === "tool_result" &&
+			"tool" in msg &&
+			msg.tool === "submit"
+		) {
+			(msg as SubmitToolResult).userResponse = response;
+			return;
+		}
+	}
+}
+
+export async function startCodeRepl(initialInput?: string): Promise<void> {
+	const systemPrompt = await Bun.file(PROMPT_PATH).text();
+	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
+
+	const rl = createInterface({
+		input: process.stdin,
+		output: process.stderr,
+		terminal: isTTY,
+	});
+	let closed = false;
+	rl.on("close", () => {
+		closed = true;
+	});
+
+	const prompt = (q: string): Promise<string> =>
+		new Promise((resolve) => {
+			if (closed) return resolve("exit");
+			rl.question(q, resolve);
+		});
+	const confirmFn = (question: string): Promise<string> =>
+		new Promise((resolve) => {
+			if (closed) return resolve("n");
+			rl.question(question, resolve);
+		});
+
+	let userInput = initialInput ?? (await prompt(`${label.user()} `));
+	let history: DomainMessage[] = [
+		{ type: "system", content: systemPrompt },
+		{
+			type: "user_input",
+			content: userInput,
+			context: await gatherContext(),
+			capabilities: null,
+		},
+	];
+
+	while (userInput.trim().toLowerCase() !== "exit") {
+		const agentResult = await agentLoop<CodeResult>(history, {
+			maxIterations: 50,
+			renderer,
+			confirmFn,
+			schema: CodeResultSchema,
+		});
+		history = agentResult.history;
+		const ir = agentResult.result;
+		writeln();
+
+		if (ir == null) {
+			writeln(`${style.red("✗")} Agent 异常终止`);
+			if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
+			writeln();
+			userInput = await prompt(`${label.user()} `);
+			history.push({
+				type: "user_input",
+				content: userInput,
+				context: await gatherContext(),
+				capabilities: null,
+			});
+			continue;
+		}
+
+		switch (ir.type) {
+			case "need_info": {
+				writeln(`${style.yellow("?")} 需要更多信息:`);
+				writeln(`  ${ir.message}`);
+				writeln();
+				userInput = await prompt(`${label.user()} `);
+				injectUserResponse(history, userInput);
+				continue;
+			}
+			case "completed": {
+				writeln(`${style.green("✓")} 完成: ${ir.summary}`);
+				if (ir.files_changed.length > 0) {
+					writeln(style.gray(`  变更文件: ${ir.files_changed.join(", ")}`));
+				}
+				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
+				writeln();
+				userInput = await prompt(`${label.user()} `);
+				history.push({
+					type: "user_input",
+					content: userInput,
+					context: await gatherContext(),
+					capabilities: null,
+				});
+				break;
+			}
+			case "error": {
+				writeln(`${style.red("✗")} 错误: ${ir.error}`);
+				if (ir.attempts.length > 0) {
+					writeln(style.gray(`  尝试过: ${ir.attempts.join("; ")}`));
+				}
+				writeln();
+				userInput = await prompt(`${label.user()} `);
+				history.push({
+					type: "user_input",
+					content: userInput,
+					context: await gatherContext(),
+					capabilities: null,
+				});
+				continue;
+			}
+		}
+	}
+
+	rl.close();
+	writeln(style.gray("Bye!"));
+}

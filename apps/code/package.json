@@ -1,0 +1,12 @@
+{
+	"name": "@n0n/code",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@n0n/cli-ui": "workspace:*",
+		"@n0n/core": "workspace:*",
+		"@n0n/types": "workspace:*",
+		"zod": "^4.3.6"
+	}
+}
