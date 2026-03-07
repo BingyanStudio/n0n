@@ -112,8 +112,11 @@ export async function startCodeRepl(initialInput?: string): Promise<void> {
 
 		switch (ir.type) {
 			case "need_info": {
-				writeln(`${style.yellow("?")} 需要更多信息:`);
-				writeln(`  ${ir.message}`);
+				writeln(`${style.yellow("?")} ${ir.question}`);
+				for (const [i, opt] of ir.options.entries()) {
+					writeln(`  ${style.cyan(`${i + 1})`)} ${opt.choice}`);
+					writeln(`     ${style.gray(opt.affect)}`);
+				}
 				writeln();
 				userInput = await prompt(`${label.user()} `);
 				injectUserResponse(history, userInput);
@@ -134,21 +137,6 @@ export async function startCodeRepl(initialInput?: string): Promise<void> {
 					capabilities: null,
 				});
 				break;
-			}
-			case "error": {
-				writeln(`${style.red("✗")} 错误: ${ir.error}`);
-				if (ir.attempts.length > 0) {
-					writeln(style.gray(`  尝试过: ${ir.attempts.join("; ")}`));
-				}
-				writeln();
-				userInput = await prompt(`${label.user()} `);
-				history.push({
-					type: "user_input",
-					content: userInput,
-					context: await gatherContext(),
-					capabilities: null,
-				});
-				continue;
 			}
 		}
 	}
