@@ -224,6 +224,27 @@ adapter.ts 中 user 消息的行为指引顺序从：
 - 这保持了模板的可读性，同时实现了对不同模型的适配
 - `adaptTags` 使用正则 `<(\w+)>` 和 `</(\w+)>` 匹配，不会误伤 markdown 中的 HTML 标签（因为 prompt 中不使用 HTML）
 
+### 统一消息结构为 XML + Markdown
+
+adapter.ts 中所有消息类型统一使用 `wrapTag()` 划分内容边界：
+
+| 消息类型 | 使用的标签 |
+|----------|-----------|
+| exec 结果 | `<exec_meta>`, `<stdout>`, `<stderr>` |
+| write 结果 | `<write_result>` 或 `<error>` |
+| reminder/submit 结果 | `<result>` |
+| 空闲警告 | `<system_warning>` |
+| 用户输入 | `<context>`, `<capabilities>`, `<hint>` |
+| 轮次反馈 | `<feedback>` |
+| 提醒触发 | `<reminder>` |
+| 参数错误 | `<error>` + `<schema>` |
+| 提交被拒 | `<rejected>` |
+
+结构特点：
+1. XML 标签仅作为内容边界标记，不做 XML 转义
+2. 标签内部使用 Markdown 丰富表达（`**加粗**`、`` `代码` ``、列表等）
+3. 所有标签通过 `wrapTag()` 生成，自动适配当前模型的 tag 风格
+
 # 2026.03.07-2
 
 当前各个工具的返回和上下文的组织较为松散，建议统一为 xml 和 mardown 混合的结构，结构特点：
