@@ -136,7 +136,7 @@ export async function startFeishuService(): Promise<void> {
 
 		"card.action.trigger": async (data: Record<string, unknown>) => {
 			console.log("[feishu] card action event received");
-			await handleCardAction(bot, data);
+			return await handleCardAction(bot, data);
 		},
 	});
 

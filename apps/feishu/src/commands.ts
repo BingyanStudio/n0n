@@ -20,7 +20,11 @@ import {
 	chunkText,
 } from "./cards/index.ts";
 import type { FeishuSession } from "./session.ts";
-import { resetSession } from "./session.ts";
+import {
+	abortSessionsByUser,
+	resetSession,
+	resetSessionsByUser,
+} from "./session.ts";
 
 // ── 命令类型 ──
 
@@ -121,20 +125,47 @@ export async function handleCommand(
 			return;
 
 		case "exit":
-			if (session.currentTask) {
-				session.currentTask.abortController.abort();
-				session.currentTask = null;
+			// 菜单事件无 chatId，需按用户 ID 查找并中断所有任务
+			if (!ctx.chatId && ctx.senderOpenId) {
+				const aborted = abortSessionsByUser(ctx.senderOpenId);
+				await sendText(
+					bot,
+					ctx,
+					"已退出",
+					aborted > 0
+						? `✋ 已中断 ${aborted} 个任务。`
+						: "✋ 当前没有正在执行的任务。",
+				);
+			} else {
+				if (session.currentTask) {
+					session.currentTask.abortController.abort();
+					session.currentTask = null;
+				}
+				await sendText(bot, ctx, "已退出", "✋ 当前任务已中断。");
 			}
-			await sendText(bot, ctx, "已退出", "✋ 当前任务已中断。");
 			return;
 
 		case "reset":
-			if (session.currentTask) {
-				session.currentTask.abortController.abort();
-				session.currentTask = null;
+			// 菜单事件无 chatId，sessionKey 为 "unknown:ou_xxx"，
+			// 需要按用户 ID 查找并重置所有真实会话
+			if (!ctx.chatId && ctx.senderOpenId) {
+				const count = resetSessionsByUser(ctx.senderOpenId, systemPrompt);
+				await sendText(
+					bot,
+					ctx,
+					"已重置",
+					count > 0
+						? `🔄 已重置 ${count} 个会话。`
+						: "🔄 没有找到活跃会话，已就绪。",
+				);
+			} else {
+				if (session.currentTask) {
+					session.currentTask.abortController.abort();
+					session.currentTask = null;
+				}
+				resetSession(sessionKey, ctx, systemPrompt);
+				await sendText(bot, ctx, "已重置", "🔄 会话已重置。");
 			}
-			resetSession(sessionKey, ctx, systemPrompt);
-			await sendText(bot, ctx, "已重置", "🔄 会话已重置。");
 			return;
 
 		case "id":

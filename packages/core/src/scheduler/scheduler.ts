@@ -86,10 +86,9 @@ export async function setScheduleEnabled(
 		},
 	);
 
+	// 已经是目标状态，幂等返回
 	if (updated === original) {
-		throw new Error(
-			`Failed to update schedule frontmatter: ${target.filePath}`,
-		);
+		return { ...target, enabled };
 	}
 
 	await Bun.write(target.filePath, updated);
