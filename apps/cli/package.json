@@ -4,9 +4,8 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
+		"@n0n/cli-ui": "workspace:*",
 		"@n0n/core": "workspace:*",
-		"@n0n/types": "workspace:*",
-		"partial-json": "^0.1.7",
-		"picocolors": "^1.1.1"
+		"@n0n/types": "workspace:*"
 	}
 }
