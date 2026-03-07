@@ -56,8 +56,12 @@ export interface HrElement {
 export interface CollapsiblePanelElement {
 	tag: "collapsible_panel";
 	expanded?: boolean;
+	background_color?: string;
 	header: {
-		title: PlainTextElement;
+		title: PlainTextElement | MarkdownElement;
+		background_color?: string;
+		vertical_align?: "top" | "center" | "bottom";
+		padding?: string;
 		icon?: {
 			tag: "standard_icon";
 			token: string;
@@ -67,6 +71,7 @@ export interface CollapsiblePanelElement {
 		icon_position?: "left" | "right" | "follow_text";
 		icon_expanded_angle?: -180 | -90 | 90 | 180;
 	};
+	border?: { color?: string; corner_radius?: string };
 	padding?: string;
 	vertical_spacing?: string;
 	elements: CardBodyElement[];

@@ -54,30 +54,6 @@ function card(
 	};
 }
 
-function panel(
-	title: string,
-	elements: CardBodyElement[],
-	expanded = false,
-): CollapsiblePanelElement {
-	return {
-		tag: "collapsible_panel",
-		expanded,
-		header: {
-			title: { tag: "plain_text", content: title },
-			icon: {
-				tag: "standard_icon",
-				token: "down-small-ccm_outlined",
-				size: "16px 16px",
-			},
-			icon_position: "right",
-			icon_expanded_angle: -180,
-		},
-		vertical_spacing: "4px",
-		padding: "4px 8px 4px 8px",
-		elements,
-	};
-}
-
 // ── 简单文本卡片 ──
 
 export function buildTextCard(
@@ -115,33 +91,103 @@ export interface RoundBlock {
 	active?: boolean;
 }
 
-/** 将 LogLine 渲染为卡片元素 */
+/**
+ * 将 LogLine 渲染为卡片元素
+ *
+ * 信息层级（对齐 CLI RichRenderer）：
+ * - thinking: 灰色文本，次要信息
+ * - content: 正常 markdown，主要信息（模型回复）
+ * - tool (▸ + detail): 折叠面板，标题=工具名，展开=参数详情
+ * - tool (◂): 灰色结果摘要行
+ * - ok/err: 状态标签
+ * - meta: 灰色小字
+ */
 function renderLine(line: LogLine): CardBodyElement {
 	switch (line.kind) {
 		case "meta":
 			return meta(line.text);
 		case "thinking":
-			// 折叠面板，灰色内容
-			return panel(`💭 ${line.text}`, [txt(line.detail ?? "(empty)")]);
+			return txt(`<font color='grey'>${line.detail ?? line.text}</font>`);
 		case "tool":
+			// ▸ 有 detail → 折叠面板展示参数详情
+			if (line.text.startsWith("▸") && line.detail) {
+				return {
+					tag: "collapsible_panel",
+					expanded: false,
+					header: {
+						title: { tag: "markdown", content: line.text },
+						vertical_align: "center",
+						padding: "2px 4px 2px 4px",
+						icon: {
+							tag: "standard_icon",
+							token: "down-small-ccm_outlined",
+							size: "12px 12px",
+						},
+						icon_position: "right",
+						icon_expanded_angle: -180,
+					},
+					vertical_spacing: "2px",
+					padding: "4px 8px 4px 8px",
+					elements: [txt(`<font color='grey'>${line.detail}</font>`)],
+				};
+			}
+			// ◂ 结果摘要 → 灰色
+			if (line.text.startsWith("◂")) {
+				return txt(`<font color='grey'>${line.text}</font>`);
+			}
+			// ▸ 无 detail → 普通行
 			return txt(line.text);
 		case "content":
 			return txt(line.text);
 		case "ok":
-			return txt(`**✔ ${line.text}**`);
+			return txt(`<text_tag color='green'>完成</text_tag> ${line.text}`);
 		case "err":
-			return txt(`**✗ ${line.text}**`);
+			return txt(`<text_tag color='red'>错误</text_tag> ${line.text}`);
 	}
 }
 
-/** 将 RoundBlock 渲染为折叠面板 */
+/**
+ * 将 RoundBlock 渲染为带样式的折叠面板
+ *
+ * 样式：灰色背景 + 圆角边框 + markdown 标题（含 text_tag 消息数）
+ */
 function renderRound(
 	block: RoundBlock,
 	expanded: boolean,
 ): CollapsiblePanelElement {
 	const elements: CardBodyElement[] =
 		block.lines.length > 0 ? block.lines.map(renderLine) : [txt("...")];
-	return panel(block.title, elements, expanded);
+
+	// 从 title 中提取消息数（如 "Round 1  ·  6 msgs" → title="Round 1", badge="6 msgs"）
+	const sep = block.title.indexOf("·");
+	const titleText = sep >= 0 ? block.title.slice(0, sep).trim() : block.title;
+	const badge = sep >= 0 ? block.title.slice(sep + 1).trim() : "";
+	// plain_text 标题 + text_tag 不兼容，分开处理
+	const headerContent = badge
+		? `${titleText}    <text_tag color='neutral'>${badge}</text_tag>`
+		: titleText;
+
+	return {
+		tag: "collapsible_panel",
+		expanded,
+		background_color: "grey",
+		header: {
+			title: { tag: "markdown", content: headerContent },
+			vertical_align: "center",
+			padding: "4px 8px 4px 8px",
+			icon: {
+				tag: "standard_icon",
+				token: "down-small-ccm_outlined",
+				size: "16px 16px",
+			},
+			icon_position: "right",
+			icon_expanded_angle: -180,
+		},
+		border: { color: "grey", corner_radius: "5px" },
+		vertical_spacing: "4px",
+		padding: "4px 8px 4px 8px",
+		elements,
+	};
 }
 
 /** 构建过程卡片 — 按轮次分块，信息分层 */

@@ -31,13 +31,59 @@ function json(value: unknown): string {
 	}
 }
 
-function fmtArgs(args: Record<string, unknown>): string {
-	return Object.entries(args)
-		.map(([k, v]) => {
-			const val = typeof v === "string" ? v : json(v);
-			return `${k}=${compact(val, 60)}`;
-		})
-		.join(", ");
+/**
+ * 提取工具调用的标题摘要和展开详情
+ *
+ * 标题：工具名 + 最关键的参数（用户一眼能看到在做什么）
+ * 详情：完整参数列表（展开后查看）
+ */
+function fmtToolCall(
+	tool: string,
+	args: Record<string, unknown>,
+): { summary: string; detail: string } {
+	// 按工具类型提取关键参数作为标题
+	const str = (k: string) => {
+		const v = args[k];
+		return typeof v === "string" ? v : v != null ? json(v) : "";
+	};
+
+	let summary: string;
+	switch (tool) {
+		case "exec":
+			summary = `▸ **exec**  \`${compact(str("command"), 80)}\``;
+			break;
+		case "write":
+			summary = `▸ **write**  ${compact(str("path"), 80)}`;
+			break;
+		case "submit":
+			summary = `▸ **submit**  ${compact(str("result") || str("message"), 60)}`;
+			break;
+		case "reminder":
+			summary = `▸ **reminder**  ${compact(str("content"), 60)}`;
+			break;
+		default:
+			summary = `▸ **${tool}**`;
+	}
+
+	// 完整参数作为展开详情
+	const lines: string[] = [];
+	for (const [key, value] of Object.entries(args)) {
+		const strVal = typeof value === "string" ? value : json(value);
+		const valLines = strVal.split("\n");
+		if (valLines.length <= 1) {
+			lines.push(`**${key}**: ${compact(strVal, 200)}`);
+		} else {
+			lines.push(`**${key}**:`);
+			for (const vl of valLines.slice(0, 15)) {
+				lines.push(`  ${vl}`);
+			}
+			if (valLines.length > 15) {
+				lines.push(`  ... (${valLines.length - 15} more lines)`);
+			}
+		}
+	}
+
+	return { summary, detail: lines.join("\n") };
 }
 
 function fmtResult(r: ToolResult): string {
@@ -128,10 +174,8 @@ export class FeishuRenderer implements Renderer {
 	toolCallStart(tc: ToolCallRecord): void {
 		this.curTool = tc.tool;
 		this.toolOutBuf = "";
-		this.conv.appendLine({
-			kind: "tool",
-			text: `▸ **${tc.tool}**  ${fmtArgs(tc.args)}`,
-		});
+		const { summary, detail } = fmtToolCall(tc.tool, tc.args);
+		this.conv.appendLine({ kind: "tool", text: summary, detail });
 	}
 
 	toolCallArgChunk(): void {}
