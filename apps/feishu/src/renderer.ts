@@ -234,7 +234,7 @@ export class FeishuRenderer implements Renderer {
 	private flushBuffers(): void {
 		this.lastFlush = Date.now();
 		if (this.thinkBuf) {
-			this.conv.setActivity(`thinking…  ${compact(this.thinkBuf, 200)}`);
+			this.conv.setActivity(compact(this.thinkBuf, 200));
 		} else if (this.contentBuf) {
 			this.conv.setActivity(compact(this.contentBuf, 200));
 		} else if (this.toolOutBuf) {
