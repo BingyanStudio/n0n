@@ -78,6 +78,8 @@ export const EXEC_TOOL_DEFINITION: LLMToolDefinition = {
 			`Available runtimes: sh, bash, cmd, pwsh (shell scripts with pipes/conditionals), bun, node, python (code with imports).`,
 			`Default runtime: ${DEFAULT_RUNTIME}. Use "bun" for TypeScript/JS, "pwsh" for PowerShell, "sh" for Unix shell.`,
 			"For simple commands (git status, bunx tsc), use the platform shell runtime.",
+			"Best practice: process output INSIDE the script (grep, filter, summarize) and only print what you need — avoid dumping large raw output into context.",
+			"Debugging tips: use `2>&1` to merge stderr into stdout; append `&& echo __DONE__` to confirm execution completed; use `> output.txt 2>&1` to capture output to file.",
 			"Returns stdout, stderr, and exit code.",
 		].join("\n"),
 		parameters: {
