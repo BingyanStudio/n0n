@@ -74,7 +74,7 @@ export default async function run() {
 
 ```typescript
 import { z } from "zod";
-import { generate } from "../../src/index.ts";
+import { generate } from "@n0n/core";
 
 const { result } = await generate("Summarize these stories:\n" + data, {
   schema: z.object({
