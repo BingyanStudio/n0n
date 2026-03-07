@@ -110,6 +110,8 @@ export interface SubmitToolResult {
 	tool: "submit";
 	result: unknown;
 	report: string | null;
+	/** 用户对 submit 结果的回应（由 REPL 注入，非模型生成） */
+	userResponse?: string;
 }
 
 export type ToolResult =

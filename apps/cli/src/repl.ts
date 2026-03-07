@@ -13,11 +13,39 @@ import {
 	loadSchedules,
 	PlainRenderer,
 } from "@n0n/core";
-import type { DomainMessage } from "@n0n/types";
+import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { isTTY, label, style, writeln } from "./ui/ansi.ts";
 import { RichRenderer } from "./ui/rich-renderer.ts";
 
 const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
+
+/** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
+async function gatherContext(): Promise<string | null> {
+	const [existing, schedules] = await Promise.all([
+		discoverWorkflows(),
+		loadSchedules(),
+	]);
+	const parts: string[] = [];
+	if (existing.length > 0) {
+		const list = existing
+			.map(
+				(w) =>
+					`- ${w.name}: ${w.description || "(no description)"} → ${w.path}`,
+			)
+			.join("\n");
+		parts.push(`<workflows>\n${list}\n</workflows>`);
+	}
+	if (schedules.length > 0) {
+		const list = schedules
+			.map(
+				(s) =>
+					`- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`,
+			)
+			.join("\n");
+		parts.push(`<schedules>\n${list}\n</schedules>`);
+	}
+	return parts.length > 0 ? parts.join("\n") : null;
+}
 
 export async function startRepl(initialInput?: string): Promise<void> {
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
@@ -55,38 +83,17 @@ export async function startRepl(initialInput?: string): Promise<void> {
 	writeln();
 
 	let userInput = initialInput ?? (await prompt(`${label.user()} `));
-	let history: DomainMessage[] = [];
-
-	while (userInput.trim().toLowerCase() !== "exit") {
-		const [existing, schedules] = await Promise.all([
-			discoverWorkflows(),
-			loadSchedules(),
-		]);
-		const contextParts: string[] = [];
-		if (existing.length > 0) {
-			contextParts.push(
-				`## Existing workflows (reuse if applicable)\n${existing.map((w) => `- ${w.name}: ${w.description || "(no description)"} → ${w.path}`).join("\n")}`,
-			);
-		}
-		if (schedules.length > 0) {
-			contextParts.push(
-				`## Existing schedules\n${schedules.map((s) => `- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`).join("\n")}`,
-			);
-		}
-
-		const userInputMsg: DomainMessage = {
+	let history: DomainMessage[] = [
+		{ type: "system", content: systemPrompt },
+		{
 			type: "user_input",
 			content: userInput,
-			context: contextParts.length > 0 ? contextParts.join("\n\n") : null,
+			context: await gatherContext(),
 			capabilities: null,
-		};
+		},
+	];
 
-		if (history.length === 0) {
-			history = [{ type: "system", content: systemPrompt }, userInputMsg];
-		} else {
-			history.push(userInputMsg);
-		}
-
+	while (userInput.trim().toLowerCase() !== "exit") {
 		const agentResult = await agentLoop<InteractiveResult>(history, {
 			maxIterations: 30,
 			renderer,
@@ -101,16 +108,16 @@ export async function startRepl(initialInput?: string): Promise<void> {
 		if (ir == null) {
 			writeln(`${style.red("✗")} Agent 异常终止`);
 			if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
-			history.push({
-				type: "turn_feedback",
-				status: "rejected",
-				resultType: "terminated",
-				detail: agentResult.report ?? "none",
-			});
 			writeln();
 			writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
 			writeln();
 			userInput = await prompt(`${label.user()} `);
+			history.push({
+				type: "user_input",
+				content: userInput,
+				context: await gatherContext(),
+				capabilities: null,
+			});
 			continue;
 		}
 
@@ -118,14 +125,10 @@ export async function startRepl(initialInput?: string): Promise<void> {
 			case "chat": {
 				writeln(ir.message);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
-				history.push({
-					type: "turn_feedback",
-					status: "accepted",
-					resultType: "chat",
-					detail: "Waiting for the next message from the user.",
-				});
 				writeln();
 				userInput = await prompt(`${label.user()} `);
+				// 用户回答注入到 submit 的 tool result 中，而非作为新的 user 消息
+				injectUserResponse(history, userInput);
 				continue;
 			}
 
@@ -133,16 +136,12 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				writeln(`${style.yellow("?")} Agent 需要更多信息:`);
 				writeln(`  ${ir.message}`);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
-				history.push({
-					type: "turn_feedback",
-					status: "accepted",
-					resultType: "need_info",
-					detail: `Waiting for the user to provide: ${ir.message}`,
-				});
 				writeln();
 				writeln(style.gray("请补充信息，或输入 'exit' 退出:"));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
+				// 用户回答注入到 submit 的 tool result 中，而非作为新的 user 消息
+				injectUserResponse(history, userInput);
 				continue;
 			}
 
@@ -150,16 +149,16 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				writeln(`${style.green("✓")} 任务完成: ${ir.result}`);
 				if (ir.summary) writeln(style.gray(`  ${ir.summary}`));
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
-				history.push({
-					type: "turn_feedback",
-					status: "accepted",
-					resultType: "completed",
-					detail: `Result: ${ir.result}\nWaiting for the next task from the user.`,
-				});
 				writeln();
 				writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
+				history.push({
+					type: "user_input",
+					content: userInput,
+					context: await gatherContext(),
+					capabilities: null,
+				});
 				break;
 			}
 
@@ -167,16 +166,16 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				writeln(`${style.red("✗")} Agent 报告错误:`);
 				writeln(`  ${ir.error}`);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
-				history.push({
-					type: "turn_feedback",
-					status: "accepted",
-					resultType: "error",
-					detail: `Error: ${ir.error}\nWaiting for the next task or additional info from the user.`,
-				});
 				writeln();
 				writeln(style.gray("可以补充信息重试，或输入 'exit' 退出:"));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
+				history.push({
+					type: "user_input",
+					content: userInput,
+					context: await gatherContext(),
+					capabilities: null,
+				});
 				continue;
 			}
 		}
@@ -184,4 +183,23 @@ export async function startRepl(initialInput?: string): Promise<void> {
 
 	rl.close();
 	writeln(style.gray("Bye!"));
+}
+
+/**
+ * 将用户回答注入到 history 中最后一个 SubmitToolResult 的 userResponse 字段。
+ * 这样模型在下一轮看到的是 tool result 中包含用户回答，而非独立的 user 消息。
+ */
+function injectUserResponse(history: DomainMessage[], response: string): void {
+	for (let i = history.length - 1; i >= 0; i--) {
+		const msg = history[i];
+		if (
+			msg !== undefined &&
+			msg.type === "tool_result" &&
+			"tool" in msg &&
+			msg.tool === "submit"
+		) {
+			(msg as SubmitToolResult).userResponse = response;
+			return;
+		}
+	}
 }
