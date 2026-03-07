@@ -1,0 +1,14 @@
+{
+	"name": "@n0n/cli-ui",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"dependencies": {
+		"@n0n/types": "workspace:*",
+		"partial-json": "^0.1.7",
+		"picocolors": "^1.1.1"
+	}
+}

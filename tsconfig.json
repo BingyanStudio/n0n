@@ -21,7 +21,8 @@
 			"@n0n/types": ["./packages/types/src/index.ts"],
 			"@n0n/llm": ["./packages/llm/src/index.ts"],
 			"@n0n/tools": ["./packages/tools/src/index.ts"],
-			"@n0n/core": ["./packages/core/src/index.ts"]
+			"@n0n/core": ["./packages/core/src/index.ts"],
+			"@n0n/cli-ui": ["./packages/cli-ui/src/index.ts"]
 		}
 	},
 	"include": [
