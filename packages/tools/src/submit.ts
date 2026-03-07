@@ -73,9 +73,8 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 
 	// 将 Zod schema 转为 JSON Schema，提取 properties 和 required
 	const jsonSchema = toJSONSchema(schema) as Record<string, unknown>;
-	const schemaProperties =
-		(jsonSchema.properties as Record<string, unknown>) ?? {};
-	const schemaRequired = (jsonSchema.required as string[]) ?? [];
+	const { properties: schemaProperties, required: schemaRequired } =
+		flattenJsonSchema(jsonSchema);
 
 	// 合并：schema 属性 + report 字段
 	const mergedProperties: Record<string, unknown> = {
@@ -87,7 +86,7 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 		},
 	};
 
-	// required 只包含 schema 自身的 required 字段，report 始终可选
+	// required 只包含所有分支共有的 required 字段，report 始终可选
 	const mergedRequired = [...schemaRequired];
 
 	const schemaStr = JSON.stringify(jsonSchema, null, 2);
@@ -105,6 +104,84 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 			},
 		},
 	};
+}
+
+// ── JSON Schema 扁平化 ──
+
+interface FlatSchema {
+	properties: Record<string, unknown>;
+	required: string[];
+}
+
+/**
+ * 将 JSON Schema 扁平化为单一 object 的 properties + required。
+ *
+ * - 普通 object schema：直接提取 properties/required。
+ * - oneOf/anyOf（discriminatedUnion 等）：合并所有分支的 properties，
+ *   只有所有分支都 require 的字段才标记为 required。
+ *   这样 LLM 能看到所有可能的字段，Zod 在应用层做精确校验。
+ */
+function flattenJsonSchema(schema: Record<string, unknown>): FlatSchema {
+	// 普通 object — 直接提取
+	if (schema.properties) {
+		return {
+			properties: schema.properties as Record<string, unknown>,
+			required: (schema.required as string[]) ?? [],
+		};
+	}
+
+	// oneOf / anyOf — 合并所有分支
+	const branches = (schema.oneOf ?? schema.anyOf) as
+		| Record<string, unknown>[]
+		| undefined;
+	if (!branches || branches.length === 0) {
+		return { properties: {}, required: [] };
+	}
+
+	const merged: Record<string, unknown> = {};
+	const requiredSets: Set<string>[] = [];
+
+	// 收集每个字段在各分支中的定义，用于合并 const → enum
+	const fieldDefs = new Map<string, Record<string, unknown>[]>();
+
+	for (const branch of branches) {
+		const props = (branch.properties ?? {}) as Record<string, unknown>;
+		const req = new Set((branch.required as string[]) ?? []);
+		for (const [key, value] of Object.entries(props)) {
+			const existing = fieldDefs.get(key);
+			if (existing) {
+				existing.push(value as Record<string, unknown>);
+			} else {
+				fieldDefs.set(key, [value as Record<string, unknown>]);
+			}
+		}
+		requiredSets.push(req);
+	}
+
+	for (const [key, defs] of fieldDefs) {
+		const first = defs[0];
+		if (!first) continue;
+		// 多个分支都有 const 值的字段（如 discriminator "type"）→ 合并为 enum
+		const constValues = defs
+			.filter((d) => "const" in d)
+			.map((d) => d.const as string);
+		if (constValues.length > 1) {
+			const base = { ...first };
+			delete base.const;
+			base.enum = constValues;
+			merged[key] = base;
+		} else {
+			merged[key] = first;
+		}
+	}
+
+	// 只有所有分支都 require 的字段才是全局 required
+	const firstReqSet = requiredSets[0];
+	const globalRequired = firstReqSet
+		? [...firstReqSet].filter((key) => requiredSets.every((s) => s.has(key)))
+		: [];
+
+	return { properties: merged, required: globalRequired };
 }
 
 // ── 执行器 ──
