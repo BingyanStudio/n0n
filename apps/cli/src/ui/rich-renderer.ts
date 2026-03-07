@@ -121,6 +121,8 @@ export class RichRenderer implements Renderer {
 			}
 			this.skipToolCallStarts = this.streamingToolCalls.size;
 			this.streamingToolCalls.clear();
+			// 结构化参数已提交到终端，重置行计数防止后续 clear() 误删已提交行
+			this.streamRegion.reset();
 		}
 	}
 
