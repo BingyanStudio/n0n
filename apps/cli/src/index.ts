@@ -12,6 +12,7 @@
  */
 
 import { rmSync } from "node:fs";
+import { style, writeln } from "@n0n/cli-ui";
 import {
 	discoverWorkflows,
 	loadSchedules,
@@ -19,7 +20,6 @@ import {
 	runWorkflow,
 } from "@n0n/core";
 import { startRepl } from "./repl.ts";
-import { style, writeln } from "./ui/ansi.ts";
 
 // ── 子命令路由 ──
 

@@ -3,6 +3,7 @@
  */
 
 import { createInterface } from "node:readline";
+import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 // PlainRenderer for non-TTY — import from core
 import {
 	agentLoop,
@@ -14,8 +15,6 @@ import {
 	PlainRenderer,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
-import { isTTY, label, style, writeln } from "./ui/ansi.ts";
-import { RichRenderer } from "./ui/rich-renderer.ts";
 
 const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
 
