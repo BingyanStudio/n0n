@@ -27,16 +27,24 @@ async function gatherContext(): Promise<string | null> {
 	]);
 	const parts: string[] = [];
 	if (existing.length > 0) {
-		parts.push(
-			`## Existing workflows (reuse if applicable)\n${existing.map((w) => `- ${w.name}: ${w.description || "(no description)"} → ${w.path}`).join("\n")}`,
-		);
+		const list = existing
+			.map(
+				(w) =>
+					`- ${w.name}: ${w.description || "(no description)"} → ${w.path}`,
+			)
+			.join("\n");
+		parts.push(`<workflows>\n${list}\n</workflows>`);
 	}
 	if (schedules.length > 0) {
-		parts.push(
-			`## Existing schedules\n${schedules.map((s) => `- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`).join("\n")}`,
-		);
+		const list = schedules
+			.map(
+				(s) =>
+					`- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`,
+			)
+			.join("\n");
+		parts.push(`<schedules>\n${list}\n</schedules>`);
 	}
-	return parts.length > 0 ? parts.join("\n\n") : null;
+	return parts.length > 0 ? parts.join("\n") : null;
 }
 
 export async function startRepl(initialInput?: string): Promise<void> {
