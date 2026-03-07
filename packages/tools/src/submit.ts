@@ -71,34 +71,33 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 		};
 	}
 
-	// 将 Zod schema 转为 JSON Schema，提取 properties 和 required
+	// 将 Zod schema 转为 JSON Schema
 	const jsonSchema = toJSONSchema(schema) as Record<string, unknown>;
 	const { properties: schemaProperties, required: schemaRequired } =
 		flattenJsonSchema(jsonSchema);
 
-	// 合并：schema 属性 + report 字段
-	const mergedProperties: Record<string, unknown> = {
-		...schemaProperties,
-		report: {
-			type: "string",
-			description:
-				"Optional brief report of what was done and any notable findings.",
-		},
-	};
+	// 从 properties 中剥离 description（格式说明统一放在工具描述中）
+	const cleanProperties: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(schemaProperties)) {
+		const { description: _, ...rest } = value as Record<string, unknown>;
+		cleanProperties[key] = rest;
+	}
 
-	// required 只包含所有分支共有的 required 字段，report 始终可选
+	// 合并：schema 属性 + report 字段
+	cleanProperties.report = { type: "string" };
 	const mergedRequired = [...schemaRequired];
 
+	// 工具描述中包含完整的格式说明
 	const schemaStr = JSON.stringify(jsonSchema, null, 2);
 
 	return {
 		type: "function",
 		function: {
 			name: "submit",
-			description: `Submit your final result. Fill in the fields directly as parameters — they must conform to this schema:\n\n\`\`\`json\n${schemaStr}\n\`\`\`\n\nValidation is enforced — non-conforming submissions will be rejected.`,
+			description: `Submit your final result. Fill in the fields directly as parameters — they must conform to this schema:\n\n\`\`\`json\n${schemaStr}\n\`\`\`\n\nThe optional \`report\` field is for brief notes on what was done.\nValidation is enforced — non-conforming submissions will be rejected.`,
 			parameters: {
 				type: "object",
-				properties: mergedProperties,
+				properties: cleanProperties,
 				required: mergedRequired,
 				additionalProperties: false,
 			},
@@ -161,7 +160,8 @@ function flattenJsonSchema(schema: Record<string, unknown>): FlatSchema {
 	for (const [key, defs] of fieldDefs) {
 		const first = defs[0];
 		if (!first) continue;
-		// 多个分支都有 const 值的字段（如 discriminator "type"）→ 合并为 enum
+
+		// discriminator 字段（多个分支各有 const 值）→ 合并为 enum
 		const constValues = defs
 			.filter((d) => "const" in d)
 			.map((d) => d.const as string);
