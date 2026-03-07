@@ -35,6 +35,8 @@ export interface MarkdownElement {
 	content: string;
 	text_align?: "left" | "center" | "right";
 	text_size?: string;
+	/** CardKit 组件唯一标识，用于流式更新等组件级操作 */
+	element_id?: string;
 }
 
 export interface DivElement {
@@ -125,6 +127,13 @@ export interface FeishuCardContent {
 	config: {
 		update_multi: true;
 		enable_forward?: boolean;
+		streaming_mode?: boolean;
+		summary?: { content: string };
+		streaming_config?: {
+			print_frequency_ms?: { default: number };
+			print_step?: { default: number };
+			print_strategy?: "fast" | "delay";
+		};
 	};
 	header: {
 		template: CardTemplate;

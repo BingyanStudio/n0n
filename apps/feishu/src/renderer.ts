@@ -13,7 +13,8 @@
 import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
 import type { FeishuConversation } from "./conversation.ts";
 
-const THROTTLE_MS = 1500;
+/** 流式文本更新节流间隔（CardKit 限制 10次/秒，留余量） */
+const THROTTLE_MS = 300;
 const SHORT = 160;
 const LONG = 600;
 
