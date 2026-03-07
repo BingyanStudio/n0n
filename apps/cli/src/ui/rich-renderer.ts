@@ -241,11 +241,14 @@ export class RichRenderer implements Renderer {
 				if (!result.success) {
 					return `${style.dim("◂")} ${style.cyan("write")} ${result.path}: ${style.red(result.error ?? "failed")}`;
 				}
-				if (result.searchPattern) {
-					const searchLines = result.searchPattern.split("\n").length;
-					return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}`;
+				return `${style.dim("◂")} ${style.cyan("write")} ${result.path}`;
+			}
+			case "edit": {
+				if (!result.success) {
+					return `${style.dim("◂")} ${style.cyan("edit")} ${result.path}: ${style.red(result.error ?? "failed")}`;
 				}
-				return `${style.dim("◂")} ${style.cyan("write")} ${result.path} ${style.gray("(full write)")}`;
+				const searchLines = result.searchPattern.split("\n").length;
+				return `${style.dim("◂")} ${style.cyan("edit")} ${result.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}`;
 			}
 			case "reminder": {
 				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)} ${style.gray(`${result.content.length} chars`)}`;

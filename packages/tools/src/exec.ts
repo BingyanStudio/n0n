@@ -1,5 +1,14 @@
 /**
- * exec 工具 — 执行 shell 命令
+ * exec 工具 — 脚本执行
+ *
+ * 模型提供 script（脚本内容）和 runtime（执行运行时），
+ * 工具将脚本写入临时文件后用指定运行时执行。
+ * 所有平台行为一致，彻底消除 shell 引号转义问题。
+ *
+ * runtime 支持：
+ * - shell 类：sh, bash, pwsh, cmd（脚本内容即 shell 脚本，支持管道等语法）
+ * - 语言类：bun, node, python（脚本内容即对应语言代码，支持 import 等）
+ * - 默认：平台 shell（Windows: cmd, 其他: sh）
  */
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
@@ -13,9 +22,10 @@ import type {
 import { z } from "zod";
 import { getToolsConfig } from "./config.ts";
 
-/** exec 工具参数 schema — 运行时校验 LLM 传入的参数 */
+/** exec 工具参数 schema */
 export const ExecArgsSchema = z.object({
-	command: z.string(),
+	script: z.string(),
+	runtime: z.string().optional(),
 	cwd: z.string().optional(),
 	timeout: z.number().optional(),
 });
@@ -24,28 +34,63 @@ export type ExecArgs = z.infer<typeof ExecArgsSchema>;
 
 const PROJECT_ROOT = process.cwd();
 const IS_WINDOWS = process.platform === "win32";
-const SHELL_CMD: [string, string] = IS_WINDOWS ? ["cmd", "/c"] : ["sh", "-c"];
+const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";
+
+/** runtime → 临时文件扩展名 */
+const RUNTIME_EXT: Record<string, string> = {
+	sh: ".sh",
+	bash: ".sh",
+	cmd: ".cmd",
+	pwsh: ".ps1",
+	bun: ".ts",
+	node: ".mjs",
+	python: ".py",
+};
+
+/** runtime → 执行命令构造器 */
+function buildSpawnCmd(runtime: string, tmpFile: string): string[] {
+	switch (runtime) {
+		case "cmd":
+			return ["cmd", "/c", tmpFile];
+		case "sh":
+		case "bash":
+			return [runtime, tmpFile];
+		case "pwsh":
+			return ["pwsh", "-NoProfile", "-File", tmpFile];
+		case "bun":
+			return ["bun", "run", tmpFile];
+		case "node":
+			return ["node", tmpFile];
+		case "python":
+			return ["python", tmpFile];
+		default:
+			// 未知 runtime 当作可执行文件名处理
+			return [runtime, tmpFile];
+	}
+}
 
 export const EXEC_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",
 	function: {
 		name: "exec",
-		description: IS_WINDOWS
-			? [
-					"Execute a command via cmd.exe on Windows. Returns stdout, stderr, and exit code.",
-					"Use Windows commands: `type` (not cat), `dir` (not ls), `findstr` (not grep). No `head`, `tail`, `wc`.",
-					'Use `bun -e "..."` (double quotes only, no single quotes) for cross-platform JS one-liners.',
-					"Known issues: `curl` may fail if a proxy is required — if curl returns exit code 6 or hangs, switch to `bun -e` with fetch().",
-					"Debugging tips: use `2>&1` to merge stderr into stdout; append `&& echo __DONE__` to confirm execution completed; use `> output.txt 2>&1` to capture output to file.",
-					"If a command fails 2-3 times, stop retrying and report the issue via submit.",
-				].join("\n")
-			: "Execute a shell command. Use for running code, reading files (cat/grep/head), system operations. Returns stdout, stderr, and exit code.",
+		description: [
+			"Execute a script. The script content is written to a temp file and run with the specified runtime.",
+			`Available runtimes: sh, bash, cmd, pwsh (shell scripts with pipes/conditionals), bun, node, python (code with imports).`,
+			`Default runtime: ${DEFAULT_RUNTIME}. Use "bun" for TypeScript/JS, "pwsh" for PowerShell, "sh" for Unix shell.`,
+			"For simple commands (git status, bunx tsc), use the platform shell runtime.",
+			"Returns stdout, stderr, and exit code.",
+		].join("\n"),
 		parameters: {
 			type: "object",
 			properties: {
-				command: {
+				script: {
 					type: "string",
-					description: "The shell command to execute",
+					description:
+						"Script content to execute. Can be a simple command or a multi-line script with full language features.",
+				},
+				runtime: {
+					type: "string",
+					description: `Runtime to execute the script (default: "${DEFAULT_RUNTIME}"). Options: sh, bash, cmd, pwsh, bun, node, python.`,
 				},
 				cwd: {
 					type: "string",
@@ -57,21 +102,19 @@ export const EXEC_TOOL_DEFINITION: LLMToolDefinition = {
 						"Timeout in seconds (default: 120). Process continues in background if exceeded.",
 				},
 			},
-			required: ["command"],
+			required: ["script"],
 			additionalProperties: false,
 		},
 	},
 };
-
 /** 运行环境摘要，供 system prompt 注入 */
 export const ENV_INFO = {
 	os: IS_WINDOWS ? "Windows" : process.platform,
-	shell: IS_WINDOWS ? "cmd.exe" : "sh",
+	shell: DEFAULT_RUNTIME,
 	cwd: PROJECT_ROOT,
 } as const;
-
-function extractCommandNames(command: string): string[] {
-	const parts = command.split(/\r?\n|&&|\|\||;|\||&/);
+function extractCommandNames(script: string): string[] {
+	const parts = script.split(/\r?\n|&&|\|\||;|\||&/);
 	return parts
 		.map((part) => {
 			const tokens = part.trim().split(/\s+/);
@@ -83,13 +126,13 @@ function extractCommandNames(command: string): string[] {
 		.filter((name) => name.length > 0);
 }
 
-function findBlockedCommand(command: string): string | null {
+function findBlockedCommand(script: string): string | null {
 	const blocked = getToolsConfig().security.blockedCommands;
 	if (blocked.length === 0) return null;
 	const blockedNormalized = IS_WINDOWS
 		? blocked.map((b) => b.toLowerCase())
 		: blocked;
-	const names = extractCommandNames(command);
+	const names = extractCommandNames(script);
 	for (const name of names) {
 		const basename = name.split(/[\\/]/).at(-1) ?? name;
 		const basenameNormalized = IS_WINDOWS ? basename.toLowerCase() : basename;
@@ -98,16 +141,72 @@ function findBlockedCommand(command: string): string | null {
 	return null;
 }
 
+async function handleBlockedCommand(
+	callId: string,
+	args: ExecArgs,
+	cwd: string,
+	blockedCmd: string,
+	confirmFn?: (question: string) => Promise<string>,
+): Promise<ExecToolResult | null> {
+	const runtime = args.runtime ?? DEFAULT_RUNTIME;
+	if (confirmFn) {
+		const safeScript = [...args.script]
+			.map((ch) => {
+				const code = ch.charCodeAt(0);
+				if (code > 31 && code !== 127) return ch;
+				if (ch === "\n") return "↵";
+				if (ch === "\t") return "→";
+				return `[^${String.fromCharCode(code + 64)}]`;
+			})
+			.join("");
+		const answer = await confirmFn(
+			`\n⚠  Script requires review: '${blockedCmd}' is in BLOCKED_COMMANDS\n` +
+				`   Runtime: ${runtime}\n` +
+				`   Script: ${safeScript}\n` +
+				`   Allow execution? [y/N] `,
+		);
+		const normalized = answer.trim().toLowerCase();
+		if (normalized !== "y" && normalized !== "yes") {
+			return {
+				type: "tool_result",
+				callId,
+				tool: "exec",
+				script: args.script,
+				runtime,
+				cwd,
+				exitCode: 1,
+				stdout: "",
+				stderr: `Command '${blockedCmd}' was rejected by the user.`,
+				durationMs: 0,
+			};
+		}
+		return null;
+	}
+	return {
+		type: "tool_result",
+		callId,
+		tool: "exec",
+		script: args.script,
+		runtime,
+		cwd,
+		exitCode: 1,
+		stdout: "",
+		stderr: `Command blocked: '${blockedCmd}' is in the BLOCKED_COMMANDS list and requires manual review before execution.`,
+		durationMs: 0,
+	};
+}
 export async function* execToolStream(
 	callId: string,
 	args: ExecArgs,
 	confirmFn?: (question: string) => Promise<string>,
 ): AsyncGenerator<ToolStreamEvent> {
+	const runtime = args.runtime ?? DEFAULT_RUNTIME;
 	const cwd = args.cwd ?? PROJECT_ROOT;
 	const timeoutMs = (args.timeout ?? 120) * 1000;
 	const start = Date.now();
 
-	const blockedCmd = findBlockedCommand(args.command);
+	// Security check — scan script content for blocked commands
+	const blockedCmd = findBlockedCommand(args.script);
 	if (blockedCmd !== null) {
 		const blocked = await handleBlockedCommand(
 			callId,
@@ -122,26 +221,21 @@ export async function* execToolStream(
 		}
 	}
 
-	// Windows: write command to temp .cmd file to avoid cmd.exe quote-stripping.
-	// cmd /c "bun -e \"...\"" fails because cmd.exe consumes the inner quotes.
-	// A .cmd file preserves all quoting exactly as written.
-	let tmpFile: string | null = null;
+	// Write script to temp file, execute with specified runtime
+	const ext = RUNTIME_EXT[runtime] ?? "";
+	const tempDir = resolve(getToolsConfig().tempDir);
+	if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+	const tmpFile = join(
+		tempDir,
+		`_n0n_exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`,
+	);
 
 	try {
-		let spawnCmd: string[];
-		if (IS_WINDOWS) {
-			const tempDir = resolve(getToolsConfig().tempDir);
-			if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-			tmpFile = join(
-				tempDir,
-				`_n0n_exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.cmd`,
-			);
-			await Bun.write(tmpFile, `@${args.command}\n`);
-			spawnCmd = ["cmd", "/c", tmpFile];
-		} else {
-			spawnCmd = [...SHELL_CMD, args.command];
-		}
+		// cmd runtime: prefix with @ to suppress echo
+		const scriptContent = runtime === "cmd" ? `@${args.script}\n` : args.script;
+		await Bun.write(tmpFile, scriptContent);
 
+		const spawnCmd = buildSpawnCmd(runtime, tmpFile);
 		const proc = Bun.spawn(spawnCmd, {
 			cwd,
 			stdout: "pipe",
@@ -195,8 +289,8 @@ export async function* execToolStream(
 
 		while (streamsDone < 2 || pending.length > 0) {
 			if (pending.length === 0) {
-				await new Promise<void>((resolve) => {
-					notify = resolve;
+				await new Promise<void>((r) => {
+					notify = r;
 				});
 				notify = null;
 			}
@@ -229,7 +323,8 @@ export async function* execToolStream(
 			type: "tool_result",
 			callId,
 			tool: "exec",
-			command: args.command,
+			script: args.script,
+			runtime,
 			cwd,
 			exitCode,
 			stdout: hint || truncate(stdout),
@@ -241,7 +336,8 @@ export async function* execToolStream(
 			type: "tool_result",
 			callId,
 			tool: "exec",
-			command: args.command,
+			script: args.script,
+			runtime,
 			cwd,
 			exitCode: 1,
 			stdout: "",
@@ -249,63 +345,10 @@ export async function* execToolStream(
 			durationMs: Date.now() - start,
 		} satisfies ExecToolResult;
 	} finally {
-		if (tmpFile) {
-			try {
-				unlinkSync(tmpFile);
-			} catch {
-				// ignore cleanup errors
-			}
+		try {
+			unlinkSync(tmpFile);
+		} catch {
+			// ignore cleanup errors
 		}
 	}
-}
-
-async function handleBlockedCommand(
-	callId: string,
-	args: ExecArgs,
-	cwd: string,
-	blockedCmd: string,
-	confirmFn?: (question: string) => Promise<string>,
-): Promise<ExecToolResult | null> {
-	if (confirmFn) {
-		const safeCommand = [...args.command]
-			.map((ch) => {
-				const code = ch.charCodeAt(0);
-				if (code > 31 && code !== 127) return ch;
-				if (ch === "\n") return "↵";
-				if (ch === "\t") return "→";
-				return `[^${String.fromCharCode(code + 64)}]`;
-			})
-			.join("");
-		const answer = await confirmFn(
-			`\n⚠  Command requires review: '${blockedCmd}' is in BLOCKED_COMMANDS\n` +
-				`   Command: ${safeCommand}\n` +
-				`   Allow execution? [y/N] `,
-		);
-		const normalized = answer.trim().toLowerCase();
-		if (normalized !== "y" && normalized !== "yes") {
-			return {
-				type: "tool_result",
-				callId,
-				tool: "exec",
-				command: args.command,
-				cwd,
-				exitCode: 1,
-				stdout: "",
-				stderr: `Command '${blockedCmd}' was rejected by the user.`,
-				durationMs: 0,
-			};
-		}
-		return null;
-	}
-	return {
-		type: "tool_result",
-		callId,
-		tool: "exec",
-		command: args.command,
-		cwd,
-		exitCode: 1,
-		stdout: "",
-		stderr: `Command blocked: '${blockedCmd}' is in the BLOCKED_COMMANDS list and requires manual review before execution.`,
-		durationMs: 0,
-	};
 }
