@@ -7,13 +7,14 @@
  * - Context 注入项目结构和 git 状态，而非 workflow 列表
  */
 
+import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 import { agentLoop, PlainRenderer } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
-const PROMPT_PATH = new URL("./prompts/code.md", import.meta.url).pathname;
+const PROMPT_PATH = resolve(import.meta.dir, "prompts", "code.md");
 
 /** 获取项目上下文（git status + 目录结构） */
 async function gatherContext(): Promise<string | null> {
