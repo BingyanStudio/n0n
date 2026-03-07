@@ -22,6 +22,7 @@ import {
 	buildTextCard,
 	type CronItem,
 } from "./cards/index.ts";
+import type { FeishuCardContent } from "./cards/types.ts";
 
 // ── 类型 ──
 
@@ -48,16 +49,27 @@ interface CardActionContext {
 	messageId: string | null;
 }
 
+/**
+ * 卡片回调响应 — SDK 会将返回值作为 WebSocket 响应发回飞书。
+ * - card: 原地更新卡片内容
+ * - toast: 显示轻提示
+ */
+export interface CardActionResponse {
+	card?: FeishuCardContent;
+	toast?: { type: "success" | "error" | "info"; content: string };
+}
+
 // ── 主处理器 ──
 
 /**
  * 从 card.action.trigger 事件数据中提取上下文并路由到对应处理函数。
- * 返回更新后的卡片 JSON（如果需要即时刷新），否则返回 undefined。
+ * 返回 CardActionResponse 供 SDK 作为回调响应发回飞书（原地更新卡片），
+ * 返回 undefined 表示无需即时更新。
  */
 export async function handleCardAction(
 	bot: FeishuBot,
 	data: FeishuCardActionData,
-): Promise<void> {
+): Promise<CardActionResponse | undefined> {
 	const operatorId = data.operator?.open_id;
 	if (!operatorId) {
 		console.error("[feishu] card action: missing operator open_id");
@@ -93,34 +105,32 @@ export async function handleCardAction(
 
 	switch (value.action) {
 		case "workflow_run":
-			await onWorkflowRun(ctx);
-			return;
+			return onWorkflowRun(ctx);
 		case "cron_toggle":
-			await onCronToggle(ctx);
-			return;
+			return onCronToggle(ctx);
 		case "cron_run":
-			await onCronRun(ctx);
-			return;
+			return onCronRun(ctx);
 		default:
 			console.warn(`[feishu] unknown card action: ${value.action}`);
+			return undefined;
 	}
 }
 
 // ── Action 处理函数 ──
 
-async function onWorkflowRun(ctx: CardActionContext): Promise<void> {
+async function onWorkflowRun(
+	ctx: CardActionContext,
+): Promise<CardActionResponse | undefined> {
 	const name = ctx.value.name as string;
-	if (!name) return;
+	if (!name) return undefined;
 
 	const workflows = await discoverWorkflows();
 	const wf = workflows.find((w) => w.name === name);
 	if (!wf) {
-		await sendFeedback(ctx, "工作流", `❌ 未找到: ${name}`, "red");
-		return;
+		return { toast: { type: "error", content: `未找到工作流: ${name}` } };
 	}
 
-	// 先发送"运行中"反馈，再异步执行工作流（避免卡片回调超时）
-	await sendFeedback(ctx, "工作流", `⏳ 正在运行: ${name}...`);
+	// 异步执行工作流（回调有 5s 超时限制），完成后通过 PATCH API 发送结果
 	runWorkflow(wf.path).then(
 		async (result) => {
 			await sendFeedback(ctx, `✅ ${name}`, formatResult(result), "green");
@@ -129,20 +139,23 @@ async function onWorkflowRun(ctx: CardActionContext): Promise<void> {
 			await sendFeedback(ctx, `❌ ${name}`, String(err), "red");
 		},
 	);
+
+	return { toast: { type: "info", content: `⏳ 正在运行: ${name}...` } };
 }
 
-async function onCronToggle(ctx: CardActionContext): Promise<void> {
+async function onCronToggle(
+	ctx: CardActionContext,
+): Promise<CardActionResponse | undefined> {
 	const name = ctx.value.name as string;
 	const enabled = ctx.value.enabled as boolean;
-	if (!name || enabled === undefined) return;
+	if (!name || enabled === undefined) return undefined;
 
 	const ok = await setScheduleEnabled(name, enabled);
 	if (!ok) {
-		await sendFeedback(ctx, "定时任务", `❌ 未找到: ${name}`, "red");
-		return;
+		return { toast: { type: "error", content: `未找到: ${name}` } };
 	}
 
-	// 刷新列表卡片
+	// 重新加载并返回更新后的卡片（SDK 会原地替换）
 	const schedules = await loadSchedules();
 	const crons: CronItem[] = schedules.map((s) => ({
 		name: s.name,
@@ -151,41 +164,31 @@ async function onCronToggle(ctx: CardActionContext): Promise<void> {
 		enabled: s.enabled,
 	}));
 
-	if (ctx.messageId) {
-		const card = buildCronListCard(crons);
-		await ctx.bot.editCardMessage(ctx.messageId, card);
-	} else {
-		await sendFeedback(
-			ctx,
-			"定时任务",
-			`✅ ${name} 已${enabled ? "启用" : "禁用"}`,
-		);
-	}
+	return { card: buildCronListCard(crons) };
 }
 
-async function onCronRun(ctx: CardActionContext): Promise<void> {
+async function onCronRun(
+	ctx: CardActionContext,
+): Promise<CardActionResponse | undefined> {
 	const name = ctx.value.name as string;
-	if (!name) return;
+	if (!name) return undefined;
 
 	const schedules = await loadSchedules();
 	const schedule = schedules.find((s) => s.name === name);
 	if (!schedule) {
-		await sendFeedback(ctx, "定时任务", `❌ 未找到: ${name}`, "red");
-		return;
+		return { toast: { type: "error", content: `未找到: ${name}` } };
 	}
 
 	if (!schedule.workflow) {
-		await sendFeedback(
-			ctx,
-			"定时任务",
-			`❌ ${name} 没有关联工作流（使用 delegateTask）`,
-			"orange",
-		);
-		return;
+		return {
+			toast: {
+				type: "error",
+				content: `${name} 没有关联工作流（使用 delegateTask）`,
+			},
+		};
 	}
 
-	// 先发送"运行中"反馈，再异步执行工作流（避免卡片回调超时）
-	await sendFeedback(ctx, "定时任务", `⏳ 正在运行: ${name}...`);
+	// 异步执行工作流，完成后通过 PATCH API 发送结果
 	runWorkflow(schedule.workflow).then(
 		async (result) => {
 			await sendFeedback(ctx, `✅ ${name}`, formatResult(result), "green");
@@ -194,6 +197,8 @@ async function onCronRun(ctx: CardActionContext): Promise<void> {
 			await sendFeedback(ctx, `❌ ${name}`, String(err), "red");
 		},
 	);
+
+	return { toast: { type: "info", content: `⏳ 正在运行: ${name}...` } };
 }
 
 // ── 辅助 ──
