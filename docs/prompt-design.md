@@ -81,7 +81,7 @@ A3: 作为题设背景。
 
 你提到 system 结构是 `【核心背景】【工具说明】【简单约束】【设定文档】`。在 n0n 场景下：
 - **核心背景** = "这是一个已完成的优秀 workflow 项目，你需要推理出每一步"
-- **工具说明** = exec/write/reminder/submit 的签名演示
+- **工具说明** = exec/write/edit/reminder/submit 的签名演示
 - **简单约束** = 安全规则（不用 sudo 等）
 - **设定文档** = ?
 
@@ -100,7 +100,7 @@ A3: 作为题设背景。
 用户的原话
 </hint>
 
-First, ask yourself: can I answer this by calling `exec` or `write`? If yes — do it, then submit as `completed`.
+First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.
 If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a `chat` response.
 Otherwise, the engineer has already built the perfect workflow for this.
 Reason out what it looks like — start by calling `reminder` with your OKR breakdown,
@@ -111,7 +111,7 @@ then proceed step by step.
 
 ## 问题：模型过早放弃，不尝试就说"做不到"
 
-**现象**：用户问"现在几点？"，模型直接以 `chat` 回复"我是自动化助手，无法获取本地时间"，而不是调用 `exec({ command: "date" })`。
+**现象**：用户问"现在几点？"，模型直接以 `chat` 回复"我是自动化助手，无法获取本地时间"，而不是调用 `exec({ script: "date" })`。
 
 **根因**：
 1. submit 的 `chat` 类型定义过宽，模型太容易落入"闲聊回复"分支
@@ -160,7 +160,7 @@ submit({ type: "chat", message: "我是自动化助手，无法获取本地时�
 </bad_example>
 
 <good_example>
-exec({ command: "date" })
+exec({ script: "date" })
 submit({ type: "completed", result: "当前时间是 2026-03-07 15:00:00 CST" })
 </good_example>
 </example>
@@ -172,7 +172,7 @@ submit({ type: "completed", result: "当前时间是 2026-03-07 15:00:00 CST" })
 
 ```
 Background    → 核心背景 + 评估压力 + always attempt
-Tools         → exec / write / reminder / submit 签名演示
+Tools         → exec / write / edit / reminder / submit 签名演示
 Constraints   → 4 条简单规则
 Specification → n0n 技术规范（workflow 格式、文件组织、运行时、AI API）
 Examples      → <example> + <good_example> / <bad_example> 正反对比
@@ -184,7 +184,7 @@ adapter.ts 中 user 消息的行为指引顺序从：
 1. ~~chat 判断~~ → workflow 推理
 
 改为：
-1. **exec/write 可解？** → completed
+1. **exec/write/edit 可解？** → completed
 2. 纯社交？ → chat
 3. 否则 → workflow 推理
 
@@ -232,6 +232,7 @@ adapter.ts 中所有消息类型统一使用 `wrapTag()` 划分内容边界：
 |----------|-----------|
 | exec 结果 | `<exec_meta>`, `<stdout>`, `<stderr>` |
 | write 结果 | `<write_result>` 或 `<error>` |
+| edit 结果 | `<edit_result>` 或 `<error>` |
 | reminder/submit 结果 | `<result>` |
 | 空闲警告 | `<system_warning>` |
 | 用户输入 | `<context>`, `<capabilities>`, `<hint>` |
@@ -275,3 +276,63 @@ xml tag 风格可以直接复用模型学习的 xml tag，不同模型使用不�
 这是内容
 [e~[
 ```
+
+# 2026.03.07-3
+
+## 工具拆分与 exec 增强
+
+### 问题
+
+1. **write 职责混淆**：原 `write` 通过 `search` 字段有无来区分"创建文件"和"修改文件"，模型需要阅读描述才能理解，字段名本身无法传达语义。
+2. **exec 在 Windows 上不稳定**：cmd.exe 的引号剥离导致复杂命令（尤其 `bun -e` 带转义字符）频繁失败。
+3. **exec 缺乏 Programmatic Tool Calling 潜力**：模型只能发送单行 shell 命令字符串，无法利用 pwsh/bun 等现代运行时的完整脚本能力。
+
+### 设计决策
+
+#### 1. write / edit 拆分
+
+将原 `write` 的两种语义拆分为独立工具，模型仅通过字段名即可理解用法：
+
+| 工具 | 参数 | 职责 |
+|------|------|------|
+| `write` | `path, content` | 创建/覆盖文件 |
+| `edit` | `path, search, replace, expectedMatches?` | 精确修改已有文件内容 |
+
+#### 2. exec 增强：script + runtime 模型
+
+exec 从 `command` 字符串改为 `script + runtime` 模型：
+
+```ts
+exec({ script: "git status" })                    // 简单命令，默认平台 shell
+exec({ script: "Get-Process | Where-Object ...", runtime: "pwsh" })  // PowerShell 脚本
+exec({ script: "const x = await fetch(...)", runtime: "bun" })       // TypeScript 代码
+```
+
+**核心机制**：所有平台统一走"写临时文件 → 用指定 runtime 执行"路径，彻底消除 shell 引号转义问题。
+
+**支持的 runtime**：
+- Shell 类：`sh`, `bash`, `cmd`, `pwsh`（支持管道、条件等 shell 语法）
+- 语言类：`bun`, `node`, `python`（支持 import、多行逻辑等）
+- 默认：平台 shell（Windows: `cmd`, 其他: `sh`）
+
+#### 3. exec 输出处理最佳实践
+
+在 tool description 中引导模型在脚本内部处理输出，避免大量原始数据污染上下文：
+
+> Best practice: process output INSIDE the script (grep, filter, summarize) and only print what you need.
+
+这与 Programmatic Tool Calling 理念一致——中间数据不进入模型上下文，只有最终结果返回。
+
+#### 4. Programmatic Tool Calling 潜力
+
+新的 script+runtime 模型天然支持本地版 PTC：模型可以写一个完整的 bun/pwsh 脚本，在一次调用中完成多步操作（读文件 → 处理数据 → 输出摘要），而非多次 exec 往返。
+
+### 最终工具集
+
+| 工具 | 参数 | 说明 |
+|------|------|------|
+| `exec` | `script, runtime?, cwd?, timeout?` | 脚本执行 |
+| `write` | `path, content` | 文件创建/覆盖 |
+| `edit` | `path, search, replace, expectedMatches?` | 文件修改 |
+| `reminder` | `content, delay?` | 延迟提醒（不变） |
+| `submit` | `result, report?` 或 schema 展开 | 提交结果（不变） |
