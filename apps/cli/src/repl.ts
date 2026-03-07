@@ -13,7 +13,7 @@ import {
 	loadSchedules,
 	PlainRenderer,
 } from "@n0n/core";
-import type { DomainMessage } from "@n0n/types";
+import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { isTTY, label, style, writeln } from "./ui/ansi.ts";
 import { RichRenderer } from "./ui/rich-renderer.ts";
 
@@ -118,14 +118,10 @@ export async function startRepl(initialInput?: string): Promise<void> {
 			case "chat": {
 				writeln(ir.message);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
-				history.push({
-					type: "turn_feedback",
-					status: "accepted",
-					resultType: "chat",
-					detail: "Waiting for the next message from the user.",
-				});
 				writeln();
 				userInput = await prompt(`${label.user()} `);
+				// 用户回答注入到 submit 的 tool result 中，而非作为新的 user 消息
+				injectUserResponse(history, userInput);
 				continue;
 			}
 
@@ -133,16 +129,12 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				writeln(`${style.yellow("?")} Agent 需要更多信息:`);
 				writeln(`  ${ir.message}`);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
-				history.push({
-					type: "turn_feedback",
-					status: "accepted",
-					resultType: "need_info",
-					detail: `Waiting for the user to provide: ${ir.message}`,
-				});
 				writeln();
 				writeln(style.gray("请补充信息，或输入 'exit' 退出:"));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
+				// 用户回答注入到 submit 的 tool result 中，而非作为新的 user 消息
+				injectUserResponse(history, userInput);
 				continue;
 			}
 
@@ -184,4 +176,23 @@ export async function startRepl(initialInput?: string): Promise<void> {
 
 	rl.close();
 	writeln(style.gray("Bye!"));
+}
+
+/**
+ * 将用户回答注入到 history 中最后一个 SubmitToolResult 的 userResponse 字段。
+ * 这样模型在下一轮看到的是 tool result 中包含用户回答，而非独立的 user 消息。
+ */
+function injectUserResponse(history: DomainMessage[], response: string): void {
+	for (let i = history.length - 1; i >= 0; i--) {
+		const msg = history[i];
+		if (
+			msg !== undefined &&
+			msg.type === "tool_result" &&
+			"tool" in msg &&
+			msg.tool === "submit"
+		) {
+			(msg as SubmitToolResult).userResponse = response;
+			return;
+		}
+	}
 }
