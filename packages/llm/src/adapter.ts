@@ -50,8 +50,13 @@ function toolResultToContent(msg: ToolResult): string {
 				"result",
 				`Reminder set: will appear in ${msg.delay} rounds`,
 			);
-		case "submit":
-			return wrapTag("result", `Submitted: ${JSON.stringify(msg.result)}`);
+		case "submit": {
+			const parts = [wrapTag("result", "Submitted successfully.")];
+			if (msg.userResponse) {
+				parts.push(wrapTag("user_response", msg.userResponse));
+			}
+			return parts.join("\n");
+		}
 	}
 }
 
