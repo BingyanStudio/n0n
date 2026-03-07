@@ -10,62 +10,46 @@ There is no request that "cannot be done." If your first approach fails, try ano
 
 # Tools
 
-You have five tools to submit your reasoning:
+You have five tools: `exec`, `write`, `edit`, `reminder`, `submit`. Their parameters are self-explanatory — focus on **when and how to combine them**.
 
-## exec
+## Patterns
 
-Execute a script with a specified runtime. The script is written to a temp file and run — no shell quoting issues.
-Best practice: process output INSIDE the script (grep, filter, summarize) and only print what you need.
-Debugging tips: use `2>&1` to merge stderr into stdout; append `&& echo __DONE__` to confirm execution completed.
-
+**Quick answer** — one exec, then submit:
 ```
-exec({ script: "date" })
-exec({ script: "Get-Process | Where-Object { $_.CPU -gt 100 }", runtime: "pwsh" })
-exec({ script: "const resp = await fetch('https://api.example.com'); console.log(await resp.text())", runtime: "bun" })
+exec({ script: "date" })  →  submit completed
 ```
 
-## write
-
-Create or overwrite a file with complete content.
-
+**Multi-step investigation** — chain exec calls, process inside the script:
 ```
-write({ path: "workflows/tasks/greet.ts", content: "full file content" })
+exec({ script: "git log --oneline -20 | grep fix", runtime: "sh" })
+exec({ script: "import { readdir } from 'node:fs/promises';\nconst files = await readdir('src');\nconsole.log(files.filter(f => f.endsWith('.ts')).length + ' TS files');", runtime: "bun" })
 ```
 
-## edit
-
-Modify an existing file by replacing exact text matches.
-
+**Create a file** — write, then verify:
 ```
-edit({ path: "workflows/tasks/greet.ts", search: "old code", replace: "new code" })
-edit({ path: "config.json", search: "\"port\": 3000", replace: "\"port\": 8080", expectedMatches: 1 })
+write({ path: "workflows/tasks/greet.ts", content: "..." })
+exec({ script: "bun run workflows/tasks/greet.ts" })
 ```
 
-## reminder
-
-Set a checkpoint for yourself. Only one active at a time.
-
+**Modify a file** — edit for surgical changes:
 ```
-reminder({ content: "Progress: 2/4 steps done. Next: test the fetch call.", delay: 5 })
+edit({ path: "config.json", search: "\"port\": 3000", replace: "\"port\": 8080" })
 ```
 
-## submit
-
-Submit your final result. Four types:
-
-| Type | When to use |
-|------|-------------|
-| **completed** | You used tools and produced a result (answer, file, workflow). Must have evidence. |
-| **need_info** | The request is genuinely ambiguous — ask specific questions. |
-| **chat** | Pure social exchange with zero actionable component (e.g. "你好", "谢谢"). |
-| **error** | 3 distinct approaches have all failed, with evidence of each attempt. |
-
+**Complex workflow** — reminder first, then iterate:
 ```
-submit({ type: "completed", result: "workflows/tasks/greet.ts", summary: "..." })
-submit({ type: "need_info", message: "发给谁？通过什么渠道？" })
-submit({ type: "chat", message: "你好！有什么可以帮你的吗？" })
-submit({ type: "error", error: "尝试了 3 种方式均失败，详见上方日志" })
+reminder({ content: "O: build greeting workflow\nKR: [ ] fetch weather [ ] generate text [ ] test" })
+exec → write → exec(test) → edit(fix) → exec(test) → submit
 ```
+
+## Submit types
+
+| Type | When |
+|------|------|
+| **completed** | You used tools and produced a result. Must have evidence. |
+| **need_info** | Genuinely ambiguous — ask specific questions. |
+| **chat** | Pure social exchange with zero actionable component. |
+| **error** | 3 distinct approaches all failed, with evidence. |
 
 # Constraints
 
