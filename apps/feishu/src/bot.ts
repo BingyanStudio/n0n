@@ -163,4 +163,88 @@ export class FeishuBot {
 			data: { content },
 		});
 	}
+
+	// ── CardKit API（流式卡片） ──
+
+	/** 创建卡片实体，返回 card_id */
+	async createCardEntity(card: FeishuCardContent): Promise<string> {
+		const res = await this.client.cardkit.v1.card.create({
+			data: {
+				type: "card_json",
+				data: JSON.stringify(card),
+			},
+		});
+		const cardId = res?.data?.card_id;
+		if (!cardId) {
+			throw new Error("Failed to create card entity: missing card_id");
+		}
+		return String(cardId);
+	}
+
+	/** 发送卡片实体消息（通过 card_id），返回 message_id */
+	async sendCardEntity(
+		ctx: FeishuMessageContext,
+		cardId: string,
+	): Promise<string> {
+		const content = JSON.stringify({
+			type: "card",
+			data: { card_id: cardId },
+		});
+		const res = await this.client.im.message.create({
+			params: { receive_id_type: ctx.recipient.receiveIdType },
+			data: {
+				receive_id: ctx.recipient.receiveId,
+				msg_type: "interactive",
+				content,
+			},
+		});
+		const messageId = res?.data?.message_id;
+		if (!messageId) {
+			throw new Error("Failed to send card entity: missing message_id");
+		}
+		return String(messageId);
+	}
+
+	/** 流式更新卡片文本元素（打字机效果） */
+	async streamCardElementContent(
+		cardId: string,
+		elementId: string,
+		content: string,
+		sequence: number,
+	): Promise<void> {
+		await this.client.cardkit.v1.cardElement.content({
+			path: { card_id: cardId, element_id: elementId },
+			data: { content, sequence },
+		});
+	}
+
+	/** 全量更新卡片实体 */
+	async updateCardEntity(
+		cardId: string,
+		card: FeishuCardContent,
+		sequence: number,
+	): Promise<void> {
+		await this.client.cardkit.v1.card.update({
+			path: { card_id: cardId },
+			data: {
+				card: { type: "card_json", data: JSON.stringify(card) },
+				sequence,
+			},
+		});
+	}
+
+	/** 更新卡片配置（如开关流式模式） */
+	async updateCardSettings(
+		cardId: string,
+		settings: Record<string, unknown>,
+		sequence: number,
+	): Promise<void> {
+		await this.client.cardkit.v1.card.settings({
+			path: { card_id: cardId },
+			data: {
+				settings: JSON.stringify(settings),
+				sequence,
+			},
+		});
+	}
 }
