@@ -181,25 +181,40 @@ function createInitialHistory(
 	];
 }
 
+/**
+ * 构建飞书运行时上下文（注入为第二条 system message）。
+ * 仅包含当前会话的动态值（用户信息、实际路径），
+ * 工作区规范和隔离约束已在 prompts/feishu.md 中定义。
+ */
 function buildFeishuSystemContext(
 	ctx: FeishuMessageContext,
 	paths: WorkspacePaths,
 	userInfo?: FeishuUserInfo | null,
 ): string {
-	const lines: string[] = ["Feishu runtime context (trusted):"];
+	const lines: string[] = ["## Runtime Environment"];
 
-	// 用户可读信息
+	// ── 用户信息 ──
 	if (userInfo?.name) lines.push(`- user_name: ${userInfo.name}`);
 	if (userInfo?.nickname) lines.push(`- nickname: ${userInfo.nickname}`);
 	if (userInfo?.jobTitle) lines.push(`- job_title: ${userInfo.jobTitle}`);
 	if (ctx.chatType) lines.push(`- chat_type: ${ctx.chatType}`);
 
-	// 引导模型通过文件获取完整数据
+	// ── 工作区路径（实际值） ──
 	lines.push(
 		"",
-		"User identity details (open_id, chat_id, tenant_key, etc.) and full profile",
-		`are stored in: ${paths.memory}/user-info.json`,
-		"Import this JSON file when you need to use these values in code or API calls.",
+		"## Workspace Paths",
+		"- cwd (workspace root): `.`",
+		"- user profile (relative to cwd): `workflows/memory/user-info.json`",
+		"- tasks (relative to cwd): `workflows/tasks/`",
+		"- schedules (relative to cwd): `workflows/schedules/`",
+		"- memory (relative to cwd): `workflows/memory/`",
+		`- skills (shared, read-only, outside workspace; absolute path): \`${paths.skills}\``,
+		"",
+		"All paths above except `skills` are relative to cwd and must stay within the workspace root.",
+		"`skills` is the only allowed path outside the workspace and is strictly read-only.",
+		"",
+		"Full user identity (open_id, chat_id, tenant_key, etc.) is in `workflows/memory/user-info.json`.",
+		"Import this JSON via its relative path when you need these values in code or API calls.",
 	);
 
 	return lines.join("\n");
