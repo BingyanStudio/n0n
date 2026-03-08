@@ -24,11 +24,8 @@ export {
 	loadSkillContent,
 } from "./discovery.ts";
 export { formatAgentsMdPrompt, loadAgentsMd } from "./prompts/agents-md.ts";
-// Prompt 模板
-export {
-	DELEGATE_PROMPT_PATH,
-	INTERACTIVE_PROMPT_PATH,
-} from "./prompts/paths.ts";
+// Prompt 模板（各 app 已各自维护专用 prompt，此处仅保留 core 内部需要的导出）
+export { DELEGATE_PROMPT_PATH } from "./prompts/paths.ts";
 // 调度
 export type { ScheduleEntry, SchedulerHandle } from "./scheduler/scheduler.ts";
 export {

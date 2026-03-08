@@ -2,6 +2,7 @@
  * REPL — 交互式对话循环
  */
 
+import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 // PlainRenderer for non-TTY — import from core
@@ -9,7 +10,6 @@ import {
 	agentLoop,
 	discoverWorkflows,
 	formatAgentsMdPrompt,
-	INTERACTIVE_PROMPT_PATH,
 	type InteractiveResult,
 	InteractiveResultSchema,
 	loadAgentsMd,
@@ -19,7 +19,8 @@ import {
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 
-const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
+/** CLI 模式专用系统提示词（workflow builder） */
+const PROMPT_PATH = resolve(import.meta.dir, "prompts", "interactive.md");
 type ReplContextPaths = Pick<
 	WorkspacePaths,
 	"workspace" | "tasks" | "skills" | "schedules"
