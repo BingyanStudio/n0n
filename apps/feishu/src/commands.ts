@@ -163,7 +163,7 @@ export async function handleCommand(
 					session.currentTask.abortController.abort();
 					session.currentTask = null;
 				}
-				resetSession(sessionKey, ctx, systemPrompt);
+				resetSession(sessionKey, ctx, systemPrompt, session.workspacePaths);
 				await sendText(bot, ctx, "已重置", "🔄 会话已重置。");
 			}
 			return;
@@ -184,7 +184,7 @@ export async function handleCommand(
 			return;
 
 		case "crons_list": {
-			const schedules = await loadSchedules();
+			const schedules = await loadSchedules(session.workspacePaths);
 			const crons: CronItem[] = schedules.map((s) => ({
 				name: s.name,
 				cron: s.cron,
@@ -197,7 +197,11 @@ export async function handleCommand(
 		}
 
 		case "crons_toggle": {
-			const ok = await setScheduleEnabled(cmd.name, cmd.enabled);
+			const ok = await setScheduleEnabled(
+				cmd.name,
+				cmd.enabled,
+				session.workspacePaths,
+			);
 			await sendText(
 				bot,
 				ctx,
@@ -210,7 +214,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_list": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows(false, session.workspacePaths);
 			const items = workflows.map((w) => ({
 				name: w.name,
 				description: w.description || "(no description)",
@@ -222,7 +226,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_show": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows(false, session.workspacePaths);
 			const wf = workflows.find((w) => w.name === cmd.name);
 			if (!wf) {
 				await sendText(bot, ctx, "工作流", `❌ 未找到: ${cmd.name}`);
@@ -238,7 +242,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_run": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows(false, session.workspacePaths);
 			const wf = workflows.find((w) => w.name === cmd.name);
 			if (!wf) {
 				await sendText(bot, ctx, "工作流", `❌ 未找到: ${cmd.name}`);
@@ -246,7 +250,11 @@ export async function handleCommand(
 			}
 			await sendText(bot, ctx, "工作流", `⏳ 正在执行: ${cmd.name}...`);
 			try {
-				const result = await runWorkflow(wf.path, cmd.argsRaw ?? undefined);
+				const result = await runWorkflow(
+					wf.path,
+					cmd.argsRaw ?? undefined,
+					session.workspacePaths,
+				);
 				await sendText(
 					bot,
 					ctx,

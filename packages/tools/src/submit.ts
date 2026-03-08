@@ -31,6 +31,45 @@ export type SubmitArgs = z.infer<typeof SubmitArgsSchema>;
 const DEFAULT_DESCRIPTION =
 	"Submit your final result. The parameters ARE the result — fill in the fields directly. Add an optional `report` for notes on what was done.";
 
+type JsonSchema = Record<string, unknown>;
+
+function isJsonSchema(value: unknown): value is JsonSchema {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stripFieldDescriptions(schema: unknown): unknown {
+	if (Array.isArray(schema)) {
+		return schema.map((item) => stripFieldDescriptions(item));
+	}
+	if (!isJsonSchema(schema)) {
+		return schema;
+	}
+
+	const next: JsonSchema = {};
+	for (const [key, value] of Object.entries(schema)) {
+		next[key] =
+			key === "description" ? undefined : stripFieldDescriptions(value);
+	}
+	return next;
+}
+
+function flattenVariantProperties(schema: JsonSchema): JsonSchema {
+	const properties = isJsonSchema(schema.properties)
+		? { ...schema.properties }
+		: {};
+	const variants = [schema.oneOf, schema.anyOf].flat().filter(isJsonSchema);
+
+	for (const variant of variants) {
+		if (!isJsonSchema(variant.properties)) continue;
+		for (const [key, value] of Object.entries(variant.properties)) {
+			if (properties[key] !== undefined) continue;
+			properties[key] = stripFieldDescriptions(value);
+		}
+	}
+
+	return properties;
+}
+
 /* placeholder — will be filled below */
 export const SUBMIT_TOOL_DEFINITION: LLMToolDefinition =
 	/* @__PURE__ */ makeSubmitToolDefinition();
@@ -72,9 +111,8 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 	}
 
 	// 将 Zod schema 转为 JSON Schema，提取 properties 和 required
-	const jsonSchema = toJSONSchema(schema) as Record<string, unknown>;
-	const schemaProperties =
-		(jsonSchema.properties as Record<string, unknown>) ?? {};
+	const jsonSchema = toJSONSchema(schema) as JsonSchema;
+	const schemaProperties = flattenVariantProperties(jsonSchema);
 	const schemaRequired = (jsonSchema.required as string[]) ?? [];
 
 	// 合并：schema 属性 + report 字段
@@ -91,6 +129,9 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 	const mergedRequired = [...schemaRequired];
 
 	const schemaStr = JSON.stringify(jsonSchema, null, 2);
+	const sanitizedProperties = stripFieldDescriptions(
+		mergedProperties,
+	) as Record<string, unknown>;
 
 	return {
 		type: "function",
@@ -99,7 +140,7 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 			description: `Submit your final result. Fill in the fields directly as parameters — they must conform to this schema:\n\n\`\`\`json\n${schemaStr}\n\`\`\`\n\nValidation is enforced — non-conforming submissions will be rejected.`,
 			parameters: {
 				type: "object",
-				properties: mergedProperties,
+				properties: sanitizedProperties,
 				required: mergedRequired,
 				additionalProperties: false,
 			},

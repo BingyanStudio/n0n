@@ -5,14 +5,16 @@
  * 仍走 agentLoop 路径，模型可自主使用工具。
  */
 
-import { ENV_INFO } from "@n0n/tools";
+import { getEnvInfo } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
+import type { PathConfig } from "../config.ts";
 
 export interface GenerateOptions<T = unknown> {
 	schema?: ZodType<T>;
 	maxIterations?: number;
+	pathConfig?: PathConfig;
 }
 
 export interface GenerateResult<T = unknown> {
@@ -31,7 +33,8 @@ export async function generate<T = unknown>(
 	instruction: string,
 	options?: GenerateOptions<T>,
 ): Promise<GenerateResult<T>> {
-	const envLine = `Environment: OS=${ENV_INFO.os}, Shell=${ENV_INFO.shell}, CWD=${ENV_INFO.cwd}`;
+	const env = getEnvInfo();
+	const envLine = `Environment: OS=${env.os}, Shell=${env.shell}, CWD=${env.cwd}`;
 
 	const history: DomainMessage[] = [
 		{

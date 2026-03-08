@@ -7,7 +7,7 @@ import { basename, resolve } from "node:path";
 import { chatCompletion } from "@n0n/llm";
 import type { LLMRequestMessage } from "@n0n/types";
 import { Glob } from "bun";
-import { paths } from "../config.ts";
+import { paths, type WorkspacePaths } from "../config.ts";
 
 export type SearchSpace = "all" | "memory" | "skill" | "history";
 
@@ -28,17 +28,29 @@ interface Candidate {
 	summary: string;
 }
 
-const SPACE_DIRS: Record<SearchSpace, string[]> = {
-	skill: [paths.skills],
-	memory: [paths.memory, paths.consultResult],
-	history: [paths.history],
-	all: [paths.skills, paths.memory, paths.consultResult, paths.history],
-};
+function getSpaceDirs(
+	workspacePaths: WorkspacePaths,
+): Record<SearchSpace, string[]> {
+	return {
+		skill: [workspacePaths.skills],
+		memory: [workspacePaths.memory, workspacePaths.consultResult],
+		history: [workspacePaths.history],
+		all: [
+			workspacePaths.skills,
+			workspacePaths.memory,
+			workspacePaths.consultResult,
+			workspacePaths.history,
+		],
+	};
+}
 
 const SUMMARY_MAX_CHARS = 600;
 
-async function collectCandidates(space: SearchSpace): Promise<Candidate[]> {
-	const dirs = SPACE_DIRS[space];
+async function collectCandidates(
+	space: SearchSpace,
+	workspacePaths: WorkspacePaths,
+): Promise<Candidate[]> {
+	const dirs = getSpaceDirs(workspacePaths)[space];
 	const candidates: Candidate[] = [];
 
 	for (const dir of dirs) {
@@ -96,8 +108,9 @@ function extractSummary(content: string, filePath: string): string {
 export async function ragSearch(
 	query: string,
 	space: SearchSpace = "all",
+	workspacePaths: WorkspacePaths = paths,
 ): Promise<RagSearchResult> {
-	const candidates = await collectCandidates(space);
+	const candidates = await collectCandidates(space, workspacePaths);
 
 	if (candidates.length === 0) {
 		return { query, space, results: [] };

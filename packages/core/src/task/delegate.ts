@@ -5,11 +5,11 @@
  */
 
 import { resolve } from "node:path";
-import { ENV_INFO } from "@n0n/tools";
+import { getEnvInfo } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
-import { paths } from "../config.ts";
+import { type PathConfig, paths, resolvePaths } from "../config.ts";
 import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
@@ -30,9 +30,13 @@ export async function delegateTask<T = unknown>(
 		schema?: ZodType<T>;
 		skipConsultation?: boolean;
 		maxIterations?: number;
+		pathConfig?: PathConfig;
 	},
 ): Promise<TaskResult<T>> {
-	const allSkills = await discoverSkills();
+	const resolvedPaths = options?.pathConfig
+		? resolvePaths(options.pathConfig)
+		: paths;
+	const allSkills = await discoverSkills(resolvedPaths.skills);
 	const skillSummaryText = formatSkillSummaries(allSkills);
 
 	let consultAdvice = "";
@@ -41,7 +45,7 @@ export async function delegateTask<T = unknown>(
 			const skillSection = skillSummaryText
 				? [
 						"",
-						`## Available Skills (in ${paths.skills}/)`,
+						`## Available Skills (in ${resolvedPaths.skills}/)`,
 						"The following skills are available. If any are relevant, mention them in your advice with their directory path so the executor can read their SKILL.md for detailed instructions.",
 						skillSummaryText,
 					].join("\n")
@@ -77,7 +81,7 @@ export async function delegateTask<T = unknown>(
 					: JSON.stringify(consultResult.result);
 
 			const hash = Bun.hash(query).toString(36);
-			const filePath = resolve(`${paths.consultResult}/${hash}.md`);
+			const filePath = resolve(resolvedPaths.consultResult, `${hash}.md`);
 			const now = new Date().toISOString();
 			await Bun.write(
 				filePath,
@@ -94,8 +98,8 @@ export async function delegateTask<T = unknown>(
 	}
 
 	const [ragHits, workflows] = await Promise.all([
-		ragSearch(query, "all"),
-		discoverWorkflows(),
+		ragSearch(query, "all", resolvedPaths),
+		discoverWorkflows(false, resolvedPaths),
 	]);
 
 	const ragContext = formatRagResults(ragHits.results);
@@ -117,9 +121,10 @@ export async function delegateTask<T = unknown>(
 		workflowList,
 	);
 
-	const envLine = `Environment: OS=${ENV_INFO.os}, Shell=${ENV_INFO.shell}, CWD=${ENV_INFO.cwd}`;
+	const env = getEnvInfo();
+	const envLine = `Environment: OS=${env.os}, Shell=${env.shell}, CWD=${env.cwd}`;
 	const shellHint =
-		ENV_INFO.os === "Windows"
+		env.os === "Windows"
 			? 'IMPORTANT: You are on Windows. Use Windows commands (e.g., `type` instead of `cat`, `dir` instead of `ls`, `findstr` instead of `grep`). Paths use backslashes. You can also use `bun -e "..."` for cross-platform file operations.'
 			: "You are on a Unix-like system. Standard shell commands (cat, ls, grep, etc.) are available.";
 

@@ -12,8 +12,9 @@
  * - bot.ts — 飞书 API 客户端
  */
 
+import { resolve } from "node:path";
 import * as lark from "@larksuiteoapi/node-sdk";
-import { INTERACTIVE_PROMPT_PATH, startScheduler } from "@n0n/core";
+import { INTERACTIVE_PROMPT_PATH, initConfig, startScheduler } from "@n0n/core";
 import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
@@ -33,6 +34,20 @@ function requireEnv(key: string): string {
 	return val;
 }
 
+function resolveFeishuWorkspace(senderOpenId: string) {
+	return initConfig({
+		workspace: resolve(process.cwd(), ".runtime", "feishu", senderOpenId),
+		workflows: "workflows",
+		tasks: "workflows/tasks",
+		skills: "workflows/skills",
+		schedules: "workflows/schedules",
+		memory: "workflows/memory",
+		consultResult: "workflows/consult-result",
+		history: "workflows/history",
+		temp: ".temp",
+	});
+}
+
 export async function startFeishuService(): Promise<void> {
 	const appId = requireEnv("FEISHU_APP_ID");
 	const appSecret = requireEnv("FEISHU_APP_SECRET");
@@ -41,8 +56,19 @@ export async function startFeishuService(): Promise<void> {
 
 	const bot = new FeishuBot({ appId, appSecret, domain });
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
+	const schedulerPaths = initConfig({
+		workspace: resolve(process.cwd(), ".runtime", "feishu", "scheduler"),
+		workflows: "workflows",
+		tasks: "workflows/tasks",
+		skills: "workflows/skills",
+		schedules: "workflows/schedules",
+		memory: "workflows/memory",
+		consultResult: "workflows/consult-result",
+		history: "workflows/history",
+		temp: ".temp",
+	});
 
-	await startScheduler();
+	await startScheduler(schedulerPaths);
 
 	const dispatcher = new lark.EventDispatcher({
 		encryptKey,
@@ -61,7 +87,15 @@ export async function startFeishuService(): Promise<void> {
 			if (!text) return;
 
 			const sessionKey = buildSessionKey(ctx);
-			const session = getOrCreateSession(sessionKey, ctx, systemPrompt);
+			const workspacePaths = resolveFeishuWorkspace(
+				ctx.senderOpenId ?? "unknown",
+			);
+			const session = getOrCreateSession(
+				sessionKey,
+				ctx,
+				systemPrompt,
+				workspacePaths,
+			);
 
 			console.log(
 				`[feishu] received message: ${text} (sessionKey=${sessionKey})`,
@@ -118,7 +152,15 @@ export async function startFeishuService(): Promise<void> {
 			if (!ctx) return;
 
 			const sessionKey = buildSessionKey(ctx);
-			const session = getOrCreateSession(sessionKey, ctx, systemPrompt);
+			const workspacePaths = resolveFeishuWorkspace(
+				ctx.senderOpenId ?? "unknown",
+			);
+			const session = getOrCreateSession(
+				sessionKey,
+				ctx,
+				systemPrompt,
+				workspacePaths,
+			);
 
 			const menuCommand = parseMenuCommand(data?.event_key);
 			if (!menuCommand) {

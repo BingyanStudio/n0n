@@ -59,8 +59,8 @@ export async function runFeishuRound(
 
 	// 2. 收集上下文
 	const [existing, schedules] = await Promise.all([
-		discoverWorkflows(),
-		loadSchedules(),
+		discoverWorkflows(false, session.workspacePaths),
+		loadSchedules(session.workspacePaths),
 	]);
 
 	const contextParts: string[] = [];

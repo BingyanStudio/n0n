@@ -10,22 +10,31 @@
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
-import { agentLoop, PlainRenderer } from "@n0n/core";
+import {
+	agentLoop,
+	initConfig,
+	PlainRenderer,
+	type WorkspacePaths,
+} from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
 const PROMPT_PATH = resolve(import.meta.dir, "prompts", "code.md");
 
 /** 获取项目上下文（git status + 目录结构） */
-async function gatherContext(): Promise<string | null> {
+async function gatherContext(workspace: string): Promise<string | null> {
 	const parts: string[] = [];
 	try {
-		const gitStatus = Bun.spawnSync(["git", "status", "--short"]);
+		const gitStatus = Bun.spawnSync(["git", "status", "--short"], {
+			cwd: workspace,
+		});
 		const status = gitStatus.stdout.toString().trim();
 		if (status) {
 			parts.push(`<git_status>\n${status}\n</git_status>`);
 		}
-		const gitBranch = Bun.spawnSync(["git", "branch", "--show-current"]);
+		const gitBranch = Bun.spawnSync(["git", "branch", "--show-current"], {
+			cwd: workspace,
+		});
 		const branch = gitBranch.stdout.toString().trim();
 		if (branch) {
 			parts.push(`<git_branch>${branch}</git_branch>`);
@@ -50,7 +59,14 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 	}
 }
 
-export async function startCodeRepl(initialInput?: string): Promise<void> {
+export async function startCodeRepl(
+	workspacePaths: WorkspacePaths,
+	initialInput?: string,
+): Promise<void> {
+	initConfig({
+		workspace: workspacePaths.workspace,
+		temp: workspacePaths.temp,
+	});
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
 
@@ -81,7 +97,7 @@ export async function startCodeRepl(initialInput?: string): Promise<void> {
 		{
 			type: "user_input",
 			content: userInput,
-			context: await gatherContext(),
+			context: await gatherContext(workspacePaths.workspace),
 			capabilities: null,
 		},
 	];
@@ -105,7 +121,7 @@ export async function startCodeRepl(initialInput?: string): Promise<void> {
 			history.push({
 				type: "user_input",
 				content: userInput,
-				context: await gatherContext(),
+				context: await gatherContext(workspacePaths.workspace),
 				capabilities: null,
 			});
 			continue;
@@ -134,7 +150,7 @@ export async function startCodeRepl(initialInput?: string): Promise<void> {
 				history.push({
 					type: "user_input",
 					content: userInput,
-					context: await gatherContext(),
+					context: await gatherContext(workspacePaths.workspace),
 					capabilities: null,
 				});
 				break;

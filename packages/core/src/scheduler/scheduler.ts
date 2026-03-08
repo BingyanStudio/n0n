@@ -6,13 +6,11 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
 import { z } from "zod";
-import { paths } from "../config.ts";
+import { paths, type WorkspacePaths } from "../config.ts";
 import { delegateTask } from "../task/delegate.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
-
-const SCHEDULES_DIR = paths.schedules;
 
 export interface ScheduleEntry {
 	name: string;
@@ -31,8 +29,10 @@ const ScheduleFrontmatterSchema = z.object({
 	workflow: z.string().optional(),
 });
 
-export async function loadSchedules(): Promise<ScheduleEntry[]> {
-	const dir = resolve(SCHEDULES_DIR);
+export async function loadSchedules(
+	workspacePaths: WorkspacePaths = paths,
+): Promise<ScheduleEntry[]> {
+	const dir = resolve(workspacePaths.schedules);
 	if (!existsSync(dir)) return [];
 
 	const glob = new Glob("**/*.mdc");
@@ -65,8 +65,9 @@ export async function loadSchedules(): Promise<ScheduleEntry[]> {
 export async function setScheduleEnabled(
 	name: string,
 	enabled: boolean,
+	workspacePaths: WorkspacePaths = paths,
 ): Promise<ScheduleEntry | null> {
-	const entries = await loadSchedules();
+	const entries = await loadSchedules(workspacePaths);
 	const target = entries.find((entry) => entry.name === name);
 	if (!target) return null;
 
@@ -100,19 +101,21 @@ export async function setScheduleEnabled(
 
 let running = false;
 
-export async function startScheduler(): Promise<void> {
+export async function startScheduler(
+	workspacePaths: WorkspacePaths = paths,
+): Promise<void> {
 	if (running) return;
 	running = true;
 
 	console.log(
-		`[scheduler] Started. Watching ${SCHEDULES_DIR}/*.mdc every 60s.`,
+		`[scheduler] Started. Watching ${workspacePaths.schedules}/*.mdc every 60s.`,
 	);
 
 	const tick = async () => {
 		if (!running) return;
 
 		const now = new Date();
-		const entries = await loadSchedules();
+		const entries = await loadSchedules(workspacePaths);
 
 		for (const entry of entries) {
 			if (!entry.enabled) continue;
@@ -124,7 +127,7 @@ export async function startScheduler(): Promise<void> {
 				console.log(`[scheduler] Triggering: ${entry.name}`);
 
 				if (entry.workflow) {
-					runWorkflow(entry.workflow).then(
+					runWorkflow(entry.workflow, undefined, workspacePaths).then(
 						(result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,

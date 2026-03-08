@@ -7,4 +7,5 @@ bun.lock
 package-lock.json
 *.log
 .temp/
+workflows/
 workflows/memory

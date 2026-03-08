@@ -8,7 +8,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
-import { paths } from "../config.ts";
+import { paths, type WorkspacePaths } from "../config.ts";
 
 export interface WorkflowMeta {
 	name: string;
@@ -31,13 +31,14 @@ export interface WorkflowModule {
  */
 export async function discoverWorkflows(
 	includeSkills = false,
+	workspacePaths: WorkspacePaths = paths,
 ): Promise<WorkflowMeta[]> {
 	const scanTargets = includeSkills
 		? [
-				{ dir: paths.tasks, label: "tasks" },
-				{ dir: paths.skills, label: "skills" },
+				{ dir: workspacePaths.tasks, label: "tasks" },
+				{ dir: workspacePaths.skills, label: "skills" },
 			]
-		: [{ dir: paths.tasks, label: "tasks" }];
+		: [{ dir: workspacePaths.tasks, label: "tasks" }];
 
 	const results: WorkflowMeta[] = [];
 
@@ -71,6 +72,7 @@ export async function discoverWorkflows(
 export async function runWorkflow(
 	workflowPath: string,
 	args?: unknown,
+	_workspacePaths: WorkspacePaths = paths,
 ): Promise<unknown> {
 	const absPath = resolve(workflowPath);
 
