@@ -2,6 +2,7 @@
  * REPL — 交互式对话循环
  */
 
+import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 // PlainRenderer for non-TTY — import from core
@@ -9,7 +10,6 @@ import {
 	agentLoop,
 	discoverWorkflows,
 	formatAgentsMdPrompt,
-	INTERACTIVE_PROMPT_PATH,
 	type InteractiveResult,
 	InteractiveResultSchema,
 	loadAgentsMd,
@@ -19,11 +19,29 @@ import {
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 
-const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
+/** CLI 模式专用系统提示词（workflow builder） */
+const PROMPT_PATH = resolve(import.meta.dir, "prompts", "interactive.md");
 type ReplContextPaths = Pick<
 	WorkspacePaths,
 	"workspace" | "tasks" | "skills" | "schedules"
 >;
+
+/**
+ * 构建工作区上下文（注入为 system message），告知 agent cwd 和目录结构。
+ * interactive.md 中的 specification 描述了相对路径布局，这里补充实际的绝对路径。
+ */
+function buildWorkspaceContext(paths: ReplContextPaths): string {
+	return [
+		"## Workspace Environment",
+		"",
+		`Your current working directory (cwd) is: \`${paths.workspace}\``,
+		"All tool paths resolve relative to this directory:",
+		"- `exec` scripts run with cwd = workspace root",
+		"- `write` / `edit` relative paths resolve against workspace root",
+		"",
+		"Use relative paths (e.g. `workflows/tasks/my-task.ts`) — they will resolve correctly.",
+	].join("\n");
+}
 
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
 async function gatherContext(paths: ReplContextPaths): Promise<string | null> {
@@ -99,6 +117,10 @@ export async function startRepl(
 	let userInput = initialInput ?? (await prompt(`${label.user()} `));
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
+		{
+			type: "system",
+			content: buildWorkspaceContext(paths),
+		},
 		{
 			type: "user_input",
 			content: userInput,

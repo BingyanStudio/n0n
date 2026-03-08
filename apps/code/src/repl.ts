@@ -23,6 +23,23 @@ import { type CodeResult, CodeResultSchema } from "./schema.ts";
 const PROMPT_PATH = resolve(import.meta.dir, "prompts", "code.md");
 type CodeWorkspacePaths = Pick<WorkspacePaths, "workspace" | "temp">;
 
+/**
+ * 构建工作区上下文（注入为 system message），告知 agent cwd 和路径解析规则。
+ */
+function buildWorkspaceContext(workspace: string): string {
+	return [
+		"## Workspace Environment",
+		"",
+		`Your current working directory (cwd) is: \`${workspace}\``,
+		"All tool paths resolve relative to this directory:",
+		"- `exec` scripts run with cwd = workspace root (the project directory)",
+		"- `write` / `edit` relative paths resolve against workspace root",
+		"",
+		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
+		"Read existing code before modifying it to understand project structure.",
+	].join("\n");
+}
+
 /** 获取项目上下文（git status + 目录结构） */
 async function gatherContext(workspace: string): Promise<string | null> {
 	const parts: string[] = [];
@@ -96,6 +113,10 @@ export async function startCodeRepl(
 	let userInput = initialInput ?? (await prompt(`${label.user()} `));
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
+		{
+			type: "system",
+			content: buildWorkspaceContext(paths.workspace),
+		},
 		{
 			type: "user_input",
 			content: userInput,
