@@ -56,34 +56,53 @@ export type ToolEntry =
 	| { definition: LLMToolDefinition; stream: true; execute: StreamExecutor }
 	| { definition: LLMToolDefinition; stream: false; execute: SyncExecutor };
 
-// ── 基础注册表（不含 submit，submit 由 makeToolkit 动态生成） ──
+/** 工具执行的工作区覆盖（用于 per-session 隔离） */
+export interface ToolsWorkspaceOverride {
+	workspace: string;
+	tempDir: string;
+}
 
-const BASE_REGISTRY: Record<string, ToolEntry> = {
-	exec: {
-		definition: EXEC_TOOL_DEFINITION,
-		stream: true,
-		execute: (tc, _reminders, confirmFn) =>
-			execToolStream(tc.id, ExecArgsSchema.parse(tc.args), confirmFn),
-	},
-	write: {
-		definition: WRITE_TOOL_DEFINITION,
-		stream: false,
-		execute: (tc) => writeTool(tc.id, WriteArgsSchema.parse(tc.args)),
-	},
-	edit: {
-		definition: EDIT_TOOL_DEFINITION,
-		stream: false,
-		execute: (tc) => editTool(tc.id, EditArgsSchema.parse(tc.args)),
-	},
-	reminder: {
-		definition: REMINDER_TOOL_DEFINITION,
-		stream: false,
-		execute: (tc, reminders) =>
-			reminderTool(tc.id, ReminderArgsSchema.parse(tc.args), reminders),
-	},
-};
+// ── 基础注册表构建 ──
 
-// ── Toolkit：包含工具定义列表 + 按名称查找入口 ──
+/**
+ * 构建基础工具注册表（不含 submit）。
+ * 接受可选的 workspace 覆盖，用于 per-session 工具隔离。
+ */
+function buildBaseRegistry(
+	toolsWorkspace?: ToolsWorkspaceOverride,
+): Record<string, ToolEntry> {
+	return {
+		exec: {
+			definition: EXEC_TOOL_DEFINITION,
+			stream: true,
+			execute: (tc, _reminders, confirmFn) =>
+				execToolStream(
+					tc.id,
+					ExecArgsSchema.parse(tc.args),
+					confirmFn,
+					toolsWorkspace,
+				),
+		},
+		write: {
+			definition: WRITE_TOOL_DEFINITION,
+			stream: false,
+			execute: (tc) => writeTool(tc.id, WriteArgsSchema.parse(tc.args)),
+		},
+		edit: {
+			definition: EDIT_TOOL_DEFINITION,
+			stream: false,
+			execute: (tc) => editTool(tc.id, EditArgsSchema.parse(tc.args)),
+		},
+		reminder: {
+			definition: REMINDER_TOOL_DEFINITION,
+			stream: false,
+			execute: (tc, reminders) =>
+				reminderTool(tc.id, ReminderArgsSchema.parse(tc.args), reminders),
+		},
+	};
+}
+
+// ── Toolkit ──
 
 export interface Toolkit {
 	definitions: LLMToolDefinition[];
@@ -91,7 +110,10 @@ export interface Toolkit {
 }
 
 export const REGISTERED_TOOLS = new Set([
-	...Object.keys(BASE_REGISTRY),
+	"exec",
+	"write",
+	"edit",
+	"reminder",
 	"submit",
 ]);
 
@@ -99,25 +121,25 @@ export const REGISTERED_TOOLS = new Set([
  * 构建完整的工具集（含 submit）。
  *
  * @param schema 可选的 Zod schema，用于约束 submit 的参数结构。
- *   有 schema 时，schema 属性直接展开到 submit 的 parameters 顶层；
- *   无 schema 时，submit 使用 `{ result: unknown, report?: string }` 结构。
+ * @param toolsWorkspace 可选的工作区覆盖，用于 per-session 隔离。
  */
-export function makeToolkit(schema?: ZodType): Toolkit {
+export function makeToolkit(
+	schema?: ZodType,
+	toolsWorkspace?: ToolsWorkspaceOverride,
+): Toolkit {
 	const hasSchema = !!schema;
 
 	const submitEntry: ToolEntry = {
 		definition: makeSubmitToolDefinition(schema),
 		stream: false,
 		execute: (tc) => {
-			// 有 schema 时跳过 SubmitArgsSchema（结构已不同），直接传 args
-			// 无 schema 时仍用 SubmitArgsSchema 校验 { result, report? }
 			const args = hasSchema ? tc.args : SubmitArgsSchema.parse(tc.args);
 			return submitTool(tc.id, args as Record<string, unknown>, hasSchema);
 		},
 	};
 
 	const registry: Record<string, ToolEntry> = {
-		...BASE_REGISTRY,
+		...buildBaseRegistry(toolsWorkspace),
 		submit: submitEntry,
 	};
 

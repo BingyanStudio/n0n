@@ -7,7 +7,7 @@ import { basename, resolve } from "node:path";
 import { chatCompletion } from "@n0n/llm";
 import type { LLMRequestMessage } from "@n0n/types";
 import { Glob } from "bun";
-import { lagacy_paths, type WorkspacePaths } from "../config.ts";
+import { getCurrentPaths, type WorkspacePaths } from "../config.ts";
 
 export type SearchSpace = "all" | "memory" | "skill" | "history";
 export type RagPaths = Pick<
@@ -105,7 +105,7 @@ function extractSummary(content: string, filePath: string): string {
 export async function ragSearch(
 	query: string,
 	space: SearchSpace = "all",
-	paths: RagPaths = lagacy_paths,
+	paths: RagPaths = getCurrentPaths(),
 ): Promise<RagSearchResult> {
 	const candidates = await collectCandidates(space, paths);
 

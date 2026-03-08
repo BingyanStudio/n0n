@@ -54,6 +54,8 @@ export interface PathConfig {
  * 默认保持向后兼容：未注入时仍基于当前进程工作目录与环境变量。
  */
 export function resolvePaths(pathConfig: PathConfig = {}): WorkspacePaths {
+	// NOTE: process.cwd() 作为 workspace 的最终 fallback，仅在未显式传入时使用。
+	// 所有 app 层应显式传入 workspace，不应依赖此默认值。
 	const workspace = resolve(pathConfig.workspace ?? process.cwd());
 	return {
 		workspace,
@@ -99,15 +101,15 @@ export function resolvePaths(pathConfig: PathConfig = {}): WorkspacePaths {
 /**
  * @deprecated 旧版全局路径配置，保持向后兼容，建议逐步迁移到显式路径配置。
  */
-export const lagacy_paths = resolvePaths();
+export const legacy_paths = resolvePaths();
 
 /** 最近一次 initConfig 解析出的路径（反映当前全局配置状态） */
-let _currentPaths: WorkspacePaths = lagacy_paths;
+let _currentPaths: WorkspacePaths = legacy_paths;
 
 /**
  * 获取当前全局配置对应的工作区路径。
  *
- * 与 `lagacy_paths`（模块加载时快照）不同，此函数返回最近一次
+ * 与 `legacy_paths`（模块加载时快照）不同，此函数返回最近一次
  * `initConfig()` 调用后的路径，能正确反映应用启动时的配置。
  */
 export function getCurrentPaths(): WorkspacePaths {
