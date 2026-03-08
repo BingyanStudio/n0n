@@ -15,7 +15,6 @@
 import { resolve } from "node:path";
 import * as lark from "@larksuiteoapi/node-sdk";
 import {
-	INTERACTIVE_PROMPT_PATH,
 	initConfig,
 	loadSchedules,
 	type SchedulerHandle,
@@ -34,7 +33,8 @@ import {
 } from "./session.ts";
 import { ensureUserInfo } from "./user-info.ts";
 
-const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
+/** 飞书模式专用系统提示词（区别于 interactive/code 模式） */
+const PROMPT_PATH = resolve(import.meta.dir, "prompts", "feishu.md");
 
 function requireEnv(key: string): string {
 	const val = process.env[key];
