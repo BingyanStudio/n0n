@@ -268,7 +268,7 @@ export class FeishuBot {
 				avatar: user.avatar?.avatar_origin ?? user.avatar?.avatar_240 ?? null,
 				email: user.email ?? null,
 				mobile: user.mobile ?? null,
-				departmentIds: (user.department_ids as string[]) ?? [],
+				departmentIds: (user.department_ids ?? []) as string[],
 				jobTitle: user.job_title ?? null,
 				updatedAt: new Date().toISOString(),
 			};
