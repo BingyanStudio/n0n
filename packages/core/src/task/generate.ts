@@ -51,15 +51,10 @@ export async function generate<T = unknown>(
 		});
 	}
 
-	const IS_WINDOWS = process.platform === "win32";
-	const os = IS_WINDOWS ? "Windows" : process.platform;
-	const shell = IS_WINDOWS ? "cmd" : "sh";
-	const envLine = `Environment: OS=${os}, Shell=${shell}, CWD=${resolvedPaths.workspace}`;
-
 	const history: DomainMessage[] = [
 		{
 			type: "system",
-			content: `${GENERATE_SYSTEM_PROMPT}\n${envLine}`,
+			content: GENERATE_SYSTEM_PROMPT,
 		},
 		{
 			type: "user_text",

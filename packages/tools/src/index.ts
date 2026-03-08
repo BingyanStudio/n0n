@@ -21,10 +21,11 @@ import type {
 import type { ZodType } from "zod";
 import { getToolsConfig } from "./config.ts";
 import { EDIT_TOOL_DEFINITION, EditArgsSchema, editTool } from "./edit.ts";
+import { detectEnv } from "./env.ts";
 import {
-	EXEC_TOOL_DEFINITION,
 	ExecArgsSchema,
 	execToolStream,
+	makeExecToolDefinition,
 } from "./exec.ts";
 import {
 	type PendingReminder,
@@ -70,6 +71,7 @@ export interface ToolsWorkspaceOverride {
  * 接受可选的 workspace 覆盖，用于 per-session 工具隔离。
  */
 function buildBaseRegistry(
+	execToolDef: LLMToolDefinition,
 	toolsWorkspace?: ToolsWorkspaceOverride,
 ): Record<string, ToolEntry> {
 	// 统一解析 workspace：优先使用 per-session override，否则使用全局配置
@@ -83,7 +85,7 @@ function buildBaseRegistry(
 
 	return {
 		exec: {
-			definition: EXEC_TOOL_DEFINITION,
+			definition: execToolDef,
 			stream: true,
 			execute: (tc, _reminders, confirmFn) =>
 				execToolStream(
@@ -131,14 +133,19 @@ export const REGISTERED_TOOLS = new Set([
 
 /**
  * 构建完整的工具集（含 submit）。
+ * 异步：首次调用会探测系统可用 runtime（~1-2s），后续调用使用缓存。
  *
  * @param schema 可选的 Zod schema，用于约束 submit 的参数结构。
  * @param toolsWorkspace 可选的工作区覆盖，用于 per-session 隔离。
+ * @param model LLM 模型名称，用于选择 XML tag 风格（可选）。
  */
-export function makeToolkit(
+export async function makeToolkit(
 	schema?: ZodType,
 	toolsWorkspace?: ToolsWorkspaceOverride,
-): Toolkit {
+	model?: string,
+): Promise<Toolkit> {
+	const env = await detectEnv();
+	const execToolDef = makeExecToolDefinition(env, model);
 	const hasSchema = !!schema;
 
 	const submitEntry: ToolEntry = {
@@ -151,7 +158,7 @@ export function makeToolkit(
 	};
 
 	const registry: Record<string, ToolEntry> = {
-		...buildBaseRegistry(toolsWorkspace),
+		...buildBaseRegistry(execToolDef, toolsWorkspace),
 		submit: submitEntry,
 	};
 
@@ -165,5 +172,6 @@ export function makeToolkit(
 
 export type { ToolsConfig } from "./config.ts";
 export { initToolsConfig } from "./config.ts";
-export { getEnvInfo } from "./exec.ts";
+export type { EnvSnapshot, RuntimeProbe } from "./env.ts";
+export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";
