@@ -62,10 +62,20 @@ function resolveCliWorkspacePaths(args: string[]): {
 	return { workspacePaths, args: nextArgs };
 }
 
+// ── 进程生命周期 ──
+
+function cleanupTemp(paths: CliTempPaths): void {
+	try {
+		rmSync(paths.temp, { recursive: true, force: true });
+	} catch {}
+}
+
+// 解析一次，main() 和 cleanup handler 共用
+const _resolved = resolveCliWorkspacePaths(process.argv.slice(2));
+
 async function main(): Promise<void> {
-	const resolved = resolveCliWorkspacePaths(process.argv.slice(2));
-	const args = resolved.args;
-	const workspacePaths = resolved.workspacePaths;
+	const args = _resolved.args;
+	const workspacePaths = _resolved.workspacePaths;
 	const initialInput = args.length > 0 ? args.join(" ") : undefined;
 	const command = args[0];
 
@@ -127,21 +137,9 @@ async function main(): Promise<void> {
 	}
 }
 
-// ── 进程生命周期 ──
-
-function cleanupTemp(paths: CliTempPaths): void {
-	try {
-		rmSync(paths.temp, { recursive: true, force: true });
-	} catch {}
-}
-
-const processWorkspacePaths = resolveCliWorkspacePaths(
-	process.argv.slice(2),
-).workspacePaths;
-
-process.on("exit", () => cleanupTemp(processWorkspacePaths));
+process.on("exit", () => cleanupTemp(_resolved.workspacePaths));
 process.on("SIGINT", () => {
-	cleanupTemp(processWorkspacePaths);
+	cleanupTemp(_resolved.workspacePaths);
 	process.exit(0);
 });
 

@@ -197,11 +197,7 @@ export async function handleCommand(
 		}
 
 		case "crons_toggle": {
-			const ok = await setScheduleEnabled(
-				cmd.name,
-				cmd.enabled,
-				session.paths,
-			);
+			const ok = await setScheduleEnabled(cmd.name, cmd.enabled, session.paths);
 			await sendText(
 				bot,
 				ctx,

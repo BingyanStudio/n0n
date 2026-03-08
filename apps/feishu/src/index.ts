@@ -19,6 +19,7 @@ import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
 import { handleCommand, parseCommand, parseMenuCommand } from "./commands.ts";
+import { resolveFeishuPaths } from "./paths.ts";
 import { runFeishuRound } from "./round.ts";
 import {
 	buildSessionKey,
@@ -34,20 +35,6 @@ function requireEnv(key: string): string {
 	return val;
 }
 
-function resolveFeishuWorkspace(senderOpenId: string) {
-	return initConfig({
-		workspace: resolve(process.cwd(), ".runtime", "feishu", senderOpenId),
-		workflows: "workflows",
-		tasks: "workflows/tasks",
-		skills: "workflows/skills",
-		schedules: "workflows/schedules",
-		memory: "workflows/memory",
-		consultResult: "workflows/consult-result",
-		history: "workflows/history",
-		temp: ".temp",
-	});
-}
-
 export async function startFeishuService(): Promise<void> {
 	const appId = requireEnv("FEISHU_APP_ID");
 	const appSecret = requireEnv("FEISHU_APP_SECRET");
@@ -56,6 +43,8 @@ export async function startFeishuService(): Promise<void> {
 
 	const bot = new FeishuBot({ appId, appSecret, domain });
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
+
+	// 启动时初始化一次全局配置（scheduler 使用的默认 workspace）
 	const schedulerPaths = initConfig({
 		workspace: resolve(process.cwd(), ".runtime", "feishu", "scheduler"),
 		workflows: "workflows",
@@ -87,9 +76,7 @@ export async function startFeishuService(): Promise<void> {
 			if (!text) return;
 
 			const sessionKey = buildSessionKey(ctx);
-			const workspacePaths = resolveFeishuWorkspace(
-				ctx.senderOpenId ?? "unknown",
-			);
+			const workspacePaths = resolveFeishuPaths(ctx.senderOpenId ?? "unknown");
 			const session = getOrCreateSession(
 				sessionKey,
 				ctx,
@@ -152,9 +139,7 @@ export async function startFeishuService(): Promise<void> {
 			if (!ctx) return;
 
 			const sessionKey = buildSessionKey(ctx);
-			const workspacePaths = resolveFeishuWorkspace(
-				ctx.senderOpenId ?? "unknown",
-			);
+			const workspacePaths = resolveFeishuPaths(ctx.senderOpenId ?? "unknown");
 			const session = getOrCreateSession(
 				sessionKey,
 				ctx,

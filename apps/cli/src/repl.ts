@@ -21,9 +21,7 @@ const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
 type ReplContextPaths = Pick<WorkspacePaths, "tasks" | "skills" | "schedules">;
 
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
-async function gatherContext(
-	paths: ReplContextPaths,
-): Promise<string | null> {
+async function gatherContext(paths: ReplContextPaths): Promise<string | null> {
 	const [existing, schedules] = await Promise.all([
 		discoverWorkflows(false, paths),
 		loadSchedules(paths),
