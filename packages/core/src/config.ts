@@ -22,7 +22,7 @@ function parseBlockedCommands(): string[] {
 }
 
 /**
- * 工作区路径集合 — 使用显式路径配置，避免隐式全局状态。
+ * 工作区路径集合 — 所有路径均为绝对路径。
  */
 export interface WorkspacePaths {
 	workspace: string;
@@ -36,6 +36,10 @@ export interface WorkspacePaths {
 	temp: string;
 }
 
+/**
+ * 路径配置输入 — 所有字段可选，未指定的使用默认值。
+ * workspace 默认为 process.cwd()，其余路径相对于 workspace 解析。
+ */
 export interface PathConfig {
 	workspace?: string;
 	workflows?: string;
@@ -49,68 +53,36 @@ export interface PathConfig {
 }
 
 /**
- * 解析工作区路径。
- *
- * 默认保持向后兼容：未注入时仍基于当前进程工作目录与环境变量。
+ * 解析工作区路径 — 纯函数，无副作用。
+ * 未指定的路径使用默认值（相对于 workspace）。
  */
 export function resolvePaths(pathConfig: PathConfig = {}): WorkspacePaths {
-	// NOTE: process.cwd() 作为 workspace 的最终 fallback，仅在未显式传入时使用。
-	// 所有 app 层应显式传入 workspace，不应依赖此默认值。
 	const workspace = resolve(pathConfig.workspace ?? process.cwd());
 	return {
 		workspace,
-		workflows: resolve(
-			workspace,
-			pathConfig.workflows ?? process.env.WORKFLOWS_DIR ?? "workflows",
-		),
-		tasks: resolve(
-			workspace,
-			pathConfig.tasks ?? process.env.TASKS_DIR ?? "workflows/tasks",
-		),
-		skills: resolve(
-			workspace,
-			pathConfig.skills ?? process.env.SKILLS_DIR ?? "workflows/skills",
-		),
+		workflows: resolve(workspace, pathConfig.workflows ?? "workflows"),
+		tasks: resolve(workspace, pathConfig.tasks ?? "workflows/tasks"),
+		skills: resolve(workspace, pathConfig.skills ?? "workflows/skills"),
 		schedules: resolve(
 			workspace,
-			pathConfig.schedules ??
-				process.env.SCHEDULES_DIR ??
-				"workflows/schedules",
+			pathConfig.schedules ?? "workflows/schedules",
 		),
-		memory: resolve(
-			workspace,
-			pathConfig.memory ?? process.env.MEMORY_DIR ?? "workflows/memory",
-		),
+		memory: resolve(workspace, pathConfig.memory ?? "workflows/memory"),
 		consultResult: resolve(
 			workspace,
-			pathConfig.consultResult ??
-				process.env.CONSULT_RESULT_DIR ??
-				"workflows/consult-result",
+			pathConfig.consultResult ?? "workflows/consult-result",
 		),
-		history: resolve(
-			workspace,
-			pathConfig.history ?? process.env.HISTORY_DIR ?? "workflows/history",
-		),
-		temp: resolve(
-			workspace,
-			pathConfig.temp ?? process.env.TEMP_DIR ?? ".temp",
-		),
+		history: resolve(workspace, pathConfig.history ?? "workflows/history"),
+		temp: resolve(workspace, pathConfig.temp ?? ".temp"),
 	};
 }
 
-/**
- * @deprecated 旧版全局路径配置，保持向后兼容，建议逐步迁移到显式路径配置。
- */
-export const legacy_paths = resolvePaths();
-
-/** 最近一次 initConfig 解析出的路径（反映当前全局配置状态） */
-let _currentPaths: WorkspacePaths = legacy_paths;
+/** 最近一次 initConfig 设置的路径 */
+let _currentPaths: WorkspacePaths = resolvePaths();
 
 /**
  * 获取当前全局配置对应的工作区路径。
- *
- * 与 `legacy_paths`（模块加载时快照）不同，此函数返回最近一次
- * `initConfig()` 调用后的路径，能正确反映应用启动时的配置。
+ * 返回最近一次 `initConfig()` 调用后的路径。
  */
 export function getCurrentPaths(): WorkspacePaths {
 	return _currentPaths;
@@ -134,7 +106,7 @@ export const config = {
 } as const;
 
 /**
- * 初始化所有子包配置（应用启动时调用一次）
+ * 初始化所有子包配置（应用启动时调用一次）。
  */
 export function initConfig(pathConfig: PathConfig = {}): WorkspacePaths {
 	const resolvedPaths = resolvePaths(pathConfig);
@@ -149,5 +121,5 @@ export function initConfig(pathConfig: PathConfig = {}): WorkspacePaths {
 	return resolvedPaths;
 }
 
-// 自动初始化
+// 自动初始化（使用 process.cwd() 默认值，app 层会再次调用 initConfig 覆盖）
 initConfig();
