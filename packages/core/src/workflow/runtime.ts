@@ -10,6 +10,8 @@ import { resolve } from "node:path";
 import { Glob } from "bun";
 import { paths, type WorkspacePaths } from "../config.ts";
 
+export type WorkflowDiscoveryPaths = Pick<WorkspacePaths, "tasks" | "skills">;
+
 export interface WorkflowMeta {
 	name: string;
 	path: string;
@@ -31,7 +33,7 @@ export interface WorkflowModule {
  */
 export async function discoverWorkflows(
 	includeSkills = false,
-	workspacePaths: WorkspacePaths = paths,
+	workspacePaths: WorkflowDiscoveryPaths = paths,
 ): Promise<WorkflowMeta[]> {
 	const scanTargets = includeSkills
 		? [
@@ -72,7 +74,6 @@ export async function discoverWorkflows(
 export async function runWorkflow(
 	workflowPath: string,
 	args?: unknown,
-	_workspacePaths: WorkspacePaths = paths,
 ): Promise<unknown> {
 	const absPath = resolve(workflowPath);
 

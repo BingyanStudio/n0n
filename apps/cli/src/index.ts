@@ -23,6 +23,10 @@ import {
 } from "@n0n/core";
 import { startRepl } from "./repl.ts";
 
+type CliWorkflowPaths = Pick<WorkspacePaths, "tasks" | "skills">;
+type CliSchedulePaths = Pick<WorkspacePaths, "schedules">;
+type CliTempPaths = Pick<WorkspacePaths, "temp">;
+
 // ── 子命令路由 ──
 
 function resolveCliWorkspacePaths(args: string[]): {
@@ -62,6 +66,7 @@ async function main(): Promise<void> {
 	const resolved = resolveCliWorkspacePaths(process.argv.slice(2));
 	const args = resolved.args;
 	const workspacePaths = resolved.workspacePaths;
+	const initialInput = args.length > 0 ? args.join(" ") : undefined;
 	const command = args[0];
 
 	switch (command) {
@@ -71,13 +76,16 @@ async function main(): Promise<void> {
 				console.error("Usage: bun run apps/cli/src/index.ts run <workflow.ts>");
 				process.exit(1);
 			}
-			const result = await runWorkflow(workflowPath, undefined, workspacePaths);
+			const result = await runWorkflow(workflowPath);
 			console.log(JSON.stringify(result, null, 2));
 			return;
 		}
 
 		case "workflows": {
-			const workflows = await discoverWorkflows(false, workspacePaths);
+			const workflows = await discoverWorkflows(
+				false,
+				workspacePaths satisfies CliWorkflowPaths,
+			);
 			if (workflows.length === 0) {
 				writeln(style.gray("No workflows found."));
 				return;
@@ -93,7 +101,9 @@ async function main(): Promise<void> {
 		case "schedule": {
 			const sub = args[1];
 			if (sub === "list" || !sub) {
-				const schedules = await loadSchedules(workspacePaths);
+				const schedules = await loadSchedules(
+					workspacePaths satisfies CliSchedulePaths,
+				);
 				if (schedules.length === 0) {
 					writeln(style.gray("No schedules found."));
 					return;
@@ -112,7 +122,6 @@ async function main(): Promise<void> {
 		}
 
 		default: {
-			const initialInput = args.length > 0 ? args.join(" ") : undefined;
 			await startRepl(workspacePaths, initialInput);
 		}
 	}
@@ -120,7 +129,7 @@ async function main(): Promise<void> {
 
 // ── 进程生命周期 ──
 
-function cleanupTemp(workspacePaths: WorkspacePaths): void {
+function cleanupTemp(workspacePaths: CliTempPaths): void {
 	try {
 		rmSync(workspacePaths.temp, { recursive: true, force: true });
 	} catch {}
