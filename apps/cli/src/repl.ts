@@ -25,6 +25,23 @@ type ReplContextPaths = Pick<
 	"workspace" | "tasks" | "skills" | "schedules"
 >;
 
+/**
+ * 构建工作区上下文（注入为 system message），告知 agent cwd 和目录结构。
+ * interactive.md 中的 specification 描述了相对路径布局，这里补充实际的绝对路径。
+ */
+function buildWorkspaceContext(paths: ReplContextPaths): string {
+	return [
+		"## Workspace Environment",
+		"",
+		`Your current working directory (cwd) is: \`${paths.workspace}\``,
+		"All tool paths resolve relative to this directory:",
+		"- `exec` scripts run with cwd = workspace root",
+		"- `write` / `edit` relative paths resolve against workspace root",
+		"",
+		"Use relative paths (e.g. `workflows/tasks/my-task.ts`) — they will resolve correctly.",
+	].join("\n");
+}
+
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
 async function gatherContext(paths: ReplContextPaths): Promise<string | null> {
 	const [existing, schedules] = await Promise.all([
@@ -99,6 +116,10 @@ export async function startRepl(
 	let userInput = initialInput ?? (await prompt(`${label.user()} `));
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
+		{
+			type: "system",
+			content: buildWorkspaceContext(paths),
+		},
 		{
 			type: "user_input",
 			content: userInput,
