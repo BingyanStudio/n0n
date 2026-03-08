@@ -14,6 +14,7 @@ export interface FeishuSession {
 	history: DomainMessage[];
 	ctx: FeishuMessageContext;
 	paths: WorkspacePaths;
+	userInfo: FeishuUserInfo | null;
 	currentTask: {
 		abortController: AbortController;
 		startedAt: number;
@@ -48,6 +49,7 @@ export function getOrCreateSession(
 		history: createInitialHistory(systemPrompt, ctx, paths, userInfo),
 		ctx,
 		paths: paths,
+		userInfo: userInfo ?? null,
 		currentTask: null,
 	};
 	sessions.set(sessionKey, session);
@@ -65,6 +67,7 @@ export function resetSession(
 		history: createInitialHistory(systemPrompt, ctx, paths, userInfo),
 		ctx,
 		paths: paths,
+		userInfo: userInfo ?? null,
 		currentTask: null,
 	};
 	sessions.set(sessionKey, session);
@@ -104,13 +107,12 @@ export function resetSessionsByUser(
 			existing.currentTask.abortController.abort();
 			existing.currentTask = null;
 		}
-		existing.history = [
-			{ type: "system", content: systemPrompt },
-			{
-				type: "system",
-				content: buildFeishuSystemContext(existing.ctx, existing.paths),
-			},
-		];
+		existing.history = createInitialHistory(
+			systemPrompt,
+			existing.ctx,
+			existing.paths,
+			existing.userInfo,
+		);
 	}
 	return keys.length;
 }

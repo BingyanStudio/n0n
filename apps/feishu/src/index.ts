@@ -96,8 +96,13 @@ export async function startFeishuService(): Promise<void> {
 			const text = FeishuBot.readText(data);
 			if (!text) return;
 
+			if (!ctx.senderOpenId) {
+				console.warn("[feishu] message with empty senderOpenId, skipping");
+				return;
+			}
+
 			const sessionKey = buildSessionKey(ctx);
-			const workspacePaths = resolveFeishuPaths(ctx.senderOpenId ?? "unknown");
+			const workspacePaths = resolveFeishuPaths(ctx.senderOpenId);
 
 			// 懒加载用户信息（首次对话时调 API，后续按 TTL 刷新）
 			const userInfo = await ensureUserInfo(
@@ -168,8 +173,13 @@ export async function startFeishuService(): Promise<void> {
 			const ctx = FeishuBot.buildContextForMenu(data);
 			if (!ctx) return;
 
+			if (!ctx.senderOpenId) {
+				console.warn("[feishu] menu event with empty senderOpenId, skipping");
+				return;
+			}
+
 			const sessionKey = buildSessionKey(ctx);
-			const workspacePaths = resolveFeishuPaths(ctx.senderOpenId ?? "unknown");
+			const workspacePaths = resolveFeishuPaths(ctx.senderOpenId);
 
 			const userInfo = await ensureUserInfo(
 				bot,
