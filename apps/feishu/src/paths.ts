@@ -8,6 +8,7 @@
  * 此模块仅做路径计算，不调用 initConfig，避免并发请求间的全局状态竞争。
  */
 
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import type { WorkspacePaths } from "@n0n/core";
 
@@ -36,4 +37,24 @@ export function resolveFeishuPaths(senderOpenId: string): WorkspacePaths {
 		history: resolve(workspace, "workflows", "history"),
 		temp: resolve(workspace, ".temp"),
 	};
+}
+
+/**
+ * 扫描所有已有用户目录，返回每个用户的 WorkspacePaths。
+ * 跳过 shared/ 目录。
+ */
+export function discoverAllUserPaths(): WorkspacePaths[] {
+	if (!existsSync(FEISHU_BASE)) return [];
+
+	const entries = readdirSync(FEISHU_BASE);
+	const results: WorkspacePaths[] = [];
+
+	for (const entry of entries) {
+		if (entry === "shared") continue;
+		const fullPath = resolve(FEISHU_BASE, entry);
+		if (!statSync(fullPath).isDirectory()) continue;
+		results.push(resolveFeishuPaths(entry));
+	}
+
+	return results;
 }

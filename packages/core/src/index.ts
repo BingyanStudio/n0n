@@ -30,12 +30,11 @@ export {
 	INTERACTIVE_PROMPT_PATH,
 } from "./prompts/paths.ts";
 // 调度
-export type { ScheduleEntry } from "./scheduler/scheduler.ts";
+export type { ScheduleEntry, SchedulerHandle } from "./scheduler/scheduler.ts";
 export {
 	loadSchedules,
 	setScheduleEnabled,
 	startScheduler,
-	stopScheduler,
 } from "./scheduler/scheduler.ts";
 // Schema（供 cli 和 feishu 共享）
 export type { InteractiveResult } from "./schema.ts";
