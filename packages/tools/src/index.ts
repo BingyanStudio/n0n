@@ -131,5 +131,5 @@ export function makeToolkit(schema?: ZodType): Toolkit {
 
 export type { ToolsConfig } from "./config.ts";
 export { initToolsConfig } from "./config.ts";
-export { ENV_INFO } from "./exec.ts";
+export { getEnvInfo } from "./exec.ts";
 export type { PendingReminder } from "./reminder.ts";

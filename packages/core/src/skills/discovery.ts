@@ -54,13 +54,13 @@ export interface SkillContent extends SkillMeta {
 
 import { paths } from "../config.ts";
 
-const SKILLS_DIR = paths.skills;
+const DEFAULT_SKILLS_DIR = paths.skills;
 
 /**
  * 发现所有 skill：扫描 SKILL.md，只解析 frontmatter（轻量）
  */
 export async function discoverSkills(
-	baseDir = SKILLS_DIR,
+	baseDir = DEFAULT_SKILLS_DIR,
 ): Promise<SkillMeta[]> {
 	const absBase = resolve(baseDir);
 	if (!existsSync(absBase)) return [];

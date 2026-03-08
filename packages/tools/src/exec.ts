@@ -32,7 +32,6 @@ export const ExecArgsSchema = z.object({
 
 export type ExecArgs = z.infer<typeof ExecArgsSchema>;
 
-const PROJECT_ROOT = process.cwd();
 const IS_WINDOWS = process.platform === "win32";
 const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";
 
@@ -96,7 +95,7 @@ export const EXEC_TOOL_DEFINITION: LLMToolDefinition = {
 				},
 				cwd: {
 					type: "string",
-					description: "Working directory (default: project root)",
+					description: "Working directory (default: injected workspace root)",
 				},
 				timeout: {
 					type: "number",
@@ -110,11 +109,18 @@ export const EXEC_TOOL_DEFINITION: LLMToolDefinition = {
 	},
 };
 /** 运行环境摘要，供 system prompt 注入 */
-export const ENV_INFO = {
-	os: IS_WINDOWS ? "Windows" : process.platform,
-	shell: DEFAULT_RUNTIME,
-	cwd: PROJECT_ROOT,
-} as const;
+export function getEnvInfo(): {
+	os: string;
+	shell: string;
+	cwd: string;
+} {
+	const config = getToolsConfig();
+	return {
+		os: IS_WINDOWS ? "Windows" : process.platform,
+		shell: DEFAULT_RUNTIME,
+		cwd: config.workspace,
+	};
+}
 function extractCommandNames(script: string): string[] {
 	const parts = script.split(/\r?\n|&&|\|\||;|\||&/);
 	return parts
@@ -203,7 +209,7 @@ export async function* execToolStream(
 	confirmFn?: (question: string) => Promise<string>,
 ): AsyncGenerator<ToolStreamEvent> {
 	const runtime = args.runtime ?? DEFAULT_RUNTIME;
-	const cwd = args.cwd ?? PROJECT_ROOT;
+	const cwd = resolve(args.cwd ?? getToolsConfig().workspace);
 	const timeoutMs = (args.timeout ?? 120) * 1000;
 	const start = Date.now();
 

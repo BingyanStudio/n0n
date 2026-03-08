@@ -9,6 +9,8 @@ export interface ToolsConfig {
 	agent: {
 		defaultExecTimeout: number;
 	};
+	/** 工具默认工作区根目录 */
+	workspace: string;
 	/** 临时文件目录（exec 临时脚本等） */
 	tempDir: string;
 }
@@ -16,6 +18,7 @@ export interface ToolsConfig {
 let _config: ToolsConfig = {
 	security: { blockedCommands: [] },
 	agent: { defaultExecTimeout: 120_000 },
+	workspace: process.cwd(),
 	tempDir: ".temp",
 };
 

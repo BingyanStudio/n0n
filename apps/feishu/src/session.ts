@@ -4,6 +4,7 @@
  * 管理每个用户/群聊的对话状态（history、当前任务、去重）。
  */
 
+import type { WorkspacePaths } from "@n0n/core";
 import type { DomainMessage } from "@n0n/types";
 import type { FeishuMessageContext } from "./bot.ts";
 
@@ -12,6 +13,7 @@ import type { FeishuMessageContext } from "./bot.ts";
 export interface FeishuSession {
 	history: DomainMessage[];
 	ctx: FeishuMessageContext;
+	workspacePaths: WorkspacePaths;
 	currentTask: {
 		abortController: AbortController;
 		startedAt: number;
@@ -33,15 +35,18 @@ export function getOrCreateSession(
 	sessionKey: string,
 	ctx: FeishuMessageContext,
 	systemPrompt: string,
+	workspacePaths: WorkspacePaths,
 ): FeishuSession {
 	const existing = sessions.get(sessionKey);
 	if (existing) {
 		existing.ctx = ctx;
+		existing.workspacePaths = workspacePaths;
 		return existing;
 	}
 	const session: FeishuSession = {
 		history: createInitialHistory(systemPrompt, ctx),
 		ctx,
+		workspacePaths,
 		currentTask: null,
 	};
 	sessions.set(sessionKey, session);
@@ -52,10 +57,12 @@ export function resetSession(
 	sessionKey: string,
 	ctx: FeishuMessageContext,
 	systemPrompt: string,
+	workspacePaths: WorkspacePaths,
 ): FeishuSession {
 	const session: FeishuSession = {
 		history: createInitialHistory(systemPrompt, ctx),
 		ctx,
+		workspacePaths,
 		currentTask: null,
 	};
 	sessions.set(sessionKey, session);

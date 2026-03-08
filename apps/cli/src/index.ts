@@ -12,19 +12,56 @@
  */
 
 import { rmSync } from "node:fs";
+import { resolve } from "node:path";
 import { style, writeln } from "@n0n/cli-ui";
 import {
 	discoverWorkflows,
+	initConfig,
 	loadSchedules,
-	paths,
 	runWorkflow,
+	type WorkspacePaths,
 } from "@n0n/core";
 import { startRepl } from "./repl.ts";
 
 // ── 子命令路由 ──
 
+function resolveCliWorkspacePaths(args: string[]): {
+	workspacePaths: WorkspacePaths;
+	args: string[];
+} {
+	const nextArgs = [...args];
+	const workspaceFlagIndex = nextArgs.indexOf("--workspace");
+	const workspaceValue =
+		workspaceFlagIndex >= 0 ? nextArgs[workspaceFlagIndex + 1] : undefined;
+	if (workspaceFlagIndex >= 0) {
+		if (!workspaceValue) {
+			throw new Error("--workspace requires a directory argument");
+		}
+		nextArgs.splice(workspaceFlagIndex, 2);
+	}
+
+	const workspace = resolve(
+		workspaceValue ?? process.env.N0N_WORKSPACE ?? process.cwd(),
+	);
+	const workspacePaths = initConfig({
+		workspace,
+		workflows: ".runtime/workflows",
+		tasks: ".runtime/workflows/tasks",
+		skills: ".runtime/workflows/skills",
+		schedules: ".runtime/workflows/schedules",
+		memory: ".runtime/workflows/memory",
+		consultResult: ".runtime/workflows/consult-result",
+		history: ".runtime/workflows/history",
+		temp: ".runtime/temp",
+	});
+
+	return { workspacePaths, args: nextArgs };
+}
+
 async function main(): Promise<void> {
-	const args = process.argv.slice(2);
+	const resolved = resolveCliWorkspacePaths(process.argv.slice(2));
+	const args = resolved.args;
+	const workspacePaths = resolved.workspacePaths;
 	const command = args[0];
 
 	switch (command) {
@@ -34,13 +71,13 @@ async function main(): Promise<void> {
 				console.error("Usage: bun run apps/cli/src/index.ts run <workflow.ts>");
 				process.exit(1);
 			}
-			const result = await runWorkflow(workflowPath);
+			const result = await runWorkflow(workflowPath, undefined, workspacePaths);
 			console.log(JSON.stringify(result, null, 2));
 			return;
 		}
 
 		case "workflows": {
-			const workflows = await discoverWorkflows();
+			const workflows = await discoverWorkflows(false, workspacePaths);
 			if (workflows.length === 0) {
 				writeln(style.gray("No workflows found."));
 				return;
@@ -56,7 +93,7 @@ async function main(): Promise<void> {
 		case "schedule": {
 			const sub = args[1];
 			if (sub === "list" || !sub) {
-				const schedules = await loadSchedules();
+				const schedules = await loadSchedules(workspacePaths);
 				if (schedules.length === 0) {
 					writeln(style.gray("No schedules found."));
 					return;
@@ -76,22 +113,26 @@ async function main(): Promise<void> {
 
 		default: {
 			const initialInput = args.length > 0 ? args.join(" ") : undefined;
-			await startRepl(initialInput);
+			await startRepl(workspacePaths, initialInput);
 		}
 	}
 }
 
 // ── 进程生命周期 ──
 
-function cleanupTemp(): void {
+function cleanupTemp(workspacePaths: WorkspacePaths): void {
 	try {
-		rmSync(paths.temp, { recursive: true, force: true });
+		rmSync(workspacePaths.temp, { recursive: true, force: true });
 	} catch {}
 }
 
-process.on("exit", cleanupTemp);
+const processWorkspacePaths = resolveCliWorkspacePaths(
+	process.argv.slice(2),
+).workspacePaths;
+
+process.on("exit", () => cleanupTemp(processWorkspacePaths));
 process.on("SIGINT", () => {
-	cleanupTemp();
+	cleanupTemp(processWorkspacePaths);
 	process.exit(0);
 });
 

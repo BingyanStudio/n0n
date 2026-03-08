@@ -13,16 +13,19 @@ import {
 	InteractiveResultSchema,
 	loadSchedules,
 	PlainRenderer,
+	type WorkspacePaths,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 
 const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
 
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
-async function gatherContext(): Promise<string | null> {
+async function gatherContext(
+	workspacePaths: WorkspacePaths,
+): Promise<string | null> {
 	const [existing, schedules] = await Promise.all([
-		discoverWorkflows(),
-		loadSchedules(),
+		discoverWorkflows(false, workspacePaths),
+		loadSchedules(workspacePaths),
 	]);
 	const parts: string[] = [];
 	if (existing.length > 0) {
@@ -46,7 +49,10 @@ async function gatherContext(): Promise<string | null> {
 	return parts.length > 0 ? parts.join("\n") : null;
 }
 
-export async function startRepl(initialInput?: string): Promise<void> {
+export async function startRepl(
+	workspacePaths: WorkspacePaths,
+	initialInput?: string,
+): Promise<void> {
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
 
@@ -87,7 +93,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 		{
 			type: "user_input",
 			content: userInput,
-			context: await gatherContext(),
+			context: await gatherContext(workspacePaths),
 			capabilities: null,
 		},
 	];
@@ -114,7 +120,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 			history.push({
 				type: "user_input",
 				content: userInput,
-				context: await gatherContext(),
+				context: await gatherContext(workspacePaths),
 				capabilities: null,
 			});
 			continue;
@@ -155,7 +161,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				history.push({
 					type: "user_input",
 					content: userInput,
-					context: await gatherContext(),
+					context: await gatherContext(workspacePaths),
 					capabilities: null,
 				});
 				break;
@@ -172,7 +178,7 @@ export async function startRepl(initialInput?: string): Promise<void> {
 				history.push({
 					type: "user_input",
 					content: userInput,
-					context: await gatherContext(),
+					context: await gatherContext(workspacePaths),
 					capabilities: null,
 				});
 				continue;

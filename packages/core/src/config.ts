@@ -2,6 +2,7 @@
  * 全局配置 — 从环境变量读取，初始化所有子包配置
  */
 
+import { resolve } from "node:path";
 import { initLLMConfig } from "@n0n/llm";
 import { initToolsConfig } from "@n0n/tools";
 
@@ -21,26 +22,81 @@ function parseBlockedCommands(): string[] {
 }
 
 /**
- * 工作流相关路径 — 统一管理，避免硬编码散布在各模块中
+ * 工作区路径集合 — 使用显式路径配置，避免隐式全局状态。
  */
-export const paths = {
-	/** 工作流根目录 */
-	workflows: process.env.WORKFLOWS_DIR ?? "workflows",
-	/** 任务工作流目录 */
-	tasks: process.env.TASKS_DIR ?? "workflows/tasks",
-	/** Agent Skills 目录 */
-	skills: process.env.SKILLS_DIR ?? "workflows/skills",
-	/** 定时任务配置目录 */
-	schedules: process.env.SCHEDULES_DIR ?? "workflows/schedules",
-	/** 记忆/知识库目录 */
-	memory: process.env.MEMORY_DIR ?? "workflows/memory",
-	/** 咨询结果缓存目录 */
-	consultResult: process.env.CONSULT_RESULT_DIR ?? "workflows/consult-result",
-	/** 历史记录目录 */
-	history: process.env.HISTORY_DIR ?? "workflows/history",
-	/** 临时文件目录（exec 临时脚本等，进程退出时清理） */
-	temp: process.env.TEMP_DIR ?? ".temp",
-} as const;
+export interface WorkspacePaths {
+	workspace: string;
+	workflows: string;
+	tasks: string;
+	skills: string;
+	schedules: string;
+	memory: string;
+	consultResult: string;
+	history: string;
+	temp: string;
+}
+
+export interface PathConfig {
+	workspace?: string;
+	workflows?: string;
+	tasks?: string;
+	skills?: string;
+	schedules?: string;
+	memory?: string;
+	consultResult?: string;
+	history?: string;
+	temp?: string;
+}
+
+/**
+ * 解析工作区路径。
+ *
+ * 默认保持向后兼容：未注入时仍基于当前进程工作目录与环境变量。
+ */
+export function resolvePaths(pathConfig: PathConfig = {}): WorkspacePaths {
+	const workspace = resolve(pathConfig.workspace ?? process.cwd());
+	return {
+		workspace,
+		workflows: resolve(
+			workspace,
+			pathConfig.workflows ?? process.env.WORKFLOWS_DIR ?? "workflows",
+		),
+		tasks: resolve(
+			workspace,
+			pathConfig.tasks ?? process.env.TASKS_DIR ?? "workflows/tasks",
+		),
+		skills: resolve(
+			workspace,
+			pathConfig.skills ?? process.env.SKILLS_DIR ?? "workflows/skills",
+		),
+		schedules: resolve(
+			workspace,
+			pathConfig.schedules ??
+				process.env.SCHEDULES_DIR ??
+				"workflows/schedules",
+		),
+		memory: resolve(
+			workspace,
+			pathConfig.memory ?? process.env.MEMORY_DIR ?? "workflows/memory",
+		),
+		consultResult: resolve(
+			workspace,
+			pathConfig.consultResult ??
+				process.env.CONSULT_RESULT_DIR ??
+				"workflows/consult-result",
+		),
+		history: resolve(
+			workspace,
+			pathConfig.history ?? process.env.HISTORY_DIR ?? "workflows/history",
+		),
+		temp: resolve(
+			workspace,
+			pathConfig.temp ?? process.env.TEMP_DIR ?? ".temp",
+		),
+	};
+}
+
+export const paths = resolvePaths();
 
 export const config = {
 	llm: {
@@ -62,13 +118,16 @@ export const config = {
 /**
  * 初始化所有子包配置（应用启动时调用一次）
  */
-export function initConfig(): void {
+export function initConfig(pathConfig: PathConfig = {}): WorkspacePaths {
+	const resolvedPaths = resolvePaths(pathConfig);
 	initLLMConfig(config.llm);
 	initToolsConfig({
 		security: config.security,
 		agent: config.agent,
-		tempDir: paths.temp,
+		workspace: resolvedPaths.workspace,
+		tempDir: resolvedPaths.temp,
 	});
+	return resolvedPaths;
 }
 
 // 自动初始化
