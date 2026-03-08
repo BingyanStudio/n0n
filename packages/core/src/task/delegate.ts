@@ -9,7 +9,7 @@ import { getEnvInfo } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
-import { type PathConfig, paths, resolvePaths } from "../config.ts";
+import { type PathConfig, lagacy_paths, resolvePaths } from "../config.ts";
 import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
@@ -35,7 +35,7 @@ export async function delegateTask<T = unknown>(
 ): Promise<TaskResult<T>> {
 	const resolvedPaths = options?.pathConfig
 		? resolvePaths(options.pathConfig)
-		: paths;
+		: lagacy_paths;
 	const allSkills = await discoverSkills(resolvedPaths.skills);
 	const skillSummaryText = formatSkillSummaries(allSkills);
 

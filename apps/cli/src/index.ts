@@ -129,9 +129,9 @@ async function main(): Promise<void> {
 
 // ── 进程生命周期 ──
 
-function cleanupTemp(workspacePaths: CliTempPaths): void {
+function cleanupTemp(paths: CliTempPaths): void {
 	try {
-		rmSync(workspacePaths.temp, { recursive: true, force: true });
+		rmSync(paths.temp, { recursive: true, force: true });
 	} catch {}
 }
 

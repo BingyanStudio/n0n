@@ -22,11 +22,11 @@ type ReplContextPaths = Pick<WorkspacePaths, "tasks" | "skills" | "schedules">;
 
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
 async function gatherContext(
-	workspacePaths: ReplContextPaths,
+	paths: ReplContextPaths,
 ): Promise<string | null> {
 	const [existing, schedules] = await Promise.all([
-		discoverWorkflows(false, workspacePaths),
-		loadSchedules(workspacePaths),
+		discoverWorkflows(false, paths),
+		loadSchedules(paths),
 	]);
 	const parts: string[] = [];
 	if (existing.length > 0) {
@@ -51,7 +51,7 @@ async function gatherContext(
 }
 
 export async function startRepl(
-	workspacePaths: ReplContextPaths,
+	paths: ReplContextPaths,
 	initialInput?: string,
 ): Promise<void> {
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
@@ -94,7 +94,7 @@ export async function startRepl(
 		{
 			type: "user_input",
 			content: userInput,
-			context: await gatherContext(workspacePaths),
+			context: await gatherContext(paths),
 			capabilities: null,
 		},
 	];
@@ -121,7 +121,7 @@ export async function startRepl(
 			history.push({
 				type: "user_input",
 				content: userInput,
-				context: await gatherContext(workspacePaths),
+				context: await gatherContext(paths),
 				capabilities: null,
 			});
 			continue;
@@ -162,7 +162,7 @@ export async function startRepl(
 				history.push({
 					type: "user_input",
 					content: userInput,
-					context: await gatherContext(workspacePaths),
+					context: await gatherContext(paths),
 					capabilities: null,
 				});
 				break;
@@ -179,7 +179,7 @@ export async function startRepl(
 				history.push({
 					type: "user_input",
 					content: userInput,
-					context: await gatherContext(workspacePaths),
+					context: await gatherContext(paths),
 					capabilities: null,
 				});
 				break;

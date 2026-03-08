@@ -96,7 +96,10 @@ export function resolvePaths(pathConfig: PathConfig = {}): WorkspacePaths {
 	};
 }
 
-export const paths = resolvePaths();
+/**
+ * @deprecated 旧版全局路径配置，保持向后兼容，建议逐步迁移到显式路径配置。
+ */
+export const lagacy_paths = resolvePaths();
 
 export const config = {
 	llm: {

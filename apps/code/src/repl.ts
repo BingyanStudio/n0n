@@ -61,12 +61,12 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 }
 
 export async function startCodeRepl(
-	workspacePaths: CodeWorkspacePaths,
+	paths: CodeWorkspacePaths,
 	initialInput?: string,
 ): Promise<void> {
 	initConfig({
-		workspace: workspacePaths.workspace,
-		temp: workspacePaths.temp,
+		workspace: paths.workspace,
+		temp: paths.temp,
 	});
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
@@ -98,7 +98,7 @@ export async function startCodeRepl(
 		{
 			type: "user_input",
 			content: userInput,
-			context: await gatherContext(workspacePaths.workspace),
+			context: await gatherContext(paths.workspace),
 			capabilities: null,
 		},
 	];
@@ -122,7 +122,7 @@ export async function startCodeRepl(
 			history.push({
 				type: "user_input",
 				content: userInput,
-				context: await gatherContext(workspacePaths.workspace),
+				context: await gatherContext(paths.workspace),
 				capabilities: null,
 			});
 			continue;
@@ -151,7 +151,7 @@ export async function startCodeRepl(
 				history.push({
 					type: "user_input",
 					content: userInput,
-					context: await gatherContext(workspacePaths.workspace),
+					context: await gatherContext(paths.workspace),
 					capabilities: null,
 				});
 				break;

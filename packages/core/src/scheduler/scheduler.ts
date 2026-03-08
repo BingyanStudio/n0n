@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
 import { z } from "zod";
-import { paths, type WorkspacePaths } from "../config.ts";
+import { lagacy_paths, type WorkspacePaths } from "../config.ts";
 import { delegateTask } from "../task/delegate.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
@@ -33,9 +33,9 @@ const ScheduleFrontmatterSchema = z.object({
 });
 
 export async function loadSchedules(
-	workspacePaths: SchedulePaths = paths,
+	paths: SchedulePaths = lagacy_paths,
 ): Promise<ScheduleEntry[]> {
-	const dir = resolve(workspacePaths.schedules);
+	const dir = resolve(paths.schedules);
 	if (!existsSync(dir)) return [];
 
 	const glob = new Glob("**/*.mdc");
@@ -68,9 +68,9 @@ export async function loadSchedules(
 export async function setScheduleEnabled(
 	name: string,
 	enabled: boolean,
-	workspacePaths: SchedulePaths = paths,
+	paths: SchedulePaths = lagacy_paths,
 ): Promise<ScheduleEntry | null> {
-	const entries = await loadSchedules(workspacePaths);
+	const entries = await loadSchedules(paths);
 	const target = entries.find((entry) => entry.name === name);
 	if (!target) return null;
 
@@ -105,20 +105,20 @@ export async function setScheduleEnabled(
 let running = false;
 
 export async function startScheduler(
-	workspacePaths: SchedulerPaths = paths,
+	paths: SchedulerPaths = lagacy_paths,
 ): Promise<void> {
 	if (running) return;
 	running = true;
 
 	console.log(
-		`[scheduler] Started. Watching ${workspacePaths.schedules}/*.mdc every 60s.`,
+		`[scheduler] Started. Watching ${paths.schedules}/*.mdc every 60s.`,
 	);
 
 	const tick = async () => {
 		if (!running) return;
 
 		const now = new Date();
-		const entries = await loadSchedules(workspacePaths);
+		const entries = await loadSchedules(paths);
 
 		for (const entry of entries) {
 			if (!entry.enabled) continue;
