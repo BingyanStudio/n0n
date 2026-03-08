@@ -15,12 +15,7 @@ export type { AgentOptions, AgentResult } from "./agent/loop.ts";
 export { agentLoop } from "./agent/loop.ts";
 // 路径配置
 export type { PathConfig, WorkspacePaths } from "./config.ts";
-export {
-	getCurrentPaths,
-	initConfig,
-	legacy_paths as paths,
-	resolvePaths,
-} from "./config.ts";
+export { getCurrentPaths, initConfig, resolvePaths } from "./config.ts";
 // 发现层
 export type { SkillContent, SkillMeta, WorkflowMeta } from "./discovery.ts";
 export {
