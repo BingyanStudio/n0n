@@ -210,12 +210,15 @@ export async function agentLoop<T = unknown>(
 			messages.push(result);
 
 			if (result.tool === "submit") {
-				const validation = validateSubmit(result.result, options?.schema);
+				const validation = validateSubmit(
+					result.cleanedResult,
+					options?.schema,
+				);
 				if (validation.ok) {
 					renderer.submitAccepted();
 					return {
 						result: validation.value,
-						report: result.report,
+						report: result.call.args.report ?? null,
 						history: messages,
 					};
 				}

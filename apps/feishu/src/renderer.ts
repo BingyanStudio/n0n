@@ -94,15 +94,17 @@ function fmtResult(r: ToolResult): string {
 		case "exec":
 			return `exit=${r.exitCode}  ${(r.durationMs / 1000).toFixed(1)}s`;
 		case "write":
-			return r.success ? r.path : `${r.path}: ${r.error ?? "failed"}`;
+			return r.success
+				? r.call.args.path
+				: `${r.call.args.path}: ${r.error ?? "failed"}`;
 		case "edit":
 			return r.success
-				? `${r.path} (${r.replacedCount}× replaced)`
-				: `${r.path}: ${r.error ?? "failed"}`;
+				? `${r.call.args.path} (${r.replacedCount}× replaced)`
+				: `${r.call.args.path}: ${r.error ?? "failed"}`;
 		case "reminder":
-			return `delay=${r.delay}`;
+			return `delay=${r.call.args.delay ?? 0}`;
 		case "submit":
-			return compact(json(r.result), 120);
+			return compact(json(r.cleanedResult), 120);
 	}
 }
 

@@ -8,16 +8,18 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import type { ExecToolCall } from "@n0n/types";
 import { ExecArgsSchema, execToolStream } from "../exec.ts";
 
 /** 收集 exec 流式输出的最终结果 */
 async function collectExecResult(script: string, runtime?: string) {
 	const args = ExecArgsSchema.parse({ script, runtime });
+	const call: ExecToolCall = { id: "test-id", tool: "exec", args };
 	let stdout = "";
 	let stderr = "";
 	let exitCode = -1;
 
-	for await (const event of execToolStream("test-id", args)) {
+	for await (const event of execToolStream(call)) {
 		if (event.type === "tool_result" && event.tool === "exec") {
 			stdout = event.stdout;
 			stderr = event.stderr;

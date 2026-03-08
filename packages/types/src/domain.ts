@@ -54,88 +54,37 @@ export interface AssistantToolCallMessage {
 	toolCalls: ToolCallRecord[];
 }
 
-// ── 工具参数类型（Single Source of Truth） ──
-// Zod schema（@n0n/tools）应与这些接口保持一致；
-// 修改字段时 tsc 会在所有消费方报错。
-// 每个接口包含索引签名以兼容 Record<string, unknown>（LLM 可能传入额外字段）。
-
-export interface ExecToolArgs {
-	[key: string]: unknown;
-	script: string;
-	runtime?: string;
-	cwd?: string;
-	timeout?: number;
-}
-
-export interface WriteToolArgs {
-	[key: string]: unknown;
-	path: string;
-	content: string;
-}
-
-export interface EditToolArgs {
-	[key: string]: unknown;
-	path: string;
-	search: string;
-	replace: string;
-	expectedMatches?: number;
-}
-
-export interface ReminderToolArgs {
-	[key: string]: unknown;
-	content: string;
-	delay?: number;
-}
-
-export interface SubmitToolArgs {
-	[key: string]: unknown;
-	result: unknown;
-	report?: string;
-}
-
-/** 工具名 → 参数类型映射 */
-export interface ToolArgsMap {
-	exec: ExecToolArgs;
-	write: WriteToolArgs;
-	edit: EditToolArgs;
-	reminder: ReminderToolArgs;
-	submit: SubmitToolArgs;
-}
-
-export type ToolName = keyof ToolArgsMap;
-
 // ── 工具调用记录（判别联合） ──
+// 参数类型由 tool-args.ts 中的 Zod schema 推断（SSoT）
+
+import type {
+	EditArgs,
+	ExecArgs,
+	ReminderArgs,
+	SubmitArgs,
+	WriteArgs,
+} from "./tool-args.ts";
 
 interface ToolCallBase {
 	id: string;
 }
 
-export type ExecToolCall = ToolCallBase & {
-	tool: "exec";
-	args: ExecToolArgs;
-};
-export type WriteToolCall = ToolCallBase & {
-	tool: "write";
-	args: WriteToolArgs;
-};
-export type EditToolCall = ToolCallBase & {
-	tool: "edit";
-	args: EditToolArgs;
-};
+export type ExecToolCall = ToolCallBase & { tool: "exec"; args: ExecArgs };
+export type WriteToolCall = ToolCallBase & { tool: "write"; args: WriteArgs };
+export type EditToolCall = ToolCallBase & { tool: "edit"; args: EditArgs };
 export type ReminderToolCall = ToolCallBase & {
 	tool: "reminder";
-	args: ReminderToolArgs;
+	args: ReminderArgs;
 };
 export type SubmitToolCall = ToolCallBase & {
 	tool: "submit";
-	args: SubmitToolArgs;
+	args: SubmitArgs;
 };
 
 /**
  * 工具调用记录 — 判别联合，通过 tool 字段窄化 args 类型。
- *
- * 仅包含已注册工具；LLM 可能发送未注册工具名，
- * 解析阶段使用 UntypedToolCall（未校验），执行阶段再窄化为 ToolCallRecord。
+ * 参数类型来自 tool-args.ts 中的 Zod schema（z.infer），
+ * 修改 schema 字段时 tsc 会在所有消费方报错。
  */
 export type ToolCallRecord =
 	| ExecToolCall
@@ -144,71 +93,53 @@ export type ToolCallRecord =
 	| ReminderToolCall
 	| SubmitToolCall;
 
-/**
- * 未经类型校验的工具调用（parseToolCalls 的输出）。
- * tool 和 args 均为宽类型；执行器负责 Zod 校验后窄化。
- */
-export interface UntypedToolCall extends ToolCallBase {
-	tool: string;
-	args: Record<string, unknown>;
+// ── 工具结果 ──
+// 每个 Result 嵌入原始 ToolCall（call 字段）。
+// call = LLM 原始调用参数；顶层字段 = 执行产出。
+// tool 字段与 call.tool 始终一致，用于判别联合窄化（TS 不支持嵌套属性窄化）。
+
+interface ToolResultBase {
+	type: "tool_result";
 }
 
-// ── 工具结果 ──
-
-export interface ExecToolResult {
-	type: "tool_result";
-	callId: string;
-	tool: "exec";
-	/** 来自 ExecToolArgs.script */
-	script: string;
-	/** 来自 ExecToolArgs.runtime */
-	runtime: string;
-	/** 来自 ExecToolArgs.cwd（执行时解析为绝对路径） */
-	cwd: string;
+export type ExecToolResult = ToolResultBase & {
+	tool: ExecToolCall["tool"]; // "exec"
+	call: ExecToolCall;
 	exitCode: number;
 	stdout: string;
 	stderr: string;
 	durationMs: number;
-}
+};
 
-export interface WriteToolResult {
-	type: "tool_result";
-	callId: string;
-	tool: "write";
-	path: string;
+export type WriteToolResult = ToolResultBase & {
+	tool: WriteToolCall["tool"]; // "write"
+	call: WriteToolCall;
 	success: boolean;
 	error: string | null;
-}
+};
 
-export interface EditToolResult {
-	type: "tool_result";
-	callId: string;
-	tool: "edit";
-	path: string;
-	searchPattern: string;
+export type EditToolResult = ToolResultBase & {
+	tool: EditToolCall["tool"]; // "edit"
+	call: EditToolCall;
 	replacedCount: number;
 	success: boolean;
 	error: string | null;
-}
+};
 
-export interface ReminderToolResult {
-	type: "tool_result";
-	callId: string;
-	tool: "reminder";
-	content: string;
-	delay: number;
+export type ReminderToolResult = ToolResultBase & {
+	tool: ReminderToolCall["tool"]; // "reminder"
+	call: ReminderToolCall;
 	acknowledged: true;
-}
+};
 
-export interface SubmitToolResult {
-	type: "tool_result";
-	callId: string;
-	tool: "submit";
-	result: unknown;
-	report: string | null;
+export type SubmitToolResult = ToolResultBase & {
+	tool: SubmitToolCall["tool"]; // "submit"
+	call: SubmitToolCall;
+	/** 经 extractSubmitResult 处理后的最终结果（有 schema 时 ≠ call.args.result） */
+	cleanedResult: unknown;
 	/** 用户对 submit 结果的回应（由 REPL 注入，非模型生成） */
 	userResponse?: string;
-}
+};
 
 export type ToolResult =
 	| ExecToolResult

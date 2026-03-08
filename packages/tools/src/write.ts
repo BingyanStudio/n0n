@@ -8,23 +8,11 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type {
 	LLMToolDefinition,
-	WriteToolArgs,
+	WriteToolCall,
 	WriteToolResult,
 } from "@n0n/types";
-import { z } from "zod";
 
-/** write 工具参数 schema */
-export const WriteArgsSchema = z.object({
-	path: z.string(),
-	content: z.string(),
-});
-
-export type WriteArgs = z.infer<typeof WriteArgsSchema>;
-
-// 编译期校验：Zod schema 推断类型必须与 @n0n/types 中的接口兼容
-type _AssertWriteArgs = WriteArgs extends WriteToolArgs ? true : never;
-type _AssertWriteArgsReverse = WriteToolArgs extends WriteArgs ? true : never;
-const _checkWriteArgs: _AssertWriteArgs & _AssertWriteArgsReverse = true;
+export { WriteArgsSchema } from "@n0n/types";
 
 export const WRITE_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",
@@ -51,34 +39,31 @@ export const WRITE_TOOL_DEFINITION: LLMToolDefinition = {
 };
 
 export async function writeTool(
-	callId: string,
-	args: WriteArgs,
+	call: WriteToolCall,
 	workspace: string,
 ): Promise<WriteToolResult> {
-	const filePath = isAbsolute(args.path)
-		? args.path
-		: resolve(workspace, args.path);
+	const filePath = isAbsolute(call.args.path)
+		? call.args.path
+		: resolve(workspace, call.args.path);
 
 	try {
 		const dir = dirname(filePath);
 		if (!existsSync(dir)) {
 			mkdirSync(dir, { recursive: true });
 		}
-		await Bun.write(filePath, args.content);
+		await Bun.write(filePath, call.args.content);
 		return {
 			type: "tool_result",
-			callId,
-			tool: "write",
-			path: args.path,
+			tool: "write" as const,
+			call,
 			success: true,
 			error: null,
 		};
 	} catch (err) {
 		return {
 			type: "tool_result",
-			callId,
-			tool: "write",
-			path: args.path,
+			tool: "write" as const,
+			call,
 			success: false,
 			error: err instanceof Error ? err.message : String(err),
 		};
