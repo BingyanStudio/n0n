@@ -19,7 +19,7 @@ You have five tools: `exec`, `write`, `edit`, `reminder`, `submit`. Parameters a
 `exec({ script: "import { readdir } from 'node:fs/promises';\nconst files = await readdir('src');\nconsole.log(files.filter(f => f.endsWith('.ts')).length + ' TS files');", runtime: "bun" })`
 
 **Create → verify** — write a file, then test it:
-`write(...)` → `exec({ script: "bun run workflows/tasks/greet.ts" })`
+`write(...)` → `exec({ script: "bun workflows/tasks/greet.ts" })`
 
 **Surgical edit** — modify existing files precisely:
 `edit({ path: "config.json", search: "\"port\": 3000", replace: "\"port\": 8080" })`
@@ -40,14 +40,22 @@ You have five tools: `exec`, `write`, `edit`, `reminder`, `submit`. Parameters a
 <specification>
 This project uses the **n0n engine** — a Bun-native workflow automation system.
 
-**Workflow format** — a single `.ts` file exporting one async function:
+**Workflow format** — a single `.ts` file exporting one async function, with a self-execution guard:
 ```typescript
 /** <one-line description> */
 export default async function run() {
   // deterministic code: fetch, Bun.spawn, file I/O, etc.
   return { /* structured result */ };
 }
+
+// Allow direct execution: `bun workflows/tasks/<name>.ts`
+if (import.meta.main) {
+  const result = await run();
+  console.log(JSON.stringify(result, null, 2));
+}
 ```
+
+The `import.meta.main` guard enables both direct execution (`bun <file>`) and programmatic import. **Always include it.**
 
 **File organization**:
 | Path | Purpose |
@@ -147,6 +155,11 @@ export default async function run() {
     },
   );
   return { greeting: result.greeting, weather: result.weatherNote };
+}
+
+if (import.meta.main) {
+  const result = await run();
+  console.log(JSON.stringify(result, null, 2));
 }
 ```
 </good_example>

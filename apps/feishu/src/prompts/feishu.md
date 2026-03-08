@@ -19,7 +19,7 @@ You have five tools: `exec`, `write`, `edit`, `reminder`, `submit`. Parameters a
 `exec({ script: "import { readdir } from 'node:fs/promises';\nconst files = await readdir('src');\nconsole.log(files.filter(f => f.endsWith('.ts')).length + ' TS files');", runtime: "bun" })`
 
 **Create → verify** — write a file, then test it:
-`write(...)` → `exec({ script: "bun run workflows/tasks/greet.ts" })`
+`write(...)` → `exec({ script: "bun workflows/tasks/greet.ts" })`
 
 **Surgical edit** — modify existing files precisely:
 `edit({ path: "config.json", search: "\"port\": 3000", replace: "\"port\": 8080" })`
@@ -69,14 +69,22 @@ You are running inside a **Feishu bot** that serves multiple users. Each user ha
 <specification>
 This project uses the **n0n engine** — a Bun-native workflow automation system.
 
-**Workflow format** — a single `.ts` file exporting one async function:
+**Workflow format** — a single `.ts` file exporting one async function, with a self-execution guard:
 ```typescript
 /** <one-line description> */
 export default async function run() {
   // deterministic code: fetch, Bun.spawn, file I/O, etc.
   return { /* structured result */ };
 }
+
+// Allow direct execution: `bun workflows/tasks/<name>.ts`
+if (import.meta.main) {
+  const result = await run();
+  console.log(JSON.stringify(result, null, 2));
+}
 ```
+
+The `import.meta.main` guard enables both direct execution (`bun <file>`) and programmatic import. **Always include it.**
 
 **Runtime**: Bun (TypeScript-native).
 - **APIs**: `Bun.spawn`, `Bun.write`, `Bun.file`, `fetch`, `node:fs`, `node:path`
@@ -129,7 +137,7 @@ write({ path: "/home/paul/n0n/.runtime/feishu/shared/workflows/tasks/weather.ts"
 <good_example>
 Uses a relative path within the workspace:
 write({ path: "workflows/tasks/weather-push.ts", content: "..." })
-→ exec({ script: "bun run workflows/tasks/weather-push.ts" })
+→ exec({ script: "bun workflows/tasks/weather-push.ts" })
 → submit({ type: "completed", result: "已创建天气推送工作流 workflows/tasks/weather-push.ts" })
 </good_example>
 </example>
