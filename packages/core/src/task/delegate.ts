@@ -15,6 +15,7 @@ import {
 	type PathConfig,
 	resolvePaths,
 } from "../config.ts";
+import { formatAgentsMdPrompt, loadAgentsMd } from "../prompts/agents-md.ts";
 import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
@@ -146,9 +147,14 @@ export async function delegateTask<T = unknown>(
 		: "You are on a Unix-like system. Standard shell commands (cat, ls, grep, etc.) are available.";
 
 	const promptTemplate = await Bun.file(PROMPT_PATH).text();
-	const systemPrompt = promptTemplate
+	let systemPrompt = promptTemplate
 		.replace("{{ENV_LINE}}", envLine)
 		.replace("{{SHELL_HINT}}", shellHint);
+
+	const agentsMd = await loadAgentsMd(resolvedPaths.workspace);
+	if (agentsMd) {
+		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
+	}
 
 	const history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },

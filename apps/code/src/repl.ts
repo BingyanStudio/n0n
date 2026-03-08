@@ -12,7 +12,8 @@ import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 import {
 	agentLoop,
-	initConfig,
+	formatAgentsMdPrompt,
+	loadAgentsMd,
 	PlainRenderer,
 	type WorkspacePaths,
 } from "@n0n/core";
@@ -64,11 +65,11 @@ export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
 	initialInput?: string,
 ): Promise<void> {
-	initConfig({
-		workspace: paths.workspace,
-		temp: paths.temp,
-	});
-	const systemPrompt = await Bun.file(PROMPT_PATH).text();
+	let systemPrompt = await Bun.file(PROMPT_PATH).text();
+	const agentsMd = await loadAgentsMd(paths.workspace);
+	if (agentsMd) {
+		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
+	}
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
 
 	const rl = createInterface({

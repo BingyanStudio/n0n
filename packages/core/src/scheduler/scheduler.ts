@@ -6,14 +6,24 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
 import { z } from "zod";
-import { lagacy_paths, type WorkspacePaths } from "../config.ts";
+import { getCurrentPaths, type WorkspacePaths } from "../config.ts";
 import { delegateTask } from "../task/delegate.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
 
 export type SchedulePaths = Pick<WorkspacePaths, "schedules">;
-export type SchedulerPaths = Pick<WorkspacePaths, "schedules">;
+export type SchedulerPaths = Pick<
+	WorkspacePaths,
+	| "schedules"
+	| "workspace"
+	| "tasks"
+	| "skills"
+	| "memory"
+	| "consultResult"
+	| "history"
+	| "temp"
+>;
 
 export interface ScheduleEntry {
 	name: string;
@@ -33,7 +43,7 @@ const ScheduleFrontmatterSchema = z.object({
 });
 
 export async function loadSchedules(
-	paths: SchedulePaths = lagacy_paths,
+	paths: SchedulePaths = getCurrentPaths(),
 ): Promise<ScheduleEntry[]> {
 	const dir = resolve(paths.schedules);
 	if (!existsSync(dir)) return [];
@@ -68,7 +78,7 @@ export async function loadSchedules(
 export async function setScheduleEnabled(
 	name: string,
 	enabled: boolean,
-	paths: SchedulePaths = lagacy_paths,
+	paths: SchedulePaths = getCurrentPaths(),
 ): Promise<ScheduleEntry | null> {
 	const entries = await loadSchedules(paths);
 	const target = entries.find((entry) => entry.name === name);
@@ -105,7 +115,7 @@ export async function setScheduleEnabled(
 let running = false;
 
 export async function startScheduler(
-	paths: SchedulerPaths = lagacy_paths,
+	paths: SchedulerPaths = getCurrentPaths(),
 ): Promise<void> {
 	if (running) return;
 	running = true;
@@ -130,7 +140,9 @@ export async function startScheduler(
 				console.log(`[scheduler] Triggering: ${entry.name}`);
 
 				if (entry.workflow) {
-					runWorkflow(entry.workflow).then(
+					// workflow 路径基于 workspace 解析
+					const workflowPath = resolve(paths.workspace, entry.workflow);
+					runWorkflow(workflowPath).then(
 						(result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
@@ -142,7 +154,8 @@ export async function startScheduler(
 						},
 					);
 				} else {
-					delegateTask(entry.prompt).then(
+					// 传播 workspace 配置给 delegateTask
+					delegateTask(entry.prompt, { pathConfig: paths }).then(
 						(result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,

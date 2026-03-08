@@ -12,7 +12,7 @@
  */
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import type {
 	ExecToolResult,
 	LLMToolDefinition,
@@ -207,9 +207,16 @@ export async function* execToolStream(
 	callId: string,
 	args: ExecArgs,
 	confirmFn?: (question: string) => Promise<string>,
+	workspaceOverride?: { workspace: string; tempDir: string },
 ): AsyncGenerator<ToolStreamEvent> {
 	const runtime = args.runtime ?? DEFAULT_RUNTIME;
-	const cwd = resolve(args.cwd ?? getToolsConfig().workspace);
+	// 相对路径基于 workspace 解析，绝对路径保持不变
+	const workspace = workspaceOverride?.workspace ?? getToolsConfig().workspace;
+	const cwd = args.cwd
+		? isAbsolute(args.cwd)
+			? args.cwd
+			: resolve(workspace, args.cwd)
+		: workspace;
 	const timeoutMs = (args.timeout ?? 120) * 1000;
 	const start = Date.now();
 
@@ -231,7 +238,9 @@ export async function* execToolStream(
 
 	// Write script to temp file, execute with specified runtime
 	const ext = RUNTIME_EXT[runtime] ?? "";
-	const tempDir = resolve(getToolsConfig().tempDir);
+	const tempDir = resolve(
+		workspaceOverride?.tempDir ?? getToolsConfig().tempDir,
+	);
 	if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
 	const tmpFile = join(
 		tempDir,

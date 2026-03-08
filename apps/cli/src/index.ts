@@ -49,14 +49,14 @@ function resolveCliWorkspacePaths(args: string[]): {
 	);
 	const workspacePaths = initConfig({
 		workspace,
-		workflows: ".runtime/workflows",
-		tasks: ".runtime/workflows/tasks",
-		skills: ".runtime/workflows/skills",
-		schedules: ".runtime/workflows/schedules",
-		memory: ".runtime/workflows/memory",
-		consultResult: ".runtime/workflows/consult-result",
-		history: ".runtime/workflows/history",
-		temp: ".runtime/temp",
+		workflows: ".runtime/cli/workflows",
+		tasks: ".runtime/cli/workflows/tasks",
+		skills: ".runtime/cli/workflows/skills",
+		schedules: ".runtime/cli/workflows/schedules",
+		memory: ".runtime/cli/workflows/memory",
+		consultResult: ".runtime/cli/workflows/consult-result",
+		history: ".runtime/cli/workflows/history",
+		temp: ".runtime/cli/temp",
 	});
 
 	return { workspacePaths, args: nextArgs };

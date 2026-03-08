@@ -8,9 +8,11 @@ import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 import {
 	agentLoop,
 	discoverWorkflows,
+	formatAgentsMdPrompt,
 	INTERACTIVE_PROMPT_PATH,
 	type InteractiveResult,
 	InteractiveResultSchema,
+	loadAgentsMd,
 	loadSchedules,
 	PlainRenderer,
 	type WorkspacePaths,
@@ -18,7 +20,10 @@ import {
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 
 const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
-type ReplContextPaths = Pick<WorkspacePaths, "tasks" | "skills" | "schedules">;
+type ReplContextPaths = Pick<
+	WorkspacePaths,
+	"workspace" | "tasks" | "skills" | "schedules"
+>;
 
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
 async function gatherContext(paths: ReplContextPaths): Promise<string | null> {
@@ -52,7 +57,11 @@ export async function startRepl(
 	paths: ReplContextPaths,
 	initialInput?: string,
 ): Promise<void> {
-	const systemPrompt = await Bun.file(PROMPT_PATH).text();
+	let systemPrompt = await Bun.file(PROMPT_PATH).text();
+	const agentsMd = await loadAgentsMd(paths.workspace);
+	if (agentsMd) {
+		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
+	}
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
 
 	const rl = createInterface({

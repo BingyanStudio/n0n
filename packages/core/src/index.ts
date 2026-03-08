@@ -18,7 +18,7 @@ export type { PathConfig, WorkspacePaths } from "./config.ts";
 export {
 	getCurrentPaths,
 	initConfig,
-	lagacy_paths as paths,
+	legacy_paths as paths,
 	resolvePaths,
 } from "./config.ts";
 // 发现层
@@ -28,6 +28,7 @@ export {
 	discoverWorkflows,
 	loadSkillContent,
 } from "./discovery.ts";
+export { formatAgentsMdPrompt, loadAgentsMd } from "./prompts/agents-md.ts";
 // Prompt 模板
 export {
 	DELEGATE_PROMPT_PATH,

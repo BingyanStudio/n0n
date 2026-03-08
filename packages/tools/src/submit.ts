@@ -113,7 +113,25 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 	// 将 Zod schema 转为 JSON Schema，提取 properties 和 required
 	const jsonSchema = toJSONSchema(schema) as JsonSchema;
 	const schemaProperties = flattenVariantProperties(jsonSchema);
-	const schemaRequired = (jsonSchema.required as string[]) ?? [];
+	// 从顶层读取 required；若缺失且为 discriminated union，从各 variant 求交集
+	let schemaRequired: string[] = Array.isArray(jsonSchema.required)
+		? [...(jsonSchema.required as string[])]
+		: [];
+	if (schemaRequired.length === 0) {
+		const variants = [jsonSchema.oneOf, jsonSchema.anyOf]
+			.flat()
+			.filter(isJsonSchema);
+		if (variants.length > 0) {
+			const variantRequireds = variants
+				.map((v) => (Array.isArray(v.required) ? (v.required as string[]) : []))
+				.filter((arr) => arr.length > 0);
+			if (variantRequireds.length > 0) {
+				schemaRequired = variantRequireds.reduce((acc, arr) =>
+					acc.filter((key) => arr.includes(key)),
+				);
+			}
+		}
+	}
 
 	// 合并：schema 属性 + report 字段
 	const mergedProperties: Record<string, unknown> = {

@@ -11,8 +11,10 @@
 import {
 	agentLoop,
 	discoverWorkflows,
+	formatAgentsMdPrompt,
 	type InteractiveResult,
 	InteractiveResultSchema,
+	loadAgentsMd,
 	loadSchedules,
 } from "@n0n/core";
 import type { FeishuBot } from "./bot.ts";
@@ -58,12 +60,16 @@ export async function runFeishuRound(
 	renderer.userMessage(userInput);
 
 	// 2. 收集上下文
-	const [existing, schedules] = await Promise.all([
+	const [existing, schedules, agentsMd] = await Promise.all([
 		discoverWorkflows(false, session.paths),
 		loadSchedules(session.paths),
+		loadAgentsMd(session.paths.workspace),
 	]);
 
 	const contextParts: string[] = [];
+	if (agentsMd) {
+		contextParts.push(formatAgentsMdPrompt(agentsMd));
+	}
 	if (existing.length > 0) {
 		contextParts.push(
 			`## Existing workflows (reuse if applicable)\n${existing
@@ -96,12 +102,16 @@ export async function runFeishuRound(
 		capabilities,
 	});
 
-	// 3. 执行 agent loop
+	// 3. 执行 agent loop（传入 per-user workspace 隔离 exec cwd/temp）
 	const result = await agentLoop<InteractiveResult>(session.history, {
 		maxIterations: 30,
 		renderer,
 		schema: InteractiveResultSchema,
 		signal: abortController.signal,
+		toolsWorkspace: {
+			workspace: session.paths.workspace,
+			tempDir: session.paths.temp,
+		},
 	});
 
 	if (abortController.signal.aborted) {
