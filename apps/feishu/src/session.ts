@@ -203,15 +203,18 @@ function buildFeishuSystemContext(
 	lines.push(
 		"",
 		"## Workspace Paths",
-		`- cwd (workspace root): \`${paths.workspace}\``,
-		`- user profile: \`workflows/memory/user-info.json\``,
-		`- tasks: \`workflows/tasks/\``,
-		`- schedules: \`workflows/schedules/\``,
-		`- memory: \`workflows/memory/\``,
-		`- skills (shared, read-only): \`${paths.skills}\``,
+		"- cwd (workspace root): `.`",
+		"- user profile (relative to cwd): `workflows/memory/user-info.json`",
+		"- tasks (relative to cwd): `workflows/tasks/`",
+		"- schedules (relative to cwd): `workflows/schedules/`",
+		"- memory (relative to cwd): `workflows/memory/`",
+		`- skills (shared, read-only, outside workspace; absolute path): \`${paths.skills}\``,
+		"",
+		"All paths above except `skills` are relative to cwd and must stay within the workspace root.",
+		"`skills` is the only allowed path outside the workspace and is strictly read-only.",
 		"",
 		"Full user identity (open_id, chat_id, tenant_key, etc.) is in `workflows/memory/user-info.json`.",
-		"Import this JSON when you need these values in code or API calls.",
+		"Import this JSON via its relative path when you need these values in code or API calls.",
 	);
 
 	return lines.join("\n");
