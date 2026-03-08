@@ -12,19 +12,17 @@
  *   这样 LLM 能获得每个字段的类型约束，而非只看到一段描述文本。
  */
 
-import type { LLMToolDefinition, SubmitToolResult } from "@n0n/types";
+import type {
+	LLMToolDefinition,
+	SubmitToolCall,
+	SubmitToolResult,
+} from "@n0n/types";
 import type { ZodType } from "zod";
-import { toJSONSchema, z } from "zod";
+import { toJSONSchema } from "zod";
 
 // ── 无 schema 时的参数校验 ──
 
-/** submit 工具参数 schema（无 schema 模式）— 运行时校验 LLM 传入的参数 */
-export const SubmitArgsSchema = z.object({
-	result: z.unknown(),
-	report: z.string().optional(),
-});
-
-export type SubmitArgs = z.infer<typeof SubmitArgsSchema>;
+export { SubmitArgsSchema } from "@n0n/types";
 
 // ── 工具定义 ──
 
@@ -189,16 +187,17 @@ export function extractSubmitResult(
 }
 
 export function submitTool(
-	callId: string,
-	args: Record<string, unknown>,
+	call: SubmitToolCall,
 	hasSchema: boolean,
 ): SubmitToolResult {
-	const report = typeof args.report === "string" ? args.report : null;
 	return {
 		type: "tool_result",
-		callId,
-		tool: "submit",
-		result: extractSubmitResult(args, hasSchema),
-		report,
+		tool: "submit" as const,
+		call,
+		cleanedResult: extractSubmitResult(
+			call.args as Record<string, unknown>,
+			hasSchema,
+		),
+		userResponse: undefined,
 	};
 }

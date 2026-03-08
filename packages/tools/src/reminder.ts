@@ -2,16 +2,13 @@
  * reminder 工具 — 为 agent 自己设置延迟提醒
  */
 
-import type { LLMToolDefinition, ReminderToolResult } from "@n0n/types";
-import { z } from "zod";
+import type {
+	LLMToolDefinition,
+	ReminderToolCall,
+	ReminderToolResult,
+} from "@n0n/types";
 
-/** reminder 工具参数 schema — 运行时校验 LLM 传入的参数 */
-export const ReminderArgsSchema = z.object({
-	content: z.string(),
-	delay: z.number().optional(),
-});
-
-export type ReminderArgs = z.infer<typeof ReminderArgsSchema>;
+export { ReminderArgsSchema } from "@n0n/types";
 
 export const REMINDER_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",
@@ -51,20 +48,17 @@ export interface PendingReminder {
 }
 
 export function reminderTool(
-	callId: string,
-	args: ReminderArgs,
+	call: ReminderToolCall,
 	reminders: PendingReminder[],
 ): ReminderToolResult {
-	const delay = args.delay ?? 7;
+	const delay = call.args.delay ?? 7;
 	reminders.length = 0;
-	reminders.push({ content: args.content, roundsLeft: delay });
+	reminders.push({ content: call.args.content, roundsLeft: delay });
 
 	return {
 		type: "tool_result",
-		callId,
-		tool: "reminder",
-		content: args.content,
-		delay,
+		tool: "reminder" as const,
+		call,
 		acknowledged: true,
 	};
 }

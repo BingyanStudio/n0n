@@ -8,6 +8,7 @@ import {
 	type ToolEntry,
 } from "@n0n/tools";
 import type {
+	ExecToolCall,
 	LLMToolCall,
 	ToolArgErrorMessage,
 	ToolCallRecord,
@@ -20,6 +21,12 @@ export type GetToolEntry = (name: string) => ToolEntry | undefined;
 
 // ── 解析 ──
 
+/**
+ * LLM 原始工具调用 → 领域 ToolCallRecord。
+ *
+ * 解析阶段只做 JSON.parse，参数结构由执行阶段的 Zod schema 校验。
+ * 返回 ToolCallRecord[]（as 断言），Zod 校验失败时会产生 ToolArgErrorMessage。
+ */
 export function parseToolCalls(raw: LLMToolCall[]): ToolCallRecord[] {
 	return raw.map((tc) => {
 		let args: Record<string, unknown>;
@@ -36,12 +43,13 @@ export function parseToolCalls(raw: LLMToolCall[]): ToolCallRecord[] {
 			id: tc.id,
 			tool: tc.function.name,
 			args,
-		};
+		} as ToolCallRecord;
 	});
 }
 
+/** 校验工具名已注册且参数解析成功 */
 export function isValidToolCall(tc: ToolCallRecord): boolean {
-	return REGISTERED_TOOLS.has(tc.tool) && !tc.args._parseError;
+	return REGISTERED_TOOLS.has(tc.tool) && !("_parseError" in tc.args);
 }
 
 // ── 执行 ──
@@ -57,11 +65,12 @@ export async function* executeToolStream(
 	if (!entry) {
 		yield {
 			type: "tool_result",
-			callId: tc.id,
-			tool: "exec",
-			script: "",
-			runtime: "",
-			cwd: "",
+			tool: "exec" as const,
+			call: {
+				id: tc.id,
+				tool: "exec" as const,
+				args: { script: "" },
+			} as ExecToolCall,
 			exitCode: 1,
 			stdout: "",
 			stderr: `Unknown tool: ${tc.tool}`,

@@ -7,52 +7,59 @@
  * - 标签内部为纯文本 / Markdown，无需 XML 转义
  */
 
-import type { DomainMessage, LLMRequestMessage, ToolResult } from "@n0n/types";
+import type {
+	DomainMessage,
+	EditToolResult,
+	ExecToolResult,
+	LLMRequestMessage,
+	ToolResult,
+	WriteToolResult,
+} from "@n0n/types";
 import { adaptTags, wrapTag } from "./tags.ts";
 
 /* ── tool result 格式化 ── */
 
-function formatExecResult(msg: ToolResult & { tool: "exec" }): string {
-	const meta = `[${msg.runtime}] [cwd: ${msg.cwd}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`;
+function formatExecResult(msg: ExecToolResult): string {
+	const meta = `[${msg.call.args.runtime ?? "unknown"}] [cwd: ${msg.call.args.cwd ?? "."}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`;
 	const parts = [wrapTag("exec_meta", meta)];
 	if (msg.stdout) parts.push(wrapTag("stdout", msg.stdout));
 	if (msg.stderr) parts.push(wrapTag("stderr", msg.stderr));
 	return parts.join("\n");
 }
 
-function formatWriteResult(msg: ToolResult & { tool: "write" }): string {
+function formatWriteResult(msg: WriteToolResult): string {
 	if (msg.success) {
-		return wrapTag("write_result", `Written to \`${msg.path}\``);
+		return wrapTag("write_result", `Written to \`${msg.call.args.path}\``);
 	}
 	return wrapTag("error", `Write failed: ${msg.error}`);
 }
 
-function formatEditResult(msg: ToolResult & { tool: "edit" }): string {
+function formatEditResult(msg: EditToolResult): string {
 	if (msg.success) {
 		return wrapTag(
 			"edit_result",
-			`Replaced ${msg.replacedCount} occurrence(s) in \`${msg.path}\``,
+			`Replaced ${msg.replacedCount} occurrence(s) in \`${msg.call.args.path}\``,
 		);
 	}
 	return wrapTag("error", `Edit failed: ${msg.error}`);
 }
 
 function toolResultToContent(msg: ToolResult): string {
-	switch (msg.tool) {
+	switch (msg.call.tool) {
 		case "exec":
-			return formatExecResult(msg as ToolResult & { tool: "exec" });
+			return formatExecResult(msg as ExecToolResult);
 		case "write":
-			return formatWriteResult(msg as ToolResult & { tool: "write" });
+			return formatWriteResult(msg as WriteToolResult);
 		case "edit":
-			return formatEditResult(msg as ToolResult & { tool: "edit" });
+			return formatEditResult(msg as EditToolResult);
 		case "reminder":
 			return wrapTag(
 				"result",
-				`Reminder set: will appear in ${msg.delay} rounds`,
+				`Reminder set: will appear in ${msg.call.args.delay ?? 0} rounds`,
 			);
 		case "submit": {
 			const parts = [wrapTag("result", "Submitted successfully.")];
-			if (msg.userResponse) {
+			if ("userResponse" in msg && msg.userResponse) {
 				parts.push(wrapTag("user_response", msg.userResponse));
 			}
 			return parts.join("\n");
@@ -107,7 +114,7 @@ export function toAPIMessages(messages: DomainMessage[]): LLMRequestMessage[] {
 			case "tool_result":
 				result.push({
 					role: "tool",
-					tool_call_id: msg.callId,
+					tool_call_id: msg.call.id,
 					content: toolResultToContent(msg),
 				});
 				break;

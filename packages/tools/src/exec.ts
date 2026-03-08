@@ -19,25 +19,17 @@ import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { wrapTagFor } from "@n0n/shared";
 import type {
+	ExecToolCall,
 	ExecToolResult,
 	LLMToolDefinition,
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
-import { z } from "zod";
 import { getToolsConfig } from "./config.ts";
 import type { EnvSnapshot } from "./env.ts";
 import { getAvailableByGroup } from "./env.ts";
 
-/** exec 工具参数 schema */
-export const ExecArgsSchema = z.object({
-	script: z.string(),
-	runtime: z.string().optional(),
-	cwd: z.string().optional(),
-	timeout: z.number().optional(),
-});
-
-export type ExecArgs = z.infer<typeof ExecArgsSchema>;
+export { ExecArgsSchema } from "@n0n/types";
 
 const IS_WINDOWS = process.platform === "win32";
 const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";
@@ -289,15 +281,14 @@ function findBlockedCommand(script: string): string | null {
 }
 
 async function handleBlockedCommand(
-	callId: string,
-	args: ExecArgs,
-	cwd: string,
+	call: ExecToolCall,
+	_cwd: string,
 	blockedCmd: string,
 	confirmFn?: (question: string) => Promise<string>,
 ): Promise<ExecToolResult | null> {
-	const runtime = args.runtime ?? DEFAULT_RUNTIME;
+	const runtime = call.args.runtime ?? DEFAULT_RUNTIME;
 	if (confirmFn) {
-		const safeScript = [...args.script]
+		const safeScript = [...call.args.script]
 			.map((ch) => {
 				const code = ch.charCodeAt(0);
 				if (code > 31 && code !== 127) return ch;
@@ -316,54 +307,46 @@ async function handleBlockedCommand(
 		if (normalized !== "y" && normalized !== "yes") {
 			return {
 				type: "tool_result",
-				callId,
-				tool: "exec",
-				script: args.script,
-				runtime,
-				cwd,
+				tool: "exec" as const,
+				call,
 				exitCode: 1,
 				stdout: "",
 				stderr: `Command '${blockedCmd}' was rejected by the user.`,
 				durationMs: 0,
-			};
+			} satisfies ExecToolResult;
 		}
 		return null;
 	}
 	return {
 		type: "tool_result",
-		callId,
-		tool: "exec",
-		script: args.script,
-		runtime,
-		cwd,
+		tool: "exec" as const,
+		call,
 		exitCode: 1,
 		stdout: "",
 		stderr: `Command blocked: '${blockedCmd}' is in the BLOCKED_COMMANDS list and requires manual review before execution.`,
 		durationMs: 0,
-	};
+	} satisfies ExecToolResult;
 }
 export async function* execToolStream(
-	callId: string,
-	args: ExecArgs,
+	call: ExecToolCall,
 	confirmFn?: (question: string) => Promise<string>,
 	workspaceConfig?: { workspace: string; tempDir: string },
 ): AsyncGenerator<ToolStreamEvent> {
-	const runtime = args.runtime ?? DEFAULT_RUNTIME;
+	const runtime = call.args.runtime ?? DEFAULT_RUNTIME;
 	const workspace = workspaceConfig?.workspace ?? getToolsConfig().workspace;
-	const cwd = args.cwd
-		? isAbsolute(args.cwd)
-			? args.cwd
-			: resolve(workspace, args.cwd)
+	const cwd = call.args.cwd
+		? isAbsolute(call.args.cwd)
+			? call.args.cwd
+			: resolve(workspace, call.args.cwd)
 		: workspace;
-	const timeoutMs = (args.timeout ?? 120) * 1000;
+	const timeoutMs = (call.args.timeout ?? 120) * 1000;
 	const start = Date.now();
 
 	// Security check — scan script content for blocked commands
-	const blockedCmd = findBlockedCommand(args.script);
+	const blockedCmd = findBlockedCommand(call.args.script);
 	if (blockedCmd !== null) {
 		const blocked = await handleBlockedCommand(
-			callId,
-			args,
+			call,
 			cwd,
 			blockedCmd,
 			confirmFn,
@@ -385,7 +368,8 @@ export async function* execToolStream(
 
 	try {
 		// cmd runtime: prefix with @ to suppress echo
-		const scriptContent = runtime === "cmd" ? `@${args.script}\n` : args.script;
+		const scriptContent =
+			runtime === "cmd" ? `@${call.args.script}\n` : call.args.script;
 		await Bun.write(tmpFile, scriptContent);
 
 		const spawnCmd = buildSpawnCmd(runtime, tmpFile);
@@ -421,7 +405,7 @@ export async function* execToolStream(
 					bucket.push(text);
 					pending.push({
 						type: "tool_output_chunk",
-						callId,
+						callId: call.id,
 						tool: "exec",
 						chunk: text,
 					});
@@ -474,11 +458,8 @@ export async function* execToolStream(
 
 		yield {
 			type: "tool_result",
-			callId,
-			tool: "exec",
-			script: args.script,
-			runtime,
-			cwd,
+			tool: "exec" as const,
+			call,
 			exitCode,
 			stdout: hint || truncate(stdout),
 			stderr: truncate(stderr),
@@ -487,11 +468,8 @@ export async function* execToolStream(
 	} catch (err) {
 		yield {
 			type: "tool_result",
-			callId,
-			tool: "exec",
-			script: args.script,
-			runtime,
-			cwd,
+			tool: "exec" as const,
+			call,
 			exitCode: 1,
 			stdout: "",
 			stderr: err instanceof Error ? err.message : String(err),

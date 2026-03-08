@@ -13,10 +13,16 @@
  */
 
 import type {
+	EditToolCall,
+	ExecToolCall,
 	LLMToolDefinition,
+	ReminderToolCall,
+	SubmitArgs,
+	SubmitToolCall,
 	ToolCallRecord,
 	ToolResult,
 	ToolStreamEvent,
+	WriteToolCall,
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import { getToolsConfig } from "./config.ts";
@@ -87,31 +93,50 @@ function buildBaseRegistry(
 		exec: {
 			definition: execToolDef,
 			stream: true,
-			execute: (tc, _reminders, confirmFn) =>
-				execToolStream(
-					tc.id,
-					ExecArgsSchema.parse(tc.args),
-					confirmFn,
-					execOverride,
-				),
+			execute: (tc, _reminders, confirmFn) => {
+				const call: ExecToolCall = {
+					id: tc.id,
+					tool: "exec" as const,
+					args: ExecArgsSchema.parse(tc.args),
+				};
+				return execToolStream(call, confirmFn, execOverride);
+			},
 		},
 		write: {
 			definition: WRITE_TOOL_DEFINITION,
 			stream: false,
-			execute: (tc) =>
-				writeTool(tc.id, WriteArgsSchema.parse(tc.args), resolvedWorkspace),
+			execute: (tc) => {
+				const call: WriteToolCall = {
+					id: tc.id,
+					tool: "write" as const,
+					args: WriteArgsSchema.parse(tc.args),
+				};
+				return writeTool(call, resolvedWorkspace);
+			},
 		},
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,
 			stream: false,
-			execute: (tc) =>
-				editTool(tc.id, EditArgsSchema.parse(tc.args), resolvedWorkspace),
+			execute: (tc) => {
+				const call: EditToolCall = {
+					id: tc.id,
+					tool: "edit" as const,
+					args: EditArgsSchema.parse(tc.args),
+				};
+				return editTool(call, resolvedWorkspace);
+			},
 		},
 		reminder: {
 			definition: REMINDER_TOOL_DEFINITION,
 			stream: false,
-			execute: (tc, reminders) =>
-				reminderTool(tc.id, ReminderArgsSchema.parse(tc.args), reminders),
+			execute: (tc, reminders) => {
+				const call: ReminderToolCall = {
+					id: tc.id,
+					tool: "reminder" as const,
+					args: ReminderArgsSchema.parse(tc.args),
+				};
+				return reminderTool(call, reminders);
+			},
 		},
 	};
 }
@@ -152,8 +177,13 @@ export async function makeToolkit(
 		definition: makeSubmitToolDefinition(schema),
 		stream: false,
 		execute: (tc) => {
-			const args = hasSchema ? tc.args : SubmitArgsSchema.parse(tc.args);
-			return submitTool(tc.id, args as Record<string, unknown>, hasSchema);
+			const parsedArgs = hasSchema ? tc.args : SubmitArgsSchema.parse(tc.args);
+			const call: SubmitToolCall = {
+				id: tc.id,
+				tool: "submit" as const,
+				args: parsedArgs as SubmitArgs,
+			};
+			return submitTool(call, hasSchema);
 		},
 	};
 
