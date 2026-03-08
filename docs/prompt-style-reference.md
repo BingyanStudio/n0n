@@ -19,7 +19,7 @@ You have five tools: `exec`, `write`, `edit`, `reminder`, `submit`. Parameters a
 `exec({ script: "import { readdir } from 'node:fs/promises';\nconst files = await readdir('src');\nconsole.log(files.filter(f => f.endsWith('.ts')).length + ' TS files');", runtime: "bun" })`
 
 **Create → verify** — write a file, then test it:
-`write(...)` → `exec({ script: "bun run workflows/tasks/greet.ts" })`
+`write(...)` → `exec({ script: "bun workflows/tasks/greet.ts" })`
 
 **Surgical edit** — modify existing files precisely:
 `edit({ path: "config.json", search: "\"port\": 3000", replace: "\"port\": 8080" })`
