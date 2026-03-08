@@ -25,9 +25,7 @@ export class PlainRenderer implements Renderer {
 
 	toolCallStart(tc: ToolCallRecord): void {
 		const suffix =
-			tc.tool === "exec"
-				? ` → ${(tc.args as { command?: string }).command?.slice(0, 80)}`
-				: "";
+			tc.tool === "exec" ? ` → ${tc.args.script.slice(0, 80)}` : "";
 		console.error(`  [agent] tool: ${tc.tool}${suffix}`);
 	}
 

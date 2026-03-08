@@ -19,6 +19,7 @@ import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { wrapTagFor } from "@n0n/shared";
 import type {
+	ExecToolArgs,
 	ExecToolResult,
 	LLMToolDefinition,
 	ToolOutputChunk,
@@ -38,6 +39,11 @@ export const ExecArgsSchema = z.object({
 });
 
 export type ExecArgs = z.infer<typeof ExecArgsSchema>;
+
+// 编译期校验：Zod schema 推断类型必须与 @n0n/types 中的接口兼容
+type _AssertExecArgs = ExecArgs extends ExecToolArgs ? true : never;
+type _AssertExecArgsReverse = ExecToolArgs extends ExecArgs ? true : never;
+const _checkExecArgs: _AssertExecArgs & _AssertExecArgsReverse = true;
 
 const IS_WINDOWS = process.platform === "win32";
 const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";

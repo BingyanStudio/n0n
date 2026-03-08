@@ -12,7 +12,11 @@
  *   这样 LLM 能获得每个字段的类型约束，而非只看到一段描述文本。
  */
 
-import type { LLMToolDefinition, SubmitToolResult } from "@n0n/types";
+import type {
+	LLMToolDefinition,
+	SubmitToolArgs,
+	SubmitToolResult,
+} from "@n0n/types";
 import type { ZodType } from "zod";
 import { toJSONSchema, z } from "zod";
 
@@ -25,6 +29,13 @@ export const SubmitArgsSchema = z.object({
 });
 
 export type SubmitArgs = z.infer<typeof SubmitArgsSchema>;
+
+// 编译期校验：Zod schema 推断类型必须与 @n0n/types 中的接口兼容
+type _AssertSubmitArgs = SubmitArgs extends SubmitToolArgs ? true : never;
+type _AssertSubmitArgsReverse = SubmitToolArgs extends SubmitArgs
+	? true
+	: never;
+const _checkSubmitArgs: _AssertSubmitArgs & _AssertSubmitArgsReverse = true;
 
 // ── 工具定义 ──
 

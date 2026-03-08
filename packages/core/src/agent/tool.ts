@@ -12,6 +12,7 @@ import type {
 	ToolArgErrorMessage,
 	ToolCallRecord,
 	ToolStreamEvent,
+	UntypedToolCall,
 } from "@n0n/types";
 import { ZodError } from "zod";
 
@@ -20,7 +21,13 @@ export type GetToolEntry = (name: string) => ToolEntry | undefined;
 
 // ── 解析 ──
 
-export function parseToolCalls(raw: LLMToolCall[]): ToolCallRecord[] {
+/**
+ * LLM 原始工具调用 → 领域 ToolCallRecord。
+ *
+ * 解析阶段无法校验参数结构（Zod 校验在执行阶段），
+ * 因此统一返回 UnknownToolCall[]；执行器负责 parse + 窄化。
+ */
+export function parseToolCalls(raw: LLMToolCall[]): UntypedToolCall[] {
 	return raw.map((tc) => {
 		let args: Record<string, unknown>;
 		try {
@@ -40,8 +47,9 @@ export function parseToolCalls(raw: LLMToolCall[]): ToolCallRecord[] {
 	});
 }
 
-export function isValidToolCall(tc: ToolCallRecord): boolean {
-	return REGISTERED_TOOLS.has(tc.tool) && !tc.args._parseError;
+/** 类型守卫：校验工具名已注册且参数解析成功，窄化为 ToolCallRecord */
+export function isValidToolCall(tc: UntypedToolCall): tc is ToolCallRecord {
+	return REGISTERED_TOOLS.has(tc.tool) && !("_parseError" in tc.args);
 }
 
 // ── 执行 ──

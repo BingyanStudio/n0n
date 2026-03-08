@@ -7,7 +7,11 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { EditToolResult, LLMToolDefinition } from "@n0n/types";
+import type {
+	EditToolArgs,
+	EditToolResult,
+	LLMToolDefinition,
+} from "@n0n/types";
 import { z } from "zod";
 
 /** edit 工具参数 schema */
@@ -19,6 +23,11 @@ export const EditArgsSchema = z.object({
 });
 
 export type EditArgs = z.infer<typeof EditArgsSchema>;
+
+// 编译期校验：Zod schema 推断类型必须与 @n0n/types 中的接口兼容
+type _AssertEditArgs = EditArgs extends EditToolArgs ? true : never;
+type _AssertEditArgsReverse = EditToolArgs extends EditArgs ? true : never;
+const _checkEditArgs: _AssertEditArgs & _AssertEditArgsReverse = true;
 
 export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",

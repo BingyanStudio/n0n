@@ -6,7 +6,11 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
-import type { LLMToolDefinition, WriteToolResult } from "@n0n/types";
+import type {
+	LLMToolDefinition,
+	WriteToolArgs,
+	WriteToolResult,
+} from "@n0n/types";
 import { z } from "zod";
 
 /** write 工具参数 schema */
@@ -16,6 +20,11 @@ export const WriteArgsSchema = z.object({
 });
 
 export type WriteArgs = z.infer<typeof WriteArgsSchema>;
+
+// 编译期校验：Zod schema 推断类型必须与 @n0n/types 中的接口兼容
+type _AssertWriteArgs = WriteArgs extends WriteToolArgs ? true : never;
+type _AssertWriteArgsReverse = WriteToolArgs extends WriteArgs ? true : never;
+const _checkWriteArgs: _AssertWriteArgs & _AssertWriteArgsReverse = true;
 
 export const WRITE_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",

@@ -54,20 +54,116 @@ export interface AssistantToolCallMessage {
 	toolCalls: ToolCallRecord[];
 }
 
-// ── 工具调用记录 ──
-export interface ToolCallRecord {
+// ── 工具参数类型（Single Source of Truth） ──
+// Zod schema（@n0n/tools）应与这些接口保持一致；
+// 修改字段时 tsc 会在所有消费方报错。
+// 每个接口包含索引签名以兼容 Record<string, unknown>（LLM 可能传入额外字段）。
+
+export interface ExecToolArgs {
+	[key: string]: unknown;
+	script: string;
+	runtime?: string;
+	cwd?: string;
+	timeout?: number;
+}
+
+export interface WriteToolArgs {
+	[key: string]: unknown;
+	path: string;
+	content: string;
+}
+
+export interface EditToolArgs {
+	[key: string]: unknown;
+	path: string;
+	search: string;
+	replace: string;
+	expectedMatches?: number;
+}
+
+export interface ReminderToolArgs {
+	[key: string]: unknown;
+	content: string;
+	delay?: number;
+}
+
+export interface SubmitToolArgs {
+	[key: string]: unknown;
+	result: unknown;
+	report?: string;
+}
+
+/** 工具名 → 参数类型映射 */
+export interface ToolArgsMap {
+	exec: ExecToolArgs;
+	write: WriteToolArgs;
+	edit: EditToolArgs;
+	reminder: ReminderToolArgs;
+	submit: SubmitToolArgs;
+}
+
+export type ToolName = keyof ToolArgsMap;
+
+// ── 工具调用记录（判别联合） ──
+
+interface ToolCallBase {
 	id: string;
+}
+
+export type ExecToolCall = ToolCallBase & {
+	tool: "exec";
+	args: ExecToolArgs;
+};
+export type WriteToolCall = ToolCallBase & {
+	tool: "write";
+	args: WriteToolArgs;
+};
+export type EditToolCall = ToolCallBase & {
+	tool: "edit";
+	args: EditToolArgs;
+};
+export type ReminderToolCall = ToolCallBase & {
+	tool: "reminder";
+	args: ReminderToolArgs;
+};
+export type SubmitToolCall = ToolCallBase & {
+	tool: "submit";
+	args: SubmitToolArgs;
+};
+
+/**
+ * 工具调用记录 — 判别联合，通过 tool 字段窄化 args 类型。
+ *
+ * 仅包含已注册工具；LLM 可能发送未注册工具名，
+ * 解析阶段使用 UntypedToolCall（未校验），执行阶段再窄化为 ToolCallRecord。
+ */
+export type ToolCallRecord =
+	| ExecToolCall
+	| WriteToolCall
+	| EditToolCall
+	| ReminderToolCall
+	| SubmitToolCall;
+
+/**
+ * 未经类型校验的工具调用（parseToolCalls 的输出）。
+ * tool 和 args 均为宽类型；执行器负责 Zod 校验后窄化。
+ */
+export interface UntypedToolCall extends ToolCallBase {
 	tool: string;
 	args: Record<string, unknown>;
 }
 
 // ── 工具结果 ──
+
 export interface ExecToolResult {
 	type: "tool_result";
 	callId: string;
 	tool: "exec";
+	/** 来自 ExecToolArgs.script */
 	script: string;
+	/** 来自 ExecToolArgs.runtime */
 	runtime: string;
+	/** 来自 ExecToolArgs.cwd（执行时解析为绝对路径） */
 	cwd: string;
 	exitCode: number;
 	stdout: string;
