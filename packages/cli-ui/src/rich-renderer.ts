@@ -239,19 +239,19 @@ export class RichRenderer implements Renderer {
 			}
 			case "write": {
 				if (!result.success) {
-					return `${style.dim("◂")} ${style.cyan("write")} ${result.path}: ${style.red(result.error ?? "failed")}`;
+					return `${style.dim("◂")} ${style.cyan("write")} ${result.call.args.path}: ${style.red(result.error ?? "failed")}`;
 				}
-				return `${style.dim("◂")} ${style.cyan("write")} ${result.path}`;
+				return `${style.dim("◂")} ${style.cyan("write")} ${result.call.args.path}`;
 			}
 			case "edit": {
 				if (!result.success) {
-					return `${style.dim("◂")} ${style.cyan("edit")} ${result.path}: ${style.red(result.error ?? "failed")}`;
+					return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path}: ${style.red(result.error ?? "failed")}`;
 				}
-				const searchLines = result.searchPattern.split("\n").length;
-				return `${style.dim("◂")} ${style.cyan("edit")} ${result.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}`;
+				const searchLines = result.call.args.search.split("\n").length;
+				return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}`;
 			}
 			case "reminder": {
-				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.delay} rounds)`)} ${style.gray(`${result.content.length} chars`)}`;
+				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${result.call.args.content.length} chars`)}`;
 			}
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;

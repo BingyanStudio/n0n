@@ -7,18 +7,13 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { EditToolResult, LLMToolDefinition } from "@n0n/types";
-import { z } from "zod";
+import type {
+	EditToolCall,
+	EditToolResult,
+	LLMToolDefinition,
+} from "@n0n/types";
 
-/** edit 工具参数 schema */
-export const EditArgsSchema = z.object({
-	path: z.string(),
-	search: z.string(),
-	replace: z.string(),
-	expectedMatches: z.number().optional(),
-});
-
-export type EditArgs = z.infer<typeof EditArgsSchema>;
+export { EditArgsSchema } from "@n0n/types";
 
 export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",
@@ -54,27 +49,24 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 };
 
 export async function editTool(
-	callId: string,
-	args: EditArgs,
+	call: EditToolCall,
 	workspace: string,
 ): Promise<EditToolResult> {
-	const filePath = isAbsolute(args.path)
-		? args.path
-		: resolve(workspace, args.path);
-	const { search, replace } = args;
-	const expectedCount = args.expectedMatches ?? 1;
+	const filePath = isAbsolute(call.args.path)
+		? call.args.path
+		: resolve(workspace, call.args.path);
+	const { search, replace } = call.args;
+	const expectedCount = call.args.expectedMatches ?? 1;
 
 	try {
 		if (!existsSync(filePath)) {
 			return {
 				type: "tool_result",
-				callId,
-				tool: "edit",
-				path: args.path,
-				searchPattern: search,
+				tool: "edit" as const,
+				call,
 				replacedCount: 0,
 				success: false,
-				error: `File not found: ${args.path}`,
+				error: `File not found: ${call.args.path}`,
 			};
 		}
 
@@ -91,10 +83,8 @@ export async function editTool(
 		if (count !== expectedCount) {
 			return {
 				type: "tool_result",
-				callId,
-				tool: "edit",
-				path: args.path,
-				searchPattern: search,
+				tool: "edit" as const,
+				call,
 				replacedCount: count,
 				success: false,
 				error: `Expected ${expectedCount} match(es) but found ${count}`,
@@ -106,10 +96,8 @@ export async function editTool(
 
 		return {
 			type: "tool_result",
-			callId,
-			tool: "edit",
-			path: args.path,
-			searchPattern: search,
+			tool: "edit" as const,
+			call,
 			replacedCount: count,
 			success: true,
 			error: null,
@@ -117,10 +105,8 @@ export async function editTool(
 	} catch (err) {
 		return {
 			type: "tool_result",
-			callId,
-			tool: "edit",
-			path: args.path,
-			searchPattern: search,
+			tool: "edit" as const,
+			call,
 			replacedCount: 0,
 			success: false,
 			error: err instanceof Error ? err.message : String(err),

@@ -38,37 +38,39 @@ function json(value: unknown): string {
  * 标题：工具名 + 最关键的参数（用户一眼能看到在做什么）
  * 详情：完整参数列表（展开后查看）
  */
-function fmtToolCall(
-	tool: string,
-	args: Record<string, unknown>,
-): { summary: string; detail: string } {
-	// 按工具类型提取关键参数作为标题
-	const str = (k: string) => {
-		const v = args[k];
-		return typeof v === "string" ? v : v != null ? json(v) : "";
-	};
-
+/**
+ * 提取工具调用的标题摘要和展开详情。
+ * 接受 ToolCallRecord 判别联合，通过 tc.tool 窄化后类型安全地访问参数。
+ */
+function fmtToolCall(tc: ToolCallRecord): { summary: string; detail: string } {
+	// 按工具类型提取关键参数作为标题（类型安全）
 	let summary: string;
-	switch (tool) {
+	switch (tc.tool) {
 		case "exec":
-			summary = `▸ **exec**  \`${compact(str("command"), 80)}\``;
+			summary = `▸ **exec**  \`${compact(tc.args.script, 80)}\``;
 			break;
 		case "write":
-			summary = `▸ **write**  ${compact(str("path"), 80)}`;
+			summary = `▸ **write**  ${compact(tc.args.path, 80)}`;
 			break;
 		case "submit":
-			summary = `▸ **submit**  ${compact(str("result") || str("message"), 60)}`;
+			summary = `▸ **submit**  ${compact(json(tc.args.result), 60)}`;
 			break;
 		case "reminder":
-			summary = `▸ **reminder**  ${compact(str("content"), 60)}`;
+			summary = `▸ **reminder**  ${compact(tc.args.content, 60)}`;
 			break;
-		default:
-			summary = `▸ **${tool}**`;
+		case "edit":
+			summary = `▸ **edit**  ${compact(tc.args.path, 80)}`;
+			break;
+		default: {
+			// exhaustive check: 所有已注册工具都已处理
+			const _exhaustive: never = tc;
+			summary = `▸ **${(_exhaustive as ToolCallRecord).tool}**`;
+		}
 	}
 
-	// 完整参数作为展开详情
+	// 完整参数作为展开详情（泛型遍历）
 	const lines: string[] = [];
-	for (const [key, value] of Object.entries(args)) {
+	for (const [key, value] of Object.entries(tc.args)) {
 		const strVal = typeof value === "string" ? value : json(value);
 		const valLines = strVal.split("\n");
 		if (valLines.length <= 1) {
@@ -92,15 +94,17 @@ function fmtResult(r: ToolResult): string {
 		case "exec":
 			return `exit=${r.exitCode}  ${(r.durationMs / 1000).toFixed(1)}s`;
 		case "write":
-			return r.success ? r.path : `${r.path}: ${r.error ?? "failed"}`;
+			return r.success
+				? r.call.args.path
+				: `${r.call.args.path}: ${r.error ?? "failed"}`;
 		case "edit":
 			return r.success
-				? `${r.path} (${r.replacedCount}× replaced)`
-				: `${r.path}: ${r.error ?? "failed"}`;
+				? `${r.call.args.path} (${r.replacedCount}× replaced)`
+				: `${r.call.args.path}: ${r.error ?? "failed"}`;
 		case "reminder":
-			return `delay=${r.delay}`;
+			return `delay=${r.call.args.delay ?? 0}`;
 		case "submit":
-			return compact(json(r.result), 120);
+			return compact(json(r.cleanedResult), 120);
 	}
 }
 
@@ -177,7 +181,7 @@ export class FeishuRenderer implements Renderer {
 	toolCallStart(tc: ToolCallRecord): void {
 		this.curTool = tc.tool;
 		this.toolOutBuf = "";
-		const { summary, detail } = fmtToolCall(tc.tool, tc.args);
+		const { summary, detail } = fmtToolCall(tc);
 		this.conv.appendLine({ kind: "tool", text: summary, detail });
 	}
 
