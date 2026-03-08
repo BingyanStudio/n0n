@@ -5,10 +5,14 @@
  * 工具将脚本写入临时文件后用指定运行时执行。
  * 所有平台行为一致，彻底消除 shell 引号转义问题。
  *
- * runtime 支持：
- * - shell 类：sh, bash, pwsh, cmd（脚本内容即 shell 脚本，支持管道等语法）
- * - 语言类：bun, node, python（脚本内容即对应语言代码，支持 import 等）
+ * runtime 按用途分组，同组内有优先级：
+ * - Shell 类：cmd(Win) / sh(Unix), bash, pwsh
+ * - JS/TS 类：bun > node > deno
+ * - Python 类：python > python3 > uv
  * - 默认：平台 shell（Windows: cmd, 其他: sh）
+ *
+ * 工具描述由 makeExecToolDefinition() 动态生成，
+ * 基于 env.ts 探测结果，只展示当前系统可用的 runtime。
  */
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
@@ -21,6 +25,8 @@ import type {
 } from "@n0n/types";
 import { z } from "zod";
 import { getToolsConfig } from "./config.ts";
+import type { EnvSnapshot } from "./env.ts";
+import { getAvailableByGroup } from "./env.ts";
 
 /** exec 工具参数 schema */
 export const ExecArgsSchema = z.object({
@@ -43,7 +49,10 @@ const RUNTIME_EXT: Record<string, string> = {
 	pwsh: ".ps1",
 	bun: ".ts",
 	node: ".mjs",
+	deno: ".ts",
 	python: ".py",
+	python3: ".py",
+	uv: ".py",
 };
 
 /** runtime → 执行命令构造器 */
@@ -60,91 +69,180 @@ function buildSpawnCmd(runtime: string, tmpFile: string): string[] {
 			return ["bun", "run", tmpFile];
 		case "node":
 			return ["node", tmpFile];
+		case "deno":
+			return ["deno", "run", "--allow-all", tmpFile];
 		case "python":
-			return ["python", tmpFile];
+		case "python3":
+			return [runtime, tmpFile];
+		case "uv":
+			return ["uv", "run", "python", tmpFile];
 		default:
 			// 未知 runtime 当作可执行文件名处理
 			return [runtime, tmpFile];
 	}
 }
 
-export const EXEC_TOOL_DEFINITION: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "exec",
-		description: [
-			"Execute a script. Content is written to a temp file and run with the specified runtime. Returns stdout, stderr, and exit code.",
-			"",
-			"## Runtimes & Examples",
-			"",
-			"**Shell runtimes** — for CLI commands, pipes, file operations:",
-			'- `sh` / `bash` (Unix default): `git diff --stat && echo "done"`',
-			"- `cmd` (Windows default): `dir /b src && echo done`",
-			'- `pwsh` (PowerShell): `Get-ChildItem src -Recurse | Where-Object { $_.Extension -eq ".ts" } | Measure-Object`',
-			"",
-			"**Language runtimes** — for data processing, complex logic, structured output:",
-			"- `bun` (TypeScript/JS, recommended): preprocess data, parse JSON, transform files",
-			"  ```",
-			'  import { readdir } from "node:fs/promises";',
-			'  const files = await readdir("./src", { recursive: true });',
-			'  const tsFiles = files.filter(f => f.endsWith(".ts"));',
-			"  console.log('Found ' + tsFiles.length + ' TS files');",
-			"  for (const f of tsFiles.slice(0, 10)) console.log(' - ' + f);",
-			"  ```",
-			"- `node` (Node.js, .mjs): similar to bun but uses Node runtime",
-			"- `python`: data analysis, scripting",
-			"  ```",
-			"  import json, sys",
-			'  data = json.load(open("package.json"))',
-			'  deps = data.get("dependencies", {})',
-			'  print(f"Dependencies ({len(deps)}):")',
-			'  for k, v in sorted(deps.items()): print(f"  {k}: {v}")',
-			"  ```",
-			"",
-			"## Best Practices",
-			"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
-			"- **Use `bun` runtime for complex logic** — when you need to parse JSON, filter arrays, do math, or produce structured summaries, write a TS script instead of chaining shell commands.",
-			"- **Simple commands use default shell** — `git status`, `bunx tsc --noEmit`, `ls -la` don't need a language runtime.",
-			"- **Debugging**: `2>&1` merges stderr; `> output.txt 2>&1` captures to file; `&& echo __DONE__` confirms completion.",
-		].join("\n"),
-		parameters: {
-			type: "object",
-			properties: {
-				script: {
-					type: "string",
-					description:
-						"Script content. Single command (e.g. `git log --oneline -5`) or multi-line code with imports, loops, etc.",
-				},
-				runtime: {
-					type: "string",
-					description: `Runtime (default: "${DEFAULT_RUNTIME}"). Shell: sh, bash, cmd, pwsh. Language: bun (TS/JS, recommended), node, python.`,
-				},
-				cwd: {
-					type: "string",
-					description: "Working directory (default: injected workspace root)",
-				},
-				timeout: {
-					type: "number",
-					description:
-						"Timeout in seconds (default: 120). Process continues in background if exceeded.",
-				},
-			},
-			required: ["script"],
-			additionalProperties: false,
-		},
-	},
+/** 各 runtime 的示例片段，按 runtime name 索引 */
+const SHELL_EXAMPLES: Record<string, string[]> = {
+	cmd: [
+		"- `cmd` (Windows default): CLI commands, pipes, file operations",
+		"  `dir /b src && type package.json | findstr version`",
+		"  NOTE: Use `type` (not `cat`), `findstr` (not `grep`), `dir` (not `ls`)",
+	],
+	sh: [
+		"- `sh` (Unix default): CLI commands, pipes, file operations",
+		'  `ls -la src && grep "version" package.json`',
+	],
+	bash: [
+		"- `bash`: advanced shell scripting (arrays, process substitution)",
+		'  `for f in src/*.ts; do echo "$(wc -l < "$f") $f"; done | sort -rn | head -5`',
+	],
+	pwsh: [
+		"- `pwsh` (PowerShell): cross-platform, object-oriented pipeline",
+		"  `Get-ChildItem src -Recurse -Filter *.ts | Measure-Object | Select-Object -Expand Count`",
+	],
 };
-/** 运行环境摘要，供 system prompt 注入 */
-export function getEnvInfo(): {
-	os: string;
-	shell: string;
-	cwd: string;
-} {
-	const config = getToolsConfig();
+const JS_EXAMPLES: Record<string, string[]> = {
+	bun: [
+		"- `bun` (TypeScript/JS, recommended): preprocess data, parse JSON, transform files",
+		"  ```",
+		'  import { readdir } from "node:fs/promises";',
+		'  const files = await readdir("./src", { recursive: true });',
+		'  const tsFiles = files.filter(f => f.endsWith(".ts"));',
+		"  console.log('Found ' + tsFiles.length + ' TS files');",
+		"  for (const f of tsFiles.slice(0, 10)) console.log(' - ' + f);",
+		"  ```",
+	],
+	node: [
+		"- `node` (Node.js, .mjs): JS runtime, similar to bun",
+		"  ```",
+		'  import { readdir } from "node:fs/promises";',
+		'  const files = await readdir("./src", { recursive: true });',
+		"  console.log(files.length + ' files found');",
+		"  ```",
+	],
+	deno: [
+		"- `deno` (TypeScript, --allow-all): secure-by-default runtime",
+		"  ```",
+		'  const entries = [...Deno.readDirSync("./src")];',
+		"  console.log(entries.length + ' entries');",
+		"  ```",
+	],
+};
+const PYTHON_EXAMPLES: Record<string, string[]> = {
+	python: [
+		"- `python`: data analysis, scripting",
+		"  ```",
+		"  import json",
+		'  data = json.load(open("package.json"))',
+		'  deps = data.get("dependencies", {})',
+		'  print(f"Dependencies ({len(deps)}):")',
+		'  for k, v in sorted(deps.items()): print(f"  {k}: {v}")',
+		"  ```",
+	],
+	python3: [
+		"- `python3`: same as python (use on systems where `python` is v2)",
+	],
+	uv: [
+		"- `uv` (via `uv run python`): managed Python, no global install needed",
+		"  ```",
+		"  import sys",
+		"  print(f'Python {sys.version}')",
+		"  ```",
+	],
+};
+
+const EXAMPLES_BY_GROUP: Record<string, Record<string, string[]>> = {
+	shell: SHELL_EXAMPLES,
+	js: JS_EXAMPLES,
+	python: PYTHON_EXAMPLES,
+};
+/** 根据环境快照构建 exec 工具描述 */
+function buildDescription(env: EnvSnapshot): string {
+	const lines: string[] = [
+		`Execute a script on ${env.os} (default shell: ${env.defaultShell}). Content is written to a temp file and run with the specified runtime. Returns stdout, stderr, and exit code.`,
+		"",
+	];
+
+	// 按分组输出可用 runtime
+	const groups: { label: string; key: "shell" | "js" | "python" }[] = [
+		{ label: "Shell runtimes", key: "shell" },
+		{ label: "Language runtimes (JS/TS)", key: "js" },
+		{ label: "Language runtimes (Python)", key: "python" },
+	];
+
+	for (const { label, key } of groups) {
+		const available = getAvailableByGroup(env, key);
+		if (available.length === 0) continue;
+
+		lines.push(
+			`**${label}** (${available.map((r) => `${r.name}${r.version ? ` ${r.version}` : ""}`).join(", ")}):`,
+		);
+
+		// 同组内所有可用 runtime 都展示完整示例（各有各的使用场景）
+		const examplesMap = EXAMPLES_BY_GROUP[key] ?? {};
+		for (const rt of available) {
+			const ex = examplesMap[rt.name];
+			if (ex) lines.push(...ex);
+		}
+		lines.push("");
+	}
+
+	// Best practices
+	const preferredJs = getAvailableByGroup(env, "js")[0];
+	const jsHint = preferredJs
+		? `Use \`${preferredJs.name}\` runtime for complex logic`
+		: "Use a language runtime for complex logic";
+
+	lines.push(
+		"## Best Practices",
+		"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
+		`- **${jsHint}** — when you need to parse JSON, filter arrays, do math, or produce structured summaries, write a script instead of chaining shell commands.`,
+		`- **Simple commands use default shell (\`${env.defaultShell}\`)** — \`git status\`, \`ls\`/\`dir\` don't need a language runtime.`,
+		"- **Debugging**: `2>&1` merges stderr; `> output.txt 2>&1` captures to file.",
+	);
+
+	return lines.join("\n");
+}
+/**
+ * 根据环境快照动态生成 exec 工具的 LLM 定义。
+ * 描述中只包含当前系统可用的 runtime 及其示例。
+ */
+export function makeExecToolDefinition(env: EnvSnapshot): LLMToolDefinition {
+	const available = env.runtimes.filter((r) => r.available);
+	const runtimeList = available.map((r) => r.name).join(", ");
+
 	return {
-		os: IS_WINDOWS ? "Windows" : process.platform,
-		shell: DEFAULT_RUNTIME,
-		cwd: config.workspace,
+		type: "function",
+		function: {
+			name: "exec",
+			description: buildDescription(env),
+			parameters: {
+				type: "object",
+				properties: {
+					script: {
+						type: "string",
+						description:
+							"Script content. Single command or multi-line code with imports, loops, etc.",
+					},
+					runtime: {
+						type: "string",
+						description: `Runtime (default: "${DEFAULT_RUNTIME}"). Available: ${runtimeList}.`,
+					},
+					cwd: {
+						type: "string",
+						description: "Working directory (default: injected workspace root)",
+					},
+					timeout: {
+						type: "number",
+						description:
+							"Timeout in seconds (default: 120). Process continues in background if exceeded.",
+					},
+				},
+				required: ["script"],
+				additionalProperties: false,
+			},
+		},
 	};
 }
 function extractCommandNames(script: string): string[] {
