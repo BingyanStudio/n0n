@@ -8,7 +8,7 @@
  * 此模块仅做路径计算，不调用 initConfig，避免并发请求间的全局状态竞争。
  */
 
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import type { WorkspacePaths } from "@n0n/core";
 
@@ -26,7 +26,7 @@ const SHARED_DIR = resolve(FEISHU_BASE, "shared");
  */
 export function resolveFeishuPaths(senderOpenId: string): WorkspacePaths {
 	const workspace = resolve(FEISHU_BASE, senderOpenId);
-	return {
+	const paths: WorkspacePaths = {
 		workspace,
 		workflows: resolve(workspace, "workflows"),
 		tasks: resolve(workspace, "workflows", "tasks"),
@@ -37,6 +37,13 @@ export function resolveFeishuPaths(senderOpenId: string): WorkspacePaths {
 		history: resolve(workspace, "workflows", "history"),
 		temp: resolve(workspace, ".temp"),
 	};
+
+	// 确保所有目录存在
+	for (const dir of Object.values(paths)) {
+		if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+	}
+
+	return paths;
 }
 
 /**
