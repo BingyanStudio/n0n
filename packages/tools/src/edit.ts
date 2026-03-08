@@ -9,7 +9,6 @@ import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { EditToolResult, LLMToolDefinition } from "@n0n/types";
 import { z } from "zod";
-import { getToolsConfig } from "./config.ts";
 
 /** edit 工具参数 schema */
 export const EditArgsSchema = z.object({
@@ -57,9 +56,8 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 export async function editTool(
 	callId: string,
 	args: EditArgs,
-	workspaceOverride?: string,
+	workspace: string,
 ): Promise<EditToolResult> {
-	const workspace = workspaceOverride ?? getToolsConfig().workspace;
 	const filePath = isAbsolute(args.path)
 		? args.path
 		: resolve(workspace, args.path);

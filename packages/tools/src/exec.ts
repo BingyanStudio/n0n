@@ -207,11 +207,10 @@ export async function* execToolStream(
 	callId: string,
 	args: ExecArgs,
 	confirmFn?: (question: string) => Promise<string>,
-	workspaceOverride?: { workspace: string; tempDir: string },
+	workspaceConfig?: { workspace: string; tempDir: string },
 ): AsyncGenerator<ToolStreamEvent> {
 	const runtime = args.runtime ?? DEFAULT_RUNTIME;
-	// 相对路径基于 workspace 解析，绝对路径保持不变
-	const workspace = workspaceOverride?.workspace ?? getToolsConfig().workspace;
+	const workspace = workspaceConfig?.workspace ?? getToolsConfig().workspace;
 	const cwd = args.cwd
 		? isAbsolute(args.cwd)
 			? args.cwd
@@ -238,9 +237,7 @@ export async function* execToolStream(
 
 	// Write script to temp file, execute with specified runtime
 	const ext = RUNTIME_EXT[runtime] ?? "";
-	const tempDir = resolve(
-		workspaceOverride?.tempDir ?? getToolsConfig().tempDir,
-	);
+	const tempDir = resolve(workspaceConfig?.tempDir ?? getToolsConfig().tempDir);
 	if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
 	const tmpFile = join(
 		tempDir,

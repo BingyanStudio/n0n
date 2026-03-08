@@ -19,6 +19,7 @@ import type {
 	ToolStreamEvent,
 } from "@n0n/types";
 import type { ZodType } from "zod";
+import { getToolsConfig } from "./config.ts";
 import { EDIT_TOOL_DEFINITION, EditArgsSchema, editTool } from "./edit.ts";
 import {
 	EXEC_TOOL_DEFINITION,
@@ -71,6 +72,15 @@ export interface ToolsWorkspaceOverride {
 function buildBaseRegistry(
 	toolsWorkspace?: ToolsWorkspaceOverride,
 ): Record<string, ToolEntry> {
+	// 统一解析 workspace：优先使用 per-session override，否则使用全局配置
+	const resolvedWorkspace =
+		toolsWorkspace?.workspace ?? getToolsConfig().workspace;
+	const resolvedTempDir = toolsWorkspace?.tempDir ?? getToolsConfig().tempDir;
+	const execOverride = toolsWorkspace ?? {
+		workspace: resolvedWorkspace,
+		tempDir: resolvedTempDir,
+	};
+
 	return {
 		exec: {
 			definition: EXEC_TOOL_DEFINITION,
@@ -80,28 +90,20 @@ function buildBaseRegistry(
 					tc.id,
 					ExecArgsSchema.parse(tc.args),
 					confirmFn,
-					toolsWorkspace,
+					execOverride,
 				),
 		},
 		write: {
 			definition: WRITE_TOOL_DEFINITION,
 			stream: false,
 			execute: (tc) =>
-				writeTool(
-					tc.id,
-					WriteArgsSchema.parse(tc.args),
-					toolsWorkspace?.workspace,
-				),
+				writeTool(tc.id, WriteArgsSchema.parse(tc.args), resolvedWorkspace),
 		},
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,
 			stream: false,
 			execute: (tc) =>
-				editTool(
-					tc.id,
-					EditArgsSchema.parse(tc.args),
-					toolsWorkspace?.workspace,
-				),
+				editTool(tc.id, EditArgsSchema.parse(tc.args), resolvedWorkspace),
 		},
 		reminder: {
 			definition: REMINDER_TOOL_DEFINITION,
