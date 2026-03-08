@@ -49,12 +49,14 @@ interface RuntimeDef {
 	priority: number;
 	/** 仅在指定平台探测（null = 所有平台） */
 	platforms: ("win32" | "darwin" | "linux")[] | null;
+	/** 版本解析失败时是否仍标记为可用（shell 类为 true，语言类为 false） */
+	versionOptional?: boolean;
 }
 
 const IS_WINDOWS = process.platform === "win32";
 
 const RUNTIME_DEFS: RuntimeDef[] = [
-	// Shell runtimes
+	// Shell runtimes — 使用可移植的探测方式，版本为可选信息
 	{
 		name: "cmd",
 		group: "shell",
@@ -63,15 +65,17 @@ const RUNTIME_DEFS: RuntimeDef[] = [
 		versionPattern: /(\d+\.\d+[\w.]*)/,
 		priority: 1,
 		platforms: ["win32"],
+		versionOptional: true,
 	},
 	{
 		name: "sh",
 		group: "shell",
 		cmd: "sh",
-		versionArgs: ["--version"],
-		versionPattern: /(\d+\.\d+[\w.]*)/,
+		versionArgs: ["-c", "exit 0"],
+		versionPattern: /^$/,
 		priority: 1,
 		platforms: ["darwin", "linux"],
+		versionOptional: true,
 	},
 	{
 		name: "bash",
@@ -81,6 +85,7 @@ const RUNTIME_DEFS: RuntimeDef[] = [
 		versionPattern: /(\d+\.\d+[\w.]*)/,
 		priority: 2,
 		platforms: null,
+		versionOptional: true,
 	},
 	{
 		name: "pwsh",
@@ -94,8 +99,9 @@ const RUNTIME_DEFS: RuntimeDef[] = [
 		versionPattern: /(\d+\.\d+[\w.]*)/,
 		priority: 3,
 		platforms: null,
+		versionOptional: true,
 	},
-	// JS/TS runtimes
+	// JS/TS runtimes — 版本必须匹配才标记为可用
 	{
 		name: "bun",
 		group: "js",
@@ -123,7 +129,7 @@ const RUNTIME_DEFS: RuntimeDef[] = [
 		priority: 3,
 		platforms: null,
 	},
-	// Python runtimes
+	// Python runtimes — 版本必须匹配才标记为可用（防止 Windows stub 误判）
 	{
 		name: "python",
 		group: "python",
@@ -180,22 +186,30 @@ async function probeRuntime(def: RuntimeDef): Promise<RuntimeProbe> {
 		});
 
 		const timer = setTimeout(() => proc.kill(), 5000);
-		const stdout = await new Response(proc.stdout).text();
-		const stderr = await new Response(proc.stderr).text();
-		const exitCode = await proc.exited;
-		clearTimeout(timer);
+		try {
+			const stdout = await new Response(proc.stdout).text();
+			const stderr = await new Response(proc.stderr).text();
+			const exitCode = await proc.exited;
 
-		// Windows python stub: exits 9009 or returns empty output
-		if (exitCode !== 0) return base;
+			// Windows python stub: exits 9009 or returns empty output
+			if (exitCode !== 0) return base;
 
-		const output = stdout + stderr;
-		const match = output.match(def.versionPattern);
+			const output = stdout + stderr;
+			const match = output.match(def.versionPattern);
+			const version = match?.[1] ?? null;
 
-		return {
-			...base,
-			available: true,
-			version: match?.[1] ?? "unknown",
-		};
+			// 语言类 runtime 必须成功解析版本号才标记为可用（防止 stub 误判）
+			// shell 类 runtime 版本为可选信息（如 dash 不支持 --version）
+			if (!version && !def.versionOptional) return base;
+
+			return {
+				...base,
+				available: true,
+				version,
+			};
+		} finally {
+			clearTimeout(timer);
+		}
 	} catch {
 		return base;
 	}
