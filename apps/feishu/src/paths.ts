@@ -11,9 +11,10 @@
 import { resolve } from "node:path";
 import type { WorkspacePaths } from "@n0n/core";
 
-// NOTE: process.cwd() 作为 base dir 的 fallback。Feishu 为长驻进程，启动后不变，
-// 风险较低。后续可改为从环境变量（如 N0N_RUNTIME_DIR）获取。
-const FEISHU_BASE = resolve(process.cwd(), ".runtime", "feishu");
+const FEISHU_BASE = resolve(
+	process.env.N0N_FEISHU_WORKSPACE ??
+		resolve(process.cwd(), ".runtime", "feishu"),
+);
 const SHARED_DIR = resolve(FEISHU_BASE, "shared");
 
 /**

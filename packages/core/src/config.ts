@@ -54,7 +54,7 @@ export interface PathConfig {
 
 /**
  * 解析工作区路径 — 纯函数，无副作用。
- * 未指定的路径使用默认值（相对于 workspace）。
+ * 所有子目录路径相对于 workspace 解析。
  */
 export function resolvePaths(pathConfig: PathConfig = {}): WorkspacePaths {
 	const workspace = resolve(pathConfig.workspace ?? process.cwd());

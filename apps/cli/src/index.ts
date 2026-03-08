@@ -46,7 +46,7 @@ function resolveCliWorkspacePaths(args: string[]): {
 
 	const workspace = resolve(
 		workspaceValue ??
-			process.env.N0N_WORKSPACE ??
+			process.env.N0N_CLI_WORKSPACE ??
 			resolve(process.cwd(), ".runtime", "cli"),
 	);
 	const workspacePaths = initConfig({
@@ -83,11 +83,13 @@ async function main(): Promise<void> {
 
 	switch (command) {
 		case "run": {
-			const workflowPath = args[1];
-			if (!workflowPath) {
+			const rawPath = args[1];
+			if (!rawPath) {
 				console.error("Usage: bun run apps/cli/src/index.ts run <workflow.ts>");
 				process.exit(1);
 			}
+			// 相对路径基于 workspace 解析
+			const workflowPath = resolve(workspacePaths.workspace, rawPath);
 			const result = await runWorkflow(workflowPath);
 			console.log(JSON.stringify(result, null, 2));
 			return;
