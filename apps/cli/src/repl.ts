@@ -18,10 +18,11 @@ import {
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 
 const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
+type ReplContextPaths = Pick<WorkspacePaths, "tasks" | "skills" | "schedules">;
 
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
 async function gatherContext(
-	workspacePaths: WorkspacePaths,
+	workspacePaths: ReplContextPaths,
 ): Promise<string | null> {
 	const [existing, schedules] = await Promise.all([
 		discoverWorkflows(false, workspacePaths),
@@ -50,7 +51,7 @@ async function gatherContext(
 }
 
 export async function startRepl(
-	workspacePaths: WorkspacePaths,
+	workspacePaths: ReplContextPaths,
 	initialInput?: string,
 ): Promise<void> {
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
@@ -172,7 +173,7 @@ export async function startRepl(
 				writeln(`  ${ir.error}`);
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 				writeln();
-				writeln(style.gray("可以补充信息重试，或输入 'exit' 退出:"));
+				writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
 				history.push({
@@ -181,7 +182,7 @@ export async function startRepl(
 					context: await gatherContext(workspacePaths),
 					capabilities: null,
 				});
-				continue;
+				break;
 			}
 		}
 	}
@@ -190,10 +191,6 @@ export async function startRepl(
 	writeln(style.gray("Bye!"));
 }
 
-/**
- * 将用户回答注入到 history 中最后一个 SubmitToolResult 的 userResponse 字段。
- * 这样模型在下一轮看到的是 tool result 中包含用户回答，而非独立的 user 消息。
- */
 function injectUserResponse(history: DomainMessage[], response: string): void {
 	for (let i = history.length - 1; i >= 0; i--) {
 		const msg = history[i];

@@ -20,6 +20,7 @@ import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
 const PROMPT_PATH = resolve(import.meta.dir, "prompts", "code.md");
+type CodeWorkspacePaths = Pick<WorkspacePaths, "workspace" | "temp">;
 
 /** 获取项目上下文（git status + 目录结构） */
 async function gatherContext(workspace: string): Promise<string | null> {
@@ -60,7 +61,7 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 }
 
 export async function startCodeRepl(
-	workspacePaths: WorkspacePaths,
+	workspacePaths: CodeWorkspacePaths,
 	initialInput?: string,
 ): Promise<void> {
 	initConfig({

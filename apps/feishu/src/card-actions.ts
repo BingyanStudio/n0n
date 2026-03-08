@@ -28,6 +28,8 @@ import type { FeishuCardContent } from "./cards/types.ts";
 
 // ── 类型 ──
 
+type FeishuWorkspacePaths = ReturnType<typeof resolveFeishuWorkspace>;
+
 /** 飞书卡片回调事件数据（card.action.trigger，SDK 未提供类型定义） */
 interface FeishuCardActionData {
 	operator?: { open_id?: string };
@@ -45,7 +47,7 @@ interface CardActionContext {
 	bot: FeishuBot;
 	/** 操作者的上下文（用于发送反馈消息） */
 	operatorCtx: FeishuMessageContext;
-	workspacePaths: ReturnType<typeof resolveFeishuWorkspace>;
+	workspacePaths: FeishuWorkspacePaths;
 	/** 按钮 value 数据 */
 	value: CardActionValue;
 	/** 原始卡片 message_id（用于更新卡片） */
@@ -149,7 +151,7 @@ async function onWorkflowRun(
 	}
 
 	// 异步执行工作流（回调有 5s 超时限制），完成后通过 PATCH API 发送结果
-	runWorkflow(wf.path, undefined, ctx.workspacePaths).then(
+	runWorkflow(wf.path).then(
 		async (result) => {
 			await sendFeedback(ctx, `✅ ${name}`, formatResult(result), "green");
 		},
@@ -207,7 +209,7 @@ async function onCronRun(
 	}
 
 	// 异步执行工作流，完成后通过 PATCH API 发送结果
-	runWorkflow(schedule.workflow, undefined, ctx.workspacePaths).then(
+	runWorkflow(schedule.workflow).then(
 		async (result) => {
 			await sendFeedback(ctx, `✅ ${name}`, formatResult(result), "green");
 		},

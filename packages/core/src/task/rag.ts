@@ -10,6 +10,10 @@ import { Glob } from "bun";
 import { paths, type WorkspacePaths } from "../config.ts";
 
 export type SearchSpace = "all" | "memory" | "skill" | "history";
+export type RagPaths = Pick<
+	WorkspacePaths,
+	"skills" | "memory" | "consultResult" | "history"
+>;
 
 export interface RagSearchResult {
 	query: string;
@@ -28,9 +32,7 @@ interface Candidate {
 	summary: string;
 }
 
-function getSpaceDirs(
-	workspacePaths: WorkspacePaths,
-): Record<SearchSpace, string[]> {
+function getSpaceDirs(workspacePaths: RagPaths): Record<SearchSpace, string[]> {
 	return {
 		skill: [workspacePaths.skills],
 		memory: [workspacePaths.memory, workspacePaths.consultResult],
@@ -48,7 +50,7 @@ const SUMMARY_MAX_CHARS = 600;
 
 async function collectCandidates(
 	space: SearchSpace,
-	workspacePaths: WorkspacePaths,
+	workspacePaths: RagPaths,
 ): Promise<Candidate[]> {
 	const dirs = getSpaceDirs(workspacePaths)[space];
 	const candidates: Candidate[] = [];
@@ -108,7 +110,7 @@ function extractSummary(content: string, filePath: string): string {
 export async function ragSearch(
 	query: string,
 	space: SearchSpace = "all",
-	workspacePaths: WorkspacePaths = paths,
+	workspacePaths: RagPaths = paths,
 ): Promise<RagSearchResult> {
 	const candidates = await collectCandidates(space, workspacePaths);
 

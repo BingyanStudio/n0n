@@ -12,6 +12,9 @@ import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
 
+export type SchedulePaths = Pick<WorkspacePaths, "schedules">;
+export type SchedulerPaths = Pick<WorkspacePaths, "schedules">;
+
 export interface ScheduleEntry {
 	name: string;
 	cron: string;
@@ -30,7 +33,7 @@ const ScheduleFrontmatterSchema = z.object({
 });
 
 export async function loadSchedules(
-	workspacePaths: WorkspacePaths = paths,
+	workspacePaths: SchedulePaths = paths,
 ): Promise<ScheduleEntry[]> {
 	const dir = resolve(workspacePaths.schedules);
 	if (!existsSync(dir)) return [];
@@ -65,7 +68,7 @@ export async function loadSchedules(
 export async function setScheduleEnabled(
 	name: string,
 	enabled: boolean,
-	workspacePaths: WorkspacePaths = paths,
+	workspacePaths: SchedulePaths = paths,
 ): Promise<ScheduleEntry | null> {
 	const entries = await loadSchedules(workspacePaths);
 	const target = entries.find((entry) => entry.name === name);
@@ -102,7 +105,7 @@ export async function setScheduleEnabled(
 let running = false;
 
 export async function startScheduler(
-	workspacePaths: WorkspacePaths = paths,
+	workspacePaths: SchedulerPaths = paths,
 ): Promise<void> {
 	if (running) return;
 	running = true;
@@ -127,7 +130,7 @@ export async function startScheduler(
 				console.log(`[scheduler] Triggering: ${entry.name}`);
 
 				if (entry.workflow) {
-					runWorkflow(entry.workflow, undefined, workspacePaths).then(
+					runWorkflow(entry.workflow).then(
 						(result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
