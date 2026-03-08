@@ -88,7 +88,8 @@ export async function startRepl(
 		});
 
 	writeln(
-		style.bold("n0n") + style.gray(" — Natural Language Workflow Engine"),
+		style.bold("n0n") +
+			style.gray(` — Natural Language Workflow Engine [${paths.workspace}]`),
 	);
 	writeln(
 		style.gray('输入任务描述，AI 将创建可复用的 workflow。输入 "exit" 退出。'),
