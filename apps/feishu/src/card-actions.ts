@@ -10,13 +10,12 @@
  * - cron_run: 立即运行定时任务的关联工作流
  */
 
-import { resolve } from "node:path";
 import {
 	discoverWorkflows,
-	initConfig,
 	loadSchedules,
 	runWorkflow,
 	setScheduleEnabled,
+	type WorkspacePaths,
 } from "@n0n/core";
 import type { FeishuBot, FeishuMessageContext } from "./bot.ts";
 import {
@@ -25,10 +24,9 @@ import {
 	type CronItem,
 } from "./cards/index.ts";
 import type { FeishuCardContent } from "./cards/types.ts";
+import { resolveFeishuPaths } from "./paths.ts";
 
 // ── 类型 ──
-
-type FeishuWorkspacePaths = ReturnType<typeof resolveFeishuWorkspace>;
 
 /** 飞书卡片回调事件数据（card.action.trigger，SDK 未提供类型定义） */
 interface FeishuCardActionData {
@@ -47,25 +45,11 @@ interface CardActionContext {
 	bot: FeishuBot;
 	/** 操作者的上下文（用于发送反馈消息） */
 	operatorCtx: FeishuMessageContext;
-	paths: FeishuWorkspacePaths;
+	paths: WorkspacePaths;
 	/** 按钮 value 数据 */
 	value: CardActionValue;
 	/** 原始卡片 message_id（用于更新卡片） */
 	messageId: string | null;
-}
-
-function resolveFeishuWorkspace(senderOpenId: string) {
-	return initConfig({
-		workspace: resolve(process.cwd(), ".runtime", "feishu", senderOpenId),
-		workflows: "workflows",
-		tasks: "workflows/tasks",
-		skills: "workflows/skills",
-		schedules: "workflows/schedules",
-		memory: "workflows/memory",
-		consultResult: "workflows/consult-result",
-		history: "workflows/history",
-		temp: ".temp",
-	});
 }
 
 /**
@@ -116,7 +100,7 @@ export async function handleCardAction(
 			messageId: null,
 			recipient: { receiveIdType: "open_id", receiveId: operatorId },
 		},
-		paths: resolveFeishuWorkspace(operatorId),
+		paths: resolveFeishuPaths(operatorId),
 		value,
 		messageId,
 	};

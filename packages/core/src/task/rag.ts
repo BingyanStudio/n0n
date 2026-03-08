@@ -37,12 +37,7 @@ function getSpaceDirs(paths: RagPaths): Record<SearchSpace, string[]> {
 		skill: [paths.skills],
 		memory: [paths.memory, paths.consultResult],
 		history: [paths.history],
-		all: [
-			paths.skills,
-			paths.memory,
-			paths.consultResult,
-			paths.history,
-		],
+		all: [paths.skills, paths.memory, paths.consultResult, paths.history],
 	};
 }
 

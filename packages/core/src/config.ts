@@ -101,6 +101,19 @@ export function resolvePaths(pathConfig: PathConfig = {}): WorkspacePaths {
  */
 export const lagacy_paths = resolvePaths();
 
+/** 最近一次 initConfig 解析出的路径（反映当前全局配置状态） */
+let _currentPaths: WorkspacePaths = lagacy_paths;
+
+/**
+ * 获取当前全局配置对应的工作区路径。
+ *
+ * 与 `lagacy_paths`（模块加载时快照）不同，此函数返回最近一次
+ * `initConfig()` 调用后的路径，能正确反映应用启动时的配置。
+ */
+export function getCurrentPaths(): WorkspacePaths {
+	return _currentPaths;
+}
+
 export const config = {
 	llm: {
 		baseUrl: requireEnv("LLM_BASE_URL"),
@@ -123,6 +136,7 @@ export const config = {
  */
 export function initConfig(pathConfig: PathConfig = {}): WorkspacePaths {
 	const resolvedPaths = resolvePaths(pathConfig);
+	_currentPaths = resolvedPaths;
 	initLLMConfig(config.llm);
 	initToolsConfig({
 		security: config.security,

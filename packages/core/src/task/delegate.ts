@@ -5,11 +5,16 @@
  */
 
 import { resolve } from "node:path";
-import { getEnvInfo } from "@n0n/tools";
+import { initToolsConfig } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
-import { type PathConfig, lagacy_paths, resolvePaths } from "../config.ts";
+import {
+	config,
+	getCurrentPaths,
+	type PathConfig,
+	resolvePaths,
+} from "../config.ts";
 import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
@@ -33,9 +38,20 @@ export async function delegateTask<T = unknown>(
 		pathConfig?: PathConfig;
 	},
 ): Promise<TaskResult<T>> {
+	// 优先使用显式传入的 pathConfig；否则使用当前全局配置路径
 	const resolvedPaths = options?.pathConfig
 		? resolvePaths(options.pathConfig)
-		: lagacy_paths;
+		: getCurrentPaths();
+
+	// 确保 tools 层（exec cwd / temp）与 resolvedPaths 对齐
+	if (options?.pathConfig) {
+		initToolsConfig({
+			security: config.security,
+			agent: config.agent,
+			workspace: resolvedPaths.workspace,
+			tempDir: resolvedPaths.temp,
+		});
+	}
 	const allSkills = await discoverSkills(resolvedPaths.skills);
 	const skillSummaryText = formatSkillSummaries(allSkills);
 
@@ -121,12 +137,13 @@ export async function delegateTask<T = unknown>(
 		workflowList,
 	);
 
-	const env = getEnvInfo();
-	const envLine = `Environment: OS=${env.os}, Shell=${env.shell}, CWD=${env.cwd}`;
-	const shellHint =
-		env.os === "Windows"
-			? 'IMPORTANT: You are on Windows. Use Windows commands (e.g., `type` instead of `cat`, `dir` instead of `ls`, `findstr` instead of `grep`). Paths use backslashes. You can also use `bun -e "..."` for cross-platform file operations.'
-			: "You are on a Unix-like system. Standard shell commands (cat, ls, grep, etc.) are available.";
+	const IS_WINDOWS = process.platform === "win32";
+	const os = IS_WINDOWS ? "Windows" : process.platform;
+	const shell = IS_WINDOWS ? "cmd" : "sh";
+	const envLine = `Environment: OS=${os}, Shell=${shell}, CWD=${resolvedPaths.workspace}`;
+	const shellHint = IS_WINDOWS
+		? 'IMPORTANT: You are on Windows. Use Windows commands (e.g., `type` instead of `cat`, `dir` instead of `ls`, `findstr` instead of `grep`). Paths use backslashes. You can also use `bun -e "..."` for cross-platform file operations.'
+		: "You are on a Unix-like system. Standard shell commands (cat, ls, grep, etc.) are available.";
 
 	const promptTemplate = await Bun.file(PROMPT_PATH).text();
 	const systemPrompt = promptTemplate
