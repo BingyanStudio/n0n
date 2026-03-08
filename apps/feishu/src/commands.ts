@@ -163,7 +163,7 @@ export async function handleCommand(
 					session.currentTask.abortController.abort();
 					session.currentTask = null;
 				}
-				resetSession(sessionKey, ctx, systemPrompt, session.workspacePaths);
+				resetSession(sessionKey, ctx, systemPrompt, session.paths);
 				await sendText(bot, ctx, "已重置", "🔄 会话已重置。");
 			}
 			return;
@@ -184,7 +184,7 @@ export async function handleCommand(
 			return;
 
 		case "crons_list": {
-			const schedules = await loadSchedules(session.workspacePaths);
+			const schedules = await loadSchedules(session.paths);
 			const crons: CronItem[] = schedules.map((s) => ({
 				name: s.name,
 				cron: s.cron,
@@ -200,7 +200,7 @@ export async function handleCommand(
 			const ok = await setScheduleEnabled(
 				cmd.name,
 				cmd.enabled,
-				session.workspacePaths,
+				session.paths,
 			);
 			await sendText(
 				bot,
@@ -214,7 +214,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_list": {
-			const workflows = await discoverWorkflows(false, session.workspacePaths);
+			const workflows = await discoverWorkflows(false, session.paths);
 			const items = workflows.map((w) => ({
 				name: w.name,
 				description: w.description || "(no description)",
@@ -226,7 +226,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_show": {
-			const workflows = await discoverWorkflows(false, session.workspacePaths);
+			const workflows = await discoverWorkflows(false, session.paths);
 			const wf = workflows.find((w) => w.name === cmd.name);
 			if (!wf) {
 				await sendText(bot, ctx, "工作流", `❌ 未找到: ${cmd.name}`);
@@ -242,7 +242,7 @@ export async function handleCommand(
 		}
 
 		case "workflows_run": {
-			const workflows = await discoverWorkflows(false, session.workspacePaths);
+			const workflows = await discoverWorkflows(false, session.paths);
 			const wf = workflows.find((w) => w.name === cmd.name);
 			if (!wf) {
 				await sendText(bot, ctx, "工作流", `❌ 未找到: ${cmd.name}`);

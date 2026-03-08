@@ -52,9 +52,9 @@ export interface SkillContent extends SkillMeta {
 	scripts: string[];
 }
 
-import { paths } from "../config.ts";
+import { lagacy_paths } from "../config.ts";
 
-const DEFAULT_SKILLS_DIR = paths.skills;
+const DEFAULT_SKILLS_DIR = lagacy_paths.skills;
 
 /**
  * 发现所有 skill：扫描 SKILL.md，只解析 frontmatter（轻量）

@@ -13,7 +13,7 @@ import type { FeishuMessageContext } from "./bot.ts";
 export interface FeishuSession {
 	history: DomainMessage[];
 	ctx: FeishuMessageContext;
-	workspacePaths: WorkspacePaths;
+	paths: WorkspacePaths;
 	currentTask: {
 		abortController: AbortController;
 		startedAt: number;
@@ -35,18 +35,18 @@ export function getOrCreateSession(
 	sessionKey: string,
 	ctx: FeishuMessageContext,
 	systemPrompt: string,
-	workspacePaths: WorkspacePaths,
+	paths: WorkspacePaths,
 ): FeishuSession {
 	const existing = sessions.get(sessionKey);
 	if (existing) {
 		existing.ctx = ctx;
-		existing.workspacePaths = workspacePaths;
+		existing.paths = paths;
 		return existing;
 	}
 	const session: FeishuSession = {
 		history: createInitialHistory(systemPrompt, ctx),
 		ctx,
-		workspacePaths,
+		paths: paths,
 		currentTask: null,
 	};
 	sessions.set(sessionKey, session);
@@ -57,12 +57,12 @@ export function resetSession(
 	sessionKey: string,
 	ctx: FeishuMessageContext,
 	systemPrompt: string,
-	workspacePaths: WorkspacePaths,
+	paths: WorkspacePaths,
 ): FeishuSession {
 	const session: FeishuSession = {
 		history: createInitialHistory(systemPrompt, ctx),
 		ctx,
-		workspacePaths,
+		paths: paths,
 		currentTask: null,
 	};
 	sessions.set(sessionKey, session);

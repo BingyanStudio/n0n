@@ -47,7 +47,7 @@ interface CardActionContext {
 	bot: FeishuBot;
 	/** 操作者的上下文（用于发送反馈消息） */
 	operatorCtx: FeishuMessageContext;
-	workspacePaths: FeishuWorkspacePaths;
+	paths: FeishuWorkspacePaths;
 	/** 按钮 value 数据 */
 	value: CardActionValue;
 	/** 原始卡片 message_id（用于更新卡片） */
@@ -116,7 +116,7 @@ export async function handleCardAction(
 			messageId: null,
 			recipient: { receiveIdType: "open_id", receiveId: operatorId },
 		},
-		workspacePaths: resolveFeishuWorkspace(operatorId),
+		paths: resolveFeishuWorkspace(operatorId),
 		value,
 		messageId,
 	};
@@ -144,7 +144,7 @@ async function onWorkflowRun(
 	const name = ctx.value.name as string;
 	if (!name) return undefined;
 
-	const workflows = await discoverWorkflows(false, ctx.workspacePaths);
+	const workflows = await discoverWorkflows(false, ctx.paths);
 	const wf = workflows.find((w) => w.name === name);
 	if (!wf) {
 		return { toast: { type: "error", content: `未找到工作流: ${name}` } };
@@ -170,13 +170,13 @@ async function onCronToggle(
 	const enabled = ctx.value.enabled as boolean;
 	if (!name || enabled === undefined) return undefined;
 
-	const ok = await setScheduleEnabled(name, enabled, ctx.workspacePaths);
+	const ok = await setScheduleEnabled(name, enabled, ctx.paths);
 	if (!ok) {
 		return { toast: { type: "error", content: `未找到: ${name}` } };
 	}
 
 	// 重新加载并返回更新后的卡片（SDK 会原地替换）
-	const schedules = await loadSchedules(ctx.workspacePaths);
+	const schedules = await loadSchedules(ctx.paths);
 	const crons: CronItem[] = schedules.map((s) => ({
 		name: s.name,
 		cron: s.cron,
@@ -193,7 +193,7 @@ async function onCronRun(
 	const name = ctx.value.name as string;
 	if (!name) return undefined;
 
-	const schedules = await loadSchedules(ctx.workspacePaths);
+	const schedules = await loadSchedules(ctx.paths);
 	const schedule = schedules.find((s) => s.name === name);
 	if (!schedule) {
 		return { toast: { type: "error", content: `未找到: ${name}` } };
