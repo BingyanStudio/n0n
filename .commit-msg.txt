@@ -1,8 +1,0 @@
-fix: simplify env var surface, resolve workflow paths against workspace
-
-- Remove all *_DIR env var fallbacks from resolvePaths() (WORKFLOWS_DIR,
-  TASKS_DIR, etc.) — sub-paths are always relative to workspace
-- Add per-app workspace env vars: N0N_CLI_WORKSPACE, N0N_CODE_WORKSPACE,
-  N0N_FEISHU_WORKSPACE
-- CLI run subcommand resolves workflowPath against workspace (not cwd)
-- Feishu scheduler workspace uses N0N_FEISHU_WORKSPACE env var
