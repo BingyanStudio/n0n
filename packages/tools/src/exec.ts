@@ -17,6 +17,7 @@
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { wrapTagFor } from "@n0n/shared";
 import type {
 	ExecToolResult,
 	LLMToolDefinition,
@@ -158,34 +159,41 @@ const EXAMPLES_BY_GROUP: Record<string, Record<string, string[]>> = {
 	python: PYTHON_EXAMPLES,
 };
 /** 根据环境快照构建 exec 工具描述 */
-function buildDescription(env: EnvSnapshot): string {
-	const lines: string[] = [
+/** 构建单个 runtime 组的描述块 */
+function buildGroupBlock(
+	label: string,
+	key: "shell" | "js" | "python",
+	env: EnvSnapshot,
+	model: string,
+): string | null {
+	const available = getAvailableByGroup(env, key);
+	if (available.length === 0) return null;
+
+	const header = `${label} (${available.map((r) => `${r.name}${r.version ? ` ${r.version}` : ""}`).join(", ")})`;
+	const examplesMap = EXAMPLES_BY_GROUP[key] ?? {};
+	const body: string[] = [];
+	for (const rt of available) {
+		const ex = examplesMap[rt.name];
+		if (ex) body.push(...ex);
+	}
+	return wrapTagFor(key, `${header}\n${body.join("\n")}`, model);
+}
+
+/** 根据环境快照构建 exec 工具描述（XML tag 结构化） */
+function buildDescription(env: EnvSnapshot, model: string): string {
+	const parts: string[] = [
 		`Execute a script on ${env.os} (default shell: ${env.defaultShell}). Content is written to a temp file and run with the specified runtime. Returns stdout, stderr, and exit code.`,
-		"",
 	];
 
-	// 按分组输出可用 runtime
 	const groups: { label: string; key: "shell" | "js" | "python" }[] = [
 		{ label: "Shell runtimes", key: "shell" },
-		{ label: "Language runtimes (JS/TS)", key: "js" },
-		{ label: "Language runtimes (Python)", key: "python" },
+		{ label: "JS/TS runtimes", key: "js" },
+		{ label: "Python runtimes", key: "python" },
 	];
 
 	for (const { label, key } of groups) {
-		const available = getAvailableByGroup(env, key);
-		if (available.length === 0) continue;
-
-		lines.push(
-			`**${label}** (${available.map((r) => `${r.name}${r.version ? ` ${r.version}` : ""}`).join(", ")}):`,
-		);
-
-		// 同组内所有可用 runtime 都展示完整示例（各有各的使用场景）
-		const examplesMap = EXAMPLES_BY_GROUP[key] ?? {};
-		for (const rt of available) {
-			const ex = examplesMap[rt.name];
-			if (ex) lines.push(...ex);
-		}
-		lines.push("");
+		const block = buildGroupBlock(label, key, env, model);
+		if (block) parts.push(block);
 	}
 
 	// Best practices
@@ -194,21 +202,28 @@ function buildDescription(env: EnvSnapshot): string {
 		? `Use \`${preferredJs.name}\` runtime for complex logic`
 		: "Use a language runtime for complex logic";
 
-	lines.push(
-		"## Best Practices",
+	const tips = [
 		"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
 		`- **${jsHint}** — when you need to parse JSON, filter arrays, do math, or produce structured summaries, write a script instead of chaining shell commands.`,
 		`- **Simple commands use default shell (\`${env.defaultShell}\`)** — \`git status\`, \`ls\`/\`dir\` don't need a language runtime.`,
 		"- **Debugging**: `2>&1` merges stderr; `> output.txt 2>&1` captures to file.",
-	);
+	].join("\n");
+	parts.push(wrapTagFor("best_practices", tips, model));
 
-	return lines.join("\n");
+	return parts.join("\n");
 }
+
 /**
  * 根据环境快照动态生成 exec 工具的 LLM 定义。
- * 描述中只包含当前系统可用的 runtime 及其示例。
+ * 描述中只包含当前系统可用的 runtime 及其示例，使用 XML tag 结构化。
+ *
+ * @param env 环境快照（来自 detectEnv）
+ * @param model LLM 模型名称（用于选择 tag 风格）
  */
-export function makeExecToolDefinition(env: EnvSnapshot): LLMToolDefinition {
+export function makeExecToolDefinition(
+	env: EnvSnapshot,
+	model = "",
+): LLMToolDefinition {
 	const available = env.runtimes.filter((r) => r.available);
 	const runtimeList = available.map((r) => r.name).join(", ");
 
@@ -216,7 +231,7 @@ export function makeExecToolDefinition(env: EnvSnapshot): LLMToolDefinition {
 		type: "function",
 		function: {
 			name: "exec",
-			description: buildDescription(env),
+			description: buildDescription(env, model),
 			parameters: {
 				type: "object",
 				properties: {

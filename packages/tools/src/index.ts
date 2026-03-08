@@ -137,13 +137,15 @@ export const REGISTERED_TOOLS = new Set([
  *
  * @param schema 可选的 Zod schema，用于约束 submit 的参数结构。
  * @param toolsWorkspace 可选的工作区覆盖，用于 per-session 隔离。
+ * @param model LLM 模型名称，用于选择 XML tag 风格（可选）。
  */
 export async function makeToolkit(
 	schema?: ZodType,
 	toolsWorkspace?: ToolsWorkspaceOverride,
+	model?: string,
 ): Promise<Toolkit> {
 	const env = await detectEnv();
-	const execToolDef = makeExecToolDefinition(env);
+	const execToolDef = makeExecToolDefinition(env, model);
 	const hasSchema = !!schema;
 
 	const submitEntry: ToolEntry = {
