@@ -2,6 +2,7 @@
  * 全局配置 — 从环境变量读取，初始化所有子包配置
  */
 
+import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { initLLMConfig } from "@n0n/llm";
 import { initToolsConfig } from "@n0n/tools";
@@ -106,11 +107,23 @@ export const config = {
 } as const;
 
 /**
+ * 确保 WorkspacePaths 中所有目录存在，不存在则递归创建。
+ */
+export function ensureWorkspaceDirs(paths: WorkspacePaths): void {
+	for (const dir of Object.values(paths)) {
+		if (!existsSync(dir)) {
+			mkdirSync(dir, { recursive: true });
+		}
+	}
+}
+
+/**
  * 初始化所有子包配置（应用启动时调用一次）。
  */
 export function initConfig(pathConfig: PathConfig = {}): WorkspacePaths {
 	const resolvedPaths = resolvePaths(pathConfig);
 	_currentPaths = resolvedPaths;
+	ensureWorkspaceDirs(resolvedPaths);
 	initLLMConfig(config.llm);
 	initToolsConfig({
 		security: config.security,
