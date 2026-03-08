@@ -46,7 +46,11 @@ export async function startFeishuService(): Promise<void> {
 
 	// 启动时初始化一次全局配置（scheduler 使用的默认 workspace）
 	const schedulerPaths = initConfig({
-		workspace: resolve(process.cwd(), ".runtime", "feishu", "scheduler"),
+		workspace: resolve(
+			process.env.N0N_FEISHU_WORKSPACE ??
+				resolve(process.cwd(), ".runtime", "feishu"),
+			"scheduler",
+		),
 		workflows: "workflows",
 		tasks: "workflows/tasks",
 		skills: "workflows/skills",

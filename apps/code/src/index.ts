@@ -20,7 +20,9 @@ if (workspaceIdx >= 0) {
 }
 
 const workspace = resolve(
-	workspaceArg ?? resolve(process.cwd(), ".runtime", "code"),
+	workspaceArg ??
+		process.env.N0N_CODE_WORKSPACE ??
+		resolve(process.cwd(), ".runtime", "code"),
 );
 const workspacePaths = initConfig({
 	workspace,
