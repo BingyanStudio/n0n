@@ -19,7 +19,9 @@ if (workspaceIdx >= 0) {
 	rawArgs.splice(workspaceIdx, 2);
 }
 
-const workspace = resolve(workspaceArg ?? process.cwd());
+const workspace = resolve(
+	workspaceArg ?? resolve(process.cwd(), ".runtime", "code"),
+);
 const workspacePaths = initConfig({
 	workspace,
 	temp: ".temp",
