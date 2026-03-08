@@ -14,18 +14,25 @@
 
 import { resolve } from "node:path";
 import * as lark from "@larksuiteoapi/node-sdk";
-import { INTERACTIVE_PROMPT_PATH, initConfig, startScheduler } from "@n0n/core";
+import {
+	INTERACTIVE_PROMPT_PATH,
+	initConfig,
+	loadSchedules,
+	type SchedulerHandle,
+	startScheduler,
+} from "@n0n/core";
 import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
 import { handleCommand, parseCommand, parseMenuCommand } from "./commands.ts";
-import { resolveFeishuPaths } from "./paths.ts";
+import { discoverAllUserPaths, resolveFeishuPaths } from "./paths.ts";
 import { runFeishuRound } from "./round.ts";
 import {
 	buildSessionKey,
 	getOrCreateSession,
 	shouldProcessMessage,
 } from "./session.ts";
+import { ensureUserInfo } from "./user-info.ts";
 
 const PROMPT_PATH = INTERACTIVE_PROMPT_PATH;
 
@@ -44,24 +51,34 @@ export async function startFeishuService(): Promise<void> {
 	const bot = new FeishuBot({ appId, appSecret, domain });
 	const systemPrompt = await Bun.file(PROMPT_PATH).text();
 
-	// 启动时初始化一次全局配置（scheduler 使用的默认 workspace）
-	const schedulerPaths = initConfig({
+	// 启动时初始化全局配置（LLM/tools）
+	initConfig({
 		workspace: resolve(
 			process.env.N0N_FEISHU_WORKSPACE ??
 				resolve(process.cwd(), ".runtime", "feishu"),
-			"scheduler",
 		),
-		workflows: "workflows",
-		tasks: "workflows/tasks",
-		skills: "workflows/skills",
-		schedules: "workflows/schedules",
-		memory: "workflows/memory",
-		consultResult: "workflows/consult-result",
-		history: "workflows/history",
-		temp: ".temp",
 	});
 
-	await startScheduler(schedulerPaths);
+	// 扫描所有已有用户目录，为有 schedule 的用户启动 scheduler
+	const schedulerHandles: SchedulerHandle[] = [];
+	const allUserPaths = discoverAllUserPaths();
+	for (const userPaths of allUserPaths) {
+		const schedules = await loadSchedules(userPaths);
+		if (schedules.length > 0) {
+			console.log(
+				`[feishu] Starting scheduler for ${userPaths.workspace} (${schedules.length} schedules)`,
+			);
+			const handle = await startScheduler(userPaths);
+			schedulerHandles.push(handle);
+		}
+	}
+	if (schedulerHandles.length === 0) {
+		console.log("[feishu] No user schedules found at startup.");
+	}
+
+	process.on("SIGINT", () => {
+		for (const h of schedulerHandles) h.stop();
+	});
 
 	const dispatcher = new lark.EventDispatcher({
 		encryptKey,
@@ -81,11 +98,20 @@ export async function startFeishuService(): Promise<void> {
 
 			const sessionKey = buildSessionKey(ctx);
 			const workspacePaths = resolveFeishuPaths(ctx.senderOpenId ?? "unknown");
+
+			// 懒加载用户信息（首次对话时调 API，后续按 TTL 刷新）
+			const userInfo = await ensureUserInfo(
+				bot,
+				ctx.senderOpenId,
+				workspacePaths.memory,
+			);
+
 			const session = getOrCreateSession(
 				sessionKey,
 				ctx,
 				systemPrompt,
 				workspacePaths,
+				userInfo,
 			);
 
 			console.log(
@@ -144,11 +170,19 @@ export async function startFeishuService(): Promise<void> {
 
 			const sessionKey = buildSessionKey(ctx);
 			const workspacePaths = resolveFeishuPaths(ctx.senderOpenId ?? "unknown");
+
+			const userInfo = await ensureUserInfo(
+				bot,
+				ctx.senderOpenId ?? "unknown",
+				workspacePaths.memory,
+			);
+
 			const session = getOrCreateSession(
 				sessionKey,
 				ctx,
 				systemPrompt,
 				workspacePaths,
+				userInfo,
 			);
 
 			const menuCommand = parseMenuCommand(data?.event_key);

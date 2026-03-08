@@ -112,13 +112,14 @@ export async function setScheduleEnabled(
 
 // ── 触发循环 ──
 
-let running = false;
+export interface SchedulerHandle {
+	stop(): void;
+}
 
 export async function startScheduler(
 	paths: SchedulerPaths = getCurrentPaths(),
-): Promise<void> {
-	if (running) return;
-	running = true;
+): Promise<SchedulerHandle> {
+	let running = true;
 
 	console.log(
 		`[scheduler] Started. Watching ${paths.schedules}/*.mdc every 60s.`,
@@ -176,13 +177,11 @@ export async function startScheduler(
 	const interval = setInterval(tick, 60_000);
 	await tick();
 
-	process.on("SIGINT", () => {
-		running = false;
-		clearInterval(interval);
-		console.log("[scheduler] Stopped.");
-	});
-}
-
-export function stopScheduler(): void {
-	running = false;
+	return {
+		stop() {
+			running = false;
+			clearInterval(interval);
+			console.log(`[scheduler] Stopped (${paths.schedules}).`);
+		},
+	};
 }

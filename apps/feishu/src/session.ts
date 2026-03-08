@@ -6,7 +6,7 @@
 
 import type { WorkspacePaths } from "@n0n/core";
 import type { DomainMessage } from "@n0n/types";
-import type { FeishuMessageContext } from "./bot.ts";
+import type { FeishuMessageContext, FeishuUserInfo } from "./bot.ts";
 
 // ── 类型 ──
 
@@ -36,6 +36,7 @@ export function getOrCreateSession(
 	ctx: FeishuMessageContext,
 	systemPrompt: string,
 	paths: WorkspacePaths,
+	userInfo?: FeishuUserInfo | null,
 ): FeishuSession {
 	const existing = sessions.get(sessionKey);
 	if (existing) {
@@ -44,7 +45,7 @@ export function getOrCreateSession(
 		return existing;
 	}
 	const session: FeishuSession = {
-		history: createInitialHistory(systemPrompt, ctx),
+		history: createInitialHistory(systemPrompt, ctx, paths, userInfo),
 		ctx,
 		paths: paths,
 		currentTask: null,
@@ -58,9 +59,10 @@ export function resetSession(
 	ctx: FeishuMessageContext,
 	systemPrompt: string,
 	paths: WorkspacePaths,
+	userInfo?: FeishuUserInfo | null,
 ): FeishuSession {
 	const session: FeishuSession = {
-		history: createInitialHistory(systemPrompt, ctx),
+		history: createInitialHistory(systemPrompt, ctx, paths, userInfo),
 		ctx,
 		paths: paths,
 		currentTask: null,
@@ -104,7 +106,10 @@ export function resetSessionsByUser(
 		}
 		existing.history = [
 			{ type: "system", content: systemPrompt },
-			{ type: "system", content: buildFeishuSystemContext(existing.ctx) },
+			{
+				type: "system",
+				content: buildFeishuSystemContext(existing.ctx, existing.paths),
+			},
 		];
 	}
 	return keys.length;
@@ -165,22 +170,35 @@ export function shouldProcessMessage(ctx: FeishuMessageContext): boolean {
 function createInitialHistory(
 	systemPrompt: string,
 	ctx: FeishuMessageContext,
+	paths: WorkspacePaths,
+	userInfo?: FeishuUserInfo | null,
 ): DomainMessage[] {
 	return [
 		{ type: "system", content: systemPrompt },
-		{ type: "system", content: buildFeishuSystemContext(ctx) },
+		{ type: "system", content: buildFeishuSystemContext(ctx, paths, userInfo) },
 	];
 }
 
-function buildFeishuSystemContext(ctx: FeishuMessageContext): string {
-	return [
-		"Feishu runtime context (trusted):",
-		`- source: feishu`,
-		`- chat_id: ${ctx.chatId}`,
-		`- chat_type: ${ctx.chatType}`,
-		`- sender_open_id: ${ctx.senderOpenId ?? ""}`,
-		`- sender_user_id: ${ctx.senderUserId ?? ""}`,
-		`- sender_union_id: ${ctx.senderUnionId ?? ""}`,
-		`- tenant_key: ${ctx.tenantKey ?? ""}`,
-	].join("\n");
+function buildFeishuSystemContext(
+	ctx: FeishuMessageContext,
+	paths: WorkspacePaths,
+	userInfo?: FeishuUserInfo | null,
+): string {
+	const lines: string[] = ["Feishu runtime context (trusted):"];
+
+	// 用户可读信息
+	if (userInfo?.name) lines.push(`- user_name: ${userInfo.name}`);
+	if (userInfo?.nickname) lines.push(`- nickname: ${userInfo.nickname}`);
+	if (userInfo?.jobTitle) lines.push(`- job_title: ${userInfo.jobTitle}`);
+	if (ctx.chatType) lines.push(`- chat_type: ${ctx.chatType}`);
+
+	// 引导模型通过文件获取完整数据
+	lines.push(
+		"",
+		"User identity details (open_id, chat_id, tenant_key, etc.) and full profile",
+		`are stored in: ${paths.memory}/user-info.json`,
+		"Import this JSON file when you need to use these values in code or API calls.",
+	);
+
+	return lines.join("\n");
 }

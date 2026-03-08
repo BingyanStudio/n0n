@@ -36,6 +36,19 @@ export interface FeishuMessageContext {
 	recipient: FeishuRecipient;
 }
 
+export interface FeishuUserInfo {
+	openId: string;
+	name: string | null;
+	enName: string | null;
+	nickname: string | null;
+	avatar: string | null;
+	email: string | null;
+	mobile: string | null;
+	departmentIds: string[];
+	jobTitle: string | null;
+	updatedAt: string;
+}
+
 export interface FeishuBotConfig {
 	appId: string;
 	appSecret: string;
@@ -231,6 +244,38 @@ export class FeishuBot {
 				sequence,
 			},
 		});
+	}
+
+	// ── 用户信息 API ──
+
+	/**
+	 * 通过 open_id 获取用户详细信息（姓名、头像、部门等）。
+	 * 需要 contact:user.base:readonly 权限。
+	 */
+	async getUserInfo(openId: string): Promise<FeishuUserInfo | null> {
+		try {
+			const res = await this.client.contact.v3.user.get({
+				path: { user_id: openId },
+				params: { user_id_type: "open_id" },
+			});
+			const user = res?.data?.user;
+			if (!user) return null;
+			return {
+				openId,
+				name: user.name ?? null,
+				enName: user.en_name ?? null,
+				nickname: user.nickname ?? null,
+				avatar: user.avatar?.avatar_origin ?? user.avatar?.avatar_240 ?? null,
+				email: user.email ?? null,
+				mobile: user.mobile ?? null,
+				departmentIds: (user.department_ids as string[]) ?? [],
+				jobTitle: user.job_title ?? null,
+				updatedAt: new Date().toISOString(),
+			};
+		} catch (err) {
+			console.error(`[feishu] getUserInfo failed for ${openId}:`, err);
+			return null;
+		}
 	}
 
 	/** 更新卡片配置（如开关流式模式） */
