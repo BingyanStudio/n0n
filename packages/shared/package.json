@@ -1,5 +1,5 @@
 {
-	"name": "@n0n/llm",
+	"name": "@n0n/shared",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
@@ -7,7 +7,6 @@
 		".": "./src/index.ts"
 	},
 	"dependencies": {
-		"@n0n/types": "workspace:*",
-		"@n0n/shared": "workspace:*"
+		"@n0n/types": "workspace:*"
 	}
 }

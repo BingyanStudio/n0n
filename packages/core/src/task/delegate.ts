@@ -138,18 +138,8 @@ export async function delegateTask<T = unknown>(
 		workflowList,
 	);
 
-	const IS_WINDOWS = process.platform === "win32";
-	const os = IS_WINDOWS ? "Windows" : process.platform;
-	const shell = IS_WINDOWS ? "cmd" : "sh";
-	const envLine = `Environment: OS=${os}, Shell=${shell}, CWD=${resolvedPaths.workspace}`;
-	const shellHint = IS_WINDOWS
-		? 'IMPORTANT: You are on Windows. Use Windows commands (e.g., `type` instead of `cat`, `dir` instead of `ls`, `findstr` instead of `grep`). Paths use backslashes. You can also use `bun -e "..."` for cross-platform file operations.'
-		: "You are on a Unix-like system. Standard shell commands (cat, ls, grep, etc.) are available.";
-
 	const promptTemplate = await Bun.file(PROMPT_PATH).text();
-	let systemPrompt = promptTemplate
-		.replace("{{ENV_LINE}}", envLine)
-		.replace("{{SHELL_HINT}}", shellHint);
+	let systemPrompt = promptTemplate;
 
 	const agentsMd = await loadAgentsMd(resolvedPaths.workspace);
 	if (agentsMd) {

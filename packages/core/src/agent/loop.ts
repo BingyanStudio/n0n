@@ -7,6 +7,7 @@
 
 import {
 	chatCompletionStream,
+	getLLMConfig,
 	StreamAccumulator,
 	toAPIMessages,
 } from "@n0n/llm";
@@ -52,7 +53,11 @@ export async function agentLoop<T = unknown>(
 ): Promise<AgentResult<T>> {
 	const maxIter = options?.maxIterations ?? config.agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
-	const toolkit = makeToolkit(options?.schema, options?.toolsWorkspace);
+	const toolkit = await makeToolkit(
+		options?.schema,
+		options?.toolsWorkspace,
+		getLLMConfig().model,
+	);
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
