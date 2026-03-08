@@ -45,18 +45,20 @@ function resolveCliWorkspacePaths(args: string[]): {
 	}
 
 	const workspace = resolve(
-		workspaceValue ?? process.env.N0N_WORKSPACE ?? process.cwd(),
+		workspaceValue ??
+			process.env.N0N_WORKSPACE ??
+			resolve(process.cwd(), ".runtime", "cli"),
 	);
 	const workspacePaths = initConfig({
 		workspace,
-		workflows: ".runtime/cli/workflows",
-		tasks: ".runtime/cli/workflows/tasks",
-		skills: ".runtime/cli/workflows/skills",
-		schedules: ".runtime/cli/workflows/schedules",
-		memory: ".runtime/cli/workflows/memory",
-		consultResult: ".runtime/cli/workflows/consult-result",
-		history: ".runtime/cli/workflows/history",
-		temp: ".runtime/cli/temp",
+		workflows: "workflows",
+		tasks: "workflows/tasks",
+		skills: "workflows/skills",
+		schedules: "workflows/schedules",
+		memory: "workflows/memory",
+		consultResult: "workflows/consult-result",
+		history: "workflows/history",
+		temp: ".temp",
 	});
 
 	return { workspacePaths, args: nextArgs };
