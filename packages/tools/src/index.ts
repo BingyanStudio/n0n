@@ -86,12 +86,22 @@ function buildBaseRegistry(
 		write: {
 			definition: WRITE_TOOL_DEFINITION,
 			stream: false,
-			execute: (tc) => writeTool(tc.id, WriteArgsSchema.parse(tc.args)),
+			execute: (tc) =>
+				writeTool(
+					tc.id,
+					WriteArgsSchema.parse(tc.args),
+					toolsWorkspace?.workspace,
+				),
 		},
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,
 			stream: false,
-			execute: (tc) => editTool(tc.id, EditArgsSchema.parse(tc.args)),
+			execute: (tc) =>
+				editTool(
+					tc.id,
+					EditArgsSchema.parse(tc.args),
+					toolsWorkspace?.workspace,
+				),
 		},
 		reminder: {
 			definition: REMINDER_TOOL_DEFINITION,

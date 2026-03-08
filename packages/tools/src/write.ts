@@ -5,9 +5,10 @@
  */
 
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import type { LLMToolDefinition, WriteToolResult } from "@n0n/types";
 import { z } from "zod";
+import { getToolsConfig } from "./config.ts";
 
 /** write 工具参数 schema */
 export const WriteArgsSchema = z.object({
@@ -44,8 +45,12 @@ export const WRITE_TOOL_DEFINITION: LLMToolDefinition = {
 export async function writeTool(
 	callId: string,
 	args: WriteArgs,
+	workspaceOverride?: string,
 ): Promise<WriteToolResult> {
-	const filePath = resolve(args.path);
+	const workspace = workspaceOverride ?? getToolsConfig().workspace;
+	const filePath = isAbsolute(args.path)
+		? args.path
+		: resolve(workspace, args.path);
 
 	try {
 		const dir = dirname(filePath);
