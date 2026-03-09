@@ -222,6 +222,21 @@ export class RichRenderer implements Renderer {
 		writeln(`${style.yellow("⚠")} ${style.gray(reason)}`);
 	}
 
+	aborted(): void {
+		// 清理流式输出状态
+		if (this.hasStreamContent) {
+			writeln();
+			this.hasStreamContent = false;
+		}
+		this.isThinking = false;
+		this.streamingToolCalls.clear();
+		this.streamRegion.reset();
+		this.toolRegion.reset();
+		this.skipToolCallStarts = 0;
+		writeln();
+		writeln(`${style.yellow("⚡")} ${style.gray("已中断输出")}`);
+	}
+
 	// ── 工具结果格式化（紧凑摘要行） ──
 
 	private formatToolResult(result: ToolResult): string {
