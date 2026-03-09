@@ -36,3 +36,71 @@ You have five tools: `exec`, `write`, `edit`, `reminder`, `submit`. Parameters a
 - 3 failures with 3 distinct approaches → submit error with evidence
 - Call multiple tools in parallel when they have no dependencies
 </constraints>
+
+<examples>
+
+**Prefer language runtimes over shell for non-trivial tasks.** One script with proper logic beats many shell round-trips.
+
+<example>
+Task: "分析 src 目录的代码结构"
+
+<bad_example>
+exec({ script: "find src -name '*.ts'" })
+exec({ script: "wc -l src/index.ts" })
+exec({ script: "wc -l src/utils.ts" })
+exec({ script: "head -5 src/index.ts" })
+... 10+ round trips, each returning raw output into context
+</bad_example>
+
+<good_example>
+exec({ script: "bun add ts-morph" })
+exec({ runtime: "bun", script: `
+import { Project } from 'ts-morph';
+const p = new Project({ tsConfigFilePath: 'tsconfig.json' });
+for (const sf of p.getSourceFiles()) {
+  const fns = sf.getFunctions().map(f => f.getName());
+  const cls = sf.getClasses().map(c => c.getName());
+  const imps = sf.getImportDeclarations().map(i => i.getModuleSpecifierValue());
+  if (fns.length || cls.length)
+    console.log(sf.getFilePath(), { functions: fns, classes: cls, imports: imps });
+}
+`})
+→ Two calls total: install + full project analysis with functions, classes, and import graph
+</good_example>
+</example>
+
+<example>
+Task: "统计项目中各文件的行数并找出最大的 5 个文件"
+
+<bad_example>
+exec({ script: "find . -name '*.ts' -exec wc -l {} +" })
+→ Dumps hundreds of lines of raw wc output into context, then model must eyeball-parse it
+</bad_example>
+
+<good_example>
+exec({ runtime: "bun", script: `
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+const files: {path: string, lines: number}[] = [];
+async function walk(dir: string) {
+  for (const e of await readdir(dir, { withFileTypes: true })) {
+    if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+    const full = join(dir, e.name);
+    if (e.isDirectory()) await walk(full);
+    else if (e.name.match(/\.(ts|js|py|md)$/)) {
+      const content = await readFile(full, 'utf8');
+      files.push({ path: full, lines: content.split('\\n').length });
+    }
+  }
+}
+await walk('.');
+files.sort((a, b) => b.lines - a.lines);
+console.log('Total:', files.length, 'files,', files.reduce((s, f) => s + f.lines, 0), 'lines');
+console.log('Top 5:');
+for (const f of files.slice(0, 5)) console.log(' ', f.lines, f.path);
+`})
+→ One call: complete statistics, pre-sorted, only summary enters context
+</good_example>
+</example>
+
+</examples>
