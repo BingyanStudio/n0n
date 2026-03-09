@@ -193,7 +193,7 @@ const PYTHON_EXAMPLES: Record<string, string[]> = {
 		"          mod = cst.parse_module(open(os.path.join(root, f)).read())",
 		"          classes = [n.name.value for n in mod.body if isinstance(n, cst.ClassDef)]",
 		"          funcs = [n.name.value for n in mod.body if isinstance(n, cst.FunctionDef)]",
-		"          if classes or funcs: results.append({'file': f, 'classes': classes, 'functions': funcs})",
+		"          if classes or funcs: results.append({'file': os.path.join(root, f), 'classes': classes, 'functions': funcs})",
 		"  print(json.dumps(results, indent=2))",
 		"  ```",
 	],
