@@ -262,7 +262,7 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 		"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
 		`- **${jsHint}** — when you need to parse JSON, filter arrays, do math, or produce structured summaries, write a script instead of chaining shell commands.`,
 		`- **Simple commands use default shell (\`${env.defaultShell}\`)** — \`git status\`, \`ls\`/\`dir\` don't need a language runtime.`,
-		"- **Install packages on the fly** — need deeper analysis? `bun add ts-morph` or `pip install libcst`, then use them in the next exec call. One script with a proper library beats ten shell round-trips.",
+		"- **Use libraries in isolation** — for deeper analysis, use proper libraries (e.g. AST/analysis tools) in a temporary or isolated environment (such as a throwaway directory or managed Python runner like `uv`). Avoid running `bun add` or `pip install` in the main project workspace unless you explicitly intend to update its dependencies.",
 		"- **Debugging**: `2>&1` merges stderr; `> output.txt 2>&1` captures to file.",
 	].join("\n");
 	parts.push(wrapTagFor("best_practices", tips, model));
