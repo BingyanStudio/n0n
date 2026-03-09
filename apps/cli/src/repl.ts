@@ -1,8 +1,8 @@
 /**
  * REPL — 交互式对话循环
  *
- * Ctrl+C 中断模型输出（而非终止进程），用户可继续输入新消息推入对话。
- * 连续两次 Ctrl+C（无输出间隔）则退出进程。
+ * Ctrl+C 在模型输出时中断当前响应（而非立即终止进程），用户可在中断后继续输入新消息推入对话。
+ * 在等待用户输入时，按下 Ctrl+C 会退出 REPL 进程。
  */
 
 import { resolve } from "node:path";
@@ -153,18 +153,37 @@ export async function startRepl(
 	while (userInput.trim().toLowerCase() !== "exit") {
 		abortController = new AbortController();
 		agentRunning = true;
-		const agentResult = await agentLoop<InteractiveResult>(history, {
-			maxIterations: 30,
-			renderer,
-			confirmFn,
-			schema: InteractiveResultSchema,
-			signal: abortController.signal,
-		});
-		agentRunning = false;
+		let agentResult: Awaited<ReturnType<typeof agentLoop<InteractiveResult>>>;
+		try {
+			agentResult = await agentLoop<InteractiveResult>(history, {
+				maxIterations: 30,
+				renderer,
+				confirmFn,
+				schema: InteractiveResultSchema,
+				signal: abortController.signal,
+			});
+		} catch (err) {
+			writeln();
+			writeln(`${style.red("✗")} Agent 运行出错，已中止本轮对话。`);
+			const message =
+				err instanceof Error ? err.message : String(err ?? "未知错误");
+			writeln(style.gray(`  ${message}`));
+			writeln();
+			userInput = await prompt(`${label.user()} `);
+			history.push({
+				type: "user_input",
+				content: userInput,
+				context: await gatherContext(paths),
+				capabilities: null,
+			});
+			continue;
+		} finally {
+			agentRunning = false;
+		}
 		history = agentResult.history;
 
-		// ── 被用户中断 ──
-		if (agentResult.report === "aborted") {
+		// ── 被用户中断（通过 AbortController.signal 判断，避免与 submit report 冲突） ──
+		if (abortController.signal.aborted) {
 			writeln();
 			userInput = await prompt(`${label.user()} `);
 			history.push({
