@@ -53,7 +53,7 @@ exec({ script: "head -5 src/index.ts" })
 </bad_example>
 
 <good_example>
-exec({ script: "bun add ts-morph", runtime: "bun" })
+exec({ script: "bun add ts-morph" })
 exec({ runtime: "bun", script: `
 import { Project } from 'ts-morph';
 const p = new Project({ tsConfigFilePath: 'tsconfig.json' });
