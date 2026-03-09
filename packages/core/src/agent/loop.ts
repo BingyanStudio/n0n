@@ -65,9 +65,10 @@ export async function agentLoop<T = unknown>(
 
 	for (let iteration = 0; iteration < maxIter; iteration++) {
 		if (options?.signal?.aborted) {
+			renderer.aborted();
 			return {
 				result: null,
-				report: "Agent terminated: aborted",
+				report: null,
 				history: messages,
 			};
 		}
@@ -87,9 +88,10 @@ export async function agentLoop<T = unknown>(
 			{ signal: options?.signal },
 		)) {
 			if (options?.signal?.aborted) {
+				renderer.aborted();
 				return {
 					result: null,
-					report: "Agent terminated: aborted",
+					report: null,
 					history: messages,
 				};
 			}
@@ -107,6 +109,17 @@ export async function agentLoop<T = unknown>(
 			}
 		}
 		renderer.contentEnd();
+
+		// stream 正常结束后再次检查 abort（chatCompletionStream abort 时直接 return，
+		// 不抛错，for-await 会正常结束，需在此拦截避免向 history 追加不完整消息）
+		if (options?.signal?.aborted) {
+			renderer.aborted();
+			return {
+				result: null,
+				report: null,
+				history: messages,
+			};
+		}
 
 		const assistantMsg = acc.toMessage();
 		const hasToolCalls =
@@ -178,9 +191,10 @@ export async function agentLoop<T = unknown>(
 
 		for (const tc of toolCalls) {
 			if (options?.signal?.aborted) {
+				renderer.aborted();
 				return {
 					result: null,
-					report: "Agent terminated: aborted",
+					report: null,
 					history: messages,
 				};
 			}

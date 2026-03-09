@@ -50,4 +50,7 @@ export interface Renderer {
 
 	/** agent 终止 */
 	agentTerminated(reason: string): void;
+
+	/** 用户中断（Ctrl+C）— 清理流式输出状态 */
+	aborted(): void;
 }

@@ -1,9 +1,12 @@
 /**
  * Code REPL — 代码编写场景的交互循环
  *
+ * Ctrl+C 在模型输出时中断当前响应（而非立即终止进程），用户可在中断后继续输入新消息推入对话。
+ * 在等待用户输入时，按下 Ctrl+C 会退出 REPL 进程。
+ *
  * 与 cli REPL 的区别：
  * - System prompt 为 code.md（代码 agent 而非 workflow builder）
- * - Submit schema 为 CodeResultSchema（completed/need_info/error）
+ * - Submit schema 为 CodeResultSchema（completed/need_info）
  * - Context 注入项目结构和 git 状态，而非 workflow 列表
  */
 
@@ -23,9 +26,6 @@ import { type CodeResult, CodeResultSchema } from "./schema.ts";
 const PROMPT_PATH = resolve(import.meta.dir, "prompts", "code.md");
 type CodeWorkspacePaths = Pick<WorkspacePaths, "workspace" | "temp">;
 
-/**
- * 构建工作区上下文（注入为 system message），告知 agent cwd 和路径解析规则。
- */
 function buildWorkspaceContext(workspace: string): string {
 	return [
 		"## Workspace Environment",
@@ -40,7 +40,6 @@ function buildWorkspaceContext(workspace: string): string {
 	].join("\n");
 }
 
-/** 获取项目上下文（git status + 目录结构） */
 async function gatherContext(workspace: string): Promise<string | null> {
 	const parts: string[] = [];
 	try {
@@ -62,7 +61,6 @@ async function gatherContext(workspace: string): Promise<string | null> {
 	return parts.length > 0 ? parts.join("\n") : null;
 }
 
-/** 将用户回答注入到 history 中最后一个 SubmitToolResult */
 function injectUserResponse(history: DomainMessage[], response: string): void {
 	for (let i = history.length - 1; i >= 0; i--) {
 		const msg = history[i];
@@ -77,7 +75,6 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 		}
 	}
 }
-
 export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
 	initialInput?: string,
@@ -110,13 +107,32 @@ export async function startCodeRepl(
 			rl.question(question, resolve);
 		});
 
+	// ── Ctrl+C 中断控制 ──
+	let abortController = new AbortController();
+	let agentRunning = false;
+
+	if (isTTY) {
+		rl.on("SIGINT", () => {
+			if (agentRunning) {
+				abortController.abort();
+			} else {
+				rl.close();
+			}
+		});
+	} else {
+		process.on("SIGINT", () => {
+			if (agentRunning) {
+				abortController.abort();
+			} else {
+				process.exit(0);
+			}
+		});
+	}
+
 	let userInput = initialInput ?? (await prompt(`${label.user()} `));
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
-		{
-			type: "system",
-			content: buildWorkspaceContext(paths.workspace),
-		},
+		{ type: "system", content: buildWorkspaceContext(paths.workspace) },
 		{
 			type: "user_input",
 			content: userInput,
@@ -126,13 +142,50 @@ export async function startCodeRepl(
 	];
 
 	while (userInput.trim().toLowerCase() !== "exit") {
-		const agentResult = await agentLoop<CodeResult>(history, {
-			maxIterations: 50,
-			renderer,
-			confirmFn,
-			schema: CodeResultSchema,
-		});
+		abortController = new AbortController();
+		agentRunning = true;
+		let agentResult: Awaited<ReturnType<typeof agentLoop<CodeResult>>>;
+		try {
+			agentResult = await agentLoop<CodeResult>(history, {
+				maxIterations: 100,
+				renderer,
+				confirmFn,
+				schema: CodeResultSchema,
+				signal: abortController.signal,
+			});
+		} catch (err) {
+			writeln();
+			writeln(`${style.red("✗")} Agent 运行出错，已中止本轮对话。`);
+			const message =
+				err instanceof Error ? err.message : String(err ?? "未知错误");
+			writeln(style.gray(`  ${message}`));
+			writeln();
+			userInput = await prompt(`${label.user()} `);
+			history.push({
+				type: "user_input",
+				content: userInput,
+				context: await gatherContext(paths.workspace),
+				capabilities: null,
+			});
+			continue;
+		} finally {
+			agentRunning = false;
+		}
 		history = agentResult.history;
+
+		// ── 被用户中断（通过 AbortController.signal 判断，避免与 submit report 冲突） ──
+		if (abortController.signal.aborted) {
+			writeln();
+			userInput = await prompt(`${label.user()} `);
+			history.push({
+				type: "user_input",
+				content: userInput,
+				context: await gatherContext(paths.workspace),
+				capabilities: null,
+			});
+			continue;
+		}
+
 		const ir = agentResult.result;
 		writeln();
 
@@ -167,7 +220,9 @@ export async function startCodeRepl(
 				if (ir.files_changed.length > 0) {
 					writeln(style.gray(`  变更文件: ${ir.files_changed.join(", ")}`));
 				}
-				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
+				if (agentResult.report) {
+					writeln(style.gray(`  ${agentResult.report}`));
+				}
 				writeln();
 				userInput = await prompt(`${label.user()} `);
 				history.push({
