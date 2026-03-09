@@ -65,9 +65,10 @@ export async function agentLoop<T = unknown>(
 
 	for (let iteration = 0; iteration < maxIter; iteration++) {
 		if (options?.signal?.aborted) {
+			renderer.aborted();
 			return {
 				result: null,
-				report: "Agent terminated: aborted",
+				report: "aborted",
 				history: messages,
 			};
 		}
@@ -87,9 +88,10 @@ export async function agentLoop<T = unknown>(
 			{ signal: options?.signal },
 		)) {
 			if (options?.signal?.aborted) {
+				renderer.aborted();
 				return {
 					result: null,
-					report: "Agent terminated: aborted",
+					report: "aborted",
 					history: messages,
 				};
 			}
@@ -178,9 +180,10 @@ export async function agentLoop<T = unknown>(
 
 		for (const tc of toolCalls) {
 			if (options?.signal?.aborted) {
+				renderer.aborted();
 				return {
 					result: null,
-					report: "Agent terminated: aborted",
+					report: "aborted",
 					history: messages,
 				};
 			}

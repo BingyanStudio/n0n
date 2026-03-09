@@ -220,6 +220,16 @@ export class FeishuRenderer implements Renderer {
 		this.conv.appendLine({ kind: "err", text: compact(reason) });
 	}
 
+	aborted(): void {
+		this.stopTimer();
+		this.thinkBuf = "";
+		this.contentBuf = "";
+		this.toolOutBuf = "";
+		this.curTool = "";
+		this.conv.setActivity("");
+		this.conv.appendLine({ kind: "meta", text: "⚡ 已中断输出" });
+	}
+
 	private scheduleFlush(): void {
 		if (this.timer) return;
 		const elapsed = Date.now() - this.lastFlush;

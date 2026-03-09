@@ -51,4 +51,8 @@ export class PlainRenderer implements Renderer {
 	agentTerminated(reason: string): void {
 		console.error(`  [agent] ${reason}`);
 	}
+
+	aborted(): void {
+		console.error("  [agent] aborted by user");
+	}
 }

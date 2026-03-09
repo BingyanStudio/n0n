@@ -1,11 +1,13 @@
 /**
  * REPL — 交互式对话循环
+ *
+ * Ctrl+C 中断模型输出（而非终止进程），用户可继续输入新消息推入对话。
+ * 连续两次 Ctrl+C（无输出间隔）则退出进程。
  */
 
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
-// PlainRenderer for non-TTY — import from core
 import {
 	agentLoop,
 	discoverWorkflows,
@@ -25,7 +27,6 @@ type ReplContextPaths = Pick<
 	WorkspacePaths,
 	"workspace" | "tasks" | "skills" | "schedules"
 >;
-
 /**
  * 构建工作区上下文（注入为 system message），告知 agent cwd 和目录结构。
  * interactive.md 中的 specification 描述了相对路径布局，这里补充实际的绝对路径。
@@ -42,7 +43,6 @@ function buildWorkspaceContext(paths: ReplContextPaths): string {
 		"Use relative paths (e.g. `workflows/tasks/my-task.ts`) — they will resolve correctly.",
 	].join("\n");
 }
-
 /** 获取当前环境上下文（workflows + schedules），每次调用时重新扫描 */
 async function gatherContext(paths: ReplContextPaths): Promise<string | null> {
 	const [existing, schedules] = await Promise.all([
@@ -70,7 +70,6 @@ async function gatherContext(paths: ReplContextPaths): Promise<string | null> {
 	}
 	return parts.length > 0 ? parts.join("\n") : null;
 }
-
 export async function startRepl(
 	paths: ReplContextPaths,
 	initialInput?: string,
@@ -87,7 +86,6 @@ export async function startRepl(
 		output: process.stderr,
 		terminal: isTTY,
 	});
-
 	let closed = false;
 	rl.on("close", () => {
 		closed = true;
@@ -98,29 +96,52 @@ export async function startRepl(
 			if (closed) return resolve("exit");
 			rl.question(q, resolve);
 		});
-
 	const confirmFn = (question: string): Promise<string> =>
 		new Promise((resolve) => {
 			if (closed) return resolve("n");
 			rl.question(question, resolve);
 		});
 
+	// ── Ctrl+C 中断控制 ──
+	let abortController = new AbortController();
+	let agentRunning = false;
+
+	// readline 的 SIGINT 事件在 terminal 模式下会自动触发
+	// 非 terminal 模式下需要监听 process SIGINT
+	if (isTTY) {
+		rl.on("SIGINT", () => {
+			if (agentRunning) {
+				abortController.abort();
+			} else {
+				// 不在 agent 运行中，正常退出
+				rl.close();
+			}
+		});
+	} else {
+		process.on("SIGINT", () => {
+			if (agentRunning) {
+				abortController.abort();
+			} else {
+				process.exit(0);
+			}
+		});
+	}
+
 	writeln(
 		style.bold("n0n") +
 			style.gray(` — Natural Language Workflow Engine [${paths.workspace}]`),
 	);
 	writeln(
-		style.gray('输入任务描述，AI 将创建可复用的 workflow。输入 "exit" 退出。'),
+		style.gray(
+			'输入任务描述，AI 将创建可复用的 workflow。输入 "exit" 退出。Ctrl+C 中断输出。',
+		),
 	);
 	writeln();
 
 	let userInput = initialInput ?? (await prompt(`${label.user()} `));
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
-		{
-			type: "system",
-			content: buildWorkspaceContext(paths),
-		},
+		{ type: "system", content: buildWorkspaceContext(paths) },
 		{
 			type: "user_input",
 			content: userInput,
@@ -130,13 +151,30 @@ export async function startRepl(
 	];
 
 	while (userInput.trim().toLowerCase() !== "exit") {
+		abortController = new AbortController();
+		agentRunning = true;
 		const agentResult = await agentLoop<InteractiveResult>(history, {
 			maxIterations: 30,
 			renderer,
 			confirmFn,
 			schema: InteractiveResultSchema,
+			signal: abortController.signal,
 		});
+		agentRunning = false;
 		history = agentResult.history;
+
+		// ── 被用户中断 ──
+		if (agentResult.report === "aborted") {
+			writeln();
+			userInput = await prompt(`${label.user()} `);
+			history.push({
+				type: "user_input",
+				content: userInput,
+				context: await gatherContext(paths),
+				capabilities: null,
+			});
+			continue;
+		}
 
 		const ir = agentResult.result;
 		writeln();
@@ -163,11 +201,9 @@ export async function startRepl(
 				if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
-				// 用户回答注入到 submit 的 tool result 中，而非作为新的 user 消息
 				injectUserResponse(history, userInput);
 				continue;
 			}
-
 			case "need_info": {
 				writeln(`${style.yellow("?")} Agent 需要更多信息:`);
 				writeln(`  ${ir.message}`);
@@ -176,11 +212,9 @@ export async function startRepl(
 				writeln(style.gray("请补充信息，或输入 'exit' 退出:"));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
-				// 用户回答注入到 submit 的 tool result 中，而非作为新的 user 消息
 				injectUserResponse(history, userInput);
 				continue;
 			}
-
 			case "completed": {
 				writeln(`${style.green("✓")} 任务完成: ${ir.result}`);
 				if (ir.summary) writeln(style.gray(`  ${ir.summary}`));
@@ -197,7 +231,6 @@ export async function startRepl(
 				});
 				break;
 			}
-
 			case "error": {
 				writeln(`${style.red("✗")} Agent 报告错误:`);
 				writeln(`  ${ir.error}`);
@@ -220,7 +253,6 @@ export async function startRepl(
 	rl.close();
 	writeln(style.gray("Bye!"));
 }
-
 function injectUserResponse(history: DomainMessage[], response: string): void {
 	for (let i = history.length - 1; i >= 0; i--) {
 		const msg = history[i];

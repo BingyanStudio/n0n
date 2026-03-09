@@ -142,10 +142,6 @@ async function main(): Promise<void> {
 }
 
 process.on("exit", () => cleanupTemp(_resolved.workspacePaths));
-process.on("SIGINT", () => {
-	cleanupTemp(_resolved.workspacePaths);
-	process.exit(0);
-});
 
 main().catch((err) => {
 	console.error("Fatal error:", err);
