@@ -121,7 +121,7 @@ const JS_EXAMPLES: Record<string, string[]> = {
 		"      } else {",
 		"        const s = await stat(full);",
 		"        const lc = extname(e.name).match(/\\.(ts|js|py|md)$/) ? (await readFile(full,'utf8')).split('\\n').length : null;",
-		"        lines.push(prefix + '📄 ' + e.name + ' (' + s.size + 'B' + (lc ? ', '+lc+' lines' : '') + ')');",
+		"        lines.push(prefix + '📄 ' + e.name + ' (' + s.size + 'B' + (lc !== null ? ', '+lc+' lines' : '') + ')');",
 		"      }",
 		"    }",
 		"    return lines;",
