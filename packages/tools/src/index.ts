@@ -79,6 +79,7 @@ function buildBaseRegistry(
 		workspace: toolsConfig.workspace,
 		tempDir: toolsConfig.tempDir,
 		blockedCommands: toolsConfig.security.blockedCommands,
+		defaultExecTimeout: toolsConfig.agent.defaultExecTimeout,
 	};
 
 	return {

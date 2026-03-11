@@ -404,6 +404,7 @@ export async function* execToolStream(
 		workspace: string;
 		tempDir: string;
 		blockedCommands: string[];
+		defaultExecTimeout: number;
 	},
 ): AsyncGenerator<ToolStreamEvent> {
 	const runtime = call.args.runtime ?? DEFAULT_RUNTIME;
@@ -413,7 +414,8 @@ export async function* execToolStream(
 			? call.args.cwd
 			: resolve(workspace, call.args.cwd)
 		: workspace;
-	const timeoutMs = (call.args.timeout ?? 120) * 1000;
+	const timeoutMs =
+		(call.args.timeout ?? toolsConfig.defaultExecTimeout) * 1000;
 	const start = Date.now();
 
 	// Security check — scan script content for blocked commands

@@ -59,7 +59,7 @@ export function createRuntimeContext(): RuntimeContext {
 		agent: {
 			maxIterations: 50,
 			maxIdleRounds: 5,
-			defaultExecTimeout: 120_000,
+			defaultExecTimeout: 120,
 		},
 		security: {
 			blockedCommands: parseBlockedCommands(),

@@ -32,8 +32,6 @@ export async function generate<T = unknown>(
 	instruction: string,
 	options: GenerateOptions<T>,
 ): Promise<GenerateResult<T>> {
-	const resolvedPaths = options.paths;
-
 	const history: DomainMessage[] = [
 		{
 			type: "system",
@@ -48,6 +46,10 @@ export async function generate<T = unknown>(
 	const result = await agentLoop<T>(history, {
 		schema: options?.schema,
 		maxIterations: options?.maxIterations ?? 15,
+		toolsWorkspace: {
+			workspace: options.paths.workspace,
+			tempDir: options.paths.temp,
+		},
 	});
 
 	return {
