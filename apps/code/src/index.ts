@@ -5,13 +5,8 @@
  * 使用 --workspace 指定目标项目目录；不会修改全局 process.cwd()。
  */
 
-import {
-	createRuntimeContext,
-	ensureDirs,
-	initRuntime,
-	parseWorkspaceArg,
-	resolveBasePaths,
-} from "@n0n/core";
+import { createRuntimeContext, initRuntime } from "@n0n/core";
+import { ensureDirs, parseWorkspaceArg, resolveBasePaths } from "@n0n/shared";
 
 const { workspace, remainingArgs } = parseWorkspaceArg(
 	process.argv.slice(2),

@@ -5,12 +5,8 @@
  * 并执行对应操作。
  */
 
-import {
-	discoverWorkflows,
-	loadSchedules,
-	runWorkflow,
-	setScheduleEnabled,
-} from "@n0n/core";
+import { loadSchedules, setScheduleEnabled } from "@n0n/scheduler";
+import { discoverWorkflows, runWorkflow } from "@n0n/workflow";
 import type { FeishuBot, FeishuMessageContext } from "./bot.ts";
 import {
 	buildCronListCard,

@@ -34,7 +34,7 @@ export function resolveBasePaths(workspace: string): BaseWorkspacePaths {
 // ── 目录创建 ──
 
 /** 确保路径对象中所有目录存在 — 只创建传入对象中实际存在的字段 */
-export function ensureDirs(paths: Record<string, string>): void {
+export function ensureDirs<T extends BaseWorkspacePaths>(paths: T): void {
 	for (const dir of Object.values(paths)) {
 		if (!existsSync(dir)) {
 			mkdirSync(dir, { recursive: true });

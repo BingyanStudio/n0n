@@ -14,17 +14,15 @@
 import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { style, writeln } from "@n0n/cli-ui";
+import { createRuntimeContext, initRuntime } from "@n0n/core";
+import { loadSchedules } from "@n0n/scheduler";
+import { ensureDirs, parseWorkspaceArg } from "@n0n/shared";
 import {
-	createRuntimeContext,
 	discoverWorkflows,
-	ensureDirs,
-	initRuntime,
-	loadSchedules,
-	parseWorkspaceArg,
 	resolveWorkflowPaths,
 	runWorkflow,
 	type WorkflowPaths,
-} from "@n0n/core";
+} from "@n0n/workflow";
 import { startRepl } from "./repl.ts";
 
 // ── 初始化 ──

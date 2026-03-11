@@ -6,6 +6,9 @@
 	"dependencies": {
 		"@n0n/cli-ui": "workspace:*",
 		"@n0n/core": "workspace:*",
-		"@n0n/types": "workspace:*"
+		"@n0n/scheduler": "workspace:*",
+		"@n0n/shared": "workspace:*",
+		"@n0n/types": "workspace:*",
+		"@n0n/workflow": "workspace:*"
 	}
 }

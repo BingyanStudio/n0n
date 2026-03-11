@@ -10,13 +10,12 @@
  * - cron_run: 立即运行定时任务的关联工作流
  */
 
+import { loadSchedules, setScheduleEnabled } from "@n0n/scheduler";
 import {
 	discoverWorkflows,
-	loadSchedules,
 	runWorkflow,
-	setScheduleEnabled,
 	type WorkflowPaths,
-} from "@n0n/core";
+} from "@n0n/workflow";
 import type { FeishuBot, FeishuMessageContext } from "./bot.ts";
 import {
 	buildCronListCard,
