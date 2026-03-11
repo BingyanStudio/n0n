@@ -15,7 +15,7 @@ import {
 	loadSchedules,
 	runWorkflow,
 	setScheduleEnabled,
-	type WorkspacePaths,
+	type WorkflowPaths,
 } from "@n0n/core";
 import type { FeishuBot, FeishuMessageContext } from "./bot.ts";
 import {
@@ -45,7 +45,7 @@ interface CardActionContext {
 	bot: FeishuBot;
 	/** 操作者的上下文（用于发送反馈消息） */
 	operatorCtx: FeishuMessageContext;
-	paths: WorkspacePaths;
+	paths: WorkflowPaths;
 	/** 按钮 value 数据 */
 	value: CardActionValue;
 	/** 原始卡片 message_id（用于更新卡片） */
