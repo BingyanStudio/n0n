@@ -1,9 +1,8 @@
 /**
  * RuntimeContext — 替代所有全局可变单例
  *
- * 从 app 入口构造，通过参数显式传递到各层。
- * 当前阶段仍保留 init/get 全局方式（LLM / tools），
- * 后续 PR 2-3 会逐步将 llm/tools 也改为显式传递。
+ * 从 app 入口构造，通过参数显式传递到各层（包括 LLM / tools）。
+ * 如需共享，可在应用入口集中构造 RuntimeContext 再下发使用。
  */
 
 // ── 类型 ──

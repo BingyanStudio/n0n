@@ -5,7 +5,6 @@
  * 直到 agent 调用 submit 或达到终止条件。
  */
 
-import type { LLMConfig } from "@n0n/llm";
 import {
 	chatCompletionStream,
 	StreamAccumulator,

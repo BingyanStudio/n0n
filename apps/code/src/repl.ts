@@ -151,6 +151,7 @@ export async function startCodeRepl(
 				confirmFn,
 				schema: CodeResultSchema,
 				signal: abortController.signal,
+				toolsWorkspace: { workspace: paths.workspace, tempDir: paths.temp },
 			});
 		} catch (err) {
 			writeln();

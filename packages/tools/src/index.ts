@@ -68,7 +68,7 @@ export type ToolEntry =
 
 /**
  * 构建基础工具注册表（不含 submit）。
- * 接受可选的 workspace 覆盖，用于 per-session 工具隔离。
+ * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir）。
  */
 function buildBaseRegistry(
 	execToolDef: LLMToolDefinition,

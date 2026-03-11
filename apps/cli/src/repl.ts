@@ -25,7 +25,7 @@ import interactivePromptText from "./prompts/interactive.md" with {
 
 type ReplContextPaths = Pick<
 	WorkflowPaths,
-	"workspace" | "tasks" | "skills" | "schedules"
+	"workspace" | "tasks" | "skills" | "schedules" | "temp"
 >;
 /**
  * 构建工作区上下文（注入为 system message），告知 agent cwd 和目录结构。
@@ -161,6 +161,7 @@ export async function startRepl(
 				confirmFn,
 				schema: InteractiveResultSchema,
 				signal: abortController.signal,
+				toolsWorkspace: { workspace: paths.workspace, tempDir: paths.temp },
 			});
 		} catch (err) {
 			writeln();
