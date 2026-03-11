@@ -16,7 +16,7 @@
 		"noImplicitOverride": true,
 		"noUnusedLocals": false,
 		"noUnusedParameters": false,
-		"types": ["bun", "node"],
+		"types": ["bun"],
 		"paths": {
 			"@n0n/types": ["./packages/types/src/index.ts"],
 			"@n0n/llm": ["./packages/llm/src/index.ts"],
