@@ -38,7 +38,7 @@ const { workspace, remainingArgs } = parseWorkspaceArg(
 const workspacePaths = resolveWorkflowPaths(workspace);
 ensureDirs(workspacePaths);
 const runtime = createRuntimeContext();
-initRuntime(runtime, workspacePaths);
+initRuntime(runtime);
 
 // ── 子命令路由 ──
 

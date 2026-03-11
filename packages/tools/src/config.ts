@@ -1,5 +1,5 @@
 /**
- * Tools 配置 — 由调用方注入
+ * Tools 配置类型
  */
 
 export interface ToolsConfig {
@@ -13,19 +13,4 @@ export interface ToolsConfig {
 	workspace: string;
 	/** 临时文件目录（exec 临时脚本等） */
 	tempDir: string;
-}
-
-let _config: ToolsConfig = {
-	security: { blockedCommands: [] },
-	agent: { defaultExecTimeout: 120_000 },
-	workspace: process.cwd(),
-	tempDir: ".temp",
-};
-
-export function initToolsConfig(config: ToolsConfig): void {
-	_config = config;
-}
-
-export function getToolsConfig(): ToolsConfig {
-	return _config;
 }

@@ -12,6 +12,7 @@ import {
 } from "@n0n/llm";
 import type { LLMConfig } from "@n0n/llm";
 import type { PendingReminder } from "@n0n/tools";
+import type { ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
 import type {
 	AssistantToolCallMessage,
@@ -53,10 +54,16 @@ export async function agentLoop<T = unknown>(
 ): Promise<AgentResult<T>> {
 	const maxIter = options?.maxIterations ?? getRuntime().agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
-	const llm = getRuntime().llm;
+	const runtime = getRuntime();
+	const llm = runtime.llm;
+	const toolsConfig: ToolsConfig = {
+		security: runtime.security,
+		agent: runtime.agent,
+		...(options?.toolsWorkspace ?? { workspace: process.cwd(), tempDir: ".temp" }),
+	};
 	const toolkit = await makeToolkit(
 		options?.schema,
-		options?.toolsWorkspace,
+		toolsConfig,
 		llm.model,
 	);
 	const messages: DomainMessage[] = [...history];

@@ -19,7 +19,11 @@ async function collectExecResult(script: string, runtime?: string) {
 	let stderr = "";
 	let exitCode = -1;
 
-	for await (const event of execToolStream(call)) {
+	for await (const event of execToolStream(call, undefined, {
+		workspace: process.cwd(),
+		tempDir: ".temp",
+		blockedCommands: [],
+	})) {
 		if (event.type === "tool_result" && event.tool === "exec") {
 			stdout = event.stdout;
 			stderr = event.stderr;

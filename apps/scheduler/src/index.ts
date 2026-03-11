@@ -16,7 +16,7 @@ const workspace = process.env.N0N_SCHEDULER_WORKSPACE ?? `${process.cwd()}/.runt
 const paths = resolveWorkflowPaths(workspace);
 ensureDirs(paths);
 const runtime = createRuntimeContext();
-initRuntime(runtime, paths);
+initRuntime(runtime);
 
 startScheduler(paths).catch((err) => {
 	console.error("Fatal error:", err);

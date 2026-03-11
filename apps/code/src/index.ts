@@ -22,7 +22,7 @@ const { workspace, remainingArgs } = parseWorkspaceArg(
 const paths = resolveBasePaths(workspace);
 ensureDirs(paths);
 const runtime = createRuntimeContext();
-initRuntime(runtime, paths);
+initRuntime(runtime);
 
 const { style, writeln } = await import("@n0n/cli-ui");
 const { startCodeRepl } = await import("./repl.ts");

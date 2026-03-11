@@ -25,7 +25,6 @@ import type {
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
-import { getToolsConfig } from "./config.ts";
 import type { EnvSnapshot } from "./env.ts";
 import { getAvailableByGroup } from "./env.ts";
 
@@ -333,8 +332,8 @@ function extractCommandNames(script: string): string[] {
 		.filter((name) => name.length > 0);
 }
 
-function findBlockedCommand(script: string): string | null {
-	const blocked = getToolsConfig().security.blockedCommands;
+function findBlockedCommand(script: string, blockedCommands: string[]): string | null {
+	const blocked = blockedCommands;
 	if (blocked.length === 0) return null;
 	const blockedNormalized = IS_WINDOWS
 		? blocked.map((b) => b.toLowerCase())
@@ -397,11 +396,11 @@ async function handleBlockedCommand(
 }
 export async function* execToolStream(
 	call: ExecToolCall,
-	confirmFn?: (question: string) => Promise<string>,
-	workspaceConfig?: { workspace: string; tempDir: string },
+	confirmFn: ((question: string) => Promise<string>) | undefined,
+	toolsConfig: { workspace: string; tempDir: string; blockedCommands: string[] },
 ): AsyncGenerator<ToolStreamEvent> {
 	const runtime = call.args.runtime ?? DEFAULT_RUNTIME;
-	const workspace = workspaceConfig?.workspace ?? getToolsConfig().workspace;
+	const workspace = toolsConfig.workspace;
 	const cwd = call.args.cwd
 		? isAbsolute(call.args.cwd)
 			? call.args.cwd
@@ -411,7 +410,7 @@ export async function* execToolStream(
 	const start = Date.now();
 
 	// Security check — scan script content for blocked commands
-	const blockedCmd = findBlockedCommand(call.args.script);
+	const blockedCmd = findBlockedCommand(call.args.script, toolsConfig.blockedCommands);
 	if (blockedCmd !== null) {
 		const blocked = await handleBlockedCommand(
 			call,
@@ -427,7 +426,7 @@ export async function* execToolStream(
 
 	// Write script to temp file, execute with specified runtime
 	const ext = RUNTIME_EXT[runtime] ?? "";
-	const tempDir = resolve(workspaceConfig?.tempDir ?? getToolsConfig().tempDir);
+	const tempDir = resolve(toolsConfig.tempDir);
 	if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
 	const tmpFile = join(
 		tempDir,
