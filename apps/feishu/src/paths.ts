@@ -4,13 +4,11 @@
  * 每个飞书用户拥有独立的工作区：`.runtime/feishu/<senderOpenId>`
  * 其中 skills 和 consultResult 在用户间共享（`.runtime/feishu/shared/`），
  * 其余目录为 per-user 隔离。
- *
- * 此模块仅做路径计算，不调用 initConfig，避免并发请求间的全局状态竞争。
  */
 
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import type { WorkspacePaths } from "@n0n/core";
+import { type WorkflowPaths, ensureDirs } from "@n0n/core";
 
 const FEISHU_BASE = resolve(
 	process.env.N0N_FEISHU_WORKSPACE ??
@@ -24,9 +22,9 @@ const SHARED_DIR = resolve(FEISHU_BASE, "shared");
  * - per-user: workspace, workflows, tasks, schedules, memory, history, temp
  * - shared:   skills, consultResult
  */
-export function resolveFeishuPaths(senderOpenId: string): WorkspacePaths {
+export function resolveFeishuPaths(senderOpenId: string): WorkflowPaths {
 	const workspace = resolve(FEISHU_BASE, senderOpenId);
-	const paths: WorkspacePaths = {
+	const paths: WorkflowPaths = {
 		workspace,
 		workflows: resolve(workspace, "workflows"),
 		tasks: resolve(workspace, "workflows", "tasks"),
@@ -38,23 +36,19 @@ export function resolveFeishuPaths(senderOpenId: string): WorkspacePaths {
 		temp: resolve(workspace, ".temp"),
 	};
 
-	// 确保所有目录存在
-	for (const dir of Object.values(paths)) {
-		if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-	}
-
+	ensureDirs(paths);
 	return paths;
 }
 
 /**
- * 扫描所有已有用户目录，返回每个用户的 WorkspacePaths。
+ * 扫描所有已有用户目录，返回每个用户的 WorkflowPaths。
  * 跳过 shared/ 目录。
  */
-export function discoverAllUserPaths(): WorkspacePaths[] {
+export function discoverAllUserPaths(): WorkflowPaths[] {
 	if (!existsSync(FEISHU_BASE)) return [];
 
 	const entries = readdirSync(FEISHU_BASE);
-	const results: WorkspacePaths[] = [];
+	const results: WorkflowPaths[] = [];
 
 	for (const entry of entries) {
 		if (entry === "shared") continue;

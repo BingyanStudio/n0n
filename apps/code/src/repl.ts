@@ -17,13 +17,13 @@ import {
 	formatAgentsMdPrompt,
 	loadAgentsMd,
 	PlainRenderer,
-	type WorkspacePaths,
+	type BaseWorkspacePaths,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
-type CodeWorkspacePaths = Pick<WorkspacePaths, "workspace" | "temp">;
+type CodeWorkspacePaths = BaseWorkspacePaths;
 
 function buildWorkspaceContext(workspace: string): string {
 	return [

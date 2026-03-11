@@ -5,17 +5,12 @@
  */
 
 import { resolve } from "node:path";
-import { initToolsConfig } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
-import {
-	config,
-	getCurrentPaths,
-	type PathConfig,
-	resolvePaths,
-} from "../config.ts";
+import { getRuntime } from "../config.ts";
 import { formatAgentsMdPrompt, loadAgentsMd } from "../prompts/agents-md.ts";
+import type { WorkflowPaths } from "../workspace.ts";
 import delegatePromptText from "../prompts/delegate.md" with { type: "text" };
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
@@ -30,27 +25,14 @@ export interface TaskResult<T = unknown> {
 
 export async function delegateTask<T = unknown>(
 	query: string,
-	options?: {
+	options: {
 		schema?: ZodType<T>;
 		skipConsultation?: boolean;
 		maxIterations?: number;
-		pathConfig?: PathConfig;
+		paths: WorkflowPaths;
 	},
 ): Promise<TaskResult<T>> {
-	// 优先使用显式传入的 pathConfig；否则使用当前全局配置路径
-	const resolvedPaths = options?.pathConfig
-		? resolvePaths(options.pathConfig)
-		: getCurrentPaths();
-
-	// 确保 tools 层（exec cwd / temp）与 resolvedPaths 对齐
-	if (options?.pathConfig) {
-		initToolsConfig({
-			security: config.security,
-			agent: config.agent,
-			workspace: resolvedPaths.workspace,
-			tempDir: resolvedPaths.temp,
-		});
-	}
+	const resolvedPaths = options.paths;
 	const allSkills = await discoverSkills(resolvedPaths.skills);
 	const skillSummaryText = formatSkillSummaries(allSkills);
 

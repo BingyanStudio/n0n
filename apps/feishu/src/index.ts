@@ -16,8 +16,10 @@ import { resolve } from "node:path";
 import * as lark from "@larksuiteoapi/node-sdk";
 import feishuPromptText from "./prompts/feishu.md" with { type: "text" };
 import {
-	initConfig,
+	createRuntimeContext,
+	initRuntime,
 	loadSchedules,
+	resolveBasePaths,
 	type SchedulerHandle,
 	startScheduler,
 } from "@n0n/core";
@@ -49,13 +51,11 @@ export async function startFeishuService(): Promise<void> {
 	const bot = new FeishuBot({ appId, appSecret, domain });
 	const systemPrompt = feishuPromptText;
 
-	// 启动时初始化全局配置（LLM/tools）
-	initConfig({
-		workspace: resolve(
-			process.env.N0N_FEISHU_WORKSPACE ??
-				resolve(process.cwd(), ".runtime", "feishu"),
-		),
-	});
+	const feishuBase = resolve(
+		process.env.N0N_FEISHU_WORKSPACE ?? resolve(process.cwd(), ".runtime", "feishu"),
+	);
+	const runtime = createRuntimeContext();
+	initRuntime(runtime, resolveBasePaths(feishuBase));
 
 	// 扫描所有已有用户目录，为有 schedule 的用户启动 scheduler
 	const schedulerHandles: SchedulerHandle[] = [];

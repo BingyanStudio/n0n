@@ -5,21 +5,16 @@
  * 仍走 agentLoop 路径，模型可自主使用工具。
  */
 
-import { initToolsConfig } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
-import {
-	config,
-	getCurrentPaths,
-	type PathConfig,
-	resolvePaths,
-} from "../config.ts";
+import { getRuntime } from "../config.ts";
+import type { BaseWorkspacePaths } from "../workspace.ts";
 
 export interface GenerateOptions<T = unknown> {
 	schema?: ZodType<T>;
 	maxIterations?: number;
-	pathConfig?: PathConfig;
+	paths: BaseWorkspacePaths;
 }
 
 export interface GenerateResult<T = unknown> {
@@ -36,20 +31,9 @@ const GENERATE_SYSTEM_PROMPT = [
 
 export async function generate<T = unknown>(
 	instruction: string,
-	options?: GenerateOptions<T>,
+	options: GenerateOptions<T>,
 ): Promise<GenerateResult<T>> {
-	const resolvedPaths = options?.pathConfig
-		? resolvePaths(options.pathConfig)
-		: getCurrentPaths();
-
-	if (options?.pathConfig) {
-		initToolsConfig({
-			security: config.security,
-			agent: config.agent,
-			workspace: resolvedPaths.workspace,
-			tempDir: resolvedPaths.temp,
-		});
-	}
+	const resolvedPaths = options.paths;
 
 	const history: DomainMessage[] = [
 		{

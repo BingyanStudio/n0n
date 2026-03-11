@@ -7,15 +7,23 @@
  *   agentLoop    — 底层 API，需要完全控制 DomainMessage[]
  */
 
-// 确保配置在任何 API 调用前初始化
-import "./config.ts";
-
 // Agent Loop
 export type { AgentOptions, AgentResult } from "./agent/loop.ts";
 export { agentLoop } from "./agent/loop.ts";
-// 路径配置
+// 运行时上下文
+export type { RuntimeContext, LLMConfig, AgentConfig, SecurityConfig } from "./runtime.ts";
+export { createRuntimeContext } from "./runtime.ts";
+// Workspace 路径
+export type { BaseWorkspacePaths, WorkflowPaths } from "./workspace.ts";
+export {
+	resolveBasePaths,
+	resolveWorkflowPaths,
+	ensureDirs,
+	parseWorkspaceArg,
+} from "./workspace.ts";
+// 兼容导出（deprecated，后续移除）
 export type { PathConfig, WorkspacePaths } from "./config.ts";
-export { getCurrentPaths, initConfig, resolvePaths } from "./config.ts";
+export { getRuntime, initRuntime, resolvePaths } from "./config.ts";
 // 发现层
 export type { SkillContent, SkillMeta, WorkflowMeta } from "./discovery.ts";
 export {

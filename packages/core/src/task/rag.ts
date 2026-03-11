@@ -7,11 +7,11 @@ import { basename, resolve } from "node:path";
 import { chatCompletion } from "@n0n/llm";
 import type { LLMRequestMessage } from "@n0n/types";
 import { Glob } from "bun";
-import { getCurrentPaths, type WorkspacePaths } from "../config.ts";
+import type { WorkflowPaths } from "../workspace.ts";
 
 export type SearchSpace = "all" | "memory" | "skill" | "history";
 export type RagPaths = Pick<
-	WorkspacePaths,
+	WorkflowPaths,
 	"skills" | "memory" | "consultResult" | "history"
 >;
 
@@ -105,7 +105,7 @@ function extractSummary(content: string, filePath: string): string {
 export async function ragSearch(
 	query: string,
 	space: SearchSpace = "all",
-	paths: RagPaths = getCurrentPaths(),
+	paths: RagPaths,
 ): Promise<RagSearchResult> {
 	const candidates = await collectCandidates(space, paths);
 

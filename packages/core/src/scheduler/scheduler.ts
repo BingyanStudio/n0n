@@ -6,24 +6,14 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
 import { z } from "zod";
-import { getCurrentPaths, type WorkspacePaths } from "../config.ts";
+import type { WorkflowPaths } from "../workspace.ts";
 import { delegateTask } from "../task/delegate.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { runWorkflow } from "../workflow/runtime.ts";
 import { cronMatches, parseCron } from "./cron.ts";
 
-export type SchedulePaths = Pick<WorkspacePaths, "schedules">;
-export type SchedulerPaths = Pick<
-	WorkspacePaths,
-	| "schedules"
-	| "workspace"
-	| "tasks"
-	| "skills"
-	| "memory"
-	| "consultResult"
-	| "history"
-	| "temp"
->;
+export type SchedulePaths = Pick<WorkflowPaths, "schedules">;
+export type SchedulerPaths = WorkflowPaths;
 
 export interface ScheduleEntry {
 	name: string;
@@ -43,7 +33,7 @@ const ScheduleFrontmatterSchema = z.object({
 });
 
 export async function loadSchedules(
-	paths: SchedulePaths = getCurrentPaths(),
+	paths: SchedulePaths,
 ): Promise<ScheduleEntry[]> {
 	const dir = resolve(paths.schedules);
 	if (!existsSync(dir)) return [];
@@ -78,7 +68,7 @@ export async function loadSchedules(
 export async function setScheduleEnabled(
 	name: string,
 	enabled: boolean,
-	paths: SchedulePaths = getCurrentPaths(),
+	paths: SchedulePaths,
 ): Promise<ScheduleEntry | null> {
 	const entries = await loadSchedules(paths);
 	const target = entries.find((entry) => entry.name === name);
@@ -117,7 +107,7 @@ export interface SchedulerHandle {
 }
 
 export async function startScheduler(
-	paths: SchedulerPaths = getCurrentPaths(),
+	paths: SchedulerPaths,
 ): Promise<SchedulerHandle> {
 	let running = true;
 
@@ -156,7 +146,7 @@ export async function startScheduler(
 					);
 				} else {
 					// 传播 workspace 配置给 delegateTask
-					delegateTask(entry.prompt, { pathConfig: paths }).then(
+					delegateTask(entry.prompt, { paths }).then(
 						(result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,

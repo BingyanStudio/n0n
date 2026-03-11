@@ -15,69 +15,43 @@ import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { style, writeln } from "@n0n/cli-ui";
 import {
+	createRuntimeContext,
 	discoverWorkflows,
-	initConfig,
+	ensureDirs,
+	initRuntime,
 	loadSchedules,
+	parseWorkspaceArg,
+	resolveWorkflowPaths,
 	runWorkflow,
-	type WorkspacePaths,
+	type WorkflowPaths,
 } from "@n0n/core";
 import { startRepl } from "./repl.ts";
 
-type CliWorkflowPaths = Pick<WorkspacePaths, "tasks" | "skills">;
-type CliSchedulePaths = Pick<WorkspacePaths, "schedules">;
-type CliTempPaths = Pick<WorkspacePaths, "temp">;
+// ── 初始化 ──
+
+const { workspace, remainingArgs } = parseWorkspaceArg(
+	process.argv.slice(2),
+	"N0N_CLI_WORKSPACE",
+	`${process.cwd()}/.runtime/cli`,
+);
+
+const workspacePaths = resolveWorkflowPaths(workspace);
+ensureDirs(workspacePaths);
+const runtime = createRuntimeContext();
+initRuntime(runtime, workspacePaths);
 
 // ── 子命令路由 ──
 
-function resolveCliWorkspacePaths(args: string[]): {
-	workspacePaths: WorkspacePaths;
-	args: string[];
-} {
-	const nextArgs = [...args];
-	const workspaceFlagIndex = nextArgs.indexOf("--workspace");
-	const workspaceValue =
-		workspaceFlagIndex >= 0 ? nextArgs[workspaceFlagIndex + 1] : undefined;
-	if (workspaceFlagIndex >= 0) {
-		if (!workspaceValue) {
-			throw new Error("--workspace requires a directory argument");
-		}
-		nextArgs.splice(workspaceFlagIndex, 2);
-	}
+type CliSchedulePaths = Pick<WorkflowPaths, "schedules">;
 
-	const workspace = resolve(
-		workspaceValue ??
-			process.env.N0N_CLI_WORKSPACE ??
-			resolve(process.cwd(), ".runtime", "cli"),
-	);
-	const workspacePaths = initConfig({
-		workspace,
-		workflows: "workflows",
-		tasks: "workflows/tasks",
-		skills: "workflows/skills",
-		schedules: "workflows/schedules",
-		memory: "workflows/memory",
-		consultResult: "workflows/consult-result",
-		history: "workflows/history",
-		temp: ".temp",
-	});
-
-	return { workspacePaths, args: nextArgs };
-}
-
-// ── 进程生命周期 ──
-
-function cleanupTemp(paths: CliTempPaths): void {
+function cleanupTemp(paths: Pick<WorkflowPaths, "temp">): void {
 	try {
 		rmSync(paths.temp, { recursive: true, force: true });
 	} catch {}
 }
 
-// 解析一次，main() 和 cleanup handler 共用
-const _resolved = resolveCliWorkspacePaths(process.argv.slice(2));
-
 async function main(): Promise<void> {
-	const args = _resolved.args;
-	const workspacePaths = _resolved.workspacePaths;
+	const args = remainingArgs;
 	const initialInput = args.length > 0 ? args.join(" ") : undefined;
 	const command = args[0];
 
@@ -88,7 +62,6 @@ async function main(): Promise<void> {
 				console.error("Usage: bun run apps/cli/src/index.ts run <workflow.ts>");
 				process.exit(1);
 			}
-			// 相对路径基于 workspace 解析
 			const workflowPath = resolve(workspacePaths.workspace, rawPath);
 			const result = await runWorkflow(workflowPath);
 			console.log(JSON.stringify(result, null, 2));
@@ -96,10 +69,7 @@ async function main(): Promise<void> {
 		}
 
 		case "workflows": {
-			const workflows = await discoverWorkflows(
-				false,
-				workspacePaths satisfies CliWorkflowPaths,
-			);
+			const workflows = await discoverWorkflows(false, workspacePaths);
 			if (workflows.length === 0) {
 				writeln(style.gray("No workflows found."));
 				return;
@@ -141,7 +111,7 @@ async function main(): Promise<void> {
 	}
 }
 
-process.on("exit", () => cleanupTemp(_resolved.workspacePaths));
+process.on("exit", () => cleanupTemp(workspacePaths));
 
 main().catch((err) => {
 	console.error("Fatal error:", err);

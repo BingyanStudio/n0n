@@ -8,9 +8,9 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
-import { getCurrentPaths, type WorkspacePaths } from "../config.ts";
+import type { WorkflowPaths } from "../workspace.ts";
 
-export type WorkflowDiscoveryPaths = Pick<WorkspacePaths, "tasks" | "skills">;
+export type WorkflowDiscoveryPaths = Pick<WorkflowPaths, "tasks" | "skills">;
 
 export interface WorkflowMeta {
 	name: string;
@@ -33,7 +33,7 @@ export interface WorkflowModule {
  */
 export async function discoverWorkflows(
 	includeSkills = false,
-	paths: WorkflowDiscoveryPaths = getCurrentPaths(),
+	paths: WorkflowDiscoveryPaths,
 ): Promise<WorkflowMeta[]> {
 	const scanTargets = includeSkills
 		? [

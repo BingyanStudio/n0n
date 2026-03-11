@@ -21,7 +21,7 @@ import type {
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
-import { config } from "../config.ts";
+import { getRuntime } from "../config.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import { executeToolStream, isValidToolCall, parseToolCalls } from "./tool.ts";
 
@@ -51,7 +51,7 @@ export async function agentLoop<T = unknown>(
 	history: DomainMessage[],
 	options?: AgentOptions<T>,
 ): Promise<AgentResult<T>> {
-	const maxIter = options?.maxIterations ?? config.agent.maxIterations;
+	const maxIter = options?.maxIterations ?? getRuntime().agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
 	const toolkit = await makeToolkit(
 		options?.schema,
@@ -139,7 +139,7 @@ export async function agentLoop<T = unknown>(
 			};
 			messages.push(textMsg);
 
-			if (idleCount >= config.agent.maxIdleRounds) {
+			if (idleCount >= getRuntime().agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
 					result: null,
@@ -151,7 +151,7 @@ export async function agentLoop<T = unknown>(
 			messages.push({
 				type: "idle_nudge",
 				idleCount,
-				maxIdleRounds: config.agent.maxIdleRounds,
+				maxIdleRounds: getRuntime().agent.maxIdleRounds,
 			});
 			continue;
 		}
@@ -166,7 +166,7 @@ export async function agentLoop<T = unknown>(
 			const content = assistantMsg.content ?? "";
 			idleCount++;
 			messages.push({ type: "assistant_text", content });
-			if (idleCount >= config.agent.maxIdleRounds) {
+			if (idleCount >= getRuntime().agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
 					result: null,
@@ -177,7 +177,7 @@ export async function agentLoop<T = unknown>(
 			messages.push({
 				type: "idle_nudge",
 				idleCount,
-				maxIdleRounds: config.agent.maxIdleRounds,
+				maxIdleRounds: getRuntime().agent.maxIdleRounds,
 			});
 			continue;
 		}

@@ -16,12 +16,12 @@ import {
 	loadAgentsMd,
 	loadSchedules,
 	PlainRenderer,
-	type WorkspacePaths,
+	type WorkflowPaths,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import interactivePromptText from "./prompts/interactive.md" with { type: "text" };
 type ReplContextPaths = Pick<
-	WorkspacePaths,
+	WorkflowPaths,
 	"workspace" | "tasks" | "skills" | "schedules"
 >;
 /**
