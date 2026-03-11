@@ -6,13 +6,13 @@
  */
 
 // ── 系统消息 ──
-export interface SystemMessage {
+export interface RawSystemMessage {
 	type: "system";
 	content: string;
 }
 
 // ── 用户消息 ──
-export interface UserTextMessage {
+export interface RawUserTextMessage {
 	type: "user_text";
 	content: string;
 }
@@ -197,8 +197,8 @@ export interface SubmitRejectedMessage {
 
 // ── 联合类型 ──
 export type DomainMessage =
-	| SystemMessage
-	| UserTextMessage
+	| RawSystemMessage
+	| RawUserTextMessage
 	| UserInputMessage
 	| UserImageMessage
 	| AssistantTextMessage

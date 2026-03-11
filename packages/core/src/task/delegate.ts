@@ -70,7 +70,10 @@ export async function delegateTask<T = unknown>(
 			];
 			const consultResult = await agentLoop(consultHistory, {
 				maxIterations: 15,
-				toolsWorkspace: { workspace: resolvedPaths.workspace, tempDir: resolvedPaths.temp },
+				toolsWorkspace: {
+					workspace: resolvedPaths.workspace,
+					tempDir: resolvedPaths.temp,
+				},
 			});
 			consultAdvice =
 				typeof consultResult.result === "string"
@@ -133,7 +136,10 @@ export async function delegateTask<T = unknown>(
 	const result = await agentLoop(history, {
 		schema: options?.schema,
 		maxIterations: options?.maxIterations,
-		toolsWorkspace: { workspace: resolvedPaths.workspace, tempDir: resolvedPaths.temp },
+		toolsWorkspace: {
+			workspace: resolvedPaths.workspace,
+			tempDir: resolvedPaths.temp,
+		},
 	});
 
 	return {
