@@ -2,11 +2,10 @@
  * 全局配置 — 过渡层
  *
  * PR 1: 路径相关代码已迁移到 workspace.ts / runtime.ts
- * 保留 initConfig 作为兼容桥接，内部委托给新模块。
- * 后续 PR 2-4 会继续消除 LLM/tools 全局单例。
+ * PR 2: LLM 配置已改为显式传递，不再需要 initLLMConfig
+ * 后续 PR 3-4 会消除 tools 全局单例。
  */
 
-import { initLLMConfig } from "@n0n/llm";
 import { initToolsConfig } from "@n0n/tools";
 import {
 	type RuntimeContext,
@@ -15,11 +14,10 @@ import {
 import {
 	type BaseWorkspacePaths,
 	type WorkflowPaths,
-	ensureDirs,
 	resolveWorkflowPaths,
 } from "./workspace.ts";
 
-// ── 运行时上下文（过渡期全局单例，PR 2-3 消除）──
+// ── 运行时上下文（过渡期全局单例，PR 3 消除 tools）──
 
 let _runtime: RuntimeContext | null = null;
 
@@ -30,18 +28,17 @@ export function getRuntime(): RuntimeContext {
 	return _runtime;
 }
 
-// ── 初始化 LLM + Tools（过渡期，保留全局 init）──
+// ── 初始化 Tools（过渡期，保留全局 init）──
 
 /**
- * 初始化 LLM 和 Tools 子包配置。
- * 路径相关逻辑已移除，由各 app 自行管理。
+ * 初始化运行时上下文和 Tools 子包配置。
+ * LLM 配置已改为显式传递，此处不再初始化。
  */
 export function initRuntime(
 	runtime: RuntimeContext,
 	paths: BaseWorkspacePaths,
 ): void {
 	_runtime = runtime;
-	initLLMConfig(runtime.llm);
 	initToolsConfig({
 		security: runtime.security,
 		agent: runtime.agent,

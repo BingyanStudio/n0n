@@ -7,10 +7,10 @@
 
 import {
 	chatCompletionStream,
-	getLLMConfig,
 	StreamAccumulator,
 	toAPIMessages,
 } from "@n0n/llm";
+import type { LLMConfig } from "@n0n/llm";
 import type { PendingReminder } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
 import type {
@@ -53,10 +53,11 @@ export async function agentLoop<T = unknown>(
 ): Promise<AgentResult<T>> {
 	const maxIter = options?.maxIterations ?? getRuntime().agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
+	const llm = getRuntime().llm;
 	const toolkit = await makeToolkit(
 		options?.schema,
 		options?.toolsWorkspace,
-		getLLMConfig().model,
+		llm.model,
 	);
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
@@ -75,7 +76,7 @@ export async function agentLoop<T = unknown>(
 
 		injectReminders(messages, reminders);
 
-		const apiMessages = toAPIMessages(messages);
+		const apiMessages = toAPIMessages(messages, llm.model);
 		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
 
 		const acc = new StreamAccumulator();
@@ -85,7 +86,7 @@ export async function agentLoop<T = unknown>(
 				tools: toolkit.definitions,
 				tool_choice: "auto",
 			},
-			{ signal: options?.signal },
+			{ signal: options?.signal, llm },
 		)) {
 			if (options?.signal?.aborted) {
 				renderer.aborted();

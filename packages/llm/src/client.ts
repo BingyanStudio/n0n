@@ -3,7 +3,7 @@
  */
 
 import type { LLMRequest, LLMResponse } from "@n0n/types";
-import { getLLMConfig } from "./config.ts";
+import type { LLMConfig } from "./config.ts";
 
 export class LLMError extends Error {
 	constructor(
@@ -29,8 +29,9 @@ function isLLMResponse(data: unknown): data is LLMResponse {
  */
 export async function chatCompletion(
 	request: Omit<LLMRequest, "model">,
+	llm: LLMConfig,
 ): Promise<LLMResponse> {
-	const config = getLLMConfig();
+	const config = llm;
 	const body: LLMRequest = {
 		model: config.model,
 		...request,

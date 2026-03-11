@@ -4,7 +4,7 @@
 
 import type { LLMAssistantMessage, LLMRequest, LLMToolCall } from "@n0n/types";
 import { LLMError } from "./client.ts";
-import { getLLMConfig } from "./config.ts";
+import type { LLMConfig } from "./config.ts";
 
 // ── StreamEvent 类型 ──
 
@@ -24,9 +24,9 @@ export type StreamEvent =
 
 export async function* chatCompletionStream(
 	request: Omit<LLMRequest, "model">,
-	options?: { signal?: AbortSignal },
+	options: { signal?: AbortSignal; llm: LLMConfig },
 ): AsyncGenerator<StreamEvent> {
-	const config = getLLMConfig();
+	const config = options.llm;
 	const body: LLMRequest & { stream: true; enable_thinking?: boolean } = {
 		model: config.model,
 		...request,
