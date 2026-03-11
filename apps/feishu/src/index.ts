@@ -12,11 +12,10 @@
  * - bot.ts — 飞书 API 客户端
  */
 
-import { resolve } from "node:path";
 import * as lark from "@larksuiteoapi/node-sdk";
-import feishuPromptText from "./prompts/feishu.md" with { type: "text" };
 import {
-	initConfig,
+	createRuntimeContext,
+	initRuntime,
 	loadSchedules,
 	type SchedulerHandle,
 	startScheduler,
@@ -26,6 +25,7 @@ import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
 import { handleCommand, parseCommand, parseMenuCommand } from "./commands.ts";
 import { discoverAllUserPaths, resolveFeishuPaths } from "./paths.ts";
+import feishuPromptText from "./prompts/feishu.md" with { type: "text" };
 import { runFeishuRound } from "./round.ts";
 import {
 	buildSessionKey,
@@ -49,13 +49,8 @@ export async function startFeishuService(): Promise<void> {
 	const bot = new FeishuBot({ appId, appSecret, domain });
 	const systemPrompt = feishuPromptText;
 
-	// 启动时初始化全局配置（LLM/tools）
-	initConfig({
-		workspace: resolve(
-			process.env.N0N_FEISHU_WORKSPACE ??
-				resolve(process.cwd(), ".runtime", "feishu"),
-		),
-	});
+	const runtime = createRuntimeContext();
+	initRuntime(runtime);
 
 	// 扫描所有已有用户目录，为有 schedule 的用户启动 scheduler
 	const schedulerHandles: SchedulerHandle[] = [];

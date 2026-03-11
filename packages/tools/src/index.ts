@@ -25,7 +25,7 @@ import type {
 	WriteToolCall,
 } from "@n0n/types";
 import type { ZodType } from "zod";
-import { getToolsConfig } from "./config.ts";
+import type { ToolsConfig } from "./config.ts";
 import { EDIT_TOOL_DEFINITION, EditArgsSchema, editTool } from "./edit.ts";
 import { detectEnv } from "./env.ts";
 import {
@@ -64,29 +64,22 @@ export type ToolEntry =
 	| { definition: LLMToolDefinition; stream: true; execute: StreamExecutor }
 	| { definition: LLMToolDefinition; stream: false; execute: SyncExecutor };
 
-/** 工具执行的工作区覆盖（用于 per-session 隔离） */
-export interface ToolsWorkspaceOverride {
-	workspace: string;
-	tempDir: string;
-}
-
 // ── 基础注册表构建 ──
 
 /**
  * 构建基础工具注册表（不含 submit）。
- * 接受可选的 workspace 覆盖，用于 per-session 工具隔离。
+ * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir）。
  */
 function buildBaseRegistry(
 	execToolDef: LLMToolDefinition,
-	toolsWorkspace?: ToolsWorkspaceOverride,
+	toolsConfig: ToolsConfig,
 ): Record<string, ToolEntry> {
-	// 统一解析 workspace：优先使用 per-session override，否则使用全局配置
-	const resolvedWorkspace =
-		toolsWorkspace?.workspace ?? getToolsConfig().workspace;
-	const resolvedTempDir = toolsWorkspace?.tempDir ?? getToolsConfig().tempDir;
-	const execOverride = toolsWorkspace ?? {
-		workspace: resolvedWorkspace,
-		tempDir: resolvedTempDir,
+	const resolvedWorkspace = toolsConfig.workspace;
+	const execConfig = {
+		workspace: toolsConfig.workspace,
+		tempDir: toolsConfig.tempDir,
+		blockedCommands: toolsConfig.security.blockedCommands,
+		defaultExecTimeout: toolsConfig.agent.defaultExecTimeout,
 	};
 
 	return {
@@ -99,7 +92,7 @@ function buildBaseRegistry(
 					tool: "exec" as const,
 					args: ExecArgsSchema.parse(tc.args),
 				};
-				return execToolStream(call, confirmFn, execOverride);
+				return execToolStream(call, confirmFn, execConfig);
 			},
 		},
 		write: {
@@ -161,12 +154,12 @@ export const REGISTERED_TOOLS = new Set([
  * 异步：首次调用会探测系统可用 runtime（~1-2s），后续调用使用缓存。
  *
  * @param schema 可选的 Zod schema，用于约束 submit 的参数结构。
- * @param toolsWorkspace 可选的工作区覆盖，用于 per-session 隔离。
+ * @param toolsConfig 工具配置，包含 workspace、tempDir 和 security 等。
  * @param model LLM 模型名称，用于选择 XML tag 风格（可选）。
  */
 export async function makeToolkit(
-	schema?: ZodType,
-	toolsWorkspace?: ToolsWorkspaceOverride,
+	schema: ZodType | undefined,
+	toolsConfig: ToolsConfig,
 	model?: string,
 ): Promise<Toolkit> {
 	const env = await detectEnv();
@@ -188,7 +181,7 @@ export async function makeToolkit(
 	};
 
 	const registry: Record<string, ToolEntry> = {
-		...buildBaseRegistry(execToolDef, toolsWorkspace),
+		...buildBaseRegistry(execToolDef, toolsConfig),
 		submit: submitEntry,
 	};
 
@@ -201,7 +194,6 @@ export async function makeToolkit(
 // ── Re-exports ──
 
 export type { ToolsConfig } from "./config.ts";
-export { initToolsConfig } from "./config.ts";
 export type { EnvSnapshot, RuntimeProbe } from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";

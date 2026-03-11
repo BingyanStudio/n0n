@@ -4,7 +4,7 @@
  * 管理每个用户/群聊的对话状态（history、当前任务、去重）。
  */
 
-import type { WorkspacePaths } from "@n0n/core";
+import type { WorkflowPaths } from "@n0n/core";
 import type { DomainMessage } from "@n0n/types";
 import type { FeishuMessageContext, FeishuUserInfo } from "./bot.ts";
 
@@ -13,7 +13,7 @@ import type { FeishuMessageContext, FeishuUserInfo } from "./bot.ts";
 export interface FeishuSession {
 	history: DomainMessage[];
 	ctx: FeishuMessageContext;
-	paths: WorkspacePaths;
+	paths: WorkflowPaths;
 	userInfo: FeishuUserInfo | null;
 	currentTask: {
 		abortController: AbortController;
@@ -36,7 +36,7 @@ export function getOrCreateSession(
 	sessionKey: string,
 	ctx: FeishuMessageContext,
 	systemPrompt: string,
-	paths: WorkspacePaths,
+	paths: WorkflowPaths,
 	userInfo?: FeishuUserInfo | null,
 ): FeishuSession {
 	const existing = sessions.get(sessionKey);
@@ -60,7 +60,7 @@ export function resetSession(
 	sessionKey: string,
 	ctx: FeishuMessageContext,
 	systemPrompt: string,
-	paths: WorkspacePaths,
+	paths: WorkflowPaths,
 	userInfo?: FeishuUserInfo | null,
 ): FeishuSession {
 	const session: FeishuSession = {
@@ -172,7 +172,7 @@ export function shouldProcessMessage(ctx: FeishuMessageContext): boolean {
 function createInitialHistory(
 	systemPrompt: string,
 	ctx: FeishuMessageContext,
-	paths: WorkspacePaths,
+	paths: WorkflowPaths,
 	userInfo?: FeishuUserInfo | null,
 ): DomainMessage[] {
 	return [
@@ -188,7 +188,7 @@ function createInitialHistory(
  */
 function buildFeishuSystemContext(
 	ctx: FeishuMessageContext,
-	paths: WorkspacePaths,
+	paths: WorkflowPaths,
 	userInfo?: FeishuUserInfo | null,
 ): string {
 	const lines: string[] = ["## Runtime Environment"];

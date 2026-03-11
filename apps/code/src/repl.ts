@@ -14,16 +14,16 @@ import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 import {
 	agentLoop,
+	type BaseWorkspacePaths,
 	formatAgentsMdPrompt,
 	loadAgentsMd,
 	PlainRenderer,
-	type WorkspacePaths,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
-type CodeWorkspacePaths = Pick<WorkspacePaths, "workspace" | "temp">;
+type CodeWorkspacePaths = BaseWorkspacePaths;
 
 function buildWorkspaceContext(workspace: string): string {
 	return [
@@ -151,6 +151,7 @@ export async function startCodeRepl(
 				confirmFn,
 				schema: CodeResultSchema,
 				signal: abortController.signal,
+				toolsWorkspace: { workspace: paths.workspace, tempDir: paths.temp },
 			});
 		} catch (err) {
 			writeln();

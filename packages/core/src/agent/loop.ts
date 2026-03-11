@@ -7,11 +7,10 @@
 
 import {
 	chatCompletionStream,
-	getLLMConfig,
 	StreamAccumulator,
 	toAPIMessages,
 } from "@n0n/llm";
-import type { PendingReminder } from "@n0n/tools";
+import type { PendingReminder, ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
 import type {
 	AssistantToolCallMessage,
@@ -21,7 +20,7 @@ import type {
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
-import { config } from "../config.ts";
+import { getRuntime } from "../runtime.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import { executeToolStream, isValidToolCall, parseToolCalls } from "./tool.ts";
 
@@ -51,13 +50,19 @@ export async function agentLoop<T = unknown>(
 	history: DomainMessage[],
 	options?: AgentOptions<T>,
 ): Promise<AgentResult<T>> {
-	const maxIter = options?.maxIterations ?? config.agent.maxIterations;
+	const maxIter = options?.maxIterations ?? getRuntime().agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
-	const toolkit = await makeToolkit(
-		options?.schema,
-		options?.toolsWorkspace,
-		getLLMConfig().model,
-	);
+	const runtime = getRuntime();
+	const llm = runtime.llm;
+	const toolsConfig: ToolsConfig = {
+		security: runtime.security,
+		agent: runtime.agent,
+		...(options?.toolsWorkspace ?? {
+			workspace: process.cwd(),
+			tempDir: ".temp",
+		}),
+	};
+	const toolkit = await makeToolkit(options?.schema, toolsConfig, llm.model);
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
@@ -75,7 +80,7 @@ export async function agentLoop<T = unknown>(
 
 		injectReminders(messages, reminders);
 
-		const apiMessages = toAPIMessages(messages);
+		const apiMessages = toAPIMessages(messages, llm.model);
 		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
 
 		const acc = new StreamAccumulator();
@@ -85,7 +90,7 @@ export async function agentLoop<T = unknown>(
 				tools: toolkit.definitions,
 				tool_choice: "auto",
 			},
-			{ signal: options?.signal },
+			{ signal: options?.signal, llm },
 		)) {
 			if (options?.signal?.aborted) {
 				renderer.aborted();
@@ -139,7 +144,7 @@ export async function agentLoop<T = unknown>(
 			};
 			messages.push(textMsg);
 
-			if (idleCount >= config.agent.maxIdleRounds) {
+			if (idleCount >= getRuntime().agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
 					result: null,
@@ -151,7 +156,7 @@ export async function agentLoop<T = unknown>(
 			messages.push({
 				type: "idle_nudge",
 				idleCount,
-				maxIdleRounds: config.agent.maxIdleRounds,
+				maxIdleRounds: getRuntime().agent.maxIdleRounds,
 			});
 			continue;
 		}
@@ -166,7 +171,7 @@ export async function agentLoop<T = unknown>(
 			const content = assistantMsg.content ?? "";
 			idleCount++;
 			messages.push({ type: "assistant_text", content });
-			if (idleCount >= config.agent.maxIdleRounds) {
+			if (idleCount >= getRuntime().agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
 					result: null,
@@ -177,7 +182,7 @@ export async function agentLoop<T = unknown>(
 			messages.push({
 				type: "idle_nudge",
 				idleCount,
-				maxIdleRounds: config.agent.maxIdleRounds,
+				maxIdleRounds: getRuntime().agent.maxIdleRounds,
 			});
 			continue;
 		}
