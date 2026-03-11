@@ -14,6 +14,7 @@
 
 import { resolve } from "node:path";
 import * as lark from "@larksuiteoapi/node-sdk";
+import feishuPromptText from "./prompts/feishu.md" with { type: "text" };
 import {
 	initConfig,
 	loadSchedules,
@@ -33,9 +34,6 @@ import {
 } from "./session.ts";
 import { ensureUserInfo } from "./user-info.ts";
 
-/** 飞书模式专用系统提示词（区别于 interactive/code 模式） */
-const PROMPT_PATH = resolve(import.meta.dir, "prompts", "feishu.md");
-
 function requireEnv(key: string): string {
 	const val = process.env[key];
 	if (!val) throw new Error(`Missing required env: ${key}`);
@@ -49,7 +47,7 @@ export async function startFeishuService(): Promise<void> {
 	const domain = process.env.FEISHU_DOMAIN === "lark" ? "lark" : "feishu";
 
 	const bot = new FeishuBot({ appId, appSecret, domain });
-	const systemPrompt = await Bun.file(PROMPT_PATH).text();
+	const systemPrompt = feishuPromptText;
 
 	// 启动时初始化全局配置（LLM/tools）
 	initConfig({
