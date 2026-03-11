@@ -5,7 +5,6 @@
  * 在等待用户输入时，按下 Ctrl+C 会退出 REPL 进程。
  */
 
-import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 import {
@@ -20,9 +19,7 @@ import {
 	type WorkspacePaths,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
-
-/** CLI 模式专用系统提示词（workflow builder） */
-const PROMPT_PATH = resolve(import.meta.dir, "prompts", "interactive.md");
+import interactivePromptText from "./prompts/interactive.md" with { type: "text" };
 type ReplContextPaths = Pick<
 	WorkspacePaths,
 	"workspace" | "tasks" | "skills" | "schedules"
@@ -74,7 +71,7 @@ export async function startRepl(
 	paths: ReplContextPaths,
 	initialInput?: string,
 ): Promise<void> {
-	let systemPrompt = await Bun.file(PROMPT_PATH).text();
+	let systemPrompt = interactivePromptText;
 	const agentsMd = await loadAgentsMd(paths.workspace);
 	if (agentsMd) {
 		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
