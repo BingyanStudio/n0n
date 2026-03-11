@@ -29,7 +29,11 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 
 function formatWriteResult(msg: WriteToolResult, model: string): string {
 	if (msg.success) {
-		return wrapTag("write_result", `Written to \`${msg.call.args.path}\``, model);
+		return wrapTag(
+			"write_result",
+			`Written to \`${msg.call.args.path}\``,
+			model,
+		);
 	}
 	return wrapTag("error", `Write failed: ${msg.error}`, model);
 }
@@ -74,7 +78,10 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 /**
  * DomainMessage[] → LLMRequestMessage[]
  */
-export function toAPIMessages(messages: DomainMessage[], model: string): LLMRequestMessage[] {
+export function toAPIMessages(
+	messages: DomainMessage[],
+	model: string,
+): LLMRequestMessage[] {
 	const result: LLMRequestMessage[] = [];
 
 	for (const msg of messages) {

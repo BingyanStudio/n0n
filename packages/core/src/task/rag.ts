@@ -7,7 +7,7 @@ import { basename, resolve } from "node:path";
 import { chatCompletion } from "@n0n/llm";
 import type { LLMRequestMessage } from "@n0n/types";
 import { Glob } from "bun";
-import { getRuntime } from "../config.ts";
+import { getRuntime } from "../runtime.ts";
 import type { WorkflowPaths } from "../workspace.ts";
 
 export type SearchSpace = "all" | "memory" | "skill" | "history";
@@ -141,10 +141,13 @@ export async function ragSearch(
 	];
 
 	try {
-		const response = await chatCompletion({
-			messages,
-			temperature: 0,
-		}, getRuntime().llm);
+		const response = await chatCompletion(
+			{
+				messages,
+				temperature: 0,
+			},
+			getRuntime().llm,
+		);
 
 		const text = response.choices[0]?.message?.content?.trim() ?? "[]";
 		const selections = parseSelections(text);

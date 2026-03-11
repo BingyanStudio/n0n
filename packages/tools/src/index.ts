@@ -75,7 +75,11 @@ function buildBaseRegistry(
 	toolsConfig: ToolsConfig,
 ): Record<string, ToolEntry> {
 	const resolvedWorkspace = toolsConfig.workspace;
-	const execConfig = { workspace: toolsConfig.workspace, tempDir: toolsConfig.tempDir, blockedCommands: toolsConfig.security.blockedCommands };
+	const execConfig = {
+		workspace: toolsConfig.workspace,
+		tempDir: toolsConfig.tempDir,
+		blockedCommands: toolsConfig.security.blockedCommands,
+	};
 
 	return {
 		exec: {

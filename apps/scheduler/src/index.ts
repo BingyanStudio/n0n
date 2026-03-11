@@ -12,7 +12,8 @@ import {
 	startScheduler,
 } from "@n0n/core";
 
-const workspace = process.env.N0N_SCHEDULER_WORKSPACE ?? `${process.cwd()}/.runtime/scheduler`;
+const workspace =
+	process.env.N0N_SCHEDULER_WORKSPACE ?? `${process.cwd()}/.runtime/scheduler`;
 const paths = resolveWorkflowPaths(workspace);
 ensureDirs(paths);
 const runtime = createRuntimeContext();

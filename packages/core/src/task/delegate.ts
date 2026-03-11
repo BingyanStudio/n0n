@@ -8,12 +8,11 @@ import { resolve } from "node:path";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
-import { getRuntime } from "../config.ts";
 import { formatAgentsMdPrompt, loadAgentsMd } from "../prompts/agents-md.ts";
-import type { WorkflowPaths } from "../workspace.ts";
 import delegatePromptText from "../prompts/delegate.md" with { type: "text" };
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
+import type { WorkflowPaths } from "../workspace.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
 

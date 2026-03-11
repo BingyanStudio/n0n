@@ -19,7 +19,10 @@ import {
 	type WorkflowPaths,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
-import interactivePromptText from "./prompts/interactive.md" with { type: "text" };
+import interactivePromptText from "./prompts/interactive.md" with {
+	type: "text",
+};
+
 type ReplContextPaths = Pick<
 	WorkflowPaths,
 	"workspace" | "tasks" | "skills" | "schedules"

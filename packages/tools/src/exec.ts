@@ -332,7 +332,10 @@ function extractCommandNames(script: string): string[] {
 		.filter((name) => name.length > 0);
 }
 
-function findBlockedCommand(script: string, blockedCommands: string[]): string | null {
+function findBlockedCommand(
+	script: string,
+	blockedCommands: string[],
+): string | null {
 	const blocked = blockedCommands;
 	if (blocked.length === 0) return null;
 	const blockedNormalized = IS_WINDOWS
@@ -397,7 +400,11 @@ async function handleBlockedCommand(
 export async function* execToolStream(
 	call: ExecToolCall,
 	confirmFn: ((question: string) => Promise<string>) | undefined,
-	toolsConfig: { workspace: string; tempDir: string; blockedCommands: string[] },
+	toolsConfig: {
+		workspace: string;
+		tempDir: string;
+		blockedCommands: string[];
+	},
 ): AsyncGenerator<ToolStreamEvent> {
 	const runtime = call.args.runtime ?? DEFAULT_RUNTIME;
 	const workspace = toolsConfig.workspace;
@@ -410,7 +417,10 @@ export async function* execToolStream(
 	const start = Date.now();
 
 	// Security check — scan script content for blocked commands
-	const blockedCmd = findBlockedCommand(call.args.script, toolsConfig.blockedCommands);
+	const blockedCmd = findBlockedCommand(
+		call.args.script,
+		toolsConfig.blockedCommands,
+	);
 	if (blockedCmd !== null) {
 		const blocked = await handleBlockedCommand(
 			call,

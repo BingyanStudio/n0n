@@ -67,3 +67,20 @@ export function createRuntimeContext(): RuntimeContext {
 		},
 	};
 }
+
+// ── 运行时上下文全局单例 ──
+
+let _runtime: RuntimeContext | null = null;
+
+/** 获取当前运行时上下文（未初始化时自动从环境变量构造） */
+export function getRuntime(): RuntimeContext {
+	if (!_runtime) {
+		_runtime = createRuntimeContext();
+	}
+	return _runtime;
+}
+
+/** 设置运行时上下文。各 app 入口调用。 */
+export function initRuntime(runtime: RuntimeContext): void {
+	_runtime = runtime;
+}

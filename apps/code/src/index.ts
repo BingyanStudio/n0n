@@ -7,10 +7,10 @@
 
 import {
 	createRuntimeContext,
+	ensureDirs,
 	initRuntime,
 	parseWorkspaceArg,
 	resolveBasePaths,
-	ensureDirs,
 } from "@n0n/core";
 
 const { workspace, remainingArgs } = parseWorkspaceArg(
@@ -27,11 +27,11 @@ initRuntime(runtime);
 const { style, writeln } = await import("@n0n/cli-ui");
 const { startCodeRepl } = await import("./repl.ts");
 
-const initialInput = remainingArgs.length > 0 ? remainingArgs.join(" ") : undefined;
+const initialInput =
+	remainingArgs.length > 0 ? remainingArgs.join(" ") : undefined;
 
 writeln(
-	style.bold("n0n code") +
-		style.gray(` — Code Agent [${paths.workspace}]`),
+	style.bold("n0n code") + style.gray(` — Code Agent [${paths.workspace}]`),
 );
 writeln(
 	style.gray('描述你的编码任务，AI 将直接修改项目代码。输入 "exit" 退出。'),

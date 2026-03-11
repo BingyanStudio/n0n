@@ -5,14 +5,13 @@
  * 直到 agent 调用 submit 或达到终止条件。
  */
 
+import type { LLMConfig } from "@n0n/llm";
 import {
 	chatCompletionStream,
 	StreamAccumulator,
 	toAPIMessages,
 } from "@n0n/llm";
-import type { LLMConfig } from "@n0n/llm";
-import type { PendingReminder } from "@n0n/tools";
-import type { ToolsConfig } from "@n0n/tools";
+import type { PendingReminder, ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
 import type {
 	AssistantToolCallMessage,
@@ -22,7 +21,7 @@ import type {
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
-import { getRuntime } from "../config.ts";
+import { getRuntime } from "../runtime.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import { executeToolStream, isValidToolCall, parseToolCalls } from "./tool.ts";
 
@@ -59,13 +58,12 @@ export async function agentLoop<T = unknown>(
 	const toolsConfig: ToolsConfig = {
 		security: runtime.security,
 		agent: runtime.agent,
-		...(options?.toolsWorkspace ?? { workspace: process.cwd(), tempDir: ".temp" }),
+		...(options?.toolsWorkspace ?? {
+			workspace: process.cwd(),
+			tempDir: ".temp",
+		}),
 	};
-	const toolkit = await makeToolkit(
-		options?.schema,
-		toolsConfig,
-		llm.model,
-	);
+	const toolkit = await makeToolkit(options?.schema, toolsConfig, llm.model);
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;

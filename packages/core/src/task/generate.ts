@@ -8,7 +8,6 @@
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { agentLoop } from "../agent/loop.ts";
-import { getRuntime } from "../config.ts";
 import type { BaseWorkspacePaths } from "../workspace.ts";
 
 export interface GenerateOptions<T = unknown> {

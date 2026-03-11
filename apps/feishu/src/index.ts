@@ -13,12 +13,10 @@
  */
 
 import * as lark from "@larksuiteoapi/node-sdk";
-import feishuPromptText from "./prompts/feishu.md" with { type: "text" };
 import {
 	createRuntimeContext,
 	initRuntime,
 	loadSchedules,
-
 	type SchedulerHandle,
 	startScheduler,
 } from "@n0n/core";
@@ -27,6 +25,7 @@ import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
 import { handleCommand, parseCommand, parseMenuCommand } from "./commands.ts";
 import { discoverAllUserPaths, resolveFeishuPaths } from "./paths.ts";
+import feishuPromptText from "./prompts/feishu.md" with { type: "text" };
 import { runFeishuRound } from "./round.ts";
 import {
 	buildSessionKey,
