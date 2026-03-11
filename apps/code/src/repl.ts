@@ -10,7 +10,6 @@
  * - Context 注入项目结构和 git 状态，而非 workflow 列表
  */
 
-import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 import {
@@ -21,9 +20,9 @@ import {
 	type WorkspacePaths,
 } from "@n0n/core";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
+import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
-const PROMPT_PATH = resolve(import.meta.dir, "prompts", "code.md");
 type CodeWorkspacePaths = Pick<WorkspacePaths, "workspace" | "temp">;
 
 function buildWorkspaceContext(workspace: string): string {
@@ -79,7 +78,7 @@ export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
 	initialInput?: string,
 ): Promise<void> {
-	let systemPrompt = await Bun.file(PROMPT_PATH).text();
+	let systemPrompt = codePromptText;
 	const agentsMd = await loadAgentsMd(paths.workspace);
 	if (agentsMd) {
 		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
