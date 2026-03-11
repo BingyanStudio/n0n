@@ -16,13 +16,11 @@ import {
 	resolvePaths,
 } from "../config.ts";
 import { formatAgentsMdPrompt, loadAgentsMd } from "../prompts/agents-md.ts";
-import { DELEGATE_PROMPT_PATH } from "../prompts/paths.ts";
+import delegatePromptText from "../prompts/delegate.md" with { type: "text" };
 import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
-
-const PROMPT_PATH = DELEGATE_PROMPT_PATH;
 
 export interface TaskResult<T = unknown> {
 	result: T | null;
@@ -138,8 +136,7 @@ export async function delegateTask<T = unknown>(
 		workflowList,
 	);
 
-	const promptTemplate = await Bun.file(PROMPT_PATH).text();
-	let systemPrompt = promptTemplate;
+	let systemPrompt = delegatePromptText;
 
 	const agentsMd = await loadAgentsMd(resolvedPaths.workspace);
 	if (agentsMd) {
