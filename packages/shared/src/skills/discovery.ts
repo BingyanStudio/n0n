@@ -24,33 +24,10 @@ import {
 	extractNestedBlock,
 	extractRawYaml,
 	parseFrontmatter as parseFM,
-} from "../utils/frontmatter.ts";
+} from "../frontmatter.ts";
+import type { SkillContent, SkillMeta } from "./types.ts";
 
-/** Skill 元数据（从 SKILL.md frontmatter 解析） */
-export interface SkillMeta {
-	/** 短标识符（必须匹配目录名） */
-	name: string;
-	/** 描述：做什么、何时使用 */
-	description: string;
-	/** SKILL.md 绝对路径 */
-	path: string;
-	/** skill 目录绝对路径 */
-	dir: string;
-	/** 可选：许可证 */
-	license?: string;
-	/** 可选：兼容性说明 */
-	compatibility?: string;
-	/** 可选：额外元数据 */
-	metadata?: Record<string, string>;
-}
-
-/** Skill 完整内容（元数据 + 指令正文） */
-export interface SkillContent extends SkillMeta {
-	/** SKILL.md 的 Markdown 正文（frontmatter 之后的部分） */
-	body: string;
-	/** skill 目录下的脚本文件列表（相对路径） */
-	scripts: string[];
-}
+export type { SkillContent, SkillMeta } from "./types.ts";
 
 /**
  * 发现所有 skill：扫描 SKILL.md，只解析 frontmatter（轻量）
@@ -173,13 +150,10 @@ const SkillFrontmatterSchema = z.object({
 
 /**
  * 解析 YAML frontmatter，提取 skill 元数据
- *
- * 支持的字段：name, description, license, compatibility, metadata
  */
 function parseSkillMeta(content: string, filePath: string): SkillMeta | null {
 	const result = parseFM(content, SkillFrontmatterSchema);
 
-	// Schema validation failed
 	if (!result) return null;
 
 	const { data } = result;
@@ -187,7 +161,6 @@ function parseSkillMeta(content: string, filePath: string): SkillMeta | null {
 
 	if (!rawYaml) return null;
 
-	// 验证 name 匹配目录名
 	const dir = resolve(filePath, "..");
 	const dirName = basename(dir);
 	if (dirName !== data.name) {
@@ -207,7 +180,6 @@ function parseSkillMeta(content: string, filePath: string): SkillMeta | null {
 	if (data.license) meta.license = data.license;
 	if (data.compatibility) meta.compatibility = data.compatibility;
 
-	// metadata 子字段（简单处理：只取顶层 key-value）
 	const metadataRaw = extractNestedBlock(rawYaml, "metadata");
 	if (metadataRaw && Object.keys(metadataRaw).length > 0) {
 		meta.metadata = metadataRaw;

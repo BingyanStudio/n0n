@@ -4,12 +4,10 @@
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseFrontmatter } from "@n0n/shared";
+import { delegateTask, runWorkflow, type WorkflowPaths } from "@n0n/workflow";
 import { Glob } from "bun";
 import { z } from "zod";
-import { delegateTask } from "../task/delegate.ts";
-import { parseFrontmatter } from "../utils/frontmatter.ts";
-import { runWorkflow } from "../workflow/runtime.ts";
-import type { WorkflowPaths } from "../workspace.ts";
 import { cronMatches, parseCron } from "./cron.ts";
 
 export type SchedulePaths = Pick<WorkflowPaths, "schedules">;

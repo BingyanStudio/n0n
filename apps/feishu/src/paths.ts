@@ -8,7 +8,8 @@
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { ensureDirs, type WorkflowPaths } from "@n0n/core";
+import { ensureDirs } from "@n0n/shared";
+import type { WorkflowPaths } from "@n0n/workflow";
 
 const FEISHU_BASE = resolve(
 	process.env.N0N_FEISHU_WORKSPACE ??

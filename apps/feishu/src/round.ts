@@ -8,15 +8,14 @@
  * 4. 根据结果更新卡片和 session history
  */
 
+import { agentLoop } from "@n0n/core";
+import { loadSchedules } from "@n0n/scheduler";
+import { formatAgentsMdPrompt, loadAgentsMd } from "@n0n/shared";
 import {
-	agentLoop,
 	discoverWorkflows,
-	formatAgentsMdPrompt,
 	type InteractiveResult,
 	InteractiveResultSchema,
-	loadAgentsMd,
-	loadSchedules,
-} from "@n0n/core";
+} from "@n0n/workflow";
 import type { FeishuBot } from "./bot.ts";
 import { FeishuConversation } from "./conversation.ts";
 import { FeishuRenderer } from "./renderer.ts";

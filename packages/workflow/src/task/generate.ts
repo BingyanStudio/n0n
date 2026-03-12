@@ -5,10 +5,10 @@
  * 仍走 agentLoop 路径，模型可自主使用工具。
  */
 
+import { agentLoop } from "@n0n/core";
+import type { BaseWorkspacePaths } from "@n0n/shared";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
-import { agentLoop } from "../agent/loop.ts";
-import type { BaseWorkspacePaths } from "../workspace.ts";
 
 export interface GenerateOptions<T = unknown> {
 	schema?: ZodType<T>;
