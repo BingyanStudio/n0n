@@ -121,15 +121,15 @@ async function buildCompile() {
 		const outFile = resolve(OUT_DIR, `${BIN_NAME}-${target}${info.suffix}`);
 		console.log(`\n🔨 Building ${info.label} → ${outFile}`);
 
-		const proc = Bun.spawn(
-			[
+		const compileArgs = [
 				"bun", "build", ENTRY,
 				"--compile",
 				"--target", `bun-${target}`,
 				"--outfile", outFile,
-			],
-			{ stdout: "inherit", stderr: "inherit" },
-		);
+		];
+		if (!noMinify) compileArgs.push("--minify");
+
+		const proc = Bun.spawn(compileArgs, { stdout: "inherit", stderr: "inherit" });
 		const exitCode = await proc.exited;
 		if (exitCode !== 0) {
 			console.error(`❌ Failed: ${info.label} (exit ${exitCode})`);
