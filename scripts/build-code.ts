@@ -28,6 +28,17 @@ const args = process.argv.slice(2);
 const noMinify = args.includes("--no-minify");
 const compileMode = args.includes("--compile");
 
+// ── Compile 目标定义（需在 dispatch 前声明，避免 TDZ） ──
+
+const TARGETS = {
+	"windows-x64": { suffix: ".exe", label: "Windows x64" },
+	"linux-x64": { suffix: "", label: "Linux x64" },
+	"linux-arm64": { suffix: "", label: "Linux arm64" },
+	"darwin-x64": { suffix: "", label: "macOS x64 (Intel)" },
+	"darwin-arm64": { suffix: "", label: "macOS arm64 (Apple Silicon)" },
+} as const;
+type TargetKey = keyof typeof TARGETS;
+
 if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
 
 if (compileMode) {
@@ -92,15 +103,6 @@ async function buildBundle() {
 }
 
 // ── Compile 模式（旧，仅供需要完全独立二进制时使用） ──
-
-const TARGETS = {
-	"windows-x64": { suffix: ".exe", label: "Windows x64" },
-	"linux-x64": { suffix: "", label: "Linux x64" },
-	"linux-arm64": { suffix: "", label: "Linux arm64" },
-	"darwin-x64": { suffix: "", label: "macOS x64 (Intel)" },
-	"darwin-arm64": { suffix: "", label: "macOS arm64 (Apple Silicon)" },
-} as const;
-type TargetKey = keyof typeof TARGETS;
 
 async function buildCompile() {
 	const targets = parseCompileTargets();
