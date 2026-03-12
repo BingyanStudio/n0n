@@ -5,9 +5,9 @@
  * 而非 `--compile` 嵌入完整 Bun 运行时（~58MB）。
  *
  * 目标机器需要安装 bun 运行时（因为 workflow 本身就依赖 bun + TS）。
- * 产物为单文件分发：
- *   dist/n0n-code          — Unix 单文件（shebang + JS bundle，可直接 ./n0n-code 执行）
- *   dist/n0n-code.cmd      — Windows 单文件（自解压 bat+JS 多语言脚本）
+ * 产物为单文件分发（sh/cmd + JS polyglot，自带 bun 检测）：
+ *   dist/n0n-code          — Unix 单文件（sh/bun polyglot，可直接 ./n0n-code 执行）
+ *   dist/n0n-code.cmd      — Windows 单文件（cmd/bun polyglot，双击或命令行运行）
  *
  * 用法：
  *   bun run scripts/build-code.ts              # 默认 minify
@@ -70,40 +70,24 @@ async function buildBundle() {
 
 	const jsContent = await Bun.file(tmpJs).text();
 
-	// ── Unix 单文件：shell wrapper + JS bundle ──
-	// 先检测 bun 是否存在，缺失时给出安装引导（而非直接 shebang 报错）
+	// ── Unix 单文件：sh/bun polyglot ──
+	// 原理：shebang 让 shell 执行，`//` 行对 shell 是无害命令（路径不存在，stderr 丢弃），
+	// 对 Bun 是行注释。shell 检测 bun 后 exec 替换为 bun 进程，Bun 跳过 shebang + // 行。
 	const unixFile = resolve(OUT_DIR, BIN_NAME);
-	const unixShell = [
+	const unixPreamble = [
 		`#!/bin/sh`,
-		`if ! command -v bun >/dev/null 2>&1; then`,
-		`  echo "\\033[31m✗ 未找到 bun 运行时\\033[0m"`,
-		`  echo "  安装: curl -fsSL https://bun.sh/install | bash"`,
-		`  echo "  详情: https://bun.sh"`,
-		`  exit 1`,
-		`fi`,
-		`exec bun "$0" "$@"`,
+		`// 2>/dev/null; command -v bun >/dev/null 2>&1 || { echo "\\033[31m✗ 未找到 bun 运行时\\033[0m"; echo "  安装: curl -fsSL https://bun.sh/install | bash"; echo "  详情: https://bun.sh"; exit 1; }; exec bun "$0" "$@"`,
 	].join("\n");
-	writeFileSync(unixFile, `${unixShell}\n${jsContent}`);
+	writeFileSync(unixFile, `${unixPreamble}\n${jsContent}`);
 	chmodSync(unixFile, 0o755);
 
-	// ── Windows 单文件：bat+JS polyglot ──
-	// 原理：.cmd 文件开头是 batch 命令，先检测 bun 再执行自身
+	// ── Windows 单文件：cmd/bun polyglot ──
+	// 原理：`//` 对 cmd 是无效命令（2>nul 吞错误），对 Bun 是行注释。
+	// cmd 执行 `&` 链：echo off → 检测 bun → 调用 bun 执行自身 → exit。
+	// Bun 跳过 `//` 注释行，直接执行后续 JS。
 	const winFile = resolve(OUT_DIR, `${BIN_NAME}.cmd`);
-	const winContent = [
-		`@echo off`,
-		`where bun >nul 2>nul`,
-		`if %errorlevel% neq 0 (`,
-		`  echo [31m✗ 未找到 bun 运行时[0m`,
-		`  echo   安装: powershell -c "irm bun.sh/install.ps1 ^| iex"`,
-		`  echo   详情: https://bun.sh`,
-		`  exit /b 1`,
-		`)`,
-		`bun "%~f0" %*`,
-		`exit /b %errorlevel%`,
-		``,
-		jsContent,
-	].join("\r\n");
-	writeFileSync(winFile, winContent);
+	const winPreamble = `// 2>nul & @echo off & where bun >nul 2>nul || (echo ✗ 未找到 bun 运行时 & echo   安装: powershell -c "irm bun.sh/install.ps1 ^| iex" & echo   详情: https://bun.sh & pause & exit /b 1) & bun "%~f0" %* & exit /b %errorlevel%`;
+	writeFileSync(winFile, `${winPreamble}\r\n${jsContent}`);
 
 	// 清理临时文件
 	await Bun.file(tmpJs).exists() && (await Bun.$`rm ${tmpJs}`);
@@ -112,7 +96,7 @@ async function buildBundle() {
 	const sizeKB = (Buffer.byteLength(jsContent) / 1024).toFixed(0);
 	const unixSizeKB = ((await Bun.file(unixFile).size) / 1024).toFixed(0);
 	console.log("");
-	console.log("✅ Bundle done — 单文件分发");
+	console.log("✅ Bundle done — 单文件分发（polyglot，自带 bun 检测）");
 	console.log(`   ${unixFile}      (${unixSizeKB} KB) — chmod +x, 直接运行`);
 	console.log(`   ${winFile}  (Windows polyglot)`);
 	console.log(`   JS payload: ${sizeKB} KB`);
