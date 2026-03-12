@@ -5,15 +5,19 @@
  */
 
 import { resolve } from "node:path";
+import { agentLoop } from "@n0n/core";
+import {
+	discoverSkills,
+	formatAgentsMdPrompt,
+	formatSkillSummaries,
+	loadAgentsMd,
+} from "@n0n/shared";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
-import { agentLoop } from "../agent/loop.ts";
-import { formatAgentsMdPrompt, loadAgentsMd } from "../prompts/agents-md.ts";
 import delegatePromptText from "../prompts/delegate.md" with { type: "text" };
-import { discoverSkills, formatSkillSummaries } from "../skills/discovery.ts";
+import type { RagHit } from "../types.ts";
 import { discoverWorkflows } from "../workflow/runtime.ts";
 import type { WorkflowPaths } from "../workspace.ts";
-import type { RagHit } from "./rag.ts";
 import { ragSearch } from "./rag.ts";
 
 export interface TaskResult<T = unknown> {

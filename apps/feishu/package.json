@@ -5,7 +5,10 @@
 	"type": "module",
 	"dependencies": {
 		"@n0n/core": "workspace:*",
+		"@n0n/scheduler": "workspace:*",
+		"@n0n/shared": "workspace:*",
 		"@n0n/types": "workspace:*",
+		"@n0n/workflow": "workspace:*",
 		"@larksuiteoapi/node-sdk": "^1.59.0"
 	}
 }

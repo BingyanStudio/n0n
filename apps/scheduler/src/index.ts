@@ -4,13 +4,10 @@
  * 启动定时调度器，监控 workflows/schedules/*.mdc
  */
 
-import {
-	createRuntimeContext,
-	ensureDirs,
-	initRuntime,
-	resolveWorkflowPaths,
-	startScheduler,
-} from "@n0n/core";
+import { createRuntimeContext, initRuntime } from "@n0n/core";
+import { startScheduler } from "@n0n/scheduler";
+import { ensureDirs } from "@n0n/shared";
+import { resolveWorkflowPaths } from "@n0n/workflow";
 
 const workspace =
 	process.env.N0N_SCHEDULER_WORKSPACE ?? `${process.cwd()}/.runtime/scheduler`;

@@ -7,18 +7,16 @@
 
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
+import { agentLoop, PlainRenderer } from "@n0n/core";
+import { loadSchedules } from "@n0n/scheduler";
+import { formatAgentsMdPrompt, loadAgentsMd } from "@n0n/shared";
+import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import {
-	agentLoop,
 	discoverWorkflows,
-	formatAgentsMdPrompt,
 	type InteractiveResult,
 	InteractiveResultSchema,
-	loadAgentsMd,
-	loadSchedules,
-	PlainRenderer,
 	type WorkflowPaths,
-} from "@n0n/core";
-import type { DomainMessage, SubmitToolResult } from "@n0n/types";
+} from "@n0n/workflow";
 import interactivePromptText from "./prompts/interactive.md" with {
 	type: "text",
 };

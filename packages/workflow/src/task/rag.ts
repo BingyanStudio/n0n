@@ -4,29 +4,17 @@
 
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { getRuntime } from "@n0n/core";
 import { chatCompletion } from "@n0n/llm";
 import type { LLMRequestMessage } from "@n0n/types";
 import { Glob } from "bun";
-import { getRuntime } from "../runtime.ts";
+import type { RagHit, RagSearchResult, SearchSpace } from "../types.ts";
 import type { WorkflowPaths } from "../workspace.ts";
 
-export type SearchSpace = "all" | "memory" | "skill" | "history";
 export type RagPaths = Pick<
 	WorkflowPaths,
 	"skills" | "memory" | "consultResult" | "history"
 >;
-
-export interface RagSearchResult {
-	query: string;
-	space: SearchSpace;
-	results: RagHit[];
-}
-
-export interface RagHit {
-	source: string;
-	content: string;
-	relevance: "high" | "medium" | "low";
-}
 
 interface Candidate {
 	source: string;

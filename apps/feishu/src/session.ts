@@ -4,8 +4,8 @@
  * 管理每个用户/群聊的对话状态（history、当前任务、去重）。
  */
 
-import type { WorkflowPaths } from "@n0n/core";
 import type { DomainMessage } from "@n0n/types";
+import type { WorkflowPaths } from "@n0n/workflow";
 import type { FeishuMessageContext, FeishuUserInfo } from "./bot.ts";
 
 // ── 类型 ──

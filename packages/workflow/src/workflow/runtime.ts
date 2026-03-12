@@ -8,15 +8,10 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { Glob } from "bun";
+import type { WorkflowMeta } from "../types.ts";
 import type { WorkflowPaths } from "../workspace.ts";
 
 export type WorkflowDiscoveryPaths = Pick<WorkflowPaths, "tasks" | "skills">;
-
-export interface WorkflowMeta {
-	name: string;
-	path: string;
-	description: string;
-}
 
 /**
  * Workflow 模块接口 — workflow 文件必须导出以下之一：
@@ -81,10 +76,8 @@ export async function runWorkflow(
 		throw new Error(`Workflow not found: ${workflowPath}`);
 	}
 
-	// Bun 原生支持动态 import .ts 文件
 	const mod = (await import(absPath)) as WorkflowModule;
 
-	// 查找入口函数：优先 default export，其次 named export `run`
 	const entryFn = mod.default ?? mod.run;
 
 	if (typeof entryFn !== "function") {
@@ -92,7 +85,7 @@ export async function runWorkflow(
 		throw new Error(
 			`Workflow ${workflowPath} must export a default function or a named 'run' function.\n` +
 				`Found exports: [${exports.join(", ")}]\n` +
-				`See WorkflowModule interface in @n0n/core for the expected contract.`,
+				`See WorkflowModule interface in @n0n/workflow for the expected contract.`,
 		);
 	}
 

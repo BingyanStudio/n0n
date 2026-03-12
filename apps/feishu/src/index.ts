@@ -13,13 +13,12 @@
  */
 
 import * as lark from "@larksuiteoapi/node-sdk";
+import { createRuntimeContext, initRuntime } from "@n0n/core";
 import {
-	createRuntimeContext,
-	initRuntime,
 	loadSchedules,
 	type SchedulerHandle,
 	startScheduler,
-} from "@n0n/core";
+} from "@n0n/scheduler";
 import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";

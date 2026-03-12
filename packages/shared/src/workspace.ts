@@ -1,10 +1,10 @@
 /**
- * Workspace 路径体系 — Base + Extend 模式
+ * Workspace 路径工具 — 通用路径解析与目录管理
  *
- * - BaseWorkspacePaths: 所有模式共享的最小路径集 (code 模式)
- * - WorkflowPaths: workflow builder 场景的完整路径集 (cli/feishu 模式)
+ * 提供最小路径集（BaseWorkspacePaths）和通用工具函数。
+ * 路径解析为纯函数，无全局状态。
  *
- * 路径解析为纯函数，无全局状态。目录创建按实际字段进行，不创建多余目录。
+ * 扩展路径集（如 WorkflowPaths）由各业务包自行定义。
  */
 
 import { existsSync, mkdirSync } from "node:fs";
@@ -20,20 +20,9 @@ export interface BaseWorkspacePaths {
 	temp: string;
 }
 
-/** CLI / Feishu 模式 — workflow builder 场景 */
-export interface WorkflowPaths extends BaseWorkspacePaths {
-	workflows: string;
-	tasks: string;
-	skills: string;
-	schedules: string;
-	memory: string;
-	consultResult: string;
-	history: string;
-}
-
 // ── 路径解析（纯函数）──
 
-/** 解析 base 路径 — code 模式使用 */
+/** 解析 base 路径 — 最小路径集 */
 export function resolveBasePaths(workspace: string): BaseWorkspacePaths {
 	const ws = resolve(workspace);
 	return {
@@ -42,27 +31,11 @@ export function resolveBasePaths(workspace: string): BaseWorkspacePaths {
 	};
 }
 
-/** 解析 workflow 路径 — cli/feishu 模式使用 */
-export function resolveWorkflowPaths(workspace: string): WorkflowPaths {
-	const ws = resolve(workspace);
-	return {
-		workspace: ws,
-		temp: resolve(ws, ".temp"),
-		workflows: resolve(ws, "workflows"),
-		tasks: resolve(ws, "workflows", "tasks"),
-		skills: resolve(ws, "workflows", "skills"),
-		schedules: resolve(ws, "workflows", "schedules"),
-		memory: resolve(ws, "workflows", "memory"),
-		consultResult: resolve(ws, "workflows", "consult-result"),
-		history: resolve(ws, "workflows", "history"),
-	};
-}
-
 // ── 目录创建 ──
 
 /** 确保路径对象中所有目录存在 — 只创建传入对象中实际存在的字段 */
-export function ensureDirs(paths: BaseWorkspacePaths | WorkflowPaths): void {
-	for (const dir of Object.values(paths) as string[]) {
+export function ensureDirs<T extends BaseWorkspacePaths>(paths: T): void {
+	for (const dir of Object.values(paths)) {
 		if (!existsSync(dir)) {
 			mkdirSync(dir, { recursive: true });
 		}
