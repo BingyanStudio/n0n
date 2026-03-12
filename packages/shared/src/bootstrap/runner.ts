@@ -5,7 +5,12 @@
  * 缺什么补什么，全部通过才继续运行。
  */
 
-import { existsSync } from "node:fs";
+import {
+	appendFileSync,
+	existsSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import type {
 	BootstrapResult,
@@ -43,12 +48,14 @@ function parseEnvFile(content: string): Record<string, string> {
 }
 
 /** 加载 .env 文件到 process.env */
-function loadEnvFile(envPath: string): Record<string, string> {
-	const fs = require("node:fs") as typeof import("node:fs");
-	const text = fs.readFileSync(envPath, "utf-8");
+function loadEnvFile(
+	envPath: string,
+	options?: { override?: boolean },
+): Record<string, string> {
+	const text = readFileSync(envPath, "utf-8");
 	const parsed = parseEnvFile(text);
 	for (const [key, value] of Object.entries(parsed)) {
-		if (!process.env[key]) {
+		if (options?.override || !process.env[key]) {
 			process.env[key] = value;
 		}
 	}
@@ -144,16 +151,18 @@ export async function bootstrap(
 		);
 
 		for (const v of missing) {
+			const prompt = v.example
+				? `请输入 ${v.key} (${v.desc}, 例如: ${v.example})`
+				: `请输入 ${v.key} (${v.desc})`;
 			const value = v.secret
-				? await ui.secret(`请输入 ${v.key} (${v.desc})`)
-				: await ui.input(`请输入 ${v.key} (${v.desc})`, v.example);
+				? await ui.secret(prompt)
+				: await ui.input(prompt, undefined);
 
 			if (value) {
 				process.env[v.key] = value;
 				// 追加到 .env 文件
 				if (existsSync(envPath)) {
-					const fs = require("node:fs") as typeof import("node:fs");
-					fs.appendFileSync(envPath, `\n${v.key}=${value}\n`);
+					appendFileSync(envPath, `\n${v.key}=${value}\n`, { mode: 0o600 });
 				}
 			}
 		}
@@ -195,7 +204,7 @@ export async function bootstrap(
 						stdio: ["inherit", "inherit", "inherit"],
 					});
 					// 重新加载
-					loadEnvFile(envPath);
+					loadEnvFile(envPath, { override: true });
 					ui.info("配置已重新加载");
 				} catch {
 					ui.warn(`无法打开编辑器，请手动编辑 ${envPath} 后重新运行`);
@@ -232,9 +241,12 @@ async function createEnvInteractive(
 	for (const group of spec.groups) {
 		for (const v of group.vars) {
 			if (v.default !== undefined) continue; // 可选的跳过，用模板默认值
+			const prompt = v.example
+				? `  ${v.desc} (${v.key}, 例如: ${v.example})`
+				: `  ${v.desc} (${v.key})`;
 			const value = v.secret
-				? await ui.secret(`  ${v.desc} (${v.key})`)
-				: await ui.input(`  ${v.desc} (${v.key})`, v.example);
+				? await ui.secret(prompt)
+				: await ui.input(prompt, undefined);
 			if (value) {
 				values[v.key] = value;
 				process.env[v.key] = value;
@@ -243,7 +255,6 @@ async function createEnvInteractive(
 	}
 
 	const template = generateEnvTemplate(spec, values);
-	const fs = require("node:fs") as typeof import("node:fs");
-	fs.writeFileSync(envPath, template);
+	writeFileSync(envPath, template, { mode: 0o600 });
 	ui.success(`.env 已创建: ${envPath}\n`);
 }
