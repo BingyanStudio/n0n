@@ -227,6 +227,7 @@ export class StreamAccumulator {
 		return {
 			role: "assistant",
 			content: this.content || null,
+			reasoning_content: this.reasoning || null,
 			tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
 		};
 	}

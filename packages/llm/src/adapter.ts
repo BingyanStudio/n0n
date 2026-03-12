@@ -99,13 +99,18 @@ export function toAPIMessages(
 				break;
 
 			case "assistant_text":
-				result.push({ role: "assistant", content: msg.content });
+				result.push({
+					role: "assistant",
+					content: msg.content,
+					...(msg.reasoning ? { reasoning_content: msg.reasoning } : {}),
+				});
 				break;
 
 			case "assistant_tool_call":
 				result.push({
 					role: "assistant",
 					content: msg.content,
+					...(msg.reasoning ? { reasoning_content: msg.reasoning } : {}),
 					tool_calls: msg.toolCalls.map((tc) => ({
 						id: tc.id,
 						type: "function" as const,
