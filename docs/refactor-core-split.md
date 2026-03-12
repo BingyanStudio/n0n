@@ -78,11 +78,10 @@ packages/workflow/src/
 
 ```
 packages/scheduler/src/
-├── types.ts                # ScheduleEntry, CronFields
 ├── scheduler.ts            # 调度循环 + MDC 解析
 ├── cron.ts                 # cron 表达式解析
 └── index.ts
-依赖: @n0n/workflow, @n0n/shared, @n0n/core
+依赖: @n0n/workflow, @n0n/shared
 ```
 
 ## 依赖图
@@ -108,7 +107,7 @@ llm (→ types, shared)     tools (→ types)
 | apps/code | core, shared |
 | apps/cli | core, shared, workflow, scheduler |
 | apps/feishu | core, shared, workflow, scheduler |
-| apps/scheduler | core, shared, scheduler |
+| apps/scheduler | core, shared, workflow, scheduler |
 
 ## 实施步骤
 
