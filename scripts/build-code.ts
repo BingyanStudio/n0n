@@ -86,7 +86,7 @@ async function buildBundle() {
 	// cmd 执行 `&` 链：echo off → 检测 bun → 调用 bun 执行自身 → exit。
 	// Bun 跳过 `//` 注释行，直接执行后续 JS。
 	const winFile = resolve(OUT_DIR, `${BIN_NAME}.cmd`);
-	const winPreamble = `// 2>nul & @echo off & where bun >nul 2>nul || (echo ✗ 未找到 bun 运行时 & echo   安装: powershell -c "irm bun.sh/install.ps1 ^| iex" & echo   详情: https://bun.sh & pause & exit /b 1) & bun "%~f0" %* & exit /b %errorlevel%`;
+	const winPreamble = `// 2>nul & @echo off & chcp 65001>nul & where bun >nul 2>nul || (echo ✗ 未找到 bun 运行时 & echo   安装: powershell -c "irm bun.sh/install.ps1 ^| iex" & echo   详情: https://bun.sh & pause & exit /b 1) & bun "%~f0" %* & exit /b %errorlevel%`;
 	writeFileSync(winFile, `${winPreamble}\r\n${jsContent}`);
 
 	// 清理临时文件
@@ -121,15 +121,15 @@ async function buildCompile() {
 		const outFile = resolve(OUT_DIR, `${BIN_NAME}-${target}${info.suffix}`);
 		console.log(`\n🔨 Building ${info.label} → ${outFile}`);
 
-		const compileArgs = [
+		const proc = Bun.spawn(
+			[
 				"bun", "build", ENTRY,
 				"--compile",
 				"--target", `bun-${target}`,
 				"--outfile", outFile,
-		];
-		if (!noMinify) compileArgs.push("--minify");
-
-		const proc = Bun.spawn(compileArgs, { stdout: "inherit", stderr: "inherit" });
+			],
+			{ stdout: "inherit", stderr: "inherit" },
+		);
 		const exitCode = await proc.exited;
 		if (exitCode !== 0) {
 			console.error(`❌ Failed: ${info.label} (exit ${exitCode})`);
