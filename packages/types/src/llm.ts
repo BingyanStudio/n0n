@@ -24,6 +24,7 @@ export interface LLMToolDefinition {
 export interface LLMRequestMessage {
 	role: "system" | "user" | "assistant" | "tool";
 	content: string | null;
+	reasoning_content?: string | null;
 	tool_calls?: LLMToolCall[];
 	tool_call_id?: string;
 }
@@ -51,6 +52,7 @@ export interface LLMToolCall {
 export interface LLMAssistantMessage {
 	role: "assistant";
 	content: string | null;
+	reasoning_content?: string | null;
 	tool_calls?: LLMToolCall[];
 }
 
