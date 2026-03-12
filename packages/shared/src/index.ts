@@ -7,6 +7,12 @@
 
 // AGENTS.md
 export { formatAgentsMdPrompt, loadAgentsMd } from "./agents-md.ts";
+// Bootstrap
+export {
+	bootstrap,
+	generateEnvTemplate,
+	LLM_ENV_GROUP,
+} from "./bootstrap/index.ts";
 // Frontmatter
 export type { RawFrontmatter, TypedFrontmatter } from "./frontmatter.ts";
 export {
