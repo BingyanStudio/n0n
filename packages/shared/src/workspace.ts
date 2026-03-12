@@ -7,8 +7,8 @@
  * 扩展路径集（如 WorkflowPaths）由各业务包自行定义。
  */
 
-import { existsSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, statSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 // ── 类型 ──
 
@@ -47,6 +47,13 @@ export function ensureDirs<T extends BaseWorkspacePaths>(paths: T): void {
 /**
  * 从命令行参数中解析 --workspace 选项。
  * 返回解析后的 workspace 绝对路径和剩余参数。
+ *
+ * 支持三种指定方式（优先级从高到低）：
+ * 1. `--workspace <dir>` 显式指定
+ * 2. 裸路径参数（拖拽文件/文件夹到 exe 时自动传入）
+ *    - 文件夹 → 直接作为 workspace
+ *    - 文件 → 取其所在目录作为 workspace
+ * 3. 环境变量 / 默认值
  */
 export function parseWorkspaceArg(
 	args: string[],
@@ -58,11 +65,21 @@ export function parseWorkspaceArg(
 	let workspaceValue: string | undefined;
 
 	if (idx >= 0) {
+		// 显式 --workspace 参数
 		workspaceValue = remaining[idx + 1];
 		if (!workspaceValue) {
 			throw new Error("--workspace requires a directory argument");
 		}
 		remaining.splice(idx, 2);
+	} else if (remaining.length > 0 && !remaining[0]?.startsWith("-")) {
+		// 裸路径参数（支持拖拽文件/文件夹到 exe）
+		const first = remaining[0] as string;
+		const candidate = resolve(first);
+		if (existsSync(candidate)) {
+			const stat = statSync(candidate);
+			workspaceValue = stat.isDirectory() ? candidate : dirname(candidate);
+			remaining.splice(0, 1);
+		}
 	}
 
 	const workspace = resolve(
