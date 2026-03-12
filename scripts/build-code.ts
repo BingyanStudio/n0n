@@ -70,16 +70,34 @@ async function buildBundle() {
 
 	const jsContent = await Bun.file(tmpJs).text();
 
-	// ── Unix 单文件：shebang + JS bundle ──
+	// ── Unix 单文件：shell wrapper + JS bundle ──
+	// 先检测 bun 是否存在，缺失时给出安装引导（而非直接 shebang 报错）
 	const unixFile = resolve(OUT_DIR, BIN_NAME);
-	writeFileSync(unixFile, `#!/usr/bin/env bun\n${jsContent}`);
+	const unixShell = [
+		`#!/bin/sh`,
+		`if ! command -v bun >/dev/null 2>&1; then`,
+		`  echo "\\033[31m✗ 未找到 bun 运行时\\033[0m"`,
+		`  echo "  安装: curl -fsSL https://bun.sh/install | bash"`,
+		`  echo "  详情: https://bun.sh"`,
+		`  exit 1`,
+		`fi`,
+		`exec bun "$0" "$@"`,
+	].join("\n");
+	writeFileSync(unixFile, `${unixShell}\n${jsContent}`);
 	chmodSync(unixFile, 0o755);
 
 	// ── Windows 单文件：bat+JS polyglot ──
-	// 原理：.cmd 文件开头是 batch 命令，用 bun 执行自身（跳过 batch 部分）
+	// 原理：.cmd 文件开头是 batch 命令，先检测 bun 再执行自身
 	const winFile = resolve(OUT_DIR, `${BIN_NAME}.cmd`);
 	const winContent = [
 		`@echo off`,
+		`where bun >nul 2>nul`,
+		`if %errorlevel% neq 0 (`,
+		`  echo [31m✗ 未找到 bun 运行时[0m`,
+		`  echo   安装: powershell -c "irm bun.sh/install.ps1 ^| iex"`,
+		`  echo   详情: https://bun.sh`,
+		`  exit /b 1`,
+		`)`,
 		`bun "%~f0" %*`,
 		`exit /b %errorlevel%`,
 		``,
