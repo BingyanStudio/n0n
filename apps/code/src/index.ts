@@ -36,7 +36,7 @@ if (!result.ok) {
 const { workspace, remainingArgs } = parseWorkspaceArg(
 	process.argv.slice(2),
 	"N0N_CODE_WORKSPACE",
-	`${process.cwd()}/.runtime/code`,
+	process.cwd(),
 );
 
 const paths = resolveBasePaths(workspace);
