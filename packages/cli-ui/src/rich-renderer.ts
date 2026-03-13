@@ -262,8 +262,8 @@ export class RichRenderer implements Renderer {
 				if (!result.success) {
 					return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path}: ${style.red(result.error ?? "failed")}`;
 				}
-				const searchLines = result.call.args.search.split("\n").length;
-				return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path} ${style.gray(`(replaced ${result.replacedCount}×, ~${searchLines} lines)`)}`;
+				const cmdCount = result.call.args.commands.length;
+				return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path} ${style.gray(`(${cmdCount} vim cmd(s))`)}`;
 			}
 			case "reminder": {
 				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${result.call.args.content.length} chars`)}`;

@@ -40,9 +40,10 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 
 function formatEditResult(msg: EditToolResult, model: string): string {
 	if (msg.success) {
+		const cmdCount = msg.call.args.commands.length;
 		return wrapTag(
 			"edit_result",
-			`Replaced ${msg.replacedCount} occurrence(s) in \`${msg.call.args.path}\``,
+			`Applied ${cmdCount} command(s) to \`${msg.call.args.path}\``,
 			model,
 		);
 	}
