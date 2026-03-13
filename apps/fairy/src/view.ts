@@ -202,6 +202,19 @@ export function computeSnapshotEnd(
 
 // ── 内部构建函数 ──
 
+/** 生成本地时区的 ISO 格式时间字符串（如 2026-03-14T03:02:23+08:00） */
+function localISOString(): string {
+	const now = new Date();
+	const pad = (n: number) => String(n).padStart(2, "0");
+	const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+	const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+	const offset = -now.getTimezoneOffset();
+	const sign = offset >= 0 ? "+" : "-";
+	const abs = Math.abs(offset);
+	const tz = `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+	return `${date}T${time}${tz}`;
+}
+
 function buildSystemPrompt(identity: string): string {
 	return [fairyPromptText, "", "---", "", identity].join("\n");
 }
@@ -232,7 +245,7 @@ function buildEnvironmentContext(paths: FairyPaths): string {
 	return [
 		"## Environment",
 		"",
-		`- current_time: ${new Date().toISOString()}`,
+		`- current_time: ${localISOString()}`,
 		`- workspace: ${paths.workspace}`,
 		`- identity_file: identity.md (edit to change your persona)`,
 		`- memory_file: memory.md (edit to update your long-term memory)`,
