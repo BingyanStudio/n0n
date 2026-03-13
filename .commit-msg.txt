@@ -1,0 +1,7 @@
+docs(edit): improve tool description with examples and pitfall warnings
+
+Based on real-world testing feedback:
+- Added 4 complete examples (function body, markdown section, append, global delete)
+- Added explicit warning about lone '.' line terminating :c/:a/:i input
+- Clarified that backticks and backslashes work fine in content
+- Added quick reference section for common commands
