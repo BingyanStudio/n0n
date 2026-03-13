@@ -57,22 +57,24 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 		name: "edit",
 		description: [
 			"Edit a file using Vim ex commands. The file must already exist.",
-			"Commands are executed in neovim headless mode (ex mode via stdin).",
+			"Commands are executed in neovim headless mode via a sourced script.",
+			"Write commands as a multi-line string — each line is one ex command.",
+			"Multi-line input (e.g. :c, :a, :i) ends with a single '.' on its own line.",
 			"",
 			"Common patterns:",
-			"  :3d                          — delete line 3",
-			"  :2,4d                        — delete lines 2-4",
-			"  :%s/old/new/g                — global search & replace",
-			"  :/pattern/d                  — delete line matching pattern",
-			"  :/start/,/end/d              — delete range between patterns",
-			"  :/func name/+1,/^}/-1c       — change (replace) function body:",
-			"    new line 1                    (followed by new content lines)",
+			"  3d                           — delete line 3",
+			"  2,4d                         — delete lines 2-4",
+			"  %s/old/new/g                 — global search & replace",
+			"  /pattern/d                   — delete line matching pattern",
+			"  /start/,/end/d               — delete range between patterns",
+			"  /func name/+1,/^}/-1c        — replace function body:",
+			"    new line 1",
 			"    new line 2",
-			"    .                             (dot on its own line ends input)",
-			"  :2a                           — append after line 2:",
+			"    .                            (dot on its own line ends input)",
+			"  2a                            — append after line 2:",
 			"    new content",
-			"    .                             (dot ends input)",
-			"  :g/TODO/d                    — delete all lines matching pattern",
+			"    .                            (dot ends input)",
+			"  g/TODO/d                     — delete all lines matching pattern",
 			"",
 			"Do NOT include :wq — it is added automatically.",
 		].join("\n"),
@@ -84,10 +86,9 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 					description: "File path relative to project root",
 				},
 				commands: {
-					type: "array",
-					items: { type: "string" },
+					type: "string",
 					description:
-						"Array of Vim ex command lines. Multi-line commands (like :c, :a, :i) span multiple array elements, terminated by a single '.' element.",
+						"Vim ex commands as a multi-line string. Each line is one command or content line. Multi-line input commands (:c, :a, :i) are terminated by a '.' on its own line.",
 				},
 			},
 			required: ["path", "commands"],
@@ -105,15 +106,15 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
  */
 async function runNvimEx(
 	filePath: string,
-	commands: string[],
+	commands: string,
 ): Promise<{ success: boolean; error?: string }> {
 	const scriptDir = mkdtempSync(join(tmpdir(), "n0n-vim-"));
 	const scriptPath = join(scriptDir, "edit.vim");
 
 	try {
 		// 写入命令脚本：先禁用自动缩进，然后执行用户命令，最后 wq
-		const preamble = ["set noautoindent", "set nosmartindent", "set nocindent"];
-		const script = `${[...preamble, ...commands, "wq"].join("\n")}\n`;
+		const preamble = "set noautoindent\nset nosmartindent\nset nocindent";
+		const script = `${preamble}\n${commands}\nwq\n`;
 		writeFileSync(scriptPath, script, "utf8");
 
 		const sourcePath = scriptPath.replace(/\\/g, "/");
@@ -184,7 +185,7 @@ export async function editTool(
 			};
 		}
 
-		if (!commands || commands.length === 0) {
+		if (!commands || commands.trim().length === 0) {
 			return {
 				type: "tool_result",
 				tool: "edit" as const,
@@ -197,12 +198,13 @@ export async function editTool(
 
 		const result = await runNvimEx(filePath, commands);
 
+		const cmdLines = commands.split("\n");
 		return {
 			type: "tool_result",
 			tool: "edit" as const,
 			call,
 			replacedCount: result.success
-				? commands.filter((c) => /^[:/]|^\d/.test(c)).length
+				? cmdLines.filter((c) => /^[:/]|^\d/.test(c)).length
 				: 0,
 			success: result.success,
 			error: result.success ? null : (result.error ?? "Unknown error"),

@@ -40,10 +40,10 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 
 function formatEditResult(msg: EditToolResult, model: string): string {
 	if (msg.success) {
-		const cmdCount = msg.call.args.commands.length;
+		const cmdLines = msg.call.args.commands.split("\n").length;
 		return wrapTag(
 			"edit_result",
-			`Applied ${cmdCount} command(s) to \`${msg.call.args.path}\``,
+			`Applied ${cmdLines} line(s) of vim commands to \`${msg.call.args.path}\``,
 			model,
 		);
 	}

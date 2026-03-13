@@ -38,10 +38,7 @@ describe("editTool (vim ex commands)", () => {
 
 	test("deletes a single line (:Nd)", async () => {
 		writeFileSync(join(workspace, F), "a\nb\nc\nd\n");
-		const r = await editTool(
-			makeCall({ path: F, commands: ["3d"] }),
-			workspace,
-		);
+		const r = await editTool(makeCall({ path: F, commands: "3d" }), workspace);
 		expect(r.success).toBe(true);
 		expect(read(workspace, F)).toBe("a\nb\nd");
 	});
@@ -49,7 +46,7 @@ describe("editTool (vim ex commands)", () => {
 	test("deletes a line range (:N,Md)", async () => {
 		writeFileSync(join(workspace, F), "a\nb\nc\nd\ne\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["2,4d"] }),
+			makeCall({ path: F, commands: "2,4d" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -59,7 +56,7 @@ describe("editTool (vim ex commands)", () => {
 	test("substitutes on a single line (:Ns/old/new/)", async () => {
 		writeFileSync(join(workspace, F), "hello world\nfoo bar\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["1s/hello/goodbye/"] }),
+			makeCall({ path: F, commands: "1s/hello/goodbye/" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -69,7 +66,7 @@ describe("editTool (vim ex commands)", () => {
 	test("global substitution (:%s/old/new/g)", async () => {
 		writeFileSync(join(workspace, F), "aa bb aa\ncc aa dd\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["%s/aa/XX/g"] }),
+			makeCall({ path: F, commands: "%s/aa/XX/g" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -81,7 +78,7 @@ describe("editTool (vim ex commands)", () => {
 	test("appends after a line (:Na + content + .)", async () => {
 		writeFileSync(join(workspace, F), "line1\nline2\nline3\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["2a", "inserted", "."] }),
+			makeCall({ path: F, commands: "2a\ninserted\n." }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -91,7 +88,7 @@ describe("editTool (vim ex commands)", () => {
 	test("inserts before a line (:Ni + content + .)", async () => {
 		writeFileSync(join(workspace, F), "line1\nline2\nline3\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["2i", "inserted", "."] }),
+			makeCall({ path: F, commands: "2i\ninserted\n." }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -101,7 +98,7 @@ describe("editTool (vim ex commands)", () => {
 	test("multi-line append", async () => {
 		writeFileSync(join(workspace, F), "a\nb\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["1a", "x", "y", "z", "."] }),
+			makeCall({ path: F, commands: "1a\nx\ny\nz\n." }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -113,7 +110,7 @@ describe("editTool (vim ex commands)", () => {
 	test("deletes line matching pattern (:/pattern/d)", async () => {
 		writeFileSync(join(workspace, F), "keep\ndelete me\nkeep too\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["/delete me/d"] }),
+			makeCall({ path: F, commands: "/delete me/d" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -123,7 +120,7 @@ describe("editTool (vim ex commands)", () => {
 	test("deletes range between patterns (:/start/,/end/d)", async () => {
 		writeFileSync(join(workspace, F), "before\nSTART\nmid\nEND\nafter\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["/START/,/END/d"] }),
+			makeCall({ path: F, commands: "/START/,/END/d" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -149,12 +146,8 @@ describe("editTool (vim ex commands)", () => {
 		const r = await editTool(
 			makeCall({
 				path: F,
-				commands: [
-					"/function hello/+1,/^}/-1c",
-					"  console.log('new');",
-					"  return 42;",
-					".",
-				],
+				commands:
+					"/function hello/+1,/^}/-1c\n  console.log('new');\n  return 42;\n.",
 			}),
 			workspace,
 		);
@@ -186,12 +179,7 @@ describe("editTool (vim ex commands)", () => {
 		const r = await editTool(
 			makeCall({
 				path: F,
-				commands: [
-					"/## Section A/+1,/^## Section B/-1c",
-					"new content A",
-					"",
-					".",
-				],
+				commands: "/## Section A/+1,/^## Section B/-1c\nnew content A\n\n.",
 			}),
 			workspace,
 		);
@@ -208,7 +196,7 @@ describe("editTool (vim ex commands)", () => {
 	test("global delete (:g/pattern/d)", async () => {
 		writeFileSync(join(workspace, F), "keep\nTODO: a\nkeep\nTODO: b\nkeep\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["g/TODO/d"] }),
+			makeCall({ path: F, commands: "g/TODO/d" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -220,7 +208,7 @@ describe("editTool (vim ex commands)", () => {
 	test("handles $ in replacement without issues", async () => {
 		writeFileSync(join(workspace, F), "price = 100\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["1s/100/$200/"] }),
+			makeCall({ path: F, commands: "1s/100/$200/" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -232,7 +220,7 @@ describe("editTool (vim ex commands)", () => {
 	test("multi-step: delete then insert", async () => {
 		writeFileSync(join(workspace, F), "a\nb\nc\nd\ne\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["2,3d", "1a", "X", "Y", "."] }),
+			makeCall({ path: F, commands: "2,3d\n1a\nX\nY\n." }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -243,7 +231,7 @@ describe("editTool (vim ex commands)", () => {
 
 	test("errors when file not found", async () => {
 		const r = await editTool(
-			makeCall({ path: "nonexistent.txt", commands: ["1d"] }),
+			makeCall({ path: "nonexistent.txt", commands: "1d" }),
 			workspace,
 		);
 		expect(r.success).toBe(false);
@@ -252,7 +240,7 @@ describe("editTool (vim ex commands)", () => {
 
 	test("errors when commands array is empty", async () => {
 		writeFileSync(join(workspace, F), "content\n");
-		const r = await editTool(makeCall({ path: F, commands: [] }), workspace);
+		const r = await editTool(makeCall({ path: F, commands: "" }), workspace);
 		expect(r.success).toBe(false);
 		expect(r.error).toContain("No commands");
 	});
@@ -262,7 +250,7 @@ describe("editTool (vim ex commands)", () => {
 	test("substitutes Chinese characters in search pattern", async () => {
 		writeFileSync(join(workspace, F), "需要修改的内容\n第二行\n");
 		const r = await editTool(
-			makeCall({ path: F, commands: ["%s/需要修改/已修改/g"] }),
+			makeCall({ path: F, commands: "%s/需要修改/已修改/g" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
@@ -274,7 +262,7 @@ describe("editTool (vim ex commands)", () => {
 		const r = await editTool(
 			makeCall({
 				path: F,
-				commands: ["/function hello/+1,/^}/-1c", "  新代码", "."],
+				commands: "/function hello/+1,/^}/-1c\n  新代码\n.",
 			}),
 			workspace,
 		);
@@ -290,7 +278,7 @@ describe("editTool (vim ex commands)", () => {
 			"保留\n待办: 修复\n保留\n待办: 删除\n保留\n",
 		);
 		const r = await editTool(
-			makeCall({ path: F, commands: ["g/待办/d"] }),
+			makeCall({ path: F, commands: "g/待办/d" }),
 			workspace,
 		);
 		expect(r.success).toBe(true);
