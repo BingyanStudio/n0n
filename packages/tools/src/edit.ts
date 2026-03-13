@@ -1,8 +1,9 @@
 /**
- * edit 工具 — 文件内容修改（search & replace）
+ * edit 工具 — 基于行号的文件内容修改
  *
- * 从原 write 工具中拆分出来，专注于文件修改操作。
- * write 负责创建/覆盖文件，edit 负责精确修改已有文件内容。
+ * 通过指定 startLine / endLine 定位修改范围，用 content 替换该范围。
+ * 消除了 search-and-replace 模式中旧内容重复出现的偏见问题：
+ * 模型不再需要复现旧代码来定位编辑位置，只需指定行号范围和新内容。
  */
 
 import { existsSync } from "node:fs";
@@ -20,7 +21,7 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 	function: {
 		name: "edit",
 		description:
-			"Edit a file by replacing exact text matches. The file must already exist. Use expectedMatches to assert the number of replacements.",
+			"Edit a file by replacing a line range with new content. Specify startLine and endLine (1-based, inclusive) to define the range to replace. The file must already exist.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -28,21 +29,22 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 					type: "string",
 					description: "File path relative to project root",
 				},
-				search: {
-					type: "string",
-					description: "Exact text to find in the file",
+				startLine: {
+					type: "number",
+					description: "First line to replace (1-based, inclusive)",
 				},
-				replace: {
-					type: "string",
-					description: "Replacement text",
-				},
-				expectedMatches: {
+				endLine: {
 					type: "number",
 					description:
-						"Expected number of matches (default: 1). Mismatch = error.",
+						"Last line to replace (1-based, inclusive). Use same value as startLine to replace a single line.",
+				},
+				content: {
+					type: "string",
+					description:
+						"New content to insert in place of the specified line range",
 				},
 			},
-			required: ["path", "search", "replace"],
+			required: ["path", "startLine", "endLine", "content"],
 			additionalProperties: false,
 		},
 	},
@@ -55,8 +57,7 @@ export async function editTool(
 	const filePath = isAbsolute(call.args.path)
 		? call.args.path
 		: resolve(workspace, call.args.path);
-	const { search, replace } = call.args;
-	const expectedCount = call.args.expectedMatches ?? 1;
+	const { startLine, endLine, content } = call.args;
 
 	try {
 		if (!existsSync(filePath)) {
@@ -70,35 +71,59 @@ export async function editTool(
 			};
 		}
 
-		const content = await Bun.file(filePath).text();
-		let count = 0;
-		let pos = 0;
-		while (true) {
-			const idx = content.indexOf(search, pos);
-			if (idx === -1) break;
-			count++;
-			pos = idx + search.length;
-		}
-
-		if (count !== expectedCount) {
+		// Validate line numbers
+		if (startLine < 1 || endLine < 1) {
 			return {
 				type: "tool_result",
 				tool: "edit" as const,
 				call,
-				replacedCount: count,
+				replacedCount: 0,
 				success: false,
-				error: `Expected ${expectedCount} match(es) but found ${count}`,
+				error: `Line numbers must be >= 1 (got startLine=${startLine}, endLine=${endLine})`,
+			};
+		}
+		if (startLine > endLine) {
+			return {
+				type: "tool_result",
+				tool: "edit" as const,
+				call,
+				replacedCount: 0,
+				success: false,
+				error: `startLine (${startLine}) must be <= endLine (${endLine})`,
 			};
 		}
 
-		const newContent = content.replaceAll(search, replace);
+		const fileContent = await Bun.file(filePath).text();
+		const lines = fileContent.split("\n");
+
+		if (startLine > lines.length) {
+			return {
+				type: "tool_result",
+				tool: "edit" as const,
+				call,
+				replacedCount: 0,
+				success: false,
+				error: `startLine (${startLine}) exceeds file length (${lines.length} lines)`,
+			};
+		}
+
+		// Clamp endLine to file length (allow replacing to end of file)
+		const effectiveEndLine = Math.min(endLine, lines.length);
+		const replacedCount = effectiveEndLine - startLine + 1;
+
+		// Build new content: lines before range + new content + lines after range
+		const before = lines.slice(0, startLine - 1);
+		const after = lines.slice(effectiveEndLine);
+		const newLines = content.length > 0 ? content.split("\n") : [];
+		const newContent = [...before, ...newLines, ...after].join("\n");
+
 		await Bun.write(filePath, newContent);
 
 		return {
 			type: "tool_result",
 			tool: "edit" as const,
 			call,
-			replacedCount: count,
+			replacedCount,
 			success: true,
 			error: null,
 		};

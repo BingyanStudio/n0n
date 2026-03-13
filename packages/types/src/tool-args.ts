@@ -33,9 +33,9 @@ export type WriteArgs = z.infer<typeof WriteArgsSchema>;
 
 export const EditArgsSchema = z.object({
 	path: z.string(),
-	search: z.string(),
-	replace: z.string(),
-	expectedMatches: z.number().optional(),
+	startLine: z.number(),
+	endLine: z.number(),
+	content: z.string(),
 });
 export type EditArgs = z.infer<typeof EditArgsSchema>;
 

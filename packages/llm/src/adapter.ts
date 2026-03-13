@@ -40,9 +40,10 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 
 function formatEditResult(msg: EditToolResult, model: string): string {
 	if (msg.success) {
+		const { startLine, endLine, path } = msg.call.args;
 		return wrapTag(
 			"edit_result",
-			`Replaced ${msg.replacedCount} occurrence(s) in \`${msg.call.args.path}\``,
+			`Replaced lines ${startLine}-${endLine} (${msg.replacedCount} line(s)) in \`${path}\``,
 			model,
 		);
 	}
