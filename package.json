@@ -7,6 +7,7 @@
 		"start": "bun run apps/cli/src/index.ts",
 		"start:code": "bun run apps/code/src/cli.ts",
 		"start:feishu": "bun run apps/feishu/src/index.ts",
+		"start:fairy": "bun run apps/fairy/src/index.ts",
 		"check": "turbo check",
 		"typecheck": "turbo typecheck",
 		"lint": "bunx biome check --write ."
