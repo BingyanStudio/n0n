@@ -9,8 +9,9 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 import type {
 	EditToolCall,
 	EditToolResult,
@@ -96,49 +97,70 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 };
 
 /**
- * 通过 neovim headless ex 模式执行命令序列
+ * 通过 neovim headless 执行 ex 命令序列。
+ *
+ * 将命令写入临时 .vim 脚本文件，然后用 -c source 执行。
+ * 不使用 -es stdin 管道，因为 stdin 模式对 UTF-8 多字节字符
+ * （如中文）在搜索模式中存在编码问题。
  */
 async function runNvimEx(
 	filePath: string,
 	commands: string[],
 ): Promise<{ success: boolean; error?: string }> {
-	return new Promise((resolve) => {
-		const args = ["--headless", "-n", "-u", "NONE", "-es", filePath];
+	const scriptDir = mkdtempSync(join(tmpdir(), "n0n-vim-"));
+	const scriptPath = join(scriptDir, "edit.vim");
 
-		const proc = spawn(NVIM_PATH, args, {
-			stdio: ["pipe", "pipe", "pipe"],
-			timeout: NVIM_TIMEOUT,
-		});
-
-		let stderr = "";
-		proc.stderr?.on("data", (d: Buffer) => {
-			stderr += d.toString();
-		});
-
-		proc.on("close", (code: number | null) => {
-			if (code === 0) {
-				resolve({ success: true });
-			} else {
-				resolve({
-					success: false,
-					error: `nvim exited with code ${code}: ${stderr.trim()}`,
-				});
-			}
-		});
-
-		proc.on("error", (err: Error) => {
-			resolve({
-				success: false,
-				error: `Failed to spawn nvim: ${err.message}`,
-			});
-		});
-
-		// 写入命令：先禁用自动缩进，然后执行用户命令，最后 wq
+	try {
+		// 写入命令脚本：先禁用自动缩进，然后执行用户命令，最后 wq
 		const preamble = ["set noautoindent", "set nosmartindent", "set nocindent"];
 		const script = `${[...preamble, ...commands, "wq"].join("\n")}\n`;
-		proc.stdin?.write(script);
-		proc.stdin?.end();
-	});
+		writeFileSync(scriptPath, script, "utf8");
+
+		const sourcePath = scriptPath.replace(/\\/g, "/");
+		const args = [
+			"--headless",
+			"-n",
+			"-u",
+			"NONE",
+			"-c",
+			`source ${sourcePath}`,
+			filePath,
+		];
+
+		return await new Promise((resolve) => {
+			const proc = spawn(NVIM_PATH, args, {
+				stdio: ["pipe", "pipe", "pipe"],
+				timeout: NVIM_TIMEOUT,
+			});
+
+			let stderr = "";
+			proc.stderr?.on("data", (d: Buffer) => {
+				stderr += d.toString();
+			});
+
+			proc.on("close", (code: number | null) => {
+				if (code === 0) {
+					resolve({ success: true });
+				} else {
+					resolve({
+						success: false,
+						error: `nvim exited with code ${code}: ${stderr.trim()}`,
+					});
+				}
+			});
+
+			proc.on("error", (err: Error) => {
+				resolve({
+					success: false,
+					error: `Failed to spawn nvim: ${err.message}`,
+				});
+			});
+		});
+	} finally {
+		try {
+			rmSync(scriptDir, { recursive: true, force: true });
+		} catch {}
+	}
 }
 
 export async function editTool(

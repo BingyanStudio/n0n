@@ -256,4 +256,44 @@ describe("editTool (vim ex commands)", () => {
 		expect(r.success).toBe(false);
 		expect(r.error).toContain("No commands");
 	});
+
+	// ── 中文 / UTF-8 多字节字符 ──
+
+	test("substitutes Chinese characters in search pattern", async () => {
+		writeFileSync(join(workspace, F), "需要修改的内容\n第二行\n");
+		const r = await editTool(
+			makeCall({ path: F, commands: ["%s/需要修改/已修改/g"] }),
+			workspace,
+		);
+		expect(r.success).toBe(true);
+		expect(read(workspace, F)).toBe("已修改的内容\n第二行");
+	});
+
+	test("change command with Chinese content", async () => {
+		writeFileSync(join(workspace, F), "function hello() {\n  旧代码\n}\n");
+		const r = await editTool(
+			makeCall({
+				path: F,
+				commands: ["/function hello/+1,/^}/-1c", "  新代码", "."],
+			}),
+			workspace,
+		);
+		expect(r.success).toBe(true);
+		const result = read(workspace, F);
+		expect(result).toContain("新代码");
+		expect(result).not.toContain("旧代码");
+	});
+
+	test("global delete with Chinese pattern", async () => {
+		writeFileSync(
+			join(workspace, F),
+			"保留\n待办: 修复\n保留\n待办: 删除\n保留\n",
+		);
+		const r = await editTool(
+			makeCall({ path: F, commands: ["g/待办/d"] }),
+			workspace,
+		);
+		expect(r.success).toBe(true);
+		expect(read(workspace, F)).toBe("保留\n保留\n保留");
+	});
 });
