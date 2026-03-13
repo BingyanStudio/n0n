@@ -3,10 +3,15 @@
  *
  * 核心创新：不直接使用对话历史，而是从全局状态重建上下文。
  *
+ * 上下文组装策略（基于 token 预算）：
+ * - 当原始历史 token 量 < 80% 上下文窗口时：直接使用原始历史
+ * - 超过阈值后：压缩为摘要（~25k tokens）+ 尾部原始对话
+ * - 摘要使用跳变窗口：每积累 STEP 轮新对话才更新一次，最大化 KV-cache 命中
+ *
  * 上下文组装顺序（前缀稳定，尾部动态）：
  * 1. [system] 身份设定（identity.md）         ← 最稳定
- * 2. [system] 对话路径摘要（跳变窗口）         ← 较稳定（跳变更新，命中缓存）
- * 3. [system] 近期原始对话（尾部窗口）         ← 动态（最近几轮完整对话）
+ * 2. [system] 对话路径摘要（跳变窗口）         ← 较稳定（跳变更新）
+ * 3. [历史/尾部] 原始对话消息                  ← 动态
  * 4. [system] 记忆和偏好（memory.md）          ← 半动态
  * 5. [system] 环境感知（时间、平台）            ← 动态
  * 6. [stimulus] 当前刺激                       ← 尾部
@@ -17,32 +22,53 @@ import fairyPromptText from "./prompts/fairy.md" with { type: "text" };
 import type { FairyPaths } from "./state.ts";
 import { loadMarkdown } from "./state.ts";
 
-// ── 配置 ──
+// ── Token 预算配置 ──
+
+/** 上下文窗口大小（tokens） */
+const CONTEXT_WINDOW = 128_000;
 
 /**
- * 进入摘要模式的最小轮次数。
- * 低于此数量时，直接使用原始对话历史（无需摘要）。
+ * 触发压缩的阈值：当原始历史估算 token 量超过此值时，切换到摘要模式。
+ * 设为上下文窗口的 80%，留 20% 给系统消息、记忆、环境和当前刺激。
  */
-const SUMMARY_THRESHOLD = 6;
+const COMPRESS_TRIGGER = Math.round(CONTEXT_WINDOW * 0.8);
 
 /**
- * 跳变窗口步长：摘要每积累 STEP 轮新对话才更新一次。
- * 这样摘要部分在连续几轮对话中保持不变，最大化 KV-cache 命中。
+ * 跳变窗口步长（轮次）。
+ * 摘要每积累 STEP 轮新对话才更新一次，保证连续对话中摘要前缀不变。
+ * 较大的 step 意味着更高的缓存命中率，但尾部原始对话也更长。
  */
-const SUMMARY_STEP = 4;
+const SNAPSHOT_STEP = 20;
 
 /**
- * 尾部保留的最近轮次数（原始对话，不做摘要）。
- * 保证模型能看到最近的完整交互细节。
+ * 粗略的 token 估算：1 token ≈ 3 chars（中英混合场景）。
+ * 不需要精确——只用于判断是否触发压缩。
  */
-const TAIL_ROUNDS = 3;
+function estimateTokens(messages: DomainMessage[]): number {
+	let chars = 0;
+	for (const msg of messages) {
+		if ("content" in msg && typeof msg.content === "string") {
+			chars += msg.content.length;
+		}
+		if (msg.type === "assistant_tool_call") {
+			for (const tc of msg.toolCalls) {
+				chars += JSON.stringify(tc.args).length;
+			}
+		}
+		if (msg.type === "tool_result") {
+			if ("stdout" in msg) chars += msg.stdout?.length ?? 0;
+			if ("stderr" in msg) chars += msg.stderr?.length ?? 0;
+			if ("error" in msg && typeof msg.error === "string")
+				chars += msg.error.length;
+		}
+	}
+	return Math.round(chars / 3);
+}
 
-// ── 对话路径提取 ──
+// ── 轮次分割 ──
 
 interface ConversationRound {
-	/** 该轮在 history 中的起始索引 */
 	startIdx: number;
-	/** 该轮在 history 中的结束索引（不含） */
 	endIdx: number;
 }
 
@@ -62,7 +88,6 @@ function splitRounds(history: DomainMessage[]): ConversationRound[] {
 			currentStart = i;
 		}
 	}
-	// 最后一轮
 	if (currentStart >= 0) {
 		rounds.push({ startIdx: currentStart, endIdx: history.length });
 	}
@@ -70,11 +95,11 @@ function splitRounds(history: DomainMessage[]): ConversationRound[] {
 	return rounds;
 }
 
+// ── 对话路径提取 ──
+
 /**
  * 从一段对话历史中提取路径摘要行。
- *
- * 提取 user_input、submit 回复、reminder 进度——
- * 三者共同构成完整的对话路径。
+ * 提取 user_input、submit 回复、reminder 进度。
  */
 function extractPathLines(messages: DomainMessage[]): string[] {
 	const lines: string[] = [];
@@ -114,20 +139,23 @@ export function buildView(
 	stimulus: string,
 ): DomainMessage[] {
 	const messages: DomainMessage[] = [];
-	const rounds = splitRounds(history);
 
 	// 1. 身份设定（最稳定前缀）
 	const identity = loadMarkdown(paths.identityFile);
 	messages.push({ type: "system", content: buildSystemPrompt(identity) });
 
-	// 2. 对话路径摘要 + 尾部原始对话
-	if (rounds.length >= SUMMARY_THRESHOLD) {
-		// 跳变窗口：摘要覆盖到 snapEnd，尾部保留 TAIL_ROUNDS 轮原始对话
-		const snapEnd = computeSnapshotEnd(
-			rounds.length,
-			TAIL_ROUNDS,
-			SUMMARY_STEP,
-		);
+	// 2. 判断是否需要压缩
+	const historyTokens = estimateTokens(history);
+
+	if (historyTokens < COMPRESS_TRIGGER) {
+		// 未触发压缩：直接使用全部原始历史
+		for (const msg of history) {
+			messages.push(msg);
+		}
+	} else {
+		// 触发压缩：摘要 + 尾部原始对话
+		const rounds = splitRounds(history);
+		const snapEnd = computeSnapshotEnd(rounds.length, SNAPSHOT_STEP);
 		const summaryMessages = history.slice(0, rounds[snapEnd]?.startIdx ?? 0);
 		const pathLines = extractPathLines(summaryMessages);
 
@@ -138,15 +166,10 @@ export function buildView(
 			});
 		}
 
-		// 尾部原始对话：从 snapEnd 开始的完整轮次
+		// 尾部原始对话
 		const tailStart = rounds[snapEnd]?.startIdx ?? 0;
 		const tailMessages = history.slice(tailStart);
 		for (const msg of tailMessages) {
-			messages.push(msg);
-		}
-	} else if (history.length > 0) {
-		// 对话数不足，直接使用全部原始历史
-		for (const msg of history) {
 			messages.push(msg);
 		}
 	}
@@ -181,28 +204,18 @@ export function buildView(
  * 计算摘要快照的结束轮次索引（跳变窗口）。
  *
  * 摘要覆盖 [0, snapEnd) 轮，尾部保留 [snapEnd, total) 轮原始对话。
- * snapEnd 按 step 跳变：只有当新轮次积累到 step 的整数倍时才前进，
- * 这样连续几轮对话中摘要部分保持不变，最大化 KV-cache 命中。
- *
- * 例如 step=4, tail=3:
- *   rounds=6  → snapEnd = floor((6-3)/4)*4 = floor(0.75)*4 = 0  → 但 >=threshold 所以至少 = max(0, 6-3) 的跳变
- *   rounds=7  → snapEnd = floor((7-3)/4)*4 = 4
- *   rounds=10 → snapEnd = floor((10-3)/4)*4 = 4
- *   rounds=11 → snapEnd = floor((11-3)/4)*4 = 8
+ * snapEnd 按 step 跳变：只有当新轮次积累到 step 的整数倍时才前进。
  */
-export function computeSnapshotEnd(
-	totalRounds: number,
-	tailSize: number,
-	step: number,
-): number {
-	const available = totalRounds - tailSize;
+export function computeSnapshotEnd(totalRounds: number, step: number): number {
+	// 至少保留 step 轮作为尾部
+	const available = totalRounds - step;
 	if (available <= 0) return 0;
 	return Math.floor(available / step) * step;
 }
 
 // ── 内部构建函数 ──
 
-/** 生成本地时区的 ISO 格式时间字符串（如 2026-03-14T03:02:23+08:00） */
+/** 生成本地时区的 ISO 格式时间字符串 */
 function localISOString(): string {
 	const now = new Date();
 	const pad = (n: number) => String(n).padStart(2, "0");
