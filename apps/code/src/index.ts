@@ -10,6 +10,9 @@
  * 3. 启动 REPL
  */
 
+import { existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
 import {
@@ -22,9 +25,14 @@ import {
 import { codeEnvSpec } from "./env-spec.ts";
 
 // ── Bootstrap ──
+// 配置文件存放在全局目录 ~/.n0n/，避免每个工作目录都需要重新配置
+const globalConfigDir = resolve(homedir(), ".n0n");
+if (!existsSync(globalConfigDir)) {
+	mkdirSync(globalConfigDir, { recursive: true });
+}
 
 const setupUI = new CliSetupRenderer();
-const result = await bootstrap(codeEnvSpec, setupUI);
+const result = await bootstrap(codeEnvSpec, setupUI, globalConfigDir);
 setupUI.dispose();
 
 if (!result.ok) {
@@ -36,7 +44,7 @@ if (!result.ok) {
 const { workspace, remainingArgs } = parseWorkspaceArg(
 	process.argv.slice(2),
 	"N0N_CODE_WORKSPACE",
-	`${process.cwd()}/.runtime/code`,
+	process.cwd(),
 );
 
 const paths = resolveBasePaths(workspace);
