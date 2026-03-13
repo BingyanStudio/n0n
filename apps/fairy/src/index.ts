@@ -18,6 +18,7 @@ import type { DomainMessage } from "@n0n/types";
 import { type FairyResponse, FairyResponseSchema } from "./schema.ts";
 import {
 	ensureFairyFiles,
+	type FairyPaths,
 	loadHistory,
 	resolveFairyPaths,
 	saveHistory,
@@ -87,14 +88,15 @@ async function main(): Promise<void> {
 	while (userInput.trim().toLowerCase() !== "exit") {
 		// 每轮从状态重建上下文
 		const history = loadHistory(paths);
-		const messages = buildView(history, paths, userInput);
+		const viewMessages = buildView(history, paths, userInput);
+		const viewSize = viewMessages.length;
 
 		abortController = new AbortController();
 		agentRunning = true;
 
 		let agentResult: Awaited<ReturnType<typeof agentLoop<FairyResponse>>>;
 		try {
-			agentResult = await agentLoop<FairyResponse>(messages, {
+			agentResult = await agentLoop<FairyResponse>(viewMessages, {
 				maxIterations: 30,
 				renderer,
 				schema: FairyResponseSchema,
@@ -125,7 +127,7 @@ async function main(): Promise<void> {
 		}
 
 		// 更新全局对话记录：追加本轮产生的新消息
-		updateHistory(paths, history, agentResult.history);
+		appendNewMessages(paths, history, agentResult.history, viewSize);
 
 		writeln();
 
@@ -145,35 +147,36 @@ async function main(): Promise<void> {
 }
 
 /**
- * 更新全局对话记录。
+ * 追加本轮新消息到全局对话记录。
  *
- * agentLoop 返回的 history 包含了 buildView 注入的 system 消息 + 本轮新消息。
- * 我们只需要追加本轮新产生的消息（跳过 buildView 注入的前缀）。
+ * buildView 构建了 viewSize 条消息作为上下文注入 agentLoop。
+ * agentLoop 返回的 history 前 viewSize 条是注入的上下文（含 system、旧历史、stimulus），
+ * 之后的是本轮 agent 新产生的消息（tool calls、results 等）。
+ *
+ * 我们需要保存的是：
+ * - 本轮的 stimulus（user_input，即 viewMessages 的最后一条）
+ * - agent 新产生的所有消息
  */
-function updateHistory(
+function appendNewMessages(
 	paths: FairyPaths,
 	oldHistory: DomainMessage[],
 	agentHistory: DomainMessage[],
+	viewSize: number,
 ): void {
-	// buildView 注入的消息数量 = system messages + 1 user_input
-	// 找到 agentHistory 中第一个非 system 的 user_input（即我们注入的 stimulus）
-	let startIdx = 0;
-	for (let i = 0; i < agentHistory.length; i++) {
-		const msg = agentHistory[i];
-		if (msg?.type === "user_input") {
-			// 这是我们注入的 stimulus，从这里开始是本轮的内容
-			startIdx = i;
-			break;
-		}
-	}
+	// stimulus 是 buildView 的最后一条消息（user_input）
+	const stimulusIdx = viewSize - 1;
+	const stimulus = agentHistory[stimulusIdx];
 
-	const newMessages = agentHistory.slice(startIdx);
-	const updated = [...oldHistory, ...newMessages];
+	// agent 新产生的消息从 viewSize 开始
+	const agentNewMessages = agentHistory.slice(viewSize);
+
+	const toAppend: DomainMessage[] = [];
+	if (stimulus) toAppend.push(stimulus);
+	toAppend.push(...agentNewMessages);
+
+	const updated = [...oldHistory, ...toAppend];
 	saveHistory(paths, updated);
 }
-
-// ── 类型导入（避免 TS 报错） ──
-import type { FairyPaths } from "./state.ts";
 
 main().catch((err) => {
 	console.error("Fatal error:", err);
