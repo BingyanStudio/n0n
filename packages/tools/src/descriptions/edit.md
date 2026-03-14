@@ -31,9 +31,7 @@ edit({ path: "src/utils.ts", commands: "g/console\\.log/d" })
 
 <example>
 **Single-line substitution with `:s`** — given this line in the file:
-```
-  status: isSuccess ? "completed" : "failed" as const,
-```
+`  status: isSuccess ? "completed" : "failed" as const,`
 
 <bad_example>
 Splitting `:s` across multiple lines — this will fail with E486/E492:
