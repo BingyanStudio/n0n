@@ -294,22 +294,38 @@ describe("editTool (vim ex commands)", () => {
 		expect(r.warnings).toBeNull();
 	});
 
-	test("warns on E486 pattern not found (exit=0 but stderr has error)", async () => {
+	test("rolls back on E486 pattern not found (atomic edit)", async () => {
 		writeFileSync(join(workspace, F), "hello\nworld\n");
 		const r = await editTool(
 			makeCall({ path: F, commands: "/nonexistent_pattern/d" }),
 			workspace,
 		);
-		// nvim exits 0 but the pattern was not found — should surface as warning
-		expect(r.success).toBe(true);
-		expect(r.warnings).not.toBeNull();
+		// E486 triggers rollback — success should be false
+		expect(r.success).toBe(false);
+		expect(r.error).toContain("E486");
 		expect(r.warnings).toContain("E486");
-		// File should be unchanged (the delete was skipped)
+		// File must be unchanged (rolled back)
 		expect(read(workspace, F)).toBe("hello\nworld");
 	});
 
+	test("rolls back partial edits when later command fails (atomic)", async () => {
+		writeFileSync(join(workspace, F), "aaa\nbbb\nccc\n");
+		const r = await editTool(
+			makeCall({
+				path: F,
+				// First command succeeds, second hits E486
+				commands: "1s/aaa/XXX/\n/no_such_pattern/d",
+			}),
+			workspace,
+		);
+		expect(r.success).toBe(false);
+		expect(r.error).toContain("E486");
+		// File must be fully restored — first edit also rolled back
+		expect(read(workspace, F)).toBe("aaa\nbbb\nccc");
+	});
+
 	test(
-		"fails on E493 backwards range",
+		"rolls back on E493 backwards range (atomic edit)",
 		async () => {
 			const code = [
 				"function a() {",
@@ -321,7 +337,6 @@ describe("editTool (vim ex commands)", () => {
 				"",
 			].join("\n");
 			writeFileSync(join(workspace, F), code);
-			// Two offset-range :c commands — second one triggers E493
 			const r = await editTool(
 				makeCall({
 					path: F,
@@ -336,9 +351,10 @@ describe("editTool (vim ex commands)", () => {
 				}),
 				workspace,
 			);
-			// E493 causes nvim to hang then get killed — should be a failure
 			expect(r.success).toBe(false);
 			expect(r.error).toContain("E493");
+			// File must be fully restored
+			expect(read(workspace, F)).toBe(code.replace(/\n$/, ""));
 		},
 		20_000,
 	);

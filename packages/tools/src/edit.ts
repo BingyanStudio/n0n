@@ -9,7 +9,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type {
@@ -116,6 +116,12 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 			"- `:c`, `:a`, `:i` commands MUST end with a single `.` on its own line.",
 			"- Content lines inside `:c`/`:a`/`:i` must NOT be a lone `.` (it terminates input).",
 			"  If you need a literal `.` line, use `..` or a workaround.",
+			"- **Pattern addressing matches the FIRST occurrence** from current position.",
+			"  When multiple similar patterns exist (e.g. multiple `}` or `function`),",
+			"  include more context in your pattern to ensure unique matching.",
+			"  Example: `/function validateToken/` instead of `/function /`.",
+			"- **Edits are atomic**: if ANY command fails or is skipped (e.g. pattern not found),",
+			"  the entire edit is rolled back. Fix all patterns and retry.",
 			"- **Multiple offset-range `:c` in one call** (e.g. `/pat/+1,/pat/-1c` twice)",
 			"  can cause `E493: Backwards range` because the first `:c` shifts line numbers.",
 			"  Workarounds: (a) use `/start/,/end/c` without offsets and include boundary lines",
@@ -256,19 +262,49 @@ export async function editTool(
 			};
 		}
 
+		// 原子性编辑：备份原文件，出错或有警告时恢复
+		const backup = readFileSync(filePath);
 		const result = await runNvimEx(filePath, commands);
+
+		const hasProblems = !result.success || !!result.warnings;
+		if (hasProblems) {
+			// 恢复原文件 — 不应用部分修改
+			writeFileSync(filePath, backup);
+		}
+
+		if (!result.success) {
+			return {
+				type: "tool_result",
+				tool: "edit" as const,
+				call,
+				replacedCount: 0,
+				success: false,
+				error: result.error ?? "Unknown error",
+				warnings: result.warnings ?? null,
+			};
+		}
+
+		if (result.warnings) {
+			return {
+				type: "tool_result",
+				tool: "edit" as const,
+				call,
+				replacedCount: 0,
+				success: false,
+				error: `Rolled back — some commands were skipped: ${result.warnings}`,
+				warnings: result.warnings,
+			};
+		}
 
 		const cmdLines = commands.split("\n");
 		return {
 			type: "tool_result",
 			tool: "edit" as const,
 			call,
-			replacedCount: result.success
-				? cmdLines.filter((c) => /^[:/]|^\d/.test(c)).length
-				: 0,
-			success: result.success,
-			error: result.success ? null : (result.error ?? "Unknown error"),
-			warnings: result.warnings ?? null,
+			replacedCount: cmdLines.filter((c) => /^[:/]|^\d/.test(c)).length,
+			success: true,
+			error: null,
+			warnings: null,
 		};
 	} catch (err) {
 		return {
