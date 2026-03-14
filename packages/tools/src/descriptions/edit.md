@@ -50,6 +50,27 @@ Or use `:c` to replace the whole line (better when the line is complex):
 
 edit({ path: "src/state.ts", commands: "/isSuccess.*as const/c\n  status: (isSuccess ? \"completed\" : \"failed\") as Status,\n." })
 </good_example>
+
+</example>
+
+<example>
+**Example 6 — Pattern addressing with parentheses (vim regex ≠ JS regex):**
+
+To replace a multi-line function call like `parseWorkspaceArg(\n\targs,\n\tprocess.cwd(),\n)`:
+
+<bad_example>
+Using JS-style regex escaping — `\(\)` means grouping in Vim, not literal parens:
+
+edit({ path: "src/index.ts", commands: "/parseWorkspaceArg($/,/process.cwd\\(\\),/-1c\n\tnewArg,\n." })
+
+This fails with E486 because `\(\)` creates an empty capture group, not a literal `()`.
+</bad_example>
+
+<good_example>
+In Vim, `(` and `)` are already literal — just use them directly:
+
+edit({ path: "src/index.ts", commands: "/parseWorkspaceArg($/,/process.cwd(),/-1c\n\tnewArg,\n." })
+</good_example>
 </example>
 
 **Quick reference:**
@@ -70,6 +91,10 @@ edit({ path: "src/state.ts", commands: "/isSuccess.*as const/c\n  status: (isSuc
   **Workaround**: use `/start/,/end/c` without offsets (include boundary lines in
   replacement content), use absolute line numbers (edit bottom-to-top), or split
   into separate edit() calls.
+- **Vim regex is NOT JavaScript regex.** In Vim's default magic mode,
+  `(` `)` are literal characters, `\(` `\)` are grouping.
+  To match `process.cwd()`, use `/process.cwd()/` — do NOT escape the parentheses.
+  Only `.` `*` `[` `^` `$` `~` have special meaning; everything else is literal.
 - Pattern addresses match the **first** occurrence from the current position.
   When a file has similar/repeated patterns (e.g. multiple functions with `}`),
   include enough context in your pattern to ensure a unique match.
