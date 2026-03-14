@@ -1,7 +1,5 @@
-Edit a file using Vim ex commands. The file must already exist.
-Commands are executed in neovim headless mode via a sourced script.
-Write commands as a multi-line string — each line is one ex command or content line.
-Use standard Vim ex syntax — `:s`, `:c`, `:d`, `:a`, `:i`, `:g`, etc.
+Edit a file using standard Vim ex commands. The file must already exist.
+If you know Vim, you already know how to use this tool — `:s`, `:c`, `:d`, `:a`, `:i`, `:g` all work as expected.
 
 **Example 1 — Replace a function body:**
 ```
@@ -37,11 +35,39 @@ g/console\.log/d
 ```
 Deletes all lines containing `console.log`.
 
-**Example 5 — Single-line substitution (vim `:s` command):**
+**Example 5 — Substitution with `:s`:**
+
+Given this line in the file:
 ```
-%s/return 'error'/return Result.err('validation failed')/
+  status: isSuccess ? "completed" : "failed" as const,
 ```
-Note: `:s/old/new/` must be a **single line**. Do NOT split search and replace across lines.
+To change it:
+```
+%s/isSuccess ? "completed" : "failed" as const/(isSuccess ? "completed" : "failed") as Status/
+```
+
+<bad_example>
+Splitting `:s` across multiple lines — this will fail:
+```
+/isSuccess ? "completed"/
+s/isSuccess ? "completed" : "failed" as const,/
+(isSuccess ? "completed" : "failed") as Status,/
+```
+Line 1 is just a search (no edit). Lines 2-3 are a broken `:s` — Vim's `:s/old/new/` must be one single line.
+</bad_example>
+
+<good_example>
+Either use `:s` on one line:
+```
+%s/isSuccess ? "completed" : "failed" as const/(isSuccess ? "completed" : "failed") as Status/
+```
+Or use `:c` to replace the whole line:
+```
+/isSuccess.*as const/c
+  status: (isSuccess ? "completed" : "failed") as Status,
+.
+```
+</good_example>
 
 **Quick reference:**
   3d                 — delete line 3
