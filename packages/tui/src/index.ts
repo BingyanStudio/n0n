@@ -8,5 +8,7 @@
  * 3. 用户输入换行时的渲染冲突
  */
 
+export { TuiApp } from "./components/App.tsx";
+export { InputBox } from "./components/InputBox.tsx";
 export { TuiRenderer } from "./renderer.tsx";
 export { createInitialState, type TuiRendererState } from "./state.ts";

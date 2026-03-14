@@ -3,6 +3,7 @@
  *
  * 实现 Renderer 接口，将事件转换为 React 状态。
  * 使用 Ink 的 render() 函数管理终端输出。
+ * 支持交互式输入处理。
  */
 
 import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
@@ -15,18 +16,32 @@ import {
 	type TuiRendererState,
 } from "./state.ts";
 
+export interface TuiRendererOptions {
+	/** 用户输入回调 */
+	onUserInput?: (text: string) => void;
+}
+
 export class TuiRenderer implements Renderer {
 	private state: TuiRendererState = createInitialState();
 	private setState!: React.Dispatch<React.SetStateAction<TuiRendererState>>;
 	private inkInstance: ReturnType<typeof render> | null = null;
+	private onUserInput?: (text: string) => void;
 
-	constructor() {
+	constructor(options: TuiRendererOptions = {}) {
+		this.onUserInput = options.onUserInput;
+
 		// 创建一个简单的状态管理
 		// Ink 的 render() 需要一个 React 组件，我们通过闭包传递 state
 		const StatefulApp = () => {
 			const [localState, setLocalState] = React.useState(this.state);
 			this.setState = setLocalState;
-			return <TuiApp state={localState} />;
+			return (
+				<TuiApp
+					state={localState}
+					onInputSubmit={(text) => this.onUserInput?.(text)}
+					waitingForInput={localState.finalStatus === null}
+				/>
+			);
 		};
 
 		this.inkInstance = render(<StatefulApp />);
@@ -112,6 +127,14 @@ export class TuiRenderer implements Renderer {
 
 	aborted(): void {
 		this.updateState((s) => stateUpdaters.aborted(s));
+	}
+
+	/** 重置状态，准备新一轮对话 */
+	resetForNewRound(): void {
+		this.updateState((s) => ({
+			...createInitialState(),
+			messages: s.messages, // 保留消息历史
+		}));
 	}
 
 	/** 清理资源 */

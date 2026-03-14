@@ -4,21 +4,31 @@
  * 布局：
  * - 上方：消息历史（滚动区域）
  * - 中间：工具输出区域
+ * - 下方：输入框
  * - 底部：状态栏
  */
 
 import { Box, Text } from "ink";
 import type React from "react";
 import type { TuiRendererState } from "../state.ts";
+import { InputBox } from "./InputBox.tsx";
 import { MessageRow } from "./MessageRow.tsx";
 import { StreamingContent } from "./StreamingContent.tsx";
 import { ToolOutput } from "./ToolOutput.tsx";
 
 interface TuiAppProps {
 	state: TuiRendererState;
+	/** 输入提交回调 */
+	onInputSubmit?: (text: string) => void;
+	/** 是否等待用户输入 */
+	waitingForInput?: boolean;
 }
 
-export const TuiApp: React.FC<TuiAppProps> = ({ state }) => {
+export const TuiApp: React.FC<TuiAppProps> = ({
+	state,
+	onInputSubmit,
+	waitingForInput = true,
+}) => {
 	const { messages, streamingToolCalls, completedToolCalls, round } = state;
 
 	return (
@@ -30,8 +40,7 @@ export const TuiApp: React.FC<TuiAppProps> = ({ state }) => {
 						{" AGENT "}
 					</Text>
 					<Text dimColor>
-						{" "}
-						round {round.current}/{round.max} ({round.msgCount} msgs)
+						{` round ${round.current}/${round.max} (${round.msgCount} msgs)`}
 					</Text>
 				</Box>
 			)}
@@ -80,6 +89,14 @@ export const TuiApp: React.FC<TuiAppProps> = ({ state }) => {
 					terminationReason={state.terminationReason}
 				/>
 			)}
+
+			{/* 输入框 */}
+			{waitingForInput && state.finalStatus === null && (
+				<InputBox
+					onSubmit={(text) => onInputSubmit?.(text)}
+					disabled={!waitingForInput || state.finalStatus !== null}
+				/>
+			)}
 		</Box>
 	);
 };
@@ -125,11 +142,7 @@ const FinalStatus: React.FC<{
 				<Box>
 					<Text color="red">{"✗"}</Text>
 					<Text>
-						{" submit rejected ("}
-						{submitError?.attempt}
-						{"/"}
-						{submitError?.maxAttempts}
-						{"): "}
+						{` submit rejected (${submitError?.attempt}/${submitError?.maxAttempts}): `}
 					</Text>
 					<Text dimColor>{submitError?.error}</Text>
 				</Box>
@@ -137,7 +150,7 @@ const FinalStatus: React.FC<{
 		case "terminated":
 			return (
 				<Box>
-					<Text color="yellow">{"⚠"}</Text>
+					<Text color="yellow">{"!"}</Text>
 					<Text dimColor>{` ${terminationReason}`}</Text>
 				</Box>
 			);
