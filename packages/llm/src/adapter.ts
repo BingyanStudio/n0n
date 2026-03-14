@@ -43,7 +43,13 @@ function formatEditResult(msg: EditToolResult, model: string): string {
 		const summary = `Edited \`${msg.call.args.path}\`: +${msg.linesAdded} -${msg.linesRemoved} lines`;
 		return wrapTag("edit_result", summary, model);
 	}
-	return wrapTag("error", `Edit failed (rolled back): ${msg.error}`, model);
+	const guidance = [
+		`Edit failed (rolled back): ${msg.error}`,
+		"",
+		"Review your commands against standard Vim ex syntax and retry.",
+		"Common mistakes: `:s/old/new/` split across lines, missing `.` terminator, pattern not found in file.",
+	].join("\n");
+	return wrapTag("error", guidance, model);
 }
 
 function toolResultToContent(msg: ToolResult, model: string): string {
