@@ -40,6 +40,8 @@ describe("editTool (vim ex commands)", () => {
 		writeFileSync(join(workspace, F), "a\nb\nc\nd\n");
 		const r = await editTool(makeCall({ path: F, commands: "3d" }), workspace);
 		expect(r.success).toBe(true);
+		expect(r.linesRemoved).toBe(1);
+		expect(r.linesAdded).toBe(0);
 		expect(read(workspace, F)).toBe("a\nb\nd");
 	});
 
@@ -102,6 +104,8 @@ describe("editTool (vim ex commands)", () => {
 			workspace,
 		);
 		expect(r.success).toBe(true);
+		expect(r.linesAdded).toBe(3);
+		expect(r.linesRemoved).toBe(0);
 		expect(read(workspace, F)).toBe("a\nx\ny\nz\nb");
 	});
 
@@ -302,6 +306,8 @@ describe("editTool (vim ex commands)", () => {
 		);
 		// E486 triggers rollback — success should be false
 		expect(r.success).toBe(false);
+		expect(r.linesAdded).toBe(0);
+		expect(r.linesRemoved).toBe(0);
 		expect(r.error).toContain("E486");
 		expect(r.warnings).toContain("E486");
 		// File must be unchanged (rolled back)

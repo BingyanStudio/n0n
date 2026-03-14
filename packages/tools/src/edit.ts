@@ -9,7 +9,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type {
@@ -237,84 +237,59 @@ export async function editTool(
 		: resolve(workspace, call.args.path);
 	const { commands } = call.args;
 
+	const fail = (error: string, warnings: string | null = null): EditToolResult => ({
+		type: "tool_result",
+		tool: "edit" as const,
+		call,
+		linesAdded: 0,
+		linesRemoved: 0,
+		success: false,
+		error,
+		warnings,
+	});
+
 	try {
-		if (!existsSync(filePath)) {
-			return {
-				type: "tool_result",
-				tool: "edit" as const,
-				call,
-				replacedCount: 0,
-				success: false,
-				error: `File not found: ${call.args.path}`,
-				warnings: null,
-			};
-		}
+		if (!existsSync(filePath)) return fail(`File not found: ${call.args.path}`);
+		if (!commands || commands.trim().length === 0) return fail("No commands provided");
 
-		if (!commands || commands.trim().length === 0) {
-			return {
-				type: "tool_result",
-				tool: "edit" as const,
-				call,
-				replacedCount: 0,
-				success: false,
-				error: "No commands provided",
-				warnings: null,
-			};
-		}
-
-		// 原子性编辑：备份原文件，出错或有警告时恢复
-		const backup = readFileSync(filePath);
+		// 原子性编辑：备份原文件内容，出错或有警告时恢复
+		const backup = readFileSync(filePath, "utf8");
 		const result = await runNvimEx(filePath, commands);
 
 		const hasProblems = !result.success || !!result.warnings;
 		if (hasProblems) {
 			// 恢复原文件 — 不应用部分修改
-			writeFileSync(filePath, backup);
+			writeFileSync(filePath, backup, "utf8");
 		}
 
 		if (!result.success) {
-			return {
-				type: "tool_result",
-				tool: "edit" as const,
-				call,
-				replacedCount: 0,
-				success: false,
-				error: result.error ?? "Unknown error",
-				warnings: result.warnings ?? null,
-			};
+			return fail(result.error ?? "Unknown error", result.warnings ?? null);
 		}
-
 		if (result.warnings) {
-			return {
-				type: "tool_result",
-				tool: "edit" as const,
-				call,
-				replacedCount: 0,
-				success: false,
-				error: `Rolled back — some commands were skipped: ${result.warnings}`,
-				warnings: result.warnings,
-			};
+			return fail(
+				`Rolled back — some commands were skipped: ${result.warnings}`,
+				result.warnings,
+			);
 		}
 
-		const cmdLines = commands.split("\n");
+		// 计算 diff 统计
+		const newContent = readFileSync(filePath, "utf8");
+		const oldLines = backup.split("\n").length;
+		const newLines = newContent.split("\n").length;
+		const added = Math.max(0, newLines - oldLines);
+		const removed = Math.max(0, oldLines - newLines);
+
 		return {
 			type: "tool_result",
 			tool: "edit" as const,
 			call,
-			replacedCount: cmdLines.filter((c) => /^[:/]|^\d/.test(c)).length,
+			linesAdded: added,
+			linesRemoved: removed,
 			success: true,
 			error: null,
 			warnings: null,
 		};
 	} catch (err) {
-		return {
-			type: "tool_result",
-			tool: "edit" as const,
-			call,
-			replacedCount: 0,
-			success: false,
-			error: err instanceof Error ? err.message : String(err),
-			warnings: null,
-		};
+		return fail(err instanceof Error ? err.message : String(err));
 	}
 }

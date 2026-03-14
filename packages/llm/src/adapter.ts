@@ -40,18 +40,10 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 
 function formatEditResult(msg: EditToolResult, model: string): string {
 	if (msg.success) {
-		const cmdLines = msg.call.args.commands.split("\n").length;
-		const summary = `Applied ${cmdLines} line(s) of vim commands to \`${msg.call.args.path}\``;
-		if (msg.warnings) {
-			return wrapTag(
-				"edit_result",
-				`${summary}\n⚠️ Warnings: ${msg.warnings}`,
-				model,
-			);
-		}
+		const summary = `Edited \`${msg.call.args.path}\`: +${msg.linesAdded} -${msg.linesRemoved} lines`;
 		return wrapTag("edit_result", summary, model);
 	}
-	return wrapTag("error", `Edit failed: ${msg.error}`, model);
+	return wrapTag("error", `Edit failed (rolled back): ${msg.error}`, model);
 }
 
 function toolResultToContent(msg: ToolResult, model: string): string {
