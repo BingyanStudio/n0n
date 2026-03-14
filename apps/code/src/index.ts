@@ -43,10 +43,13 @@ if (!result.ok) {
 const args = process.argv.slice(2);
 const useTui = args.includes("--tui");
 
+// 过滤掉已知标志，避免被当作 workspace 或 initialInput
+const filteredArgs = args.filter((arg) => arg !== "--tui");
+
 // ── 初始化 ──
 
 const { workspace, remainingArgs } = parseWorkspaceArg(
-	process.argv.slice(2),
+	filteredArgs,
 	"N0N_CODE_WORKSPACE",
 	process.cwd(),
 );
