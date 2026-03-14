@@ -146,8 +146,7 @@ export function toAPIMessages(
 				if (msg.context) parts.push(wrapTag("context", msg.context, model));
 				if (msg.capabilities)
 					parts.push(wrapTag("capabilities", msg.capabilities, model));
-				if (msg.hint)
-					parts.push(wrapTag("system_hint", msg.hint, model));
+				if (msg.hint) parts.push(wrapTag("system_hint", msg.hint, model));
 				parts.push(msg.content);
 				result.push({ role: "user", content: parts.join("\n\n") });
 				break;
