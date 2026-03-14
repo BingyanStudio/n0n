@@ -99,7 +99,12 @@ export async function startRepl(
 	const prompt = (q: string): Promise<string> =>
 		new Promise((resolve) => {
 			if (closed) return resolve("exit");
-			rl.question(q, resolve);
+			// 输入锁定：暂停渲染输出，防止 readline 和渲染器同时写 stderr
+			if (renderer instanceof RichRenderer) renderer.pauseOutput();
+			rl.question(q, (answer) => {
+				if (renderer instanceof RichRenderer) renderer.resumeOutput();
+				resolve(answer);
+			});
 		});
 	const confirmFn = (question: string): Promise<string> =>
 		new Promise((resolve) => {

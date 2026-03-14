@@ -71,3 +71,8 @@ export function writeln(text = ""): void {
 
 /** 检测是否为 TTY（支持 ANSI） */
 export const isTTY: boolean = out.isTTY ?? false;
+
+/** 获取终端宽度（列数），非 TTY 时返回 80 作为合理默认值 */
+export function getTerminalWidth(): number {
+	return out.columns ?? 80;
+}
