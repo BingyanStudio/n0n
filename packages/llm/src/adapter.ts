@@ -41,11 +41,15 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 function formatEditResult(msg: EditToolResult, model: string): string {
 	if (msg.success) {
 		const cmdLines = msg.call.args.commands.split("\n").length;
-		return wrapTag(
-			"edit_result",
-			`Applied ${cmdLines} line(s) of vim commands to \`${msg.call.args.path}\``,
-			model,
-		);
+		const summary = `Applied ${cmdLines} line(s) of vim commands to \`${msg.call.args.path}\``;
+		if (msg.warnings) {
+			return wrapTag(
+				"edit_result",
+				`${summary}\n⚠️ Warnings: ${msg.warnings}`,
+				model,
+			);
+		}
+		return wrapTag("edit_result", summary, model);
 	}
 	return wrapTag("error", `Edit failed: ${msg.error}`, model);
 }

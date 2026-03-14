@@ -51,6 +51,15 @@ const NVIM_PATH = findNvim();
 /** 执行超时（毫秒） */
 const NVIM_TIMEOUT = 15_000;
 
+/** 从 nvim stderr 中提取 Vim 错误（E\d{3} 格式） */
+function extractVimErrors(stderr: string): string | null {
+	const errorLines = stderr
+		.split("\n")
+		.filter((line) => /E\d{3}:/.test(line))
+		.map((line) => line.trim());
+	return errorLines.length > 0 ? errorLines.join("; ") : null;
+}
+
 export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",
 	function: {
@@ -107,6 +116,11 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 			"- `:c`, `:a`, `:i` commands MUST end with a single `.` on its own line.",
 			"- Content lines inside `:c`/`:a`/`:i` must NOT be a lone `.` (it terminates input).",
 			"  If you need a literal `.` line, use `..` or a workaround.",
+			"- **Multiple offset-range `:c` in one call** (e.g. `/pat/+1,/pat/-1c` twice)",
+			"  can cause `E493: Backwards range` because the first `:c` shifts line numbers.",
+			"  Workarounds: (a) use `/start/,/end/c` without offsets and include boundary lines",
+			"  in the replacement, (b) use line-number addressing from bottom to top,",
+			"  or (c) split into separate edit calls.",
 		].join("\n"),
 		parameters: {
 			type: "object",
@@ -137,7 +151,7 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 async function runNvimEx(
 	filePath: string,
 	commands: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; warnings?: string }> {
 	const scriptDir = mkdtempSync(join(tmpdir(), "n0n-vim-"));
 	const scriptPath = join(scriptDir, "edit.vim");
 
@@ -160,27 +174,41 @@ async function runNvimEx(
 
 		return await new Promise((resolve) => {
 			const proc = spawn(NVIM_PATH, args, {
-				stdio: ["pipe", "pipe", "pipe"],
+				stdio: ["ignore", "pipe", "pipe"],
 				timeout: NVIM_TIMEOUT,
 			});
 
 			let stderr = "";
+			let errorKillTimer: ReturnType<typeof setTimeout> | null = null;
+
 			proc.stderr?.on("data", (d: Buffer) => {
 				stderr += d.toString();
+				// 检测到 Vim 错误码时，启动短延时强制终止
+				// nvim 在某些错误（如 E493）后会挂起不退出
+				if (/E\d{3}:/.test(stderr) && !errorKillTimer) {
+					errorKillTimer = setTimeout(() => proc.kill(), 500);
+				}
 			});
 
 			proc.on("close", (code: number | null) => {
+				if (errorKillTimer) clearTimeout(errorKillTimer);
+				const vimErrors = extractVimErrors(stderr);
 				if (code === 0) {
-					resolve({ success: true });
+					// exit=0 但 stderr 中有 Vim 错误码（如 E486: Pattern not found）
+					// 表示部分命令被静默跳过
+					resolve({ success: true, warnings: vimErrors ?? undefined });
 				} else {
 					resolve({
 						success: false,
-						error: `nvim exited with code ${code}: ${stderr.trim()}`,
+						error: vimErrors
+							? `nvim error: ${vimErrors}`
+							: `nvim exited with code ${code}: ${stderr.trim()}`,
 					});
 				}
 			});
 
 			proc.on("error", (err: Error) => {
+				if (errorKillTimer) clearTimeout(errorKillTimer);
 				resolve({
 					success: false,
 					error: `Failed to spawn nvim: ${err.message}`,
@@ -212,6 +240,7 @@ export async function editTool(
 				replacedCount: 0,
 				success: false,
 				error: `File not found: ${call.args.path}`,
+				warnings: null,
 			};
 		}
 
@@ -223,6 +252,7 @@ export async function editTool(
 				replacedCount: 0,
 				success: false,
 				error: "No commands provided",
+				warnings: null,
 			};
 		}
 
@@ -238,6 +268,7 @@ export async function editTool(
 				: 0,
 			success: result.success,
 			error: result.success ? null : (result.error ?? "Unknown error"),
+			warnings: result.warnings ?? null,
 		};
 	} catch (err) {
 		return {
@@ -247,6 +278,7 @@ export async function editTool(
 			replacedCount: 0,
 			success: false,
 			error: err instanceof Error ? err.message : String(err),
+			warnings: null,
 		};
 	}
 }

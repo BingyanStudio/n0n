@@ -124,6 +124,7 @@ export type EditToolResult = ToolResultBase & {
 	replacedCount: number;
 	success: boolean;
 	error: string | null;
+	warnings: string | null;
 };
 
 export type ReminderToolResult = ToolResultBase & {
