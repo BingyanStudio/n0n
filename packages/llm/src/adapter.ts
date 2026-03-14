@@ -40,13 +40,10 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 
 function formatEditResult(msg: EditToolResult, model: string): string {
 	if (msg.success) {
-		return wrapTag(
-			"edit_result",
-			`Replaced ${msg.replacedCount} occurrence(s) in \`${msg.call.args.path}\``,
-			model,
-		);
+		const summary = `Edited \`${msg.call.args.path}\`: +${msg.linesAdded} -${msg.linesRemoved} lines`;
+		return wrapTag("edit_result", summary, model);
 	}
-	return wrapTag("error", `Edit failed: ${msg.error}`, model);
+	return wrapTag("error", `Edit failed (rolled back): ${msg.error}`, model);
 }
 
 function toolResultToContent(msg: ToolResult, model: string): string {

@@ -121,9 +121,11 @@ export type WriteToolResult = ToolResultBase & {
 export type EditToolResult = ToolResultBase & {
 	tool: EditToolCall["tool"]; // "edit"
 	call: EditToolCall;
-	replacedCount: number;
+	linesAdded: number;
+	linesRemoved: number;
 	success: boolean;
 	error: string | null;
+	warnings: string | null;
 };
 
 export type ReminderToolResult = ToolResultBase & {
