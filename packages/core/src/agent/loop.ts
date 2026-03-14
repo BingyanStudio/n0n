@@ -171,7 +171,11 @@ export async function agentLoop<T = unknown>(
 		if (toolCalls.length === 0) {
 			const content = assistantMsg.content ?? "";
 			idleCount++;
-			messages.push({ type: "assistant_text", content, reasoning: assistantMsg.reasoning_content });
+			messages.push({
+				type: "assistant_text",
+				content,
+				reasoning: assistantMsg.reasoning_content,
+			});
 			if (idleCount >= getRuntime().agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {

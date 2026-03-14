@@ -330,38 +330,34 @@ describe("editTool (vim ex commands)", () => {
 		expect(read(workspace, F)).toBe("aaa\nbbb\nccc");
 	});
 
-	test(
-		"rolls back on E493 backwards range (atomic edit)",
-		async () => {
-			const code = [
-				"function a() {",
-				"  old_a();",
-				"}",
-				"function b() {",
-				"  old_b();",
-				"}",
-				"",
-			].join("\n");
-			writeFileSync(join(workspace, F), code);
-			const r = await editTool(
-				makeCall({
-					path: F,
-					commands: [
-						"/function a/+1,/^}/-1c",
-						"  new_a();",
-						".",
-						"/function b/+1,/^}/-1c",
-						"  new_b();",
-						".",
-					].join("\n"),
-				}),
-				workspace,
-			);
-			expect(r.success).toBe(false);
-			expect(r.error).toContain("E493");
-			// File must be fully restored
-			expect(read(workspace, F)).toBe(code.replace(/\n$/, ""));
-		},
-		20_000,
-	);
+	test("rolls back on E493 backwards range (atomic edit)", async () => {
+		const code = [
+			"function a() {",
+			"  old_a();",
+			"}",
+			"function b() {",
+			"  old_b();",
+			"}",
+			"",
+		].join("\n");
+		writeFileSync(join(workspace, F), code);
+		const r = await editTool(
+			makeCall({
+				path: F,
+				commands: [
+					"/function a/+1,/^}/-1c",
+					"  new_a();",
+					".",
+					"/function b/+1,/^}/-1c",
+					"  new_b();",
+					".",
+				].join("\n"),
+			}),
+			workspace,
+		);
+		expect(r.success).toBe(false);
+		expect(r.error).toContain("E493");
+		// File must be fully restored
+		expect(read(workspace, F)).toBe(code.replace(/\n$/, ""));
+	}, 20_000);
 });

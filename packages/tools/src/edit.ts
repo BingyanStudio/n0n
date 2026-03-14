@@ -9,7 +9,13 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type {
@@ -237,7 +243,10 @@ export async function editTool(
 		: resolve(workspace, call.args.path);
 	const { commands } = call.args;
 
-	const fail = (error: string, warnings: string | null = null): EditToolResult => ({
+	const fail = (
+		error: string,
+		warnings: string | null = null,
+	): EditToolResult => ({
 		type: "tool_result",
 		tool: "edit" as const,
 		call,
@@ -250,7 +259,8 @@ export async function editTool(
 
 	try {
 		if (!existsSync(filePath)) return fail(`File not found: ${call.args.path}`);
-		if (!commands || commands.trim().length === 0) return fail("No commands provided");
+		if (!commands || commands.trim().length === 0)
+			return fail("No commands provided");
 
 		// 原子性编辑：备份原文件内容，出错或有警告时恢复
 		const backup = readFileSync(filePath, "utf8");
