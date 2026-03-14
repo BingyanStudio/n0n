@@ -284,4 +284,62 @@ describe("editTool (vim ex commands)", () => {
 		expect(r.success).toBe(true);
 		expect(read(workspace, F)).toBe("保留\n保留\n保留");
 	});
+
+	// ── Warnings & Error 检测 ──
+
+	test("no warnings for clean execution", async () => {
+		writeFileSync(join(workspace, F), "a\nb\nc\n");
+		const r = await editTool(makeCall({ path: F, commands: "2d" }), workspace);
+		expect(r.success).toBe(true);
+		expect(r.warnings).toBeNull();
+	});
+
+	test("warns on E486 pattern not found (exit=0 but stderr has error)", async () => {
+		writeFileSync(join(workspace, F), "hello\nworld\n");
+		const r = await editTool(
+			makeCall({ path: F, commands: "/nonexistent_pattern/d" }),
+			workspace,
+		);
+		// nvim exits 0 but the pattern was not found — should surface as warning
+		expect(r.success).toBe(true);
+		expect(r.warnings).not.toBeNull();
+		expect(r.warnings).toContain("E486");
+		// File should be unchanged (the delete was skipped)
+		expect(read(workspace, F)).toBe("hello\nworld");
+	});
+
+	test(
+		"fails on E493 backwards range",
+		async () => {
+			const code = [
+				"function a() {",
+				"  old_a();",
+				"}",
+				"function b() {",
+				"  old_b();",
+				"}",
+				"",
+			].join("\n");
+			writeFileSync(join(workspace, F), code);
+			// Two offset-range :c commands — second one triggers E493
+			const r = await editTool(
+				makeCall({
+					path: F,
+					commands: [
+						"/function a/+1,/^}/-1c",
+						"  new_a();",
+						".",
+						"/function b/+1,/^}/-1c",
+						"  new_b();",
+						".",
+					].join("\n"),
+				}),
+				workspace,
+			);
+			// E493 causes nvim to hang then get killed — should be a failure
+			expect(r.success).toBe(false);
+			expect(r.error).toContain("E493");
+		},
+		20_000,
+	);
 });
