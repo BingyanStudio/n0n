@@ -39,6 +39,10 @@ if (!result.ok) {
 	process.exit(1);
 }
 
+// ── 解析参数 ──
+const args = process.argv.slice(2);
+const useTui = args.includes("--tui");
+
 // ── 初始化 ──
 
 const { workspace, remainingArgs } = parseWorkspaceArg(
@@ -60,9 +64,12 @@ const initialInput =
 writeln(
 	style.bold("n0n code") + style.gray(` — Code Agent [${paths.workspace}]`),
 );
+if (useTui) {
+	writeln(style.gray("使用 TUI 渲染器（实验性）"));
+}
 writeln(
 	style.gray('描述你的编码任务，AI 将直接修改项目代码。输入 "exit" 退出。'),
 );
 writeln();
 
-await startCodeRepl(paths, initialInput);
+await startCodeRepl(paths, initialInput, { useTui });

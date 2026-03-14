@@ -9,6 +9,7 @@
  *   n0n                    — 以当前目录为 workspace 启动
  *   n0n --workspace <dir>  — 指定 workspace 目录
  *   n0n <dir>              — 拖拽目录 / 裸路径参数
+ *   n0n --tui              — 使用 TUI 渲染器（实验性）
  *   n0n --version / -v     — 显示版本号
  *   n0n --help / -h        — 显示帮助信息
  */
@@ -31,6 +32,7 @@ if (args.includes("--help") || args.includes("-h")) {
   n0n                     以当前目录为 workspace 启动
   n0n <dir>               指定 workspace 目录（支持拖拽）
   n0n --workspace <dir>   显式指定 workspace 目录
+  n0n --tui               使用 TUI 渲染器（实验性）
   n0n -v, --version       显示版本号
   n0n -h, --help          显示帮助信息
 

@@ -18,7 +18,8 @@ import {
 	formatAgentsMdPrompt,
 	loadAgentsMd,
 } from "@n0n/shared";
-import type { DomainMessage, SubmitToolResult } from "@n0n/types";
+import { TuiRenderer } from "@n0n/tui";
+import type { DomainMessage, Renderer, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
@@ -30,6 +31,11 @@ const USER_INPUT_HINT = [
 ].join("\n");
 
 type CodeWorkspacePaths = BaseWorkspacePaths;
+
+interface ReplOptions {
+	/** 使用 TUI 渲染器（实验性） */
+	useTui?: boolean;
+}
 
 function buildWorkspaceContext(workspace: string): string {
 	return [
@@ -80,16 +86,30 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 		}
 	}
 }
+
 export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
 	initialInput?: string,
+	options: ReplOptions = {},
 ): Promise<void> {
+	const { useTui = false } = options;
+
 	let systemPrompt = codePromptText;
 	const agentsMd = await loadAgentsMd(paths.workspace);
 	if (agentsMd) {
 		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
 	}
-	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
+
+	// 选择渲染器
+	let renderer: Renderer;
+	let tuiRenderer: TuiRenderer | null = null;
+
+	if (useTui && isTTY) {
+		tuiRenderer = new TuiRenderer();
+		renderer = tuiRenderer;
+	} else {
+		renderer = isTTY ? new RichRenderer() : new PlainRenderer();
+	}
 
 	const rl = createInterface({
 		input: process.stdin,
@@ -173,7 +193,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
-			hint: USER_INPUT_HINT,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		} finally {
@@ -190,7 +210,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
-			hint: USER_INPUT_HINT,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		}
@@ -208,7 +228,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
-			hint: USER_INPUT_HINT,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		}
@@ -240,11 +260,16 @@ export async function startCodeRepl(
 					content: userInput,
 					context: await gatherContext(paths.workspace),
 					capabilities: null,
-				hint: USER_INPUT_HINT,
+					hint: USER_INPUT_HINT,
 				});
 				break;
 			}
 		}
+	}
+
+	// 清理 TUI 渲染器
+	if (tuiRenderer) {
+		tuiRenderer.dispose();
 	}
 
 	rl.close();
