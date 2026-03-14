@@ -22,7 +22,7 @@ You have five tools: `exec`, `write`, `edit`, `reminder`, `submit`. Parameters a
 `write(...)` → `exec({ script: "bun workflows/tasks/greet.ts" })`
 
 **Surgical edit** — modify existing files precisely:
-`edit({ path: "config.json", search: "\"port\": 3000", replace: "\"port\": 8080" })`
+`edit({ path: "config.json", commands: "%s/\"port\": 3000/\"port\": 8080/" })`
 
 **Complex workflow** — plan first, then iterate:
 `reminder(OKR)` → `exec` → `write` → `exec(test)` → `edit(fix)` → `exec(test)` → `submit`

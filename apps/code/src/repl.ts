@@ -22,6 +22,13 @@ import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
+/** Code agent 的用户输入行为引导 — 无 chat 类型，专注工具调用和代码交付 */
+const USER_INPUT_HINT = [
+	"First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.",
+	"If genuinely stuck or ambiguous, submit `need_info` with specific options for the user.",
+	"Otherwise, reason out what the engineer wrote — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
+].join("\n");
+
 type CodeWorkspacePaths = BaseWorkspacePaths;
 
 function buildWorkspaceContext(workspace: string): string {
@@ -136,6 +143,7 @@ export async function startCodeRepl(
 			content: userInput,
 			context: await gatherContext(paths.workspace),
 			capabilities: null,
+			hint: USER_INPUT_HINT,
 		},
 	];
 
@@ -165,6 +173,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
+			hint: USER_INPUT_HINT,
 			});
 			continue;
 		} finally {
@@ -181,6 +190,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
+			hint: USER_INPUT_HINT,
 			});
 			continue;
 		}
@@ -198,6 +208,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
+			hint: USER_INPUT_HINT,
 			});
 			continue;
 		}
@@ -229,6 +240,7 @@ export async function startCodeRepl(
 					content: userInput,
 					context: await gatherContext(paths.workspace),
 					capabilities: null,
+				hint: USER_INPUT_HINT,
 				});
 				break;
 			}

@@ -41,6 +41,7 @@ function makeQuickRound(i: number): DomainMessage[] {
 			content: `你好，今天天气怎么样？这是第${i}轮对话，我想聊聊最近的工作进展和一些技术问题。`,
 			context: null,
 			capabilities: null,
+			hint: null,
 		},
 		{
 			type: "assistant_tool_call",
@@ -78,6 +79,7 @@ function makeToolRound(i: number): DomainMessage[] {
 				"帮我检查一下 apps/fairy/src/view.ts 的代码结构，看看有没有什么可以优化的地方",
 			context: null,
 			capabilities: null,
+			hint: null,
 		},
 		{
 			type: "assistant_tool_call",

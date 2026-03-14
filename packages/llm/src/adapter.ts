@@ -141,15 +141,9 @@ export function toAPIMessages(
 				if (msg.context) parts.push(wrapTag("context", msg.context, model));
 				if (msg.capabilities)
 					parts.push(wrapTag("capabilities", msg.capabilities, model));
-				parts.push(
-					[
-						wrapTag("hint", msg.content, model),
-						"",
-						"First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.",
-						"If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a `chat` response.",
-						"Otherwise, the engineer has already built the perfect workflow for this. Reason out what it looks like — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
-					].join("\n"),
-				);
+				if (msg.hint)
+					parts.push(wrapTag("system_hint", msg.hint, model));
+				parts.push(msg.content);
 				result.push({ role: "user", content: parts.join("\n\n") });
 				break;
 			}
