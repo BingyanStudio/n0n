@@ -141,10 +141,9 @@ export function toAPIMessages(
 				if (msg.context) parts.push(wrapTag("context", msg.context, model));
 				if (msg.capabilities)
 					parts.push(wrapTag("capabilities", msg.capabilities, model));
-				const hint = msg.hint
-					? `${wrapTag("hint", msg.content, model)}\n\n${msg.hint}`
-					: wrapTag("hint", msg.content, model);
-				parts.push(hint);
+				if (msg.hint)
+					parts.push(wrapTag("system_hint", msg.hint, model));
+				parts.push(msg.content);
 				result.push({ role: "user", content: parts.join("\n\n") });
 				break;
 			}
