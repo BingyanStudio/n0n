@@ -1,73 +1,58 @@
 Edit a file using standard Vim ex commands. The file must already exist.
 If you know Vim, you already know how to use this tool — `:s`, `:c`, `:d`, `:a`, `:i`, `:g` all work as expected.
+Write commands as a multi-line string — each line is one ex command or content line.
 
-**Example 1 — Replace a function body:**
-```
-/function validateToken/+1,/^}/-1c
-  const decoded = jwt.verify(token);
-  if (!decoded) throw new Error('invalid');
-  return decoded.userId;
-.
-```
-Addressing: `/pattern/+1` = line after match, `/^}/-1` = line before `}`.
-The `:c` (change) command replaces the addressed range with new content.
-A single `.` on its own line terminates the input.
+<example>
+**Replace a function body** — use `:c` (change) with pattern addressing:
 
-**Example 2 — Replace a markdown section:**
-```
-/## Installation/+1,/^##/-1c
-Run `npm install` to get started.
+edit({ path: "src/auth.ts", commands: "/function validateToken/+1,/^}/-1c\n  const decoded = jwt.verify(token);\n  if (!decoded) throw new Error('invalid');\n  return decoded.userId;\n." })
 
-See [docs](./docs) for details.
-.
-```
+`/pattern/+1` = line after match, `/^}/-1` = line before `}`.
+`:c` replaces the addressed range. A single `.` on its own line terminates the input.
+</example>
 
-**Example 3 — Append content after a line:**
-```
-/import.*react/a
-import { useState } from 'react';
-.
-```
+<example>
+**Replace a markdown section:**
 
-**Example 4 — Delete and global commands:**
-```
-g/console\.log/d
-```
-Deletes all lines containing `console.log`.
+edit({ path: "README.md", commands: "/## Installation/+1,/^##/-1c\nRun `npm install` to get started.\n\nSee [docs](./docs) for details.\n." })
+</example>
 
-**Example 5 — Substitution with `:s`:**
+<example>
+**Append content after a line:**
 
-Given this line in the file:
+edit({ path: "src/app.tsx", commands: "/import.*react/a\nimport { useState } from 'react';\n." })
+</example>
+
+<example>
+**Delete all lines matching a pattern:**
+
+edit({ path: "src/utils.ts", commands: "g/console\\.log/d" })
+</example>
+
+<example>
+**Single-line substitution with `:s`** — given this line in the file:
 ```
   status: isSuccess ? "completed" : "failed" as const,
 ```
-To change it:
-```
-%s/isSuccess ? "completed" : "failed" as const/(isSuccess ? "completed" : "failed") as Status/
-```
 
 <bad_example>
-Splitting `:s` across multiple lines — this will fail:
-```
-/isSuccess ? "completed"/
-s/isSuccess ? "completed" : "failed" as const,/
-(isSuccess ? "completed" : "failed") as Status,/
-```
-Line 1 is just a search (no edit). Lines 2-3 are a broken `:s` — Vim's `:s/old/new/` must be one single line.
+Splitting `:s` across multiple lines — this will fail with E486/E492:
+
+edit({ path: "src/state.ts", commands: "/isSuccess ? \"completed\"/\ns/isSuccess ? \"completed\" : \"failed\" as const,/\n(isSuccess ? \"completed\" : \"failed\") as Status,/" })
+
+Line 1 is just a search (no edit). Lines 2-3 are a broken `:s` — Vim's `:s/old/new/` is a single-line command, it cannot be split across lines.
 </bad_example>
 
 <good_example>
-Either use `:s` on one line:
-```
-%s/isSuccess ? "completed" : "failed" as const/(isSuccess ? "completed" : "failed") as Status/
-```
-Or use `:c` to replace the whole line:
-```
-/isSuccess.*as const/c
-  status: (isSuccess ? "completed" : "failed") as Status,
-.
-```
+Use `:s` on one line — the entire `old/new` must be on the same line:
+
+edit({ path: "src/state.ts", commands: "%s/isSuccess ? \"completed\" : \"failed\" as const/(isSuccess ? \"completed\" : \"failed\") as Status/" })
+
+Or use `:c` to replace the whole line (better when the line is complex):
+
+edit({ path: "src/state.ts", commands: "/isSuccess.*as const/c\n  status: (isSuccess ? \"completed\" : \"failed\") as Status,\n." })
 </good_example>
+</example>
 
 **Quick reference:**
   3d                 — delete line 3
