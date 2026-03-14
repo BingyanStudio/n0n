@@ -21,6 +21,13 @@ import interactivePromptText from "./prompts/interactive.md" with {
 	type: "text",
 };
 
+/** CLI 交互模式的用户输入行为引导 — 含 chat 类型 */
+const USER_INPUT_HINT = [
+	"First, ask yourself: can I answer this by calling \`exec\`, \`write\`, or \`edit\`? If yes — do it, then submit as \`completed\`.",
+	"If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a \`chat\` response.",
+	"Otherwise, reason out what the user needs — start by calling \`reminder\` with your OKR breakdown, then proceed step by step.",
+].join("\n");
+
 type ReplContextPaths = Pick<
 	WorkflowPaths,
 	"workspace" | "tasks" | "skills" | "schedules" | "temp"
@@ -145,6 +152,7 @@ export async function startRepl(
 			content: userInput,
 			context: await gatherContext(paths),
 			capabilities: null,
+			hint: USER_INPUT_HINT,
 		},
 	];
 
@@ -174,6 +182,7 @@ export async function startRepl(
 				content: userInput,
 				context: await gatherContext(paths),
 				capabilities: null,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		} finally {
@@ -190,6 +199,7 @@ export async function startRepl(
 				content: userInput,
 				context: await gatherContext(paths),
 				capabilities: null,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		}
@@ -209,6 +219,7 @@ export async function startRepl(
 				content: userInput,
 				context: await gatherContext(paths),
 				capabilities: null,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		}
@@ -246,6 +257,7 @@ export async function startRepl(
 					content: userInput,
 					context: await gatherContext(paths),
 					capabilities: null,
+					hint: USER_INPUT_HINT,
 				});
 				break;
 			}
@@ -262,6 +274,7 @@ export async function startRepl(
 					content: userInput,
 					context: await gatherContext(paths),
 					capabilities: null,
+					hint: USER_INPUT_HINT,
 				});
 				break;
 			}

@@ -195,6 +195,7 @@ export function buildView(
 		content: stimulus,
 		context: null,
 		capabilities: null,
+		hint: null,
 	});
 
 	return messages;

@@ -23,6 +23,8 @@ export interface UserInputMessage {
 	content: string;
 	context: string | null;
 	capabilities: string | null;
+	/** 注入到用户消息末尾的行为引导提示，各 app 自行定义。null 时 adapter 不追加额外提示。 */
+	hint: string | null;
 }
 
 /** submit 后的轮次反馈（系统注入），adapter 负责生成具体提示词 */

@@ -3,7 +3,7 @@
  *
  * 工具集：
  * - write: 文件创建/覆盖
- * - edit: 文件内容修改（search & replace）
+ * - edit: 文件内容修改（Vim ex commands）
  * - exec: 脚本执行（script + runtime）
  * - reminder: 延迟提醒
  * - submit: 提交结果（动态生成）

@@ -21,6 +21,13 @@ import { FeishuConversation } from "./conversation.ts";
 import { FeishuRenderer } from "./renderer.ts";
 import type { FeishuSession } from "./session.ts";
 
+/** 飞书模式的用户输入行为引导 — 含 chat 类型 */
+const USER_INPUT_HINT = [
+	"First, ask yourself: can I answer this by calling \`exec\`, \`write\`, or \`edit\`? If yes — do it, then submit as \`completed\`.",
+	"If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a \`chat\` response.",
+	"Otherwise, reason out what the user needs — start by calling \`reminder\` with your OKR breakdown, then proceed step by step.",
+].join("\n");
+
 // ── 辅助 ──
 
 function isWorkflowCreateIntent(text: string): boolean {
@@ -99,6 +106,7 @@ export async function runFeishuRound(
 		content: userInput,
 		context: contextParts.length > 0 ? contextParts.join("\n\n") : null,
 		capabilities,
+		hint: USER_INPUT_HINT,
 	});
 
 	// 3. 执行 agent loop（传入 per-user workspace 隔离 exec cwd/temp）
