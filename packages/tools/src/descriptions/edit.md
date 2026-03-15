@@ -1,11 +1,11 @@
 Edit a file using standard Vim ex commands. The file must already exist.
 If you know Vim, you already know how to use this tool — `:s`, `:c`, `:d`, `:a`, `:i`, `:g` all work as expected.
-Write commands as a multi-line string — each line is one ex command or content line.
+Write vim_command as a multi-line string — each line is one ex command or content line.
 
 <example>
 **Replace a function body** — use `:c` (change) with pattern addressing:
 
-edit({ path: "src/auth.ts", commands: "/function validateToken/+1,/^}/-1c\n  const decoded = jwt.verify(token);\n  if (!decoded) throw new Error('invalid');\n  return decoded.userId;\n." })
+vim_edit({ path: "src/auth.ts", vim_command: "/function validateToken/+1,/^}/-1c\n  const decoded = jwt.verify(token);\n  if (!decoded) throw new Error('invalid');\n  return decoded.userId;\n." })
 
 `/pattern/+1` = line after match, `/^}/-1` = line before `}`.
 `:c` replaces the addressed range. A single `.` on its own line terminates the input.
@@ -14,19 +14,19 @@ edit({ path: "src/auth.ts", commands: "/function validateToken/+1,/^}/-1c\n  con
 <example>
 **Replace a markdown section:**
 
-edit({ path: "README.md", commands: "/## Installation/+1,/^##/-1c\nRun `npm install` to get started.\n\nSee [docs](./docs) for details.\n." })
+vim_edit({ path: "README.md", vim_command: "/## Installation/+1,/^##/-1c\nRun `npm install` to get started.\n\nSee [docs](./docs) for details.\n." })
 </example>
 
 <example>
 **Append content after a line:**
 
-edit({ path: "src/app.tsx", commands: "/import.*react/a\nimport { useState } from 'react';\n." })
+vim_edit({ path: "src/app.tsx", vim_command: "/import.*react/a\nimport { useState } from 'react';\n." })
 </example>
 
 <example>
 **Delete all lines matching a pattern:**
 
-edit({ path: "src/utils.ts", commands: "g/console\\.log/d" })
+vim_edit({ path: "src/utils.ts", vim_command: "g/console\\.log/d" })
 </example>
 
 <example>
@@ -36,7 +36,7 @@ edit({ path: "src/utils.ts", commands: "g/console\\.log/d" })
 <bad_example>
 Splitting `:s` across multiple lines — this will fail with E486/E492:
 
-edit({ path: "src/state.ts", commands: "/isSuccess ? \"completed\"/\ns/isSuccess ? \"completed\" : \"failed\" as const,/\n(isSuccess ? \"completed\" : \"failed\") as Status,/" })
+vim_edit({ path: "src/state.ts", vim_command: "/isSuccess ? \"completed\"/\ns/isSuccess ? \"completed\" : \"failed\" as const,/\n(isSuccess ? \"completed\" : \"failed\") as Status,/" })
 
 Line 1 is just a search (no edit). Lines 2-3 are a broken `:s` — Vim's `:s/old/new/` is a single-line command, it cannot be split across lines.
 </bad_example>
@@ -44,11 +44,11 @@ Line 1 is just a search (no edit). Lines 2-3 are a broken `:s` — Vim's `:s/old
 <good_example>
 Use `:s` on one line — the entire `old/new` must be on the same line:
 
-edit({ path: "src/state.ts", commands: "%s/isSuccess ? \"completed\" : \"failed\" as const/(isSuccess ? \"completed\" : \"failed\") as Status/" })
+vim_edit({ path: "src/state.ts", vim_command: "%s/isSuccess ? \"completed\" : \"failed\" as const/(isSuccess ? \"completed\" : \"failed\") as Status/" })
 
 Or use `:c` to replace the whole line (better when the line is complex):
 
-edit({ path: "src/state.ts", commands: "/isSuccess.*as const/c\n  status: (isSuccess ? \"completed\" : \"failed\") as Status,\n." })
+vim_edit({ path: "src/state.ts", vim_command: "/isSuccess.*as const/c\n  status: (isSuccess ? \"completed\" : \"failed\") as Status,\n." })
 </good_example>
 
 </example>
@@ -61,7 +61,7 @@ To replace a multi-line function call like `parseWorkspaceArg(\n\targs,\n\tproce
 <bad_example>
 Using JS-style regex escaping — `\(\)` means grouping in Vim, not literal parens:
 
-edit({ path: "src/index.ts", commands: "/parseWorkspaceArg($/,/process.cwd\\(\\),/-1c\n\tnewArg,\n." })
+vim_edit({ path: "src/index.ts", vim_command: "/parseWorkspaceArg($/,/process.cwd\\(\\),/-1c\n\tnewArg,\n." })
 
 This fails with E486 because `\(\)` creates an empty capture group, not a literal `()`.
 </bad_example>
@@ -69,7 +69,7 @@ This fails with E486 because `\(\)` creates an empty capture group, not a litera
 <good_example>
 In Vim, `(` and `)` are already literal — just use them directly:
 
-edit({ path: "src/index.ts", commands: "/parseWorkspaceArg($/,/process.cwd(),/-1c\n\tnewArg,\n." })
+vim_edit({ path: "src/index.ts", vim_command: "/parseWorkspaceArg($/,/process.cwd(),/-1c\n\tnewArg,\n." })
 </good_example>
 </example>
 
@@ -90,7 +90,7 @@ edit({ path: "src/index.ts", commands: "/parseWorkspaceArg($/,/process.cwd(),/-1
   in one call will silently fail after the first.
   **Workaround**: use `/start/,/end/c` without offsets (include boundary lines in
   replacement content), use absolute line numbers (edit bottom-to-top), or split
-  into separate edit() calls.
+  into separate vim_edit() calls.
 - **Vim regex is NOT JavaScript regex.** In Vim's default magic mode,
   `(` `)` are literal characters, `\(` `\)` are grouping.
   To match `process.cwd()`, use `/process.cwd()/` — do NOT escape the parentheses.

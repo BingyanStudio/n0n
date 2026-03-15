@@ -18,14 +18,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import editDescription from "./descriptions/edit.md" with { type: "text" };
 import type {
-	EditToolCall,
-	EditToolResult,
 	LLMToolDefinition,
+	VimEditToolCall,
+	VimEditToolResult,
 } from "@n0n/types";
+import editDescription from "./descriptions/edit.md" with { type: "text" };
 
-export { EditArgsSchema } from "@n0n/types";
+export { VimEditArgsSchema } from "@n0n/types";
 
 /** neovim 可执行文件路径，优先使用环境变量，其次尝试常见安装位置 */
 function findNvim(): string {
@@ -67,10 +67,10 @@ function extractVimErrors(stderr: string): string | null {
 	return errorLines.length > 0 ? errorLines.join("; ") : null;
 }
 
-export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
+export const VIM_EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",
 	function: {
-		name: "edit",
+		name: "vim_edit",
 		description: editDescription,
 		parameters: {
 			type: "object",
@@ -79,13 +79,13 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 					type: "string",
 					description: "File path relative to project root",
 				},
-				commands: {
+				vim_command: {
 					type: "string",
 					description:
 						"Vim ex commands as a multi-line string. Each line is one command or content line. Multi-line input commands (:c, :a, :i) are terminated by a '.' on its own line. Do NOT include :wq.",
 				},
 			},
-			required: ["path", "commands"],
+			required: ["path", "vim_command"],
 			additionalProperties: false,
 		},
 	},
@@ -172,21 +172,21 @@ async function runNvimEx(
 	}
 }
 
-export async function editTool(
-	call: EditToolCall,
+export async function vimEditTool(
+	call: VimEditToolCall,
 	workspace: string,
-): Promise<EditToolResult> {
+): Promise<VimEditToolResult> {
 	const filePath = isAbsolute(call.args.path)
 		? call.args.path
 		: resolve(workspace, call.args.path);
-	const { commands } = call.args;
+	const { vim_command } = call.args;
 
 	const fail = (
 		error: string,
 		warnings: string | null = null,
-	): EditToolResult => ({
+	): VimEditToolResult => ({
 		type: "tool_result",
-		tool: "edit" as const,
+		tool: "vim_edit" as const,
 		call,
 		linesAdded: 0,
 		linesRemoved: 0,
@@ -197,12 +197,12 @@ export async function editTool(
 
 	try {
 		if (!existsSync(filePath)) return fail(`File not found: ${call.args.path}`);
-		if (!commands || commands.trim().length === 0)
-			return fail("No commands provided");
+		if (!vim_command || vim_command.trim().length === 0)
+			return fail("No vim_command provided");
 
 		// 原子性编辑：备份原文件内容，出错或有警告时恢复
 		const backup = readFileSync(filePath, "utf8");
-		const result = await runNvimEx(filePath, commands);
+		const result = await runNvimEx(filePath, vim_command);
 
 		const hasProblems = !result.success || !!result.warnings;
 		if (hasProblems) {
@@ -229,7 +229,7 @@ export async function editTool(
 
 		return {
 			type: "tool_result",
-			tool: "edit" as const,
+			tool: "vim_edit" as const,
 			call,
 			linesAdded: added,
 			linesRemoved: removed,
