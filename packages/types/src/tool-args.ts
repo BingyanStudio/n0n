@@ -29,13 +29,13 @@ export const WriteArgsSchema = z.object({
 });
 export type WriteArgs = z.infer<typeof WriteArgsSchema>;
 
-// ── edit ──
+// ── vim_edit ──
 
-export const EditArgsSchema = z.object({
+export const VimEditArgsSchema = z.object({
 	path: z.string(),
-	commands: z.string(),
+	vim_command: z.string(),
 });
-export type EditArgs = z.infer<typeof EditArgsSchema>;
+export type VimEditArgs = z.infer<typeof VimEditArgsSchema>;
 
 // ── reminder ──
 

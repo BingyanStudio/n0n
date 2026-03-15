@@ -3,7 +3,7 @@
  *
  * 工具集：
  * - write: 文件创建/覆盖
- * - edit: 文件内容修改（Vim ex commands）
+ * - vim_edit: 文件内容修改（Vim ex commands）
  * - exec: 脚本执行（script + runtime）
  * - reminder: 延迟提醒
  * - submit: 提交结果（动态生成）
@@ -13,7 +13,6 @@
  */
 
 import type {
-	EditToolCall,
 	ExecToolCall,
 	LLMToolDefinition,
 	ReminderToolCall,
@@ -22,11 +21,16 @@ import type {
 	ToolCallRecord,
 	ToolResult,
 	ToolStreamEvent,
+	VimEditToolCall,
 	WriteToolCall,
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import type { ToolsConfig } from "./config.ts";
-import { EDIT_TOOL_DEFINITION, EditArgsSchema, editTool } from "./edit.ts";
+import {
+	VIM_EDIT_TOOL_DEFINITION,
+	VimEditArgsSchema,
+	vimEditTool,
+} from "./edit.ts";
 import { detectEnv } from "./env.ts";
 import {
 	ExecArgsSchema,
@@ -107,16 +111,16 @@ function buildBaseRegistry(
 				return writeTool(call, resolvedWorkspace);
 			},
 		},
-		edit: {
-			definition: EDIT_TOOL_DEFINITION,
+		vim_edit: {
+			definition: VIM_EDIT_TOOL_DEFINITION,
 			stream: false,
 			execute: (tc) => {
-				const call: EditToolCall = {
+				const call: VimEditToolCall = {
 					id: tc.id,
-					tool: "edit" as const,
-					args: EditArgsSchema.parse(tc.args),
+					tool: "vim_edit" as const,
+					args: VimEditArgsSchema.parse(tc.args),
 				};
-				return editTool(call, resolvedWorkspace);
+				return vimEditTool(call, resolvedWorkspace);
 			},
 		},
 		reminder: {
@@ -144,7 +148,7 @@ export interface Toolkit {
 export const REGISTERED_TOOLS = new Set([
 	"exec",
 	"write",
-	"edit",
+	"vim_edit",
 	"reminder",
 	"submit",
 ]);

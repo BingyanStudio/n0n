@@ -9,10 +9,10 @@
 
 import type {
 	DomainMessage,
-	EditToolResult,
 	ExecToolResult,
 	LLMRequestMessage,
 	ToolResult,
+	VimEditToolResult,
 	WriteToolResult,
 } from "@n0n/types";
 import { adaptTags, wrapTag } from "./tags.ts";
@@ -38,15 +38,15 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 	return wrapTag("error", `Write failed: ${msg.error}`, model);
 }
 
-function formatEditResult(msg: EditToolResult, model: string): string {
+function formatEditResult(msg: VimEditToolResult, model: string): string {
 	if (msg.success) {
 		const summary = `Edited \`${msg.call.args.path}\`: +${msg.linesAdded} -${msg.linesRemoved} lines`;
-		return wrapTag("edit_result", summary, model);
+		return wrapTag("vim_edit_result", summary, model);
 	}
 	const guidance = [
-		`Edit failed (rolled back): ${msg.error}`,
+		`vim_edit failed (rolled back): ${msg.error}`,
 		"",
-		"Review your commands against standard Vim ex syntax and retry.",
+		"Review your vim_command against standard Vim ex syntax and retry.",
 		"Common mistakes: `:s/old/new/` split across lines, missing `.` terminator, pattern not found in file.",
 	].join("\n");
 	return wrapTag("error", guidance, model);
@@ -58,8 +58,8 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 			return formatExecResult(msg as ExecToolResult, model);
 		case "write":
 			return formatWriteResult(msg as WriteToolResult, model);
-		case "edit":
-			return formatEditResult(msg as EditToolResult, model);
+		case "vim_edit":
+			return formatEditResult(msg as VimEditToolResult, model);
 		case "reminder":
 			return wrapTag(
 				"result",

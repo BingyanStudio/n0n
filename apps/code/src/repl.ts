@@ -173,7 +173,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
-			hint: USER_INPUT_HINT,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		} finally {
@@ -190,7 +190,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
-			hint: USER_INPUT_HINT,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		}
@@ -208,7 +208,7 @@ export async function startCodeRepl(
 				content: userInput,
 				context: await gatherContext(paths.workspace),
 				capabilities: null,
-			hint: USER_INPUT_HINT,
+				hint: USER_INPUT_HINT,
 			});
 			continue;
 		}
@@ -240,7 +240,7 @@ export async function startCodeRepl(
 					content: userInput,
 					context: await gatherContext(paths.workspace),
 					capabilities: null,
-				hint: USER_INPUT_HINT,
+					hint: USER_INPUT_HINT,
 				});
 				break;
 			}
