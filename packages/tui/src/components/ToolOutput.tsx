@@ -70,7 +70,7 @@ function formatArgs(tool: string, args: Record<string, unknown>): string {
 			return "";
 		}
 		case "write":
-		case "vim_edit":
+		case "edit":
 			return typeof args.path === "string" ? args.path : "";
 		case "reminder":
 			return `delay=${args.delay}`;
@@ -105,7 +105,7 @@ function formatResult(result: {
 		case "exec":
 			return result.exitCode === 0 ? "exit=0" : `exit=${result.exitCode}`;
 		case "write":
-		case "vim_edit":
+		case "edit":
 			if (result.success === false) {
 				return result.error ?? "failed";
 			}

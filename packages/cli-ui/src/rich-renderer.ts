@@ -258,12 +258,12 @@ export class RichRenderer implements Renderer {
 				}
 				return `${style.dim("◂")} ${style.cyan("write")} ${result.call.args.path}`;
 			}
-			case "vim_edit": {
+			case "edit": {
 				if (!result.success) {
-					return `${style.dim("◂")} ${style.cyan("vim_edit")} ${result.call.args.path}: ${style.red(result.error ?? "failed")}`;
+					return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path}: ${style.red(result.error ?? "failed")}`;
 				}
 				const diff = `+${result.linesAdded} -${result.linesRemoved}`;
-				return `${style.dim("◂")} ${style.cyan("vim_edit")} ${result.call.args.path} ${style.gray(`(${diff} lines)`)}`;
+				return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path} ${style.gray(`(${diff} lines)`)}`;
 			}
 			case "reminder": {
 				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${result.call.args.content.length} chars`)}`;

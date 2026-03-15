@@ -58,7 +58,7 @@ function fmtToolCall(tc: ToolCallRecord): { summary: string; detail: string } {
 		case "reminder":
 			summary = `▸ **reminder**  ${compact(tc.args.content, 60)}`;
 			break;
-		case "vim_edit":
+		case "edit":
 			summary = `▸ **edit**  ${compact(tc.args.path, 80)}`;
 			break;
 		default: {
@@ -97,7 +97,7 @@ function fmtResult(r: ToolResult): string {
 			return r.success
 				? r.call.args.path
 				: `${r.call.args.path}: ${r.error ?? "failed"}`;
-		case "vim_edit":
+		case "edit":
 			return r.success
 				? `${r.call.args.path} (+${r.linesAdded} -${r.linesRemoved} lines)`
 				: `${r.call.args.path}: ${r.error ?? "failed"}`;
