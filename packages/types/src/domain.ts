@@ -62,10 +62,10 @@ export interface AssistantToolCallMessage {
 // 参数类型由 tool-args.ts 中的 Zod schema 推断（SSoT）
 
 import type {
+	EditArgs,
 	ExecArgs,
 	ReminderArgs,
 	SubmitArgs,
-	VimEditArgs,
 	WriteArgs,
 } from "./tool-args.ts";
 
@@ -75,10 +75,7 @@ interface ToolCallBase {
 
 export type ExecToolCall = ToolCallBase & { tool: "exec"; args: ExecArgs };
 export type WriteToolCall = ToolCallBase & { tool: "write"; args: WriteArgs };
-export type VimEditToolCall = ToolCallBase & {
-	tool: "vim_edit";
-	args: VimEditArgs;
-};
+export type EditToolCall = ToolCallBase & { tool: "edit"; args: EditArgs };
 export type ReminderToolCall = ToolCallBase & {
 	tool: "reminder";
 	args: ReminderArgs;
@@ -96,7 +93,7 @@ export type SubmitToolCall = ToolCallBase & {
 export type ToolCallRecord =
 	| ExecToolCall
 	| WriteToolCall
-	| VimEditToolCall
+	| EditToolCall
 	| ReminderToolCall
 	| SubmitToolCall;
 
@@ -125,9 +122,9 @@ export type WriteToolResult = ToolResultBase & {
 	error: string | null;
 };
 
-export type VimEditToolResult = ToolResultBase & {
-	tool: VimEditToolCall["tool"]; // "vim_edit"
-	call: VimEditToolCall;
+export type EditToolResult = ToolResultBase & {
+	tool: EditToolCall["tool"]; // "edit"
+	call: EditToolCall;
 	linesAdded: number;
 	linesRemoved: number;
 	success: boolean;
@@ -153,7 +150,7 @@ export type SubmitToolResult = ToolResultBase & {
 export type ToolResult =
 	| ExecToolResult
 	| WriteToolResult
-	| VimEditToolResult
+	| EditToolResult
 	| ReminderToolResult
 	| SubmitToolResult;
 
