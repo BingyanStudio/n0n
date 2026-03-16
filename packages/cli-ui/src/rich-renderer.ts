@@ -148,10 +148,15 @@ export class RichRenderer implements Renderer {
 		if (tc.tool === "edit") {
 			const path = tc.args.path ?? "?";
 			const intent = typeof tc.args.intent === "string" ? tc.args.intent : "";
-			const truncatedIntent = intent.length > 60 ? intent.slice(0, 60) + "..." : intent;
-			this.toolRegion.writeln(`${style.dim("▸")} ${style.cyan("edit")} ${style.gray(path)}`);
+			const truncatedIntent =
+				intent.length > 60 ? `${intent.slice(0, 60)}...` : intent;
+			this.toolRegion.writeln(
+				`${style.dim("▸")} ${style.cyan("edit")} ${style.gray(path)}`,
+			);
 			this.toolRegion.writeln(`  ${style.dim("│")} ${truncatedIntent}`);
-			this.toolRegion.writeln(`  ${style.dim("├")}${style.dim("─".repeat(30))}`);
+			this.toolRegion.writeln(
+				`  ${style.dim("├")}${style.dim("─".repeat(30))}`,
+			);
 			return;
 		}
 
