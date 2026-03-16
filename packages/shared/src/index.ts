@@ -10,6 +10,7 @@ export { formatAgentsMdPrompt, loadAgentsMd } from "./agents-md.ts";
 // Bootstrap
 export {
 	bootstrap,
+	EDITOR_LLM_ENV_GROUP,
 	generateEnvTemplate,
 	LLM_ENV_GROUP,
 } from "./bootstrap/index.ts";

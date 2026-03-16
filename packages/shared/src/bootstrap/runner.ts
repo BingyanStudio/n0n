@@ -28,7 +28,10 @@ function allVars(spec: EnvSpec): EnvVarDef[] {
 /** 查找缺失的必填变量 */
 function findMissing(spec: EnvSpec): EnvVarDef[] {
 	return allVars(spec).filter(
-		(v) => v.default === undefined && !process.env[v.key],
+		(v) =>
+			v.default === undefined &&
+			!process.env[v.key] &&
+			!(v.inheritFrom && process.env[v.inheritFrom]),
 	);
 }
 
@@ -239,8 +242,60 @@ async function createEnvInteractive(
 	const values: Record<string, string> = {};
 
 	for (const group of spec.groups) {
+		// 检查该组是否所有必填变量都有 inheritFrom（即可继承组）
+		const requiredVars = group.vars.filter((v) => v.default === undefined);
+		const allInheritable =
+			requiredVars.length > 0 && requiredVars.every((v) => v.inheritFrom);
+
+		if (allInheritable) {
+			// 可继承组：逐字段询问是否复用主配置
+			ui.info(`\n${group.title}:`);
+			for (const v of requiredVars) {
+				const parentKey = v.inheritFrom;
+				if (!parentKey) continue;
+				const parentVal = values[parentKey] ?? process.env[parentKey];
+				if (!parentVal) {
+					// 父变量不存在，必须手动输入
+					const prompt = v.example
+						? `  ${v.desc} (${v.key}, 例如: ${v.example})`
+						: `  ${v.desc} (${v.key})`;
+					const value = v.secret
+						? await ui.secret(prompt)
+						: await ui.input(prompt, undefined);
+					if (value) {
+						values[v.key] = value;
+						process.env[v.key] = value;
+					}
+					continue;
+				}
+
+				const displayVal = v.secret ? "****" : parentVal;
+				const reuse = await ui.confirm(
+					`  ${v.desc} — 使用与 ${parentKey} 相同的值？(${displayVal})`,
+					true,
+				);
+				if (reuse) {
+					// 不写入 .env，运行时 fallback 到主配置
+					process.env[v.key] = parentVal;
+				} else {
+					const prompt = v.example
+						? `  ${v.desc} (${v.key}, 例如: ${v.example})`
+						: `  ${v.desc} (${v.key})`;
+					const value = v.secret
+						? await ui.secret(prompt)
+						: await ui.input(prompt, undefined);
+					if (value) {
+						values[v.key] = value;
+						process.env[v.key] = value;
+					}
+				}
+			}
+			continue;
+		}
+
+		// 普通组：逐个输入
 		for (const v of group.vars) {
-			if (v.default !== undefined) continue; // 可选的跳过，用模板默认值
+			if (v.default !== undefined) continue;
 			const prompt = v.example
 				? `  ${v.desc} (${v.key}, 例如: ${v.example})`
 				: `  ${v.desc} (${v.key})`;
