@@ -9,7 +9,7 @@
  * 设计原则：
  * - 内容即地址：用内容本身定位，而非外部坐标
  * - 意图驱动：主模型只需表达"改什么"，不需要关心"怎么精确定位"
- * - 验证闭环：返回 diff 给主模型确认
+ * - 验证闭环：返回变更后的最终状态给主模型确认
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -22,6 +22,7 @@ import type {
 	LLMToolDefinition,
 } from "@n0n/types";
 import editDescription from "./descriptions/edit.md" with { type: "text" };
+import editorAgentPrompt from "./descriptions/editor-agent.md" with { type: "text" };
 
 export { EditArgsSchema } from "@n0n/types";
 
@@ -49,29 +50,44 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 	},
 };
 
-// ── Shadow Edit System Prompt ──
+// ── Editor LLM 工具定义 ──
 
-const SHADOW_SYSTEM_PROMPT = `You are a precise code editor. Given a source file and an edit intent, output a JSON array of search/replace operations.
-
-RULES:
-1. Each operation: { "search": "exact text to find", "replace": "replacement text" }
-2. "search" must be an EXACT substring of the source file (character-for-character match including whitespace and indentation)
-3. "search" should be the MINIMAL unique fragment that unambiguously identifies the target location
-4. "replace" is the complete replacement for the matched text
-5. Only modify what the intent describes — leave everything else unchanged
-6. For deletions, use "replace": ""
-7. For insertions after X, include X in "search" and X + new content in "replace"
-8. Output ONLY the JSON array, no explanation, no markdown fences
-
-EXAMPLE:
-Intent: "Change timeout from 5000 to 10000"
-Source contains: "const TIMEOUT = 5000;"
-Output: [{"search": "const TIMEOUT = 5000;", "replace": "const TIMEOUT = 10000;"}]
-
-EXAMPLE:
-Intent: "Add import for readFile after the fs import"
-Source contains: "import { writeFile } from 'fs';"
-Output: [{"search": "import { writeFile } from 'fs';", "replace": "import { writeFile } from 'fs';\\nimport { readFile } from 'fs/promises';"}]`;
+/** Editor LLM 调用的工具：apply_edits */
+const EDITOR_TOOL_DEFINITION: LLMToolDefinition = {
+	type: "function",
+	function: {
+		name: "apply_edits",
+		description:
+			"Apply a list of search/replace operations to the source file. Each operation finds an exact substring and replaces it.",
+		parameters: {
+			type: "object",
+			properties: {
+				operations: {
+					type: "array" as unknown as "object",
+					items: {
+						type: "object",
+						properties: {
+							search: {
+								type: "string",
+								description:
+									"Exact substring to find in the source file (character-for-character match including whitespace)",
+							},
+							replace: {
+								type: "string",
+								description:
+									"Replacement text. Use empty string for deletions.",
+							},
+						},
+						required: ["search", "replace"],
+					},
+					description: "List of search/replace operations to apply sequentially",
+				},
+			},
+			required: ["operations"],
+			additionalProperties: false,
+		},
+	},
+};
 
 // ── Types ──
 
@@ -83,7 +99,9 @@ interface SearchReplaceOp {
 // ── Core Logic ──
 
 /**
- * 调用 Editor LLM 将编辑意图解析为 search/replace 操作序列
+ * 调用 Editor LLM 将编辑意图解析为 search/replace 操作序列。
+ * 使用 tool_choice: "required" 强制模型调用 apply_edits 工具，
+ * 直接从 tool_calls 中解析结构化结果，无需 JSON 文本解析。
  */
 async function resolveIntent(
 	source: string,
@@ -91,38 +109,54 @@ async function resolveIntent(
 	editorLlm: LLMConfig,
 ): Promise<{ ops: SearchReplaceOp[]; error?: string }> {
 	try {
+		const userContent = [
+			"<source_file>",
+			source,
+			"</source_file>",
+			"",
+			"<edit_intent>",
+			intent,
+			"</edit_intent>",
+			"",
+			"Call the `apply_edits` tool with the exact search/replace operations needed. You MUST call the tool.",
+		].join("\n");
+
 		const response = await chatCompletion(
 			{
 				messages: [
-					{ role: "system", content: SHADOW_SYSTEM_PROMPT },
-					{
-						role: "user",
-						content: `<source_file>\n${source}\n</source_file>\n\n<edit_intent>\n${intent}\n</edit_intent>`,
-					},
+					{ role: "system", content: editorAgentPrompt },
+					{ role: "user", content: userContent },
 				],
+				tools: [EDITOR_TOOL_DEFINITION],
+				tool_choice: "required",
 				temperature: 0,
 			},
 			editorLlm,
 		);
 
-		const content = response.choices[0]?.message?.content;
-		if (!content) {
+		const message = response.choices[0]?.message;
+		if (!message) {
 			return { ops: [], error: "Editor LLM returned empty response" };
 		}
 
-		// 提取 JSON（可能被 markdown 代码块包裹）
-		const jsonStr = content
-			.replace(/^```(?:json)?\s*/m, "")
-			.replace(/\s*```\s*$/m, "")
-			.trim();
+		// 从 tool_calls 中提取结构化结果
+		const toolCall = message.tool_calls?.[0];
+		if (!toolCall || toolCall.function.name !== "apply_edits") {
+			// fallback: 尝试从 content 解析（某些模型可能不遵守 tool_choice）
+			if (message.content) {
+				return parseOpsFromContent(message.content);
+			}
+			return { ops: [], error: "Editor LLM did not call apply_edits tool" };
+		}
 
-		const parsed = JSON.parse(jsonStr);
-		if (!Array.isArray(parsed)) {
-			return { ops: [], error: `Editor LLM returned non-array: ${typeof parsed}` };
+		const parsed = JSON.parse(toolCall.function.arguments);
+		const rawOps = parsed.operations;
+		if (!Array.isArray(rawOps)) {
+			return { ops: [], error: "Editor LLM returned non-array operations" };
 		}
 
 		const ops: SearchReplaceOp[] = [];
-		for (const item of parsed) {
+		for (const item of rawOps) {
 			if (
 				typeof item === "object" &&
 				item !== null &&
@@ -141,6 +175,44 @@ async function resolveIntent(
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
 		return { ops: [], error: `Editor LLM call failed: ${msg}` };
+	}
+}
+
+/**
+ * Fallback: 从纯文本 content 中解析 JSON 操作列表
+ */
+function parseOpsFromContent(
+	content: string,
+): { ops: SearchReplaceOp[]; error?: string } {
+	try {
+		const jsonStr = content
+			.replace(/^```(?:json)?\s*/m, "")
+			.replace(/\s*```\s*$/m, "")
+			.trim();
+
+		const parsed = JSON.parse(jsonStr);
+		// 支持 { operations: [...] } 或直接 [...]
+		const rawOps = Array.isArray(parsed) ? parsed : parsed?.operations;
+		if (!Array.isArray(rawOps)) {
+			return { ops: [], error: "Could not parse operations from content" };
+		}
+
+		const ops: SearchReplaceOp[] = [];
+		for (const item of rawOps) {
+			if (
+				typeof item === "object" &&
+				item !== null &&
+				typeof item.search === "string" &&
+				typeof item.replace === "string"
+			) {
+				ops.push({ search: item.search, replace: item.replace });
+			}
+		}
+		return ops.length > 0
+			? { ops }
+			: { ops: [], error: "No valid operations in content" };
+	} catch {
+		return { ops: [], error: "Failed to parse JSON from content" };
 	}
 }
 
@@ -183,13 +255,23 @@ export function applyOps(
 }
 
 /**
- * 生成简洁的 unified diff 摘要
+ * 生成变更摘要 — 只显示变更区域的最终状态（不显示删除内容）
+ *
+ * 格式：每个变更区域显示上下文行 + 新内容，用行号标注。
+ * 主模型只需确认最终状态是否正确，不需要看旧内容。
  */
-export function computeDiff(oldContent: string, newContent: string, path: string): string {
+export function computeDiff(
+	oldContent: string,
+	newContent: string,
+	path: string,
+): string {
+	if (oldContent === newContent) return "(no changes)";
+
 	const oldLines = oldContent.split("\n");
 	const newLines = newContent.split("\n");
-
 	const chunks: string[] = [];
+
+	// 简单 LCS 差异检测：找到变更区域，只输出新内容
 	let i = 0;
 	let j = 0;
 
@@ -200,19 +282,18 @@ export function computeDiff(oldContent: string, newContent: string, path: string
 			continue;
 		}
 
-		// 找到差异区域
-		const contextStart = Math.max(0, i - 2);
-		let oldEnd = i;
-		let newEnd = j;
+		// 找到差异起点，记录上下文
+		const contextStart = Math.max(0, j - 2);
 
 		// 向前扫描找到差异结束
+		let oldEnd = i;
+		let newEnd = j;
 		while (oldEnd < oldLines.length || newEnd < newLines.length) {
 			if (
 				oldEnd < oldLines.length &&
 				newEnd < newLines.length &&
 				oldLines[oldEnd] === newLines[newEnd]
 			) {
-				// 检查是否有足够的连续匹配行（3行）表示差异结束
 				let matchCount = 0;
 				while (
 					oldEnd + matchCount < oldLines.length &&
@@ -228,30 +309,20 @@ export function computeDiff(oldContent: string, newContent: string, path: string
 			if (newEnd < newLines.length) newEnd++;
 		}
 
-		// 输出 chunk
-		chunks.push(`@@ -${contextStart + 1},${oldEnd - contextStart} +${contextStart + 1},${newEnd - contextStart} @@`);
+		const contextEnd = Math.min(newLines.length, newEnd + 2);
 
-		// 上下文行
-		for (let c = contextStart; c < i; c++) {
-			chunks.push(` ${oldLines[c]}`);
-		}
-		// 删除的行
-		for (let c = i; c < oldEnd; c++) {
-			chunks.push(`-${oldLines[c]}`);
-		}
-		// 新增的行
-		for (let c = j; c < newEnd; c++) {
-			chunks.push(`+${newLines[c]}`);
+		// 输出变更区域的最终状态（带行号）
+		chunks.push(`@@ ${path}:${contextStart + 1}-${contextEnd} @@`);
+		for (let c = contextStart; c < contextEnd; c++) {
+			const prefix = c >= j && c < newEnd ? "+" : " ";
+			chunks.push(`${prefix} ${c + 1} | ${newLines[c]}`);
 		}
 
 		i = oldEnd;
 		j = newEnd;
 	}
 
-	if (chunks.length === 0) return "(no changes)";
-
-	const header = `--- a/${path}\n+++ b/${path}`;
-	return `${header}\n${chunks.join("\n")}`;
+	return chunks.join("\n");
 }
 
 // ── Tool Entry Point ──
@@ -293,21 +364,20 @@ export async function editTool(
 		const { content: newContent, applied, errors } = applyOps(source, ops);
 
 		if (applied === 0) {
-			return fail(
-				`No operations applied. Errors:\n${errors.join("\n")}`,
-			);
+			return fail(`No operations applied. Errors:\n${errors.join("\n")}`);
 		}
 
 		// 3. 写入文件
 		writeFileSync(filePath, newContent, "utf8");
 
-		// 4. 生成 diff
+		// 4. 生成变更摘要（只显示最终状态）
 		const diff = computeDiff(source, newContent, call.args.path);
 
 		// 5. 如果有部分失败，在 diff 中附加警告
-		const warnings = errors.length > 0
-			? `\n\n⚠️ ${errors.length} operation(s) failed:\n${errors.join("\n")}`
-			: "";
+		const warnings =
+			errors.length > 0
+				? `\n\n⚠️ ${errors.length} operation(s) failed:\n${errors.join("\n")}`
+				: "";
 
 		return {
 			type: "tool_result",
