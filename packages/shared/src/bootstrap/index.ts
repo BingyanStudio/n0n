@@ -11,6 +11,6 @@
  */
 
 export type { BootstrapResult, EnvGroup, EnvSpec, EnvVarDef } from "@n0n/types";
-export { LLM_ENV_GROUP } from "./common-specs.ts";
+export { EDITOR_LLM_ENV_GROUP, LLM_ENV_GROUP } from "./common-specs.ts";
 export { bootstrap } from "./runner.ts";
 export { generateEnvTemplate } from "./template.ts";
