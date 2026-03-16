@@ -10,19 +10,29 @@ import type { EnvSpec, EnvVarDef } from "@n0n/types";
 function varLine(v: EnvVarDef, withValue?: string): string {
 	const lines: string[] = [];
 	const isOptional = v.default !== undefined;
-	const tag = isOptional ? "[可选]" : "[必填]";
+	const hasInherit = !!v.inheritFrom;
+	const tag = isOptional ? "[可选]" : hasInherit ? "[继承]" : "[必填]";
 
 	lines.push(`# ${tag} ${v.desc}`);
-	if (v.example && !withValue) {
+	if (hasInherit && !withValue) {
+		// 继承变量未自定义：注释掉，标注继承来源
+		lines.push(`# 未设置时继承自 ${v.inheritFrom}`);
+		lines.push(`# ${v.key}=`);
+	} else if (v.example && !withValue) {
 		lines.push(`# 示例: ${v.example}`);
-	}
-
-	const value = withValue ?? v.default ?? "";
-	if (isOptional && !withValue) {
-		// 可选变量注释掉
-		lines.push(`# ${v.key}=${value}`);
+		const value = withValue ?? v.default ?? "";
+		if (isOptional) {
+			lines.push(`# ${v.key}=${value}`);
+		} else {
+			lines.push(`${v.key}=${value}`);
+		}
 	} else {
-		lines.push(`${v.key}=${value}`);
+		const value = withValue ?? v.default ?? "";
+		if (isOptional && !withValue) {
+			lines.push(`# ${v.key}=${value}`);
+		} else {
+			lines.push(`${v.key}=${value}`);
+		}
 	}
 
 	return lines.join("\n");
