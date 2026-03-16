@@ -40,16 +40,10 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 
 function formatEditResult(msg: EditToolResult, model: string): string {
 	if (msg.success) {
-		const summary = `Edited \`${msg.call.args.path}\`: +${msg.linesAdded} -${msg.linesRemoved} lines`;
+		const summary = `Edited \`${msg.call.args.path}\`:\n${msg.diff}`;
 		return wrapTag("edit_result", summary, model);
 	}
-	const guidance = [
-		`Edit failed (rolled back): ${msg.error}`,
-		"",
-		"Review your commands against standard Vim ex syntax and retry.",
-		"Common mistakes: `:s/old/new/` split across lines, missing `.` terminator, pattern not found in file.",
-	].join("\n");
-	return wrapTag("error", guidance, model);
+	return wrapTag("error", `Edit failed: ${msg.error}`, model);
 }
 
 function toolResultToContent(msg: ToolResult, model: string): string {

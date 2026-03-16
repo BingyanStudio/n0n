@@ -26,6 +26,8 @@ export interface SecurityConfig {
 
 export interface RuntimeContext {
 	llm: LLMConfig;
+	/** Editor LLM 配置 — 用于影子编辑层（shadow edit）。未配置时 fallback 到 llm。 */
+	editorLlm: LLMConfig;
 	agent: AgentConfig;
 	security: SecurityConfig;
 }
@@ -49,13 +51,27 @@ function parseBlockedCommands(): string[] {
 
 /** 从环境变量构造 RuntimeContext（纯函数，无副作用） */
 export function createRuntimeContext(): RuntimeContext {
+	const llm: LLMConfig = {
+		baseUrl: requireEnv("LLM_BASE_URL"),
+		apiKey: requireEnv("LLM_API_KEY"),
+		model: requireEnv("LLM_MODEL"),
+		enableThinking: process.env.LLM_ENABLE_THINKING === "true",
+	};
+
+	// Editor LLM: 各字段独立 fallback 到主 LLM 配置
+	const editorLlm: LLMConfig = {
+		baseUrl: process.env.EDITOR_LLM_BASE_URL || llm.baseUrl,
+		apiKey: process.env.EDITOR_LLM_API_KEY || llm.apiKey,
+		model: process.env.EDITOR_LLM_MODEL || llm.model,
+		enableThinking:
+			process.env.EDITOR_LLM_ENABLE_THINKING !== undefined
+				? process.env.EDITOR_LLM_ENABLE_THINKING === "true"
+				: llm.enableThinking,
+	};
+
 	return {
-		llm: {
-			baseUrl: requireEnv("LLM_BASE_URL"),
-			apiKey: requireEnv("LLM_API_KEY"),
-			model: requireEnv("LLM_MODEL"),
-			enableThinking: process.env.LLM_ENABLE_THINKING === "true",
-		},
+		llm,
+		editorLlm,
 		agent: {
 			maxIterations: 50,
 			maxIdleRounds: 5,

@@ -57,6 +57,7 @@ export async function agentLoop<T = unknown>(
 	const toolsConfig: ToolsConfig = {
 		security: runtime.security,
 		agent: runtime.agent,
+		editorLlm: runtime.editorLlm,
 		...(options?.toolsWorkspace ?? {
 			workspace: process.cwd(),
 			tempDir: ".temp",

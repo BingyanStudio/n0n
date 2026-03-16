@@ -99,7 +99,7 @@ function fmtResult(r: ToolResult): string {
 				: `${r.call.args.path}: ${r.error ?? "failed"}`;
 		case "edit":
 			return r.success
-				? `${r.call.args.path} (+${r.linesAdded} -${r.linesRemoved} lines)`
+				? r.call.args.path
 				: `${r.call.args.path}: ${r.error ?? "failed"}`;
 		case "reminder":
 			return `delay=${r.call.args.delay ?? 0}`;
