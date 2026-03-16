@@ -35,3 +35,36 @@ export const LLM_ENV_GROUP: EnvGroup = {
 		},
 	],
 };
+
+/** Editor LLM 配置组 — 影子编辑层使用，各字段可独立 fallback 到主 LLM */
+export const EDITOR_LLM_ENV_GROUP: EnvGroup = {
+	title: "Editor LLM 配置（影子编辑层）",
+	vars: [
+		{
+			key: "EDITOR_LLM_BASE_URL",
+			desc: "Editor LLM API 地址",
+			example: "https://api.openai.com",
+			inheritFrom: "LLM_BASE_URL",
+		},
+		{
+			key: "EDITOR_LLM_API_KEY",
+			desc: "Editor LLM API 密钥",
+			example: "sk-xxx",
+			secret: true,
+			inheritFrom: "LLM_API_KEY",
+		},
+		{
+			key: "EDITOR_LLM_MODEL",
+			desc: "Editor LLM 模型名称",
+			example: "gpt-4o",
+			inheritFrom: "LLM_MODEL",
+		},
+		{
+			key: "EDITOR_LLM_ENABLE_THINKING",
+			desc: "Editor LLM 启用思考模式",
+			example: "true",
+			default: "false",
+			inheritFrom: "LLM_ENABLE_THINKING",
+		},
+	],
+};
