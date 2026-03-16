@@ -13,11 +13,15 @@ import { applyOps, computeDiff } from "../edit.ts";
 describe("applyOps", () => {
 	test("单次替换", () => {
 		const source = "const TIMEOUT = 5000;\nconsole.log('hello');";
-		const ops = [{ search: "const TIMEOUT = 5000;", replace: "const TIMEOUT = 10000;" }];
+		const ops = [
+			{ search: "const TIMEOUT = 5000;", replace: "const TIMEOUT = 10000;" },
+		];
 		const result = applyOps(source, ops);
 		expect(result.applied).toBe(1);
 		expect(result.errors).toHaveLength(0);
-		expect(result.content).toBe("const TIMEOUT = 10000;\nconsole.log('hello');");
+		expect(result.content).toBe(
+			"const TIMEOUT = 10000;\nconsole.log('hello');",
+		);
 	});
 
 	test("多次替换（不同位置）", () => {
@@ -42,10 +46,13 @@ describe("applyOps", () => {
 
 	test("插入（search 包含锚点，replace 包含新内容）", () => {
 		const source = "import { writeFile } from 'fs';";
-		const ops = [{
-			search: "import { writeFile } from 'fs';",
-			replace: "import { writeFile } from 'fs';\nimport { readFile } from 'fs/promises';",
-		}];
+		const ops = [
+			{
+				search: "import { writeFile } from 'fs';",
+				replace:
+					"import { writeFile } from 'fs';\nimport { readFile } from 'fs/promises';",
+			},
+		];
 		const result = applyOps(source, ops);
 		expect(result.applied).toBe(1);
 		expect(result.content).toContain("readFile");
@@ -90,10 +97,12 @@ describe("applyOps", () => {
 
 	test("多行搜索和替换", () => {
 		const source = "function foo() {\n  return 1;\n}";
-		const ops = [{
-			search: "function foo() {\n  return 1;\n}",
-			replace: "function foo() {\n  return 42;\n}",
-		}];
+		const ops = [
+			{
+				search: "function foo() {\n  return 1;\n}",
+				replace: "function foo() {\n  return 42;\n}",
+			},
+		];
 		const result = applyOps(source, ops);
 		expect(result.applied).toBe(1);
 		expect(result.content).toContain("return 42;");

@@ -24,7 +24,9 @@ import type {
 	LLMToolDefinition,
 } from "@n0n/types";
 import editDescription from "./descriptions/edit.md" with { type: "text" };
-import editorAgentPrompt from "./descriptions/editor-agent.md" with { type: "text" };
+import editorAgentPrompt from "./descriptions/editor-agent.md" with {
+	type: "text",
+};
 
 export { EditArgsSchema } from "@n0n/types";
 
@@ -81,7 +83,8 @@ const EDITOR_TOOL_DEFINITION: LLMToolDefinition = {
 						},
 						required: ["search", "replace"],
 					},
-					description: "List of search/replace operations to apply sequentially",
+					description:
+						"List of search/replace operations to apply sequentially",
 				},
 			},
 			required: ["operations"],
@@ -147,9 +150,10 @@ function extractOps(message: {
 /**
  * Fallback: 从纯文本 content 中解析 JSON 操作列表
  */
-function parseOpsFromContent(
-	content: string,
-): { ops: SearchReplaceOp[]; error?: string } {
+function parseOpsFromContent(content: string): {
+	ops: SearchReplaceOp[];
+	error?: string;
+} {
 	try {
 		const jsonStr = content
 			.replace(/^```(?:json)?\s*/m, "")
@@ -204,7 +208,9 @@ export function applyOps(
 		}
 
 		content =
-			content.slice(0, idx) + op.replace + content.slice(idx + op.search.length);
+			content.slice(0, idx) +
+			op.replace +
+			content.slice(idx + op.search.length);
 		applied++;
 	}
 
@@ -369,7 +375,10 @@ async function resolveAndApply(
 		}
 	}
 
-	return { content: source, error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastError}` };
+	return {
+		content: source,
+		error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastError}`,
+	};
 }
 
 /**
@@ -390,7 +399,11 @@ export function computeDiff(
 	let j = 0;
 
 	while (i < oldLines.length || j < newLines.length) {
-		if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+		if (
+			i < oldLines.length &&
+			j < newLines.length &&
+			oldLines[i] === newLines[j]
+		) {
 			i++;
 			j++;
 			continue;
@@ -459,7 +472,8 @@ export async function editTool(
 
 	try {
 		if (!existsSync(filePath)) return fail(`File not found: ${call.args.path}`);
-		if (!intent || intent.trim().length === 0) return fail("No intent provided");
+		if (!intent || intent.trim().length === 0)
+			return fail("No intent provided");
 
 		const source = readFileSync(filePath, "utf8");
 
