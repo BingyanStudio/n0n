@@ -22,6 +22,8 @@ export interface EnvVarDef {
 	default?: string;
 	/** 是否为敏感信息（输入时不回显） */
 	secret?: boolean;
+	/** 继承自哪个主变量（用于影子配置层 fallback） */
+	inheritFrom?: string;
 }
 
 /** 环境变量分组（用于 .env 模板的分段注释） */
