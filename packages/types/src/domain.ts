@@ -125,11 +125,9 @@ export type WriteToolResult = ToolResultBase & {
 export type EditToolResult = ToolResultBase & {
 	tool: EditToolCall["tool"]; // "edit"
 	call: EditToolCall;
-	linesAdded: number;
-	linesRemoved: number;
+	diff: string;
 	success: boolean;
 	error: string | null;
-	warnings: string | null;
 };
 
 export type ReminderToolResult = ToolResultBase & {
