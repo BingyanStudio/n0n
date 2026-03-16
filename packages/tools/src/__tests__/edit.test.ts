@@ -1,7 +1,7 @@
 /**
  * edit 工具测试 — 影子编辑（Shadow Edit）
  *
- * 测试纯函数部分：applyOps（search/replace 应用）和 computeDiff（diff 生成）。
+ * 测试纯函数部分：applyOps（search/replace 应用）和 computeDiff（变更摘要）。
  * editTool 集成测试需要 mock LLM，单独标记。
  */
 
@@ -128,27 +128,39 @@ describe("computeDiff", () => {
 		expect(diff).toBe("(no changes)");
 	});
 
-	test("单行修改", () => {
+	test("单行修改 — 只显示最终状态", () => {
 		const old = "line1\nline2\nline3";
 		const now = "line1\nmodified\nline3";
 		const diff = computeDiff(old, now, "test.ts");
-		expect(diff).toContain("--- a/test.ts");
-		expect(diff).toContain("+++ b/test.ts");
-		expect(diff).toContain("-line2");
-		expect(diff).toContain("+modified");
+		// 应该包含新内容，带 + 前缀
+		expect(diff).toContain("+");
+		expect(diff).toContain("modified");
+		// 不应该包含旧内容的删除标记
+		expect(diff).not.toContain("-line2");
+		expect(diff).not.toContain("- ");
 	});
 
-	test("新增行", () => {
+	test("新增行 — 显示新增内容", () => {
 		const old = "line1\nline2";
 		const now = "line1\nnew line\nline2";
 		const diff = computeDiff(old, now, "test.ts");
-		expect(diff).toContain("+new line");
+		expect(diff).toContain("new line");
+		expect(diff).toContain("+");
 	});
 
-	test("删除行", () => {
+	test("删除行 — 不显示被删除的内容", () => {
 		const old = "line1\nline2\nline3";
 		const now = "line1\nline3";
 		const diff = computeDiff(old, now, "test.ts");
-		expect(diff).toContain("-line2");
+		// 不应该显示被删除的 line2
+		expect(diff).not.toContain("line2");
+	});
+
+	test("包含行号和文件路径", () => {
+		const old = "line1\nline2\nline3";
+		const now = "line1\nchanged\nline3";
+		const diff = computeDiff(old, now, "src/foo.ts");
+		expect(diff).toContain("src/foo.ts");
+		expect(diff).toContain("@@");
 	});
 });
