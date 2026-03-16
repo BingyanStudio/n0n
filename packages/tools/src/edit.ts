@@ -10,6 +10,7 @@
  * - 内容即地址：用内容本身定位，而非外部坐标
  * - 意图驱动：主模型只需表达"改什么"，不需要关心"怎么精确定位"
  * - 验证闭环：返回变更后的最终状态给主模型确认
+ * - 重试纠错：Editor LLM 出错时反馈错误信息并重试
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,6 +20,7 @@ import { chatCompletion } from "@n0n/llm";
 import type {
 	EditToolCall,
 	EditToolResult,
+	LLMRequestMessage,
 	LLMToolDefinition,
 } from "@n0n/types";
 import editDescription from "./descriptions/edit.md" with { type: "text" };
@@ -52,7 +54,6 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 
 // ── Editor LLM 工具定义 ──
 
-/** Editor LLM 调用的工具：apply_edits */
 const EDITOR_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",
 	function: {
@@ -96,86 +97,51 @@ interface SearchReplaceOp {
 	replace: string;
 }
 
+/** 最大重试次数（含首次尝试） */
+const MAX_ATTEMPTS = 3;
+
 // ── Core Logic ──
 
 /**
- * 调用 Editor LLM 将编辑意图解析为 search/replace 操作序列。
- * 使用 tool_choice: "required" 强制模型调用 apply_edits 工具，
- * 直接从 tool_calls 中解析结构化结果，无需 JSON 文本解析。
+ * 从 tool_calls 或 content 中提取 search/replace 操作
  */
-async function resolveIntent(
-	source: string,
-	intent: string,
-	editorLlm: LLMConfig,
-): Promise<{ ops: SearchReplaceOp[]; error?: string }> {
-	try {
-		const userContent = [
-			"<source_file>",
-			source,
-			"</source_file>",
-			"",
-			"<edit_intent>",
-			intent,
-			"</edit_intent>",
-			"",
-			"Call the `apply_edits` tool with the exact search/replace operations needed. You MUST call the tool.",
-		].join("\n");
-
-		const response = await chatCompletion(
-			{
-				messages: [
-					{ role: "system", content: editorAgentPrompt },
-					{ role: "user", content: userContent },
-				],
-				tools: [EDITOR_TOOL_DEFINITION],
-				tool_choice: "required",
-				temperature: 0,
-			},
-			editorLlm,
-		);
-
-		const message = response.choices[0]?.message;
-		if (!message) {
-			return { ops: [], error: "Editor LLM returned empty response" };
-		}
-
-		// 从 tool_calls 中提取结构化结果
-		const toolCall = message.tool_calls?.[0];
-		if (!toolCall || toolCall.function.name !== "apply_edits") {
-			// fallback: 尝试从 content 解析（某些模型可能不遵守 tool_choice）
-			if (message.content) {
-				return parseOpsFromContent(message.content);
+function extractOps(message: {
+	content: string | null;
+	tool_calls?: { function: { name: string; arguments: string } }[];
+}): { ops: SearchReplaceOp[]; error?: string } {
+	// 优先从 tool_calls 提取
+	const toolCall = message.tool_calls?.[0];
+	if (toolCall?.function.name === "apply_edits") {
+		try {
+			const parsed = JSON.parse(toolCall.function.arguments);
+			const rawOps = parsed.operations;
+			if (!Array.isArray(rawOps)) {
+				return { ops: [], error: "apply_edits: operations is not an array" };
 			}
-			return { ops: [], error: "Editor LLM did not call apply_edits tool" };
+			const ops = rawOps.filter(
+				(item: unknown): item is SearchReplaceOp =>
+					typeof item === "object" &&
+					item !== null &&
+					typeof (item as SearchReplaceOp).search === "string" &&
+					typeof (item as SearchReplaceOp).replace === "string",
+			);
+			return ops.length > 0
+				? { ops }
+				: { ops: [], error: "apply_edits: no valid operations in array" };
+		} catch (e) {
+			return {
+				ops: [],
+				error: `apply_edits: failed to parse arguments: ${e instanceof Error ? e.message : String(e)}`,
+			};
 		}
-
-		const parsed = JSON.parse(toolCall.function.arguments);
-		const rawOps = parsed.operations;
-		if (!Array.isArray(rawOps)) {
-			return { ops: [], error: "Editor LLM returned non-array operations" };
-		}
-
-		const ops: SearchReplaceOp[] = [];
-		for (const item of rawOps) {
-			if (
-				typeof item === "object" &&
-				item !== null &&
-				typeof item.search === "string" &&
-				typeof item.replace === "string"
-			) {
-				ops.push({ search: item.search, replace: item.replace });
-			}
-		}
-
-		if (ops.length === 0) {
-			return { ops: [], error: "Editor LLM returned no valid operations" };
-		}
-
-		return { ops };
-	} catch (err) {
-		const msg = err instanceof Error ? err.message : String(err);
-		return { ops: [], error: `Editor LLM call failed: ${msg}` };
 	}
+
+	// Fallback: 从 content 解析 JSON
+	if (message.content) {
+		return parseOpsFromContent(message.content);
+	}
+
+	return { ops: [], error: "No tool call and no content in response" };
 }
 
 /**
@@ -189,25 +155,18 @@ function parseOpsFromContent(
 			.replace(/^```(?:json)?\s*/m, "")
 			.replace(/\s*```\s*$/m, "")
 			.trim();
-
 		const parsed = JSON.parse(jsonStr);
-		// 支持 { operations: [...] } 或直接 [...]
 		const rawOps = Array.isArray(parsed) ? parsed : parsed?.operations;
 		if (!Array.isArray(rawOps)) {
 			return { ops: [], error: "Could not parse operations from content" };
 		}
-
-		const ops: SearchReplaceOp[] = [];
-		for (const item of rawOps) {
-			if (
+		const ops = rawOps.filter(
+			(item: unknown): item is SearchReplaceOp =>
 				typeof item === "object" &&
 				item !== null &&
-				typeof item.search === "string" &&
-				typeof item.replace === "string"
-			) {
-				ops.push({ search: item.search, replace: item.replace });
-			}
-		}
+				typeof (item as SearchReplaceOp).search === "string" &&
+				typeof (item as SearchReplaceOp).replace === "string",
+		);
 		return ops.length > 0
 			? { ops }
 			: { ops: [], error: "No valid operations in content" };
@@ -218,7 +177,6 @@ function parseOpsFromContent(
 
 /**
  * 应用 search/replace 操作序列到源文件内容
- * 返回修改后的内容，或错误信息
  */
 export function applyOps(
 	source: string,
@@ -237,7 +195,6 @@ export function applyOps(
 			continue;
 		}
 
-		// 检查唯一性：确保只有一处匹配
 		const secondIdx = content.indexOf(op.search, idx + 1);
 		if (secondIdx !== -1) {
 			errors.push(
@@ -255,10 +212,168 @@ export function applyOps(
 }
 
 /**
- * 生成变更摘要 — 只显示变更区域的最终状态（不显示删除内容）
+ * 多轮对话循环：调用 Editor LLM，验证结果，出错时反馈并重试。
  *
- * 格式：每个变更区域显示上下文行 + 新内容，用行号标注。
- * 主模型只需确认最终状态是否正确，不需要看旧内容。
+ * 流程：
+ * 1. 发送 [system, user(source + intent)]
+ * 2. Editor LLM 返回 tool_call → 解析 ops → applyOps 验证
+ * 3. 全部成功 → 返回新内容
+ * 4. 有失败 → 追加 assistant + tool_result(错误) 到 messages，重试
+ * 5. 没调用工具 → 追加 user(错误提示)，重试
+ * 6. 达到上限 → 返回最后的错误
+ */
+async function resolveAndApply(
+	source: string,
+	intent: string,
+	editorLlm: LLMConfig,
+): Promise<{ content: string; error?: string }> {
+	const messages: LLMRequestMessage[] = [
+		{ role: "system", content: editorAgentPrompt },
+		{
+			role: "user",
+			content: [
+				"<source_file>",
+				source,
+				"</source_file>",
+				"",
+				"<edit_intent>",
+				intent,
+				"</edit_intent>",
+				"",
+				"Call the `apply_edits` tool with the exact search/replace operations needed. You MUST call the tool.",
+			].join("\n"),
+		},
+	];
+
+	let lastError = "";
+
+	for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+		try {
+			const response = await chatCompletion(
+				{
+					messages,
+					tools: [EDITOR_TOOL_DEFINITION],
+					tool_choice: "required",
+					temperature: 0,
+				},
+				editorLlm,
+			);
+
+			const message = response.choices[0]?.message;
+			if (!message) {
+				lastError = "Editor LLM returned empty response";
+				messages.push({
+					role: "user",
+					content: `Error: ${lastError}. Please call the apply_edits tool.`,
+				});
+				continue;
+			}
+
+			// 提取操作
+			const { ops, error: extractError } = extractOps(message);
+			if (extractError || ops.length === 0) {
+				lastError = extractError ?? "No operations extracted";
+
+				// 追加 assistant 消息（保持对话连贯）
+				messages.push({
+					role: "assistant",
+					content: message.content,
+					tool_calls: message.tool_calls,
+				});
+
+				// 如果有 tool_call，追加 tool result 反馈错误
+				if (message.tool_calls?.[0]) {
+					messages.push({
+						role: "tool",
+						content: `Error: ${lastError}. Review the source file and fix your operations.`,
+						tool_call_id: message.tool_calls[0].id,
+					});
+				} else {
+					messages.push({
+						role: "user",
+						content: `Error: ${lastError}. You MUST call the apply_edits tool. Do not respond with text.`,
+					});
+				}
+				continue;
+			}
+
+			// 应用操作并验证
+			const { content, applied, errors } = applyOps(source, ops);
+
+			if (applied === 0) {
+				lastError = `All operations failed:\n${errors.join("\n")}`;
+
+				messages.push({
+					role: "assistant",
+					content: message.content,
+					tool_calls: message.tool_calls,
+				});
+				if (message.tool_calls?.[0]) {
+					messages.push({
+						role: "tool",
+						content: [
+							`Error: ${lastError}`,
+							"",
+							"Your search strings did not match the source file exactly.",
+							"Check whitespace, indentation, and character-for-character accuracy.",
+							"Here is the current source file for reference:",
+							"<source_file>",
+							source,
+							"</source_file>",
+							"",
+							"Call apply_edits again with corrected operations.",
+						].join("\n"),
+						tool_call_id: message.tool_calls[0].id,
+					});
+				}
+				continue;
+			}
+
+			if (errors.length > 0) {
+				// 部分成功 — 用部分应用后的内容作为新 source 继续
+				const remainingErrors = errors.join("\n");
+				lastError = `${applied} operation(s) applied, ${errors.length} failed:\n${remainingErrors}`;
+
+				messages.push({
+					role: "assistant",
+					content: message.content,
+					tool_calls: message.tool_calls,
+				});
+				if (message.tool_calls?.[0]) {
+					messages.push({
+						role: "tool",
+						content: [
+							`Partial success: ${applied} applied, ${errors.length} failed:`,
+							remainingErrors,
+							"",
+							"Here is the UPDATED source file after partial application:",
+							"<source_file>",
+							content,
+							"</source_file>",
+							"",
+							"Call apply_edits again to fix the remaining failed operations.",
+						].join("\n"),
+						tool_call_id: message.tool_calls[0].id,
+					});
+				}
+				// 更新 source 为部分应用后的内容
+				source = content;
+				continue;
+			}
+
+			// 全部成功
+			return { content };
+		} catch (err) {
+			lastError = `Editor LLM call failed: ${err instanceof Error ? err.message : String(err)}`;
+			// 网络错误等不追加消息，直接重试
+		}
+	}
+
+	return { content: source, error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastError}` };
+}
+
+/**
+ * 生成变更摘要 — 只显示变更区域的最终状态（不显示删除内容）
  */
 export function computeDiff(
 	oldContent: string,
@@ -271,7 +386,6 @@ export function computeDiff(
 	const newLines = newContent.split("\n");
 	const chunks: string[] = [];
 
-	// 简单 LCS 差异检测：找到变更区域，只输出新内容
 	let i = 0;
 	let j = 0;
 
@@ -282,10 +396,8 @@ export function computeDiff(
 			continue;
 		}
 
-		// 找到差异起点，记录上下文
 		const contextStart = Math.max(0, j - 2);
 
-		// 向前扫描找到差异结束
 		let oldEnd = i;
 		let newEnd = j;
 		while (oldEnd < oldLines.length || newEnd < newLines.length) {
@@ -311,7 +423,6 @@ export function computeDiff(
 
 		const contextEnd = Math.min(newLines.length, newEnd + 2);
 
-		// 输出变更区域的最终状态（带行号）
 		chunks.push(`@@ ${path}:${contextStart + 1}-${contextEnd} @@`);
 		for (let c = contextStart; c < contextEnd; c++) {
 			const prefix = c >= j && c < newEnd ? "+" : " ";
@@ -352,38 +463,26 @@ export async function editTool(
 
 		const source = readFileSync(filePath, "utf8");
 
-		// 1. 调用 Editor LLM 解析意图
-		const { ops, error: resolveError } = await resolveIntent(
+		// 多轮对话：调用 Editor LLM + 验证 + 重试
+		const { content: newContent, error } = await resolveAndApply(
 			source,
 			intent,
 			editorLlm,
 		);
-		if (resolveError) return fail(resolveError);
 
-		// 2. 应用 search/replace 操作
-		const { content: newContent, applied, errors } = applyOps(source, ops);
+		if (error) return fail(error);
 
-		if (applied === 0) {
-			return fail(`No operations applied. Errors:\n${errors.join("\n")}`);
-		}
-
-		// 3. 写入文件
+		// 写入文件
 		writeFileSync(filePath, newContent, "utf8");
 
-		// 4. 生成变更摘要（只显示最终状态）
+		// 生成变更摘要
 		const diff = computeDiff(source, newContent, call.args.path);
-
-		// 5. 如果有部分失败，在 diff 中附加警告
-		const warnings =
-			errors.length > 0
-				? `\n\n⚠️ ${errors.length} operation(s) failed:\n${errors.join("\n")}`
-				: "";
 
 		return {
 			type: "tool_result",
 			tool: "edit" as const,
 			call,
-			diff: diff + warnings,
+			diff,
 			success: true,
 			error: null,
 		};
