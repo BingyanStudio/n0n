@@ -29,11 +29,11 @@ export const WriteArgsSchema = z.object({
 });
 export type WriteArgs = z.infer<typeof WriteArgsSchema>;
 
-// ── edit ──
+// ── edit (shadow edit — 意图驱动) ──
 
 export const EditArgsSchema = z.object({
 	path: z.string(),
-	commands: z.string(),
+	intent: z.string(),
 });
 export type EditArgs = z.infer<typeof EditArgsSchema>;
 

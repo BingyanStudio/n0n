@@ -144,6 +144,17 @@ export class RichRenderer implements Renderer {
 			return;
 		}
 
+		// edit: 显示 path 和截断的 intent
+		if (tc.tool === "edit") {
+			const path = tc.args.path ?? "?";
+			const intent = typeof tc.args.intent === "string" ? tc.args.intent : "";
+			const truncatedIntent = intent.length > 60 ? intent.slice(0, 60) + "..." : intent;
+			this.toolRegion.writeln(`${style.dim("▸")} ${style.cyan("edit")} ${style.gray(path)}`);
+			this.toolRegion.writeln(`  ${style.dim("│")} ${truncatedIntent}`);
+			this.toolRegion.writeln(`  ${style.dim("├")}${style.dim("─".repeat(30))}`);
+			return;
+		}
+
 		// 非流式回退：直接渲染结构化参数
 		for (const line of renderToolArgs(tc.tool, tc.args)) {
 			this.toolRegion.writeln(line);
@@ -262,8 +273,7 @@ export class RichRenderer implements Renderer {
 				if (!result.success) {
 					return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path}: ${style.red(result.error ?? "failed")}`;
 				}
-				const diff = `+${result.linesAdded} -${result.linesRemoved}`;
-				return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path} ${style.gray(`(${diff} lines)`)}`;
+				return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path} ${style.green("✓")}`;
 			}
 			case "reminder": {
 				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${result.call.args.content.length} chars`)}`;

@@ -3,7 +3,7 @@
  *
  * 工具集：
  * - write: 文件创建/覆盖
- * - edit: 文件内容修改（Vim ex commands）
+ * - edit: 文件内容修改（影子编辑 — 意图驱动）
  * - exec: 脚本执行（script + runtime）
  * - reminder: 延迟提醒
  * - submit: 提交结果（动态生成）
@@ -68,7 +68,7 @@ export type ToolEntry =
 
 /**
  * 构建基础工具注册表（不含 submit）。
- * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir）。
+ * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir/editorLlm）。
  */
 function buildBaseRegistry(
 	execToolDef: LLMToolDefinition,
@@ -116,7 +116,7 @@ function buildBaseRegistry(
 					tool: "edit" as const,
 					args: EditArgsSchema.parse(tc.args),
 				};
-				return editTool(call, resolvedWorkspace);
+				return editTool(call, resolvedWorkspace, toolsConfig.editorLlm);
 			},
 		},
 		reminder: {
@@ -154,7 +154,7 @@ export const REGISTERED_TOOLS = new Set([
  * 异步：首次调用会探测系统可用 runtime（~1-2s），后续调用使用缓存。
  *
  * @param schema 可选的 Zod schema，用于约束 submit 的参数结构。
- * @param toolsConfig 工具配置，包含 workspace、tempDir 和 security 等。
+ * @param toolsConfig 工具配置，包含 workspace、tempDir、security、editorLlm 等。
  * @param model LLM 模型名称，用于选择 XML tag 风格（可选）。
  */
 export async function makeToolkit(
