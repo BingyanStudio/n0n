@@ -54,12 +54,14 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 			return formatWriteResult(msg as WriteToolResult, model);
 		case "edit":
 			return formatEditResult(msg as EditToolResult, model);
-		case "reminder":
+		case "reminder": {
+			const delay = msg.call.args.delay ?? 7;
 			return wrapTag(
 				"result",
-				`Reminder set: will appear in ${msg.call.args.delay ?? 0} rounds`,
+				`Reminder set. Commitment: ${delay} rounds. A <reminder> will be injected when it expires.`,
 				model,
 			);
+		}
 		case "submit": {
 			const parts = [wrapTag("result", "Submitted successfully.", model)];
 			if ("userResponse" in msg && msg.userResponse) {
@@ -163,16 +165,22 @@ export function toAPIMessages(
 				});
 				break;
 
-			case "reminder:due":
+			case "reminder:due": {
+				const reminderBody = [
+					msg.content,
+					"",
+					`⏰ Your commitment of ${msg.originalDelay} rounds has expired.`,
+					"",
+					"You **must** output a `<reflection>` block before your next tool call,",
+					"analyzing why the commitment was not met and how to adjust.",
+					"Then set a new reminder with updated progress and a revised commitment.",
+				].join("\n");
 				result.push({
 					role: "user",
-					content: wrapTag(
-						"reminder",
-						`${msg.content}\n\n⚠️ You **must** set a new reminder (with updated progress) in your next tool call.`,
-						model,
-					),
+					content: wrapTag("reminder", reminderBody, model),
 				});
 				break;
+			}
 
 			case "tool_arg_error":
 				result.push({
