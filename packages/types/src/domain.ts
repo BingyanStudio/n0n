@@ -178,6 +178,8 @@ export interface IdleNudgeMessage {
 export interface ReminderDueMessage {
 	type: "reminder:due";
 	content: string;
+	/** 模型设置 reminder 时承诺的原始轮数 */
+	originalDelay: number;
 }
 
 // ── 工具参数错误 ──
