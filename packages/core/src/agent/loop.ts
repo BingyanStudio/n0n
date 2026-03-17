@@ -349,6 +349,7 @@ function injectReminders(
 		messages.push({
 			type: "reminder:due",
 			content: r.content,
+			originalDelay: r.originalDelay,
 		});
 	}
 }
