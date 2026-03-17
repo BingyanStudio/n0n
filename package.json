@@ -10,7 +10,8 @@
 		"start:fairy": "bun run apps/fairy/src/index.ts",
 		"check": "turbo check",
 		"typecheck": "turbo typecheck",
-		"lint": "bunx biome check --write ."
+		"lint": "bunx biome check --write .",
+		"harbor-sim": "bun run scripts/harbor-sim.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.4",
