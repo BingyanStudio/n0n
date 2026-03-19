@@ -86,6 +86,11 @@ const EDITOR_TOOL_DEFINITION: LLMToolDefinition = {
 					description:
 						"List of search/replace operations to apply sequentially",
 				},
+				feedback: {
+					type: "string",
+					description:
+						"Optional feedback on the caller's edit intent. Provide suggestions if the intent is: (1) over-specified (contains line numbers or verbatim source code that isn't needed), (2) too large (should be split into multiple edits), or (3) too vague (cannot reliably locate the target). Omit or leave empty if the intent is clear and well-scoped.",
+				},
 			},
 			required: ["operations"],
 			additionalProperties: false,
@@ -111,13 +116,14 @@ const MAX_ATTEMPTS = 3;
 function extractOps(message: {
 	content: string | null;
 	tool_calls?: { function: { name: string; arguments: string } }[];
-}): { ops: SearchReplaceOp[]; error?: string } {
+}): { ops: SearchReplaceOp[]; error?: string; feedback?: string } {
 	// 优先从 tool_calls 提取
 	const toolCall = message.tool_calls?.[0];
 	if (toolCall?.function.name === "apply_edits") {
 		try {
 			const parsed = JSON.parse(toolCall.function.arguments);
 			const rawOps = parsed.operations;
+			const feedback = typeof parsed.feedback === "string" && parsed.feedback.length > 0 ? parsed.feedback : undefined;
 			if (!Array.isArray(rawOps)) {
 				return { ops: [], error: "apply_edits: operations is not an array" };
 			}
@@ -129,7 +135,7 @@ function extractOps(message: {
 					typeof (item as SearchReplaceOp).replace === "string",
 			);
 			return ops.length > 0
-				? { ops }
+				? { ops, feedback }
 				: { ops: [], error: "apply_edits: no valid operations in array" };
 		} catch (e) {
 			return {
@@ -232,7 +238,7 @@ async function resolveAndApply(
 	source: string,
 	intent: string,
 	editorLlm: LLMConfig,
-): Promise<{ content: string; error?: string }> {
+): Promise<{ content: string; error?: string; feedback?: string }> {
 	const messages: LLMRequestMessage[] = [
 		{ role: "system", content: editorAgentPrompt },
 		{
@@ -276,7 +282,7 @@ async function resolveAndApply(
 			}
 
 			// 提取操作
-			const { ops, error: extractError } = extractOps(message);
+			const { ops, error: extractError, feedback } = extractOps(message);
 			if (extractError || ops.length === 0) {
 				lastError = extractError ?? "No operations extracted";
 
@@ -368,7 +374,7 @@ async function resolveAndApply(
 			}
 
 			// 全部成功
-			return { content };
+			return { content, feedback };
 		} catch (err) {
 			lastError = `Editor LLM call failed: ${err instanceof Error ? err.message : String(err)}`;
 			// 网络错误等不追加消息，直接重试
@@ -468,6 +474,7 @@ export async function editTool(
 		diff: "",
 		success: false,
 		error,
+		feedback: null,
 	});
 
 	try {
@@ -478,13 +485,13 @@ export async function editTool(
 		const source = readFileSync(filePath, "utf8");
 
 		// 多轮对话：调用 Editor LLM + 验证 + 重试
-		const { content: newContent, error } = await resolveAndApply(
+		const { content: newContent, error, feedback } = await resolveAndApply(
 			source,
 			intent,
 			editorLlm,
 		);
 
-		if (error) return fail(error);
+		if (error) return { ...fail(error), feedback: feedback ?? null };
 
 		// 写入文件
 		writeFileSync(filePath, newContent, "utf8");
@@ -499,6 +506,7 @@ export async function editTool(
 			diff,
 			success: true,
 			error: null,
+			feedback: feedback ?? null,
 		};
 	} catch (err) {
 		return fail(err instanceof Error ? err.message : String(err));
