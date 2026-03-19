@@ -9,6 +9,7 @@
 
 import type {
 	DomainMessage,
+	EditDiff,
 	EditToolResult,
 	ExecToolResult,
 	LLMRequestMessage,
@@ -38,10 +39,20 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 	return wrapTag("error", `Write failed: ${msg.error}`, model);
 }
 
+function formatDiffText(diff: EditDiff): string {
+	if (diff.chunks.length === 0) return "(no changes)";
+	const sections: string[] = [];
+	for (const chunk of diff.chunks) {
+		const body = chunk.lines.map((dl) => dl.content).join("\n");
+		sections.push(body);
+	}
+	return sections.join("\n...\n");
+}
+
 function formatEditResult(msg: EditToolResult, model: string): string {
 	const parts: string[] = [];
 	if (msg.success) {
-		const summary = `Edited \`${msg.call.args.path}\`:\n${msg.diff}`;
+		const summary = `Edited \`${msg.call.args.path}\`:\n${formatDiffText(msg.diff)}`;
 		parts.push(wrapTag("edit_result", summary, model));
 	} else {
 		parts.push(wrapTag("error", `Edit failed: ${msg.error}`, model));

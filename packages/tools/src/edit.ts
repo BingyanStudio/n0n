@@ -23,6 +23,9 @@ import { isAbsolute, resolve } from "node:path";
 import type { LLMConfig } from "@n0n/llm";
 import { chatCompletion } from "@n0n/llm";
 import type {
+	DiffChunk,
+	DiffLine,
+	EditDiff,
 	EditToolCall,
 	EditToolResult,
 	LLMRequestMessage,
@@ -213,7 +216,7 @@ async function editorLoop(
 	source: string,
 	intent: string,
 	editorLlm: LLMConfig,
-): Promise<{ content: string; feedback: string | null; error: string | null }> {
+): Promise<{ content: string; feedback: string | null; error: string | null; rounds: number }> {
 	let current = source;
 	let editCount = 0;
 
@@ -250,6 +253,7 @@ async function editorLoop(
 				content: current,
 				feedback: null,
 				error: `Editor LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
+				rounds: round + 1,
 			};
 		}
 
@@ -344,7 +348,7 @@ async function editorLoop(
 							: null;
 
 					// 退出循环
-					return { content: current, feedback, error: null };
+					return { content: current, feedback, error: null, rounds: round + 1 };
 				}
 
 				default: {
@@ -362,6 +366,7 @@ async function editorLoop(
 		content: current,
 		feedback: null,
 		error: `Editor LLM did not submit within ${MAX_ROUNDS} rounds (${editCount} edits applied).`,
+		rounds: MAX_ROUNDS,
 	};
 }
 
@@ -373,13 +378,16 @@ async function editorLoop(
 export function computeDiff(
 	oldContent: string,
 	newContent: string,
-	path: string,
-): string {
-	if (oldContent === newContent) return "(no changes)";
+): EditDiff {
+	if (oldContent === newContent) {
+		return { chunks: [], added: 0, removed: 0 };
+	}
 
 	const oldLines = oldContent.split("\n");
 	const newLines = newContent.split("\n");
-	const chunks: string[] = [];
+	const chunks: DiffChunk[] = [];
+	let totalAdded = 0;
+	let totalRemoved = 0;
 
 	let i = 0;
 	let j = 0;
@@ -421,18 +429,31 @@ export function computeDiff(
 		}
 
 		const contextEnd = Math.min(newLines.length, newEnd + 2);
+		const chunkAdded = newEnd - j;
+		const chunkRemoved = oldEnd - i;
+		totalAdded += chunkAdded;
+		totalRemoved += chunkRemoved;
 
-		chunks.push(`@@ ${path}:${contextStart + 1}-${contextEnd} @@`);
+		const lines: DiffLine[] = [];
 		for (let c = contextStart; c < contextEnd; c++) {
-			const prefix = c >= j && c < newEnd ? "+" : " ";
-			chunks.push(`${prefix} ${c + 1} | ${newLines[c]}`);
+			lines.push({
+				line: c + 1,
+				content: newLines[c]!,
+				changed: c >= j && c < newEnd,
+			});
 		}
+
+		chunks.push({
+			startLine: contextStart + 1,
+			endLine: contextEnd,
+			lines,
+		});
 
 		i = oldEnd;
 		j = newEnd;
 	}
 
-	return chunks.join("\n");
+	return { chunks, added: totalAdded, removed: totalRemoved };
 }
 
 // ── Tool Entry Point ──
@@ -451,10 +472,12 @@ export async function editTool(
 		type: "tool_result",
 		tool: "edit" as const,
 		call,
-		diff: "",
+		diff: { chunks: [], added: 0, removed: 0 },
 		success: false,
 		error,
 		feedback: null,
+		rounds: 0,
+		durationMs: 0,
 	});
 
 	try {
@@ -464,19 +487,23 @@ export async function editTool(
 
 		const source = readFileSync(filePath, "utf8");
 
-		const { content: newContent, feedback, error } = await editorLoop(
+		const startTime = Date.now();
+
+		const { content: newContent, feedback, error, rounds } = await editorLoop(
 			source,
 			intent,
 			editorLlm,
 		);
 
-		if (error) return { ...fail(error), feedback: feedback ?? null };
+		const durationMs = Date.now() - startTime;
+
+		if (error) return { ...fail(error), feedback: feedback ?? null, rounds, durationMs };
 
 		// 写入文件
 		writeFileSync(filePath, newContent, "utf8");
 
 		// 生成变更摘要
-		const diff = computeDiff(source, newContent, call.args.path);
+		const diff = computeDiff(source, newContent);
 
 		return {
 			type: "tool_result",
@@ -486,6 +513,8 @@ export async function editTool(
 			success: true,
 			error: null,
 			feedback: feedback ?? null,
+			rounds,
+			durationMs,
 		};
 	} catch (err) {
 		return fail(err instanceof Error ? err.message : String(err));
