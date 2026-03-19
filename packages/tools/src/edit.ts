@@ -21,7 +21,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { LLMConfig } from "@n0n/llm";
-import { chatCompletion } from "@n0n/llm";
+import { chatCompletionStream, StreamAccumulator } from "@n0n/llm";
 import type {
 	DiffChunk,
 	DiffLine,
@@ -153,26 +153,38 @@ function applySingleOp(
 	oldStr: string,
 	newStr: string,
 ): { ok: true; content: string } | { ok: false; error: string } {
-	const idx = source.indexOf(oldStr);
+	// 归一化换行符：LLM 生成的 old_string 总是 \n，但源文件可能是 \r\n
+	const useCrlf = source.includes("\r\n");
+	const normSource = useCrlf ? source.replace(/\r\n/g, "\n") : source;
+	const normOld = oldStr.replace(/\r\n/g, "\n");
+
+	const idx = normSource.indexOf(normOld);
 	if (idx === -1) {
 		const preview =
-			oldStr.length > 80 ? `${oldStr.slice(0, 80)}...` : oldStr;
+			normOld.length > 80 ? `${normOld.slice(0, 80)}...` : normOld;
 		return { ok: false, error: `Search text not found: "${preview}"` };
 	}
 
-	const secondIdx = source.indexOf(oldStr, idx + 1);
+	const secondIdx = normSource.indexOf(normOld, idx + 1);
 	if (secondIdx !== -1) {
 		const preview =
-			oldStr.length > 80 ? `${oldStr.slice(0, 80)}...` : oldStr;
+			normOld.length > 80 ? `${normOld.slice(0, 80)}...` : normOld;
 		return {
 			ok: false,
 			error: `Search text matches multiple locations: "${preview}"`,
 		};
 	}
 
+	// 适配替换文本的换行风格
+	const normNew = useCrlf
+		? newStr.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n")
+		: newStr.replace(/\r\n/g, "\n");
+
 	const content =
-		source.slice(0, idx) + newStr + source.slice(idx + oldStr.length);
-	return { ok: true, content };
+		normSource.slice(0, idx) + normNew + normSource.slice(idx + normOld.length);
+
+	// 恢复原始换行风格
+	return { ok: true, content: useCrlf ? content.replace(/\n/g, "\r\n") : content };
 }
 
 /**
@@ -212,10 +224,11 @@ export function applyOps(
  * 4. Editor LLM 调用 submit → 提取 feedback → 退出循环
  * 5. 达到上限 → 返回最后的错误
  */
-async function editorLoop(
+export async function editorLoop(
 	source: string,
 	intent: string,
 	editorLlm: LLMConfig,
+	onEvent?: (round: number, event: import("@n0n/llm").StreamEvent) => void,
 ): Promise<{ content: string; feedback: string | null; error: string | null; rounds: number }> {
 	let current = source;
 	let editCount = 0;
@@ -237,17 +250,22 @@ async function editorLoop(
 	];
 
 	for (let round = 0; round < MAX_ROUNDS; round++) {
-		let response: Awaited<ReturnType<typeof chatCompletion>>;
+		let message: ReturnType<StreamAccumulator["toMessage"]>;
 		try {
-			response = await chatCompletion(
+			const acc = new StreamAccumulator();
+			for await (const event of chatCompletionStream(
 				{
 					messages,
 					tools: EDITOR_TOOLS,
 					tool_choice: "required",
 					temperature: 0,
 				},
-				editorLlm,
-			);
+				{ llm: editorLlm },
+			)) {
+				acc.push(event);
+				onEvent?.(round, event);
+			}
+			message = acc.toMessage();
 		} catch (err) {
 			return {
 				content: current,
@@ -257,12 +275,11 @@ async function editorLoop(
 			};
 		}
 
-		const message = response.choices[0]?.message;
-		if (!message?.tool_calls?.length) {
+		if (!message.tool_calls?.length) {
 			// 无工具调用 — 追加提示重试
 			messages.push({
 				role: "assistant",
-				content: message?.content ?? "",
+				content: message.content ?? "",
 			});
 			messages.push({
 				role: "user",
@@ -276,7 +293,11 @@ async function editorLoop(
 		messages.push({
 			role: "assistant",
 			content: message.content,
-			tool_calls: message.tool_calls,
+			tool_calls: message.tool_calls?.map((tc) => ({
+				id: tc.id,
+				type: tc.type,
+				function: tc.function,
+			})),
 		});
 
 		// 逐个处理 tool_calls
