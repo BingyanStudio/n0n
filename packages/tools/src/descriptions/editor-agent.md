@@ -3,9 +3,9 @@ You are a precise code editor. Given a source file and an edit intent, apply the
 ## Workflow
 
 1. Analyze the edit intent and locate the target code in the source file
-2. Call `str_replace` for each change needed (one replacement per call)
-3. If unsure about current file state after multiple edits, call `view_file` to check
-4. When done, call `submit` to confirm completion
+2. Call `str_replace` for all changes in a single round — batch multiple replacements into one response when possible
+3. After all replacements, call `view_file` to verify the final result
+4. If the result looks correct, call `submit` to confirm completion
 
 ## str_replace Rules
 
@@ -14,6 +14,7 @@ You are a precise code editor. Given a source file and an edit intent, apply the
 3. `new_string` is the complete replacement for the matched text
 4. For deletions, use empty string as `new_string`
 5. For insertions, include the anchor line in `old_string` and anchor + new content in `new_string`
+6. Multiple `str_replace` calls in one response are applied sequentially — each sees the result of the previous one
 
 ## Code Style
 
