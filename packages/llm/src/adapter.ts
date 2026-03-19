@@ -227,5 +227,16 @@ export function toAPIMessages(
 		}
 	}
 
-	return result;
+	// 合并连续的 system 消息 — 部分模型（如 minimax）不支持多个 system 消息
+	const merged: LLMRequestMessage[] = [];
+	for (const msg of result) {
+		const prev = merged[merged.length - 1];
+		if (msg.role === "system" && prev?.role === "system") {
+			prev.content += `\n\n${msg.content}`;
+		} else {
+			merged.push(msg);
+		}
+	}
+
+	return merged;
 }
