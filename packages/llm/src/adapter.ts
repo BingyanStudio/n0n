@@ -43,10 +43,10 @@ function formatDiffText(diff: EditDiff, path: string): string {
 	if (diff.chunks.length === 0) return "(no changes)";
 	const lines: string[] = [];
 	for (const chunk of diff.chunks) {
-		lines.push(`@@ ${path}:${chunk.startLine}-${chunk.endLine} @@`);
+		lines.push(`@@ ${path} @@`);
 		for (const dl of chunk.lines) {
 			const prefix = dl.changed ? "+" : " ";
-			lines.push(`${prefix} ${dl.line} | ${dl.content}`);
+			lines.push(`${prefix} ${dl.content}`);
 		}
 	}
 	return lines.join("\n");
