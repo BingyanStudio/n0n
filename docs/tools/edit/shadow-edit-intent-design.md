@@ -114,3 +114,28 @@ shadow_edit(path, intent): 编辑文件。用自然语言描述你的修改意�
 方案 B（shadow edit）在精确端退化为方案 A：当主模型的意图是"将 X 替换为 Y"时，Editor LLM 只是做格式翻译。两者是连续谱的不同位置，不是对立方案。
 
 shadow edit 的优势在于：主模型可以在连续谱上自由滑动，而 Editor LLM + 反馈机制确保无论主模型在哪个位置表达，都能得到正确执行或有效纠正。
+
+## 6. 架构演进：editorLoop
+
+### 问题
+
+初版实现中 `resolveAndApply()` 是一个手写的 mini agent loop（~150 行），与 `@n0n/core` 的 `agentLoop` 高度重复。
+考虑复用 `agentLoop`，但会导致 `@n0n/tools → @n0n/core` 的循环依赖（当前依赖链：`types ← llm/tools ← core`）。
+
+### 决策
+
+Editor LLM 是 edit 工具的**内部实现细节**，不应泄漏到外部。在 `edit.ts` 内部实现专用的 `editorLoop`，完全封装，只依赖 `@n0n/llm`。
+
+### Editor LLM 工具集
+
+| 工具 | 参数 | 职责 |
+|------|------|------|
+| `str_replace` | `old_string`, `new_string` | 单次精确替换，可多次调用 |
+| `view_file` | 无 | 读取当前文件状态 |
+| `submit` | `feedback?` | 提交完成 + 可选反馈，退出循环 |
+
+设计理由：
+- **`str_replace`**：扁平参数，符合模型先验（Anthropic `edit_file` 模式），单次调用单次替换
+- **`view_file`**：多次编辑后确认当前状态，比在错误消息中塞完整文件更干净
+- **`submit`**：统一退出机制 + 反馈通道，指令清晰时直接 submit 不带 feedback
+- **不给 exec**：Editor LLM 职责是翻译编辑意图为文本替换，不需要执行脚本
