@@ -39,23 +39,20 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 	return wrapTag("error", `Write failed: ${msg.error}`, model);
 }
 
-function formatDiffText(diff: EditDiff, path: string): string {
+function formatDiffText(diff: EditDiff): string {
 	if (diff.chunks.length === 0) return "(no changes)";
-	const lines: string[] = [];
+	const sections: string[] = [];
 	for (const chunk of diff.chunks) {
-		lines.push(`@@ ${path} @@`);
-		for (const dl of chunk.lines) {
-			const prefix = dl.changed ? "+" : " ";
-			lines.push(`${prefix} ${dl.content}`);
-		}
+		const body = chunk.lines.map((dl) => dl.content).join("\n");
+		sections.push(body);
 	}
-	return lines.join("\n");
+	return sections.join("\n...\n");
 }
 
 function formatEditResult(msg: EditToolResult, model: string): string {
 	const parts: string[] = [];
 	if (msg.success) {
-		const summary = `Edited \`${msg.call.args.path}\`:\n${formatDiffText(msg.diff, msg.call.args.path)}`;
+		const summary = `Edited \`${msg.call.args.path}\`:\n${formatDiffText(msg.diff)}`;
 		parts.push(wrapTag("edit_result", summary, model));
 	} else {
 		parts.push(wrapTag("error", `Edit failed: ${msg.error}`, model));
