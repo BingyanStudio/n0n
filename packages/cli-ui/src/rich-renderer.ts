@@ -275,10 +275,18 @@ export class RichRenderer implements Renderer {
 				return `${style.dim("◂")} ${style.cyan("write")} ${result.call.args.path}`;
 			}
 			case "edit": {
+				const path = result.call.args.path;
+				const duration = style.gray(`${(result.durationMs / 1000).toFixed(1)}s`);
+				const rounds = style.gray(`${result.rounds}r`);
 				if (!result.success) {
-					return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path}: ${style.red(result.error ?? "failed")}`;
+					return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${style.red(result.error ?? "failed")}`;
 				}
-				return `${style.dim("◂")} ${style.cyan("edit")} ${result.call.args.path} ${style.green("✓")}`;
+				const { added, removed } = result.diff;
+				const lineStats = [
+					added > 0 ? style.green(`+${added}`) : null,
+					removed > 0 ? style.red(`-${removed}`) : null,
+				].filter(Boolean).join(" ") || style.gray("(no changes)");
+				return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${lineStats} ${style.green("✓")}`;
 			}
 			case "reminder": {
 				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${result.call.args.content.length} chars`)}`;

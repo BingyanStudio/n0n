@@ -133,43 +133,62 @@ describe("applyOps", () => {
 describe("computeDiff", () => {
 	test("无变化", () => {
 		const content = "line1\nline2\nline3";
-		const diff = computeDiff(content, content, "test.ts");
-		expect(diff).toBe("(no changes)");
+		const diff = computeDiff(content, content);
+		expect(diff.chunks).toHaveLength(0);
+		expect(diff.added).toBe(0);
+		expect(diff.removed).toBe(0);
 	});
 
-	test("单行修改 — 只显示最终状态", () => {
+	test("单行修改 — 统计正确", () => {
 		const old = "line1\nline2\nline3";
 		const now = "line1\nmodified\nline3";
-		const diff = computeDiff(old, now, "test.ts");
-		// 应该包含新内容，带 + 前缀
-		expect(diff).toContain("+");
-		expect(diff).toContain("modified");
-		// 不应该包含旧内容的删除标记
-		expect(diff).not.toContain("-line2");
-		expect(diff).not.toContain("- ");
+		const diff = computeDiff(old, now);
+		expect(diff.added).toBeGreaterThan(0);
+		expect(diff.removed).toBeGreaterThan(0);
+		expect(diff.chunks).toHaveLength(1);
+		const chunk = diff.chunks[0]!;
+		// 变更行应包含新内容
+		const changedLines = chunk.lines.filter((l) => l.changed);
+		expect(changedLines.length).toBeGreaterThan(0);
+		expect(changedLines.some((l) => l.content === "modified")).toBe(true);
 	});
 
-	test("新增行 — 显示新增内容", () => {
+	test("新增行 — added 计数", () => {
 		const old = "line1\nline2";
 		const now = "line1\nnew line\nline2";
-		const diff = computeDiff(old, now, "test.ts");
-		expect(diff).toContain("new line");
-		expect(diff).toContain("+");
+		const diff = computeDiff(old, now);
+		expect(diff.added).toBeGreaterThan(0);
+		const allContent = diff.chunks.flatMap((c) =>
+			c.lines.map((l) => l.content),
+		);
+		expect(allContent).toContain("new line");
 	});
 
-	test("删除行 — 不显示被删除的内容", () => {
+	test("删除行 — removed 计数", () => {
 		const old = "line1\nline2\nline3";
 		const now = "line1\nline3";
-		const diff = computeDiff(old, now, "test.ts");
-		// 不应该显示被删除的 line2
-		expect(diff).not.toContain("line2");
+		const diff = computeDiff(old, now);
+		expect(diff.removed).toBeGreaterThan(0);
+		// 不应该在新文件的行内容中包含被删除的 line2
+		const allContent = diff.chunks.flatMap((c) =>
+			c.lines.map((l) => l.content),
+		);
+		expect(allContent).not.toContain("line2");
 	});
 
-	test("包含行号和文件路径", () => {
+	test("chunks 包含行号信息", () => {
 		const old = "line1\nline2\nline3";
 		const now = "line1\nchanged\nline3";
-		const diff = computeDiff(old, now, "src/foo.ts");
-		expect(diff).toContain("src/foo.ts");
-		expect(diff).toContain("@@");
+		const diff = computeDiff(old, now);
+		expect(diff.chunks).toHaveLength(1);
+		const chunk = diff.chunks[0]!;
+		expect(chunk.startLine).toBeGreaterThan(0);
+		expect(chunk.endLine).toBeGreaterThanOrEqual(
+			chunk.startLine,
+		);
+		// 每行都有行号
+		for (const line of chunk.lines) {
+			expect(line.line).toBeGreaterThan(0);
+		}
 	});
 });

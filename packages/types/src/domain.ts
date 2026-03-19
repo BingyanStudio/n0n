@@ -122,14 +122,48 @@ export type WriteToolResult = ToolResultBase & {
 	error: string | null;
 };
 
+/** diff 中的单行 */
+export interface DiffLine {
+	/** 行号（基于新文件） */
+	line: number;
+	/** 行内容 */
+	content: string;
+	/** 是否为变更行（新增或修改） */
+	changed: boolean;
+}
+
+/** diff 中的一个变更块 */
+export interface DiffChunk {
+	/** 块起始行号（基于新文件） */
+	startLine: number;
+	/** 块结束行号（基于新文件） */
+	endLine: number;
+	/** 块内各行 */
+	lines: DiffLine[];
+}
+
+/** 结构化 diff — 纯数据，格式化由 adapter/renderer 各自负责 */
+export interface EditDiff {
+	/** 变更块列表 */
+	chunks: DiffChunk[];
+	/** 新增/修改的行数 */
+	added: number;
+	/** 删除的行数 */
+	removed: number;
+}
+
 export type EditToolResult = ToolResultBase & {
 	tool: EditToolCall["tool"]; // "edit"
 	call: EditToolCall;
-	diff: string;
+	diff: EditDiff;
 	success: boolean;
 	error: string | null;
 	/** Editor LLM 对主模型编辑指令的反馈（过度指定/任务过大/过于模糊等），null 表示指令清晰 */
 	feedback: string | null;
+	/** Editor LLM 循环轮次数 */
+	rounds: number;
+	/** 编辑总耗时（毫秒） */
+	durationMs: number;
 };
 
 export type ReminderToolResult = ToolResultBase & {
