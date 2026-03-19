@@ -39,11 +39,17 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 }
 
 function formatEditResult(msg: EditToolResult, model: string): string {
+	const parts: string[] = [];
 	if (msg.success) {
 		const summary = `Edited \`${msg.call.args.path}\`:\n${msg.diff}`;
-		return wrapTag("edit_result", summary, model);
+		parts.push(wrapTag("edit_result", summary, model));
+	} else {
+		parts.push(wrapTag("error", `Edit failed: ${msg.error}`, model));
 	}
-	return wrapTag("error", `Edit failed: ${msg.error}`, model);
+	if (msg.feedback) {
+		parts.push(wrapTag("edit_feedback", msg.feedback, model));
+	}
+	return parts.join("\n");
 }
 
 function toolResultToContent(msg: ToolResult, model: string): string {

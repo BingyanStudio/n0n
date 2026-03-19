@@ -4,13 +4,18 @@
  * 主模型用自由文本表达编辑意图（intent），影子层（Editor LLM）
  * 负责理解意图并生成精确的 search/replace 操作来修改文件。
  *
- * 架构：主模型 → intent → Editor LLM → search/replace → 文件
+ * 架构：主模型 → intent → editorLoop(Editor LLM) → str_replace × N → 文件
+ *
+ * Editor LLM 工具集（完全封装在 edit.ts 内部，不依赖 @n0n/core）：
+ * - str_replace(old_string, new_string): 单次精确替换
+ * - view_file(): 读取当前文件状态
+ * - submit(feedback?): 提交完成 + 可选反馈，退出循环
  *
  * 设计原则：
  * - 内容即地址：用内容本身定位，而非外部坐标
  * - 意图驱动：主模型只需表达"改什么"，不需要关心"怎么精确定位"
  * - 验证闭环：返回变更后的最终状态给主模型确认
- * - 重试纠错：Editor LLM 出错时反馈错误信息并重试
+ * - 运行时反馈：Editor LLM 通过 submit 反馈指令质量，动态引导主模型
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -29,6 +34,8 @@ import editorAgentPrompt from "./descriptions/editor-agent.md" with {
 };
 
 export { EditArgsSchema } from "@n0n/types";
+
+// ── 主模型工具定义（intent 驱动） ──
 
 export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 	type: "function",
@@ -54,44 +61,73 @@ export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
 	},
 };
 
-// ── Editor LLM 工具定义 ──
+// ── Editor LLM 内部工具定义 ──
 
-const EDITOR_TOOL_DEFINITION: LLMToolDefinition = {
+const STR_REPLACE_TOOL: LLMToolDefinition = {
 	type: "function",
 	function: {
-		name: "apply_edits",
+		name: "str_replace",
 		description:
-			"Apply a list of search/replace operations to the source file. Each operation finds an exact substring and replaces it.",
+			"Replace an exact substring in the file. The old_string must match character-for-character (including whitespace). Use the minimal unique fragment needed to identify the location.",
 		parameters: {
 			type: "object",
 			properties: {
-				operations: {
-					type: "array" as unknown as "object",
-					items: {
-						type: "object",
-						properties: {
-							search: {
-								type: "string",
-								description:
-									"Exact substring to find in the source file (character-for-character match including whitespace)",
-							},
-							replace: {
-								type: "string",
-								description:
-									"Replacement text. Use empty string for deletions.",
-							},
-						},
-						required: ["search", "replace"],
-					},
+				old_string: {
+					type: "string",
 					description:
-						"List of search/replace operations to apply sequentially",
+						"Exact substring to find in the current file content",
+				},
+				new_string: {
+					type: "string",
+					description:
+						"Replacement text. Use empty string for deletions.",
 				},
 			},
-			required: ["operations"],
+			required: ["old_string", "new_string"],
 			additionalProperties: false,
 		},
 	},
 };
+
+const VIEW_FILE_TOOL: LLMToolDefinition = {
+	type: "function",
+	function: {
+		name: "view_file",
+		description:
+			"View the current file content after previous edits. Use this to verify the file state before making further changes.",
+		parameters: {
+			type: "object",
+			properties: {},
+			additionalProperties: false,
+		},
+	},
+};
+
+const SUBMIT_TOOL: LLMToolDefinition = {
+	type: "function",
+	function: {
+		name: "submit",
+		description:
+			"Submit when all edits are complete. Optionally provide feedback on the caller's intent quality.",
+		parameters: {
+			type: "object",
+			properties: {
+				feedback: {
+					type: "string",
+					description:
+						"Optional feedback if the caller's intent could be improved: over-specified (contains line numbers/verbatim code), too large (should split), or too vague (cannot locate target). Omit if intent is clear.",
+				},
+			},
+			additionalProperties: false,
+		},
+	},
+};
+
+const EDITOR_TOOLS: LLMToolDefinition[] = [
+	STR_REPLACE_TOOL,
+	VIEW_FILE_TOOL,
+	SUBMIT_TOOL,
+];
 
 // ── Types ──
 
@@ -100,87 +136,44 @@ interface SearchReplaceOp {
 	replace: string;
 }
 
-/** 最大重试次数（含首次尝试） */
-const MAX_ATTEMPTS = 3;
+/** Editor LLM 最大循环轮数 */
+const MAX_ROUNDS = 15;
 
-// ── Core Logic ──
+// ── Core Logic: applyOps ──
 
 /**
- * 从 tool_calls 或 content 中提取 search/replace 操作
+ * 应用单次 search/replace 操作到源文件内容。
+ * 返回 { ok, content?, error? }。
  */
-function extractOps(message: {
-	content: string | null;
-	tool_calls?: { function: { name: string; arguments: string } }[];
-}): { ops: SearchReplaceOp[]; error?: string } {
-	// 优先从 tool_calls 提取
-	const toolCall = message.tool_calls?.[0];
-	if (toolCall?.function.name === "apply_edits") {
-		try {
-			const parsed = JSON.parse(toolCall.function.arguments);
-			const rawOps = parsed.operations;
-			if (!Array.isArray(rawOps)) {
-				return { ops: [], error: "apply_edits: operations is not an array" };
-			}
-			const ops = rawOps.filter(
-				(item: unknown): item is SearchReplaceOp =>
-					typeof item === "object" &&
-					item !== null &&
-					typeof (item as SearchReplaceOp).search === "string" &&
-					typeof (item as SearchReplaceOp).replace === "string",
-			);
-			return ops.length > 0
-				? { ops }
-				: { ops: [], error: "apply_edits: no valid operations in array" };
-		} catch (e) {
-			return {
-				ops: [],
-				error: `apply_edits: failed to parse arguments: ${e instanceof Error ? e.message : String(e)}`,
-			};
-		}
+function applySingleOp(
+	source: string,
+	oldStr: string,
+	newStr: string,
+): { ok: true; content: string } | { ok: false; error: string } {
+	const idx = source.indexOf(oldStr);
+	if (idx === -1) {
+		const preview =
+			oldStr.length > 80 ? `${oldStr.slice(0, 80)}...` : oldStr;
+		return { ok: false, error: `Search text not found: "${preview}"` };
 	}
 
-	// Fallback: 从 content 解析 JSON
-	if (message.content) {
-		return parseOpsFromContent(message.content);
+	const secondIdx = source.indexOf(oldStr, idx + 1);
+	if (secondIdx !== -1) {
+		const preview =
+			oldStr.length > 80 ? `${oldStr.slice(0, 80)}...` : oldStr;
+		return {
+			ok: false,
+			error: `Search text matches multiple locations: "${preview}"`,
+		};
 	}
 
-	return { ops: [], error: "No tool call and no content in response" };
+	const content =
+		source.slice(0, idx) + newStr + source.slice(idx + oldStr.length);
+	return { ok: true, content };
 }
 
 /**
- * Fallback: 从纯文本 content 中解析 JSON 操作列表
- */
-function parseOpsFromContent(content: string): {
-	ops: SearchReplaceOp[];
-	error?: string;
-} {
-	try {
-		const jsonStr = content
-			.replace(/^```(?:json)?\s*/m, "")
-			.replace(/\s*```\s*$/m, "")
-			.trim();
-		const parsed = JSON.parse(jsonStr);
-		const rawOps = Array.isArray(parsed) ? parsed : parsed?.operations;
-		if (!Array.isArray(rawOps)) {
-			return { ops: [], error: "Could not parse operations from content" };
-		}
-		const ops = rawOps.filter(
-			(item: unknown): item is SearchReplaceOp =>
-				typeof item === "object" &&
-				item !== null &&
-				typeof (item as SearchReplaceOp).search === "string" &&
-				typeof (item as SearchReplaceOp).replace === "string",
-		);
-		return ops.length > 0
-			? { ops }
-			: { ops: [], error: "No valid operations in content" };
-	} catch {
-		return { ops: [], error: "Failed to parse JSON from content" };
-	}
-}
-
-/**
- * 应用 search/replace 操作序列到源文件内容
+ * 应用 search/replace 操作序列到源文件内容（兼容测试用）。
  */
 export function applyOps(
 	source: string,
@@ -191,48 +184,39 @@ export function applyOps(
 	const errors: string[] = [];
 
 	for (const op of ops) {
-		const idx = content.indexOf(op.search);
-		if (idx === -1) {
-			errors.push(
-				`Search text not found: "${op.search.length > 80 ? `${op.search.slice(0, 80)}...` : op.search}"`,
-			);
-			continue;
+		const result = applySingleOp(content, op.search, op.replace);
+		if (result.ok) {
+			content = result.content;
+			applied++;
+		} else {
+			errors.push(result.error);
 		}
-
-		const secondIdx = content.indexOf(op.search, idx + 1);
-		if (secondIdx !== -1) {
-			errors.push(
-				`Search text matches multiple locations: "${op.search.length > 80 ? `${op.search.slice(0, 80)}...` : op.search}"`,
-			);
-			continue;
-		}
-
-		content =
-			content.slice(0, idx) +
-			op.replace +
-			content.slice(idx + op.search.length);
-		applied++;
 	}
 
 	return { content, applied, errors };
 }
 
+// ── Editor Loop ──
+
 /**
- * 多轮对话循环：调用 Editor LLM，验证结果，出错时反馈并重试。
+ * Editor LLM 专用循环：驱动 Editor LLM 通过 str_replace/view_file/submit
+ * 完成编辑任务。完全封装在 edit.ts 内部，不依赖 @n0n/core。
  *
  * 流程：
  * 1. 发送 [system, user(source + intent)]
- * 2. Editor LLM 返回 tool_call → 解析 ops → applyOps 验证
- * 3. 全部成功 → 返回新内容
- * 4. 有失败 → 追加 assistant + tool_result(错误) 到 messages，重试
- * 5. 没调用工具 → 追加 user(错误提示)，重试
- * 6. 达到上限 → 返回最后的错误
+ * 2. Editor LLM 调用 str_replace → 执行替换 → 返回结果
+ * 3. Editor LLM 调用 view_file → 返回当前文件内容
+ * 4. Editor LLM 调用 submit → 提取 feedback → 退出循环
+ * 5. 达到上限 → 返回最后的错误
  */
-async function resolveAndApply(
+async function editorLoop(
 	source: string,
 	intent: string,
 	editorLlm: LLMConfig,
-): Promise<{ content: string; error?: string }> {
+): Promise<{ content: string; feedback: string | null; error: string | null }> {
+	let current = source;
+	let editCount = 0;
+
 	const messages: LLMRequestMessage[] = [
 		{ role: "system", content: editorAgentPrompt },
 		{
@@ -245,141 +229,143 @@ async function resolveAndApply(
 				"<edit_intent>",
 				intent,
 				"</edit_intent>",
-				"",
-				"Call the `apply_edits` tool with the exact search/replace operations needed. You MUST call the tool.",
 			].join("\n"),
 		},
 	];
 
-	let lastError = "";
-
-	for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+	for (let round = 0; round < MAX_ROUNDS; round++) {
+		let response: Awaited<ReturnType<typeof chatCompletion>>;
 		try {
-			const response = await chatCompletion(
+			response = await chatCompletion(
 				{
 					messages,
-					tools: [EDITOR_TOOL_DEFINITION],
+					tools: EDITOR_TOOLS,
 					tool_choice: "required",
 					temperature: 0,
 				},
 				editorLlm,
 			);
-
-			const message = response.choices[0]?.message;
-			if (!message) {
-				lastError = "Editor LLM returned empty response";
-				messages.push({
-					role: "user",
-					content: `Error: ${lastError}. Please call the apply_edits tool.`,
-				});
-				continue;
-			}
-
-			// 提取操作
-			const { ops, error: extractError } = extractOps(message);
-			if (extractError || ops.length === 0) {
-				lastError = extractError ?? "No operations extracted";
-
-				// 追加 assistant 消息（保持对话连贯）
-				messages.push({
-					role: "assistant",
-					content: message.content,
-					tool_calls: message.tool_calls,
-				});
-
-				// 如果有 tool_call，追加 tool result 反馈错误
-				if (message.tool_calls?.[0]) {
-					messages.push({
-						role: "tool",
-						content: `Error: ${lastError}. Review the source file and fix your operations.`,
-						tool_call_id: message.tool_calls[0].id,
-					});
-				} else {
-					messages.push({
-						role: "user",
-						content: `Error: ${lastError}. You MUST call the apply_edits tool. Do not respond with text.`,
-					});
-				}
-				continue;
-			}
-
-			// 应用操作并验证
-			const { content, applied, errors } = applyOps(source, ops);
-
-			if (applied === 0) {
-				lastError = `All operations failed:\n${errors.join("\n")}`;
-
-				messages.push({
-					role: "assistant",
-					content: message.content,
-					tool_calls: message.tool_calls,
-				});
-				if (message.tool_calls?.[0]) {
-					messages.push({
-						role: "tool",
-						content: [
-							`Error: ${lastError}`,
-							"",
-							"Your search strings did not match the source file exactly.",
-							"Check whitespace, indentation, and character-for-character accuracy.",
-							"Here is the current source file for reference:",
-							"<source_file>",
-							source,
-							"</source_file>",
-							"",
-							"Call apply_edits again with corrected operations.",
-						].join("\n"),
-						tool_call_id: message.tool_calls[0].id,
-					});
-				}
-				continue;
-			}
-
-			if (errors.length > 0) {
-				// 部分成功 — 用部分应用后的内容作为新 source 继续
-				const remainingErrors = errors.join("\n");
-				lastError = `${applied} operation(s) applied, ${errors.length} failed:\n${remainingErrors}`;
-
-				messages.push({
-					role: "assistant",
-					content: message.content,
-					tool_calls: message.tool_calls,
-				});
-				if (message.tool_calls?.[0]) {
-					messages.push({
-						role: "tool",
-						content: [
-							`Partial success: ${applied} applied, ${errors.length} failed:`,
-							remainingErrors,
-							"",
-							"Here is the UPDATED source file after partial application:",
-							"<source_file>",
-							content,
-							"</source_file>",
-							"",
-							"Call apply_edits again to fix the remaining failed operations.",
-						].join("\n"),
-						tool_call_id: message.tool_calls[0].id,
-					});
-				}
-				// 更新 source 为部分应用后的内容
-				source = content;
-				continue;
-			}
-
-			// 全部成功
-			return { content };
 		} catch (err) {
-			lastError = `Editor LLM call failed: ${err instanceof Error ? err.message : String(err)}`;
-			// 网络错误等不追加消息，直接重试
+			return {
+				content: current,
+				feedback: null,
+				error: `Editor LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
+			};
+		}
+
+		const message = response.choices[0]?.message;
+		if (!message?.tool_calls?.length) {
+			// 无工具调用 — 追加提示重试
+			messages.push({
+				role: "assistant",
+				content: message?.content ?? "",
+			});
+			messages.push({
+				role: "user",
+				content:
+					"You must call a tool. Use str_replace to make changes, view_file to check the file, or submit when done.",
+			});
+			continue;
+		}
+
+		// 追加 assistant 消息
+		messages.push({
+			role: "assistant",
+			content: message.content,
+			tool_calls: message.tool_calls,
+		});
+
+		// 逐个处理 tool_calls
+		for (const tc of message.tool_calls) {
+			const name = tc.function.name;
+			let args: Record<string, unknown>;
+			try {
+				args = JSON.parse(tc.function.arguments);
+			} catch {
+				messages.push({
+					role: "tool",
+					tool_call_id: tc.id,
+					content: "Error: Failed to parse tool arguments as JSON.",
+				});
+				continue;
+			}
+
+			switch (name) {
+				case "str_replace": {
+					const oldStr = String(args.old_string ?? "");
+					const newStr = String(args.new_string ?? "");
+
+					if (!oldStr) {
+						messages.push({
+							role: "tool",
+							tool_call_id: tc.id,
+							content: "Error: old_string cannot be empty.",
+						});
+						break;
+					}
+
+					const result = applySingleOp(current, oldStr, newStr);
+					if (result.ok) {
+						current = result.content;
+						editCount++;
+						messages.push({
+							role: "tool",
+							tool_call_id: tc.id,
+							content: `OK: Replacement applied (edit #${editCount}).`,
+						});
+					} else {
+						messages.push({
+							role: "tool",
+							tool_call_id: tc.id,
+							content: [
+								`Error: ${result.error}`,
+								"",
+								"Check whitespace, indentation, and character-for-character accuracy.",
+								"Call view_file to see the current file content.",
+							].join("\n"),
+						});
+					}
+					break;
+				}
+
+				case "view_file": {
+					messages.push({
+						role: "tool",
+						tool_call_id: tc.id,
+						content: `<source_file>\n${current}\n</source_file>`,
+					});
+					break;
+				}
+
+				case "submit": {
+					const feedback =
+						typeof args.feedback === "string" && args.feedback.length > 0
+							? args.feedback
+							: null;
+
+					// 退出循环
+					return { content: current, feedback, error: null };
+				}
+
+				default: {
+					messages.push({
+						role: "tool",
+						tool_call_id: tc.id,
+						content: `Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
+					});
+				}
+			}
 		}
 	}
 
 	return {
-		content: source,
-		error: `Failed after ${MAX_ATTEMPTS} attempts. Last error: ${lastError}`,
+		content: current,
+		feedback: null,
+		error: `Editor LLM did not submit within ${MAX_ROUNDS} rounds (${editCount} edits applied).`,
 	};
 }
+
+// ── Diff ──
 
 /**
  * 生成变更摘要 — 只显示变更区域的最终状态（不显示删除内容）
@@ -468,6 +454,7 @@ export async function editTool(
 		diff: "",
 		success: false,
 		error,
+		feedback: null,
 	});
 
 	try {
@@ -477,14 +464,13 @@ export async function editTool(
 
 		const source = readFileSync(filePath, "utf8");
 
-		// 多轮对话：调用 Editor LLM + 验证 + 重试
-		const { content: newContent, error } = await resolveAndApply(
+		const { content: newContent, feedback, error } = await editorLoop(
 			source,
 			intent,
 			editorLlm,
 		);
 
-		if (error) return fail(error);
+		if (error) return { ...fail(error), feedback: feedback ?? null };
 
 		// 写入文件
 		writeFileSync(filePath, newContent, "utf8");
@@ -499,6 +485,7 @@ export async function editTool(
 			diff,
 			success: true,
 			error: null,
+			feedback: feedback ?? null,
 		};
 	} catch (err) {
 		return fail(err instanceof Error ? err.message : String(err));
