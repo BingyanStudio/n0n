@@ -128,6 +128,8 @@ export type EditToolResult = ToolResultBase & {
 	diff: string;
 	success: boolean;
 	error: string | null;
+	/** Editor LLM 对主模型编辑指令的反馈（过度指定/任务过大/过于模糊等），null 表示指令清晰 */
+	feedback: string | null;
 };
 
 export type ReminderToolResult = ToolResultBase & {
