@@ -26,7 +26,7 @@ import type {
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import type { ToolsConfig } from "./config.ts";
-import { EDIT_TOOL_DEFINITION, EditArgsSchema, editTool } from "./edit.ts";
+import { EDIT_TOOL_DEFINITION, EditArgsSchema, editToolStream } from "./edit.ts";
 import { detectEnv } from "./env.ts";
 import {
 	ExecArgsSchema,
@@ -109,14 +109,14 @@ function buildBaseRegistry(
 		},
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,
-			stream: false,
+			stream: true,
 			execute: (tc) => {
 				const call: EditToolCall = {
 					id: tc.id,
 					tool: "edit" as const,
 					args: EditArgsSchema.parse(tc.args),
 				};
-				return editTool(call, resolvedWorkspace, toolsConfig.editorLlm);
+				return editToolStream(call, resolvedWorkspace, toolsConfig.editorLlm);
 			},
 		},
 		reminder: {

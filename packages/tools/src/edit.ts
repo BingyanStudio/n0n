@@ -30,6 +30,8 @@ import type {
 	EditToolResult,
 	LLMRequestMessage,
 	LLMToolDefinition,
+	ToolOutputChunk,
+	ToolStreamEvent,
 } from "@n0n/types";
 import editDescription from "./descriptions/edit.md" with { type: "text" };
 import editorAgentPrompt from "./descriptions/editor-agent.md" with {
@@ -229,6 +231,7 @@ export async function editorLoop(
 	intent: string,
 	editorLlm: LLMConfig,
 	onEvent?: (round: number, event: import("@n0n/llm").StreamEvent) => void,
+	onToolResult?: (round: number, summary: string) => void,
 ): Promise<{ content: string; feedback: string | null; error: string | null; rounds: number }> {
 	let current = source;
 	let editCount = 0;
@@ -312,6 +315,7 @@ export async function editorLoop(
 					tool_call_id: tc.id,
 					content: "Error: Failed to parse tool arguments as JSON.",
 				});
+				onToolResult?.(round, "parse error");
 				continue;
 			}
 
@@ -326,6 +330,7 @@ export async function editorLoop(
 							tool_call_id: tc.id,
 							content: "Error: old_string cannot be empty.",
 						});
+						onToolResult?.(round, "str_replace → old_string empty");
 						break;
 					}
 
@@ -338,6 +343,7 @@ export async function editorLoop(
 							tool_call_id: tc.id,
 							content: `OK: Replacement applied (edit #${editCount}).`,
 						});
+						onToolResult?.(round, `str_replace → edit #${editCount}`);
 					} else {
 						messages.push({
 							role: "tool",
@@ -349,6 +355,7 @@ export async function editorLoop(
 								"Call view_file to see the current file content.",
 							].join("\n"),
 						});
+						onToolResult?.(round, `str_replace → ${result.error}`);
 					}
 					break;
 				}
@@ -359,6 +366,7 @@ export async function editorLoop(
 						tool_call_id: tc.id,
 						content: `<source_file>\n${current}\n</source_file>`,
 					});
+					onToolResult?.(round, "view_file → ok");
 					break;
 				}
 
@@ -368,6 +376,7 @@ export async function editorLoop(
 							? args.feedback
 							: null;
 
+					onToolResult?.(round, "submit");
 					// 退出循环
 					return { content: current, feedback, error: null, rounds: round + 1 };
 				}
@@ -378,6 +387,7 @@ export async function editorLoop(
 						tool_call_id: tc.id,
 						content: `Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
 					});
+					onToolResult?.(round, `unknown tool: ${name}`);
 				}
 			}
 		}
@@ -539,5 +549,128 @@ export async function editTool(
 		};
 	} catch (err) {
 		return fail(err instanceof Error ? err.message : String(err));
+	}
+}
+
+/**
+ * 流式版 editTool — yield ToolOutputChunk 展示 Editor LLM 中间过程，
+ * 最终 yield EditToolResult。
+ */
+export async function* editToolStream(
+	call: EditToolCall,
+	workspace: string,
+	editorLlm: LLMConfig,
+): AsyncGenerator<ToolStreamEvent> {
+	const filePath = isAbsolute(call.args.path)
+		? call.args.path
+		: resolve(workspace, call.args.path);
+	const { intent } = call.args;
+
+	const fail = (error: string): EditToolResult => ({
+		type: "tool_result",
+		tool: "edit" as const,
+		call,
+		diff: { chunks: [], added: 0, removed: 0 },
+		success: false,
+		error,
+		feedback: null,
+		rounds: 0,
+		durationMs: 0,
+	});
+
+	try {
+		if (!existsSync(filePath)) {
+			yield fail(`File not found: ${call.args.path}`);
+			return;
+		}
+		if (!intent || intent.trim().length === 0) {
+			yield fail("No intent provided");
+			return;
+		}
+
+		const source = readFileSync(filePath, "utf8");
+		const startTime = Date.now();
+
+		// Async queue 桥接 onEvent → yield
+		const queue: string[] = [];
+		let resolve: (() => void) | null = null;
+		let done = false;
+
+		const push = (text: string) => {
+			queue.push(text);
+			resolve?.();
+		};
+
+		let lastRound = -1;
+		const onEvent = (round: number, _event: import("@n0n/llm").StreamEvent) => {
+			if (round !== lastRound) {
+				push(`[round ${round + 1}]\n`);
+				lastRound = round;
+			}
+		};
+
+		const onToolResult = (_round: number, summary: string) => {
+			push(`  ${summary}\n`);
+		};
+
+		// 启动 editorLoop（后台运行）
+		const loopPromise = editorLoop(source, intent, editorLlm, onEvent, onToolResult).then(
+			(result) => {
+				done = true;
+				resolve?.();
+				return result;
+			},
+		);
+
+		// 从 queue yield chunks
+		while (!done) {
+			if (queue.length > 0) {
+				const text = queue.splice(0, queue.length).join("");
+				yield {
+					type: "tool_output_chunk",
+					callId: call.id,
+					tool: "edit",
+					chunk: text,
+				};
+			} else {
+				await new Promise<void>((r) => {
+					resolve = r;
+				});
+			}
+		}
+		// flush 剩余
+		if (queue.length > 0) {
+			yield {
+				type: "tool_output_chunk",
+				callId: call.id,
+				tool: "edit",
+				chunk: queue.join(""),
+			};
+		}
+
+		const { content: newContent, feedback, error, rounds } = await loopPromise;
+		const durationMs = Date.now() - startTime;
+
+		if (error) {
+			yield { ...fail(error), feedback: feedback ?? null, rounds, durationMs };
+			return;
+		}
+
+		writeFileSync(filePath, newContent, "utf8");
+		const diff = computeDiff(source, newContent);
+
+		yield {
+			type: "tool_result",
+			tool: "edit" as const,
+			call,
+			diff,
+			success: true,
+			error: null,
+			feedback: feedback ?? null,
+			rounds,
+			durationMs,
+		};
+	} catch (err) {
+		yield fail(err instanceof Error ? err.message : String(err));
 	}
 }
