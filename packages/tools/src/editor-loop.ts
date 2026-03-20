@@ -208,6 +208,18 @@ export async function editorLoop(
 			continue;
 		}
 
+		// 预解析所有 tool call 参数（避免 double parse）
+		const parsedToolCalls: Array<{
+			tc: (typeof message.toolCalls)[number];
+			args: Record<string, unknown> | null;
+		}> = message.toolCalls.map((tc) => {
+			try {
+				return { tc, args: JSON.parse(tc.input) as Record<string, unknown> };
+			} catch {
+				return { tc, args: null };
+			}
+		});
+
 		// 构建 assistant 消息（包含 tool calls）
 		messages.push({
 			role: "assistant",
@@ -215,21 +227,20 @@ export async function editorLoop(
 				...(message.content
 					? [{ type: "text" as const, text: message.content }]
 					: []),
-				...message.toolCalls.map((tc) => ({
-					type: "tool-call" as const,
-					toolCallId: tc.toolCallId,
-					toolName: tc.toolName,
-					input: JSON.parse(tc.input),
-				})),
+				...parsedToolCalls
+					.filter((p) => p.args !== null)
+					.map((p) => ({
+						type: "tool-call" as const,
+						toolCallId: p.tc.toolCallId,
+						toolName: p.tc.toolName,
+						input: p.args,
+					})),
 			],
 		});
 
-		for (const tc of message.toolCalls) {
+		for (const { tc, args } of parsedToolCalls) {
 			const name = tc.toolName;
-			let args: Record<string, unknown>;
-			try {
-				args = JSON.parse(tc.input);
-			} catch {
+			if (args === null) {
 				messages.push({
 					role: "tool",
 					content: [
