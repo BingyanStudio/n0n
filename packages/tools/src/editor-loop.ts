@@ -373,7 +373,15 @@ export async function editorLoop(
 								`OK: Replacement applied (edit #${editCount}).\n${context}`,
 							),
 						);
-						onToolResult?.(round, `str_replace → edit #${editCount}`);
+						const oldLines = oldStr.split("\n").length;
+						const newLines = newStr.split("\n").length;
+						const addedLines = Math.max(0, newLines - oldLines);
+						const removedLines = Math.max(0, oldLines - newLines);
+						const lineStats = [
+							removedLines > 0 ? `-${removedLines}` : null,
+							addedLines > 0 ? `+${addedLines}` : null,
+						].filter(Boolean).join(" ") || "±0";
+						onToolResult?.(round, `str_replace → edit #${editCount} (${lineStats} lines)`);
 					} else {
 						messages.push(
 							toolResult(
@@ -437,7 +445,13 @@ export async function editorLoop(
 							),
 						);
 					}
-					onToolResult?.(round, "view_file → ok");
+					if (startLine !== undefined || endLine !== undefined) {
+						const s = Math.max(1, startLine ?? 1);
+						const e = Math.min(lines.length, endLine ?? lines.length);
+						onToolResult?.(round, `view_file → L${s}-${e} (${e - s + 1} lines)`);
+					} else {
+						onToolResult?.(round, `view_file → ok (${lines.length} lines)`);
+					}
 					break;
 				}
 
@@ -447,7 +461,7 @@ export async function editorLoop(
 							? args.feedback
 							: null;
 
-					onToolResult?.(round, "submit");
+					onToolResult?.(round, feedback ? `submit\n  ${feedback}` : "submit");
 					return {
 						content: current,
 						feedback,
