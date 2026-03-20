@@ -7,7 +7,7 @@
  * 流程：
  * 1. 发送 [system, user(source + intent)]
  * 2. Editor LLM 调用 str_replace → 执行替换 → 返回结果
- * 3. Editor LLM 调用 view_file → 返回当前文件内容
+ * 3. Editor LLM 调用 view_file → 返回当前文件内容（支持行号范围）
  * 4. Editor LLM 调用 submit → 提取 feedback → 退出循环
  * 5. 达到上限 → 返回最后的错误
  */
@@ -41,6 +41,11 @@ const EDITOR_TOOL_SET: ToolSet = {
 					type: "string",
 					description: "Replacement text. Use empty string for deletions.",
 				},
+				expected_matches: {
+					type: "number",
+					description:
+						"Expected number of matches for old_string. Defaults to 1. If actual matches differ from this value, the replacement is rejected.",
+				},
 			},
 			required: ["old_string", "new_string"],
 			additionalProperties: false,
@@ -48,25 +53,37 @@ const EDITOR_TOOL_SET: ToolSet = {
 	}),
 	view_file: tool({
 		description:
-			"View the current file content after previous edits. Use this to verify the file state before making further changes.",
+			"View the current file content after previous edits. Optionally specify a line range to avoid reading the entire file.",
 		inputSchema: jsonSchema({
 			type: "object",
-			properties: {},
+			properties: {
+				start_line: {
+					type: "number",
+					description:
+						"Start line number (1-based, inclusive). Omit to start from the beginning.",
+				},
+				end_line: {
+					type: "number",
+					description:
+						"End line number (1-based, inclusive). Omit to read to the end.",
+				},
+			},
 			additionalProperties: false,
 		}),
 	}),
 	submit: tool({
 		description:
-			"Submit when all edits are complete. Optionally provide feedback on the caller's intent quality.",
+			"Submit when all edits are complete. You must always provide feedback on the caller's intent quality to help optimize future requests — aim for efficiency, precision, and semantic references (avoid line numbers).",
 		inputSchema: jsonSchema({
 			type: "object",
 			properties: {
 				feedback: {
 					type: "string",
 					description:
-						"Optional feedback if the caller's intent could be improved: over-specified (contains line numbers/verbatim code), too large (should split), or too vague (cannot locate target). Omit if intent is clear.",
+						"Feedback on the caller's intent quality: over-specified (contains line numbers/verbatim code), too large (should split), too vague (cannot locate target), or positive acknowledgment if intent is clear and well-scoped.",
 				},
 			},
+			required: ["feedback"],
 			additionalProperties: false,
 		}),
 	}),
@@ -96,35 +113,54 @@ function toolResult(
 	};
 }
 
+// ── countOccurrences ──
+
+/**
+ * 统计 pattern 在 text 中出现的次数。
+ */
+function countOccurrences(text: string, pattern: string): number {
+	if (pattern.length === 0) return 0;
+	let count = 0;
+	let pos = 0;
+	while ((pos = text.indexOf(pattern, pos)) !== -1) {
+		count++;
+		pos += pattern.length;
+	}
+	return count;
+}
+
 // ── applySingleOp ──
 
 /**
  * 应用单次 search/replace 操作到源文件内容。
  * 归一化 CRLF 换行符，确保 LLM 生成的 \n 能匹配源文件的 \r\n。
+ *
+ * @param expectedMatches 预期匹配数量，默认为 1。实际匹配数与预期不符时拒绝修改。
  */
 export function applySingleOp(
 	source: string,
 	oldStr: string,
 	newStr: string,
+	expectedMatches = 1,
 ): { ok: true; content: string } | { ok: false; error: string } {
 	const useCrlf = source.includes("\r\n");
 	const normSource = useCrlf ? source.replace(/\r\n/g, "\n") : source;
 	const normOld = oldStr.replace(/\r\n/g, "\n");
 
-	const idx = normSource.indexOf(normOld);
-	if (idx === -1) {
-		const preview =
-			normOld.length > 80 ? `${normOld.slice(0, 80)}...` : normOld;
-		return { ok: false, error: `Search text not found: "${preview}"` };
-	}
+	const actualMatches = countOccurrences(normSource, normOld);
 
-	const secondIdx = normSource.indexOf(normOld, idx + 1);
-	if (secondIdx !== -1) {
+	if (actualMatches !== expectedMatches) {
 		const preview =
 			normOld.length > 80 ? `${normOld.slice(0, 80)}...` : normOld;
+		if (actualMatches === 0) {
+			return {
+				ok: false,
+				error: `Search text not found: "${preview}" — actual matches: 0, expected matches: ${expectedMatches}. Rejected. Please fix expected_matches or provide more context in old_string for precise matching.`,
+			};
+		}
 		return {
 			ok: false,
-			error: `Search text matches multiple locations: "${preview}"`,
+			error: `Match count mismatch for "${preview}" — actual matches: ${actualMatches}, expected matches: ${expectedMatches}. Rejected. Please fix expected_matches or provide more context in old_string for precise matching.`,
 		};
 	}
 
@@ -132,13 +168,51 @@ export function applySingleOp(
 		? newStr.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n")
 		: newStr.replace(/\r\n/g, "\n");
 
-	const content =
-		normSource.slice(0, idx) + normNew + normSource.slice(idx + normOld.length);
+	// 执行替换：替换所有匹配（expectedMatches 个）
+	let content = normSource;
+	let pos = 0;
+	for (let i = 0; i < actualMatches; i++) {
+		const idx = content.indexOf(normOld, pos);
+		if (idx === -1) break;
+		content =
+			content.slice(0, idx) + normNew + content.slice(idx + normOld.length);
+		pos = idx + normNew.length;
+	}
 
 	return {
 		ok: true,
 		content: useCrlf ? content.replace(/\n/g, "\r\n") : content,
 	};
+}
+
+// ── getReplacementContext ──
+
+/**
+ * 获取替换后在内容中的行号和内容上下文。
+ * 返回修改处的行号范围和对应行内容。
+ */
+function getReplacementContext(
+	content: string,
+	newStr: string,
+): string {
+	if (!newStr) return "Deletion applied.";
+
+	const normContent = content.replace(/\r\n/g, "\n");
+	const normNew = newStr.replace(/\r\n/g, "\n");
+	const idx = normContent.indexOf(normNew);
+	if (idx === -1) return "Replacement applied.";
+
+	const beforeMatch = normContent.slice(0, idx);
+	const startLine = beforeMatch.split("\n").length;
+	const newLines = normNew.split("\n");
+	const endLine = startLine + newLines.length - 1;
+
+	const lines: string[] = [];
+	for (let i = 0; i < newLines.length; i++) {
+		lines.push(`${startLine + i}| ${newLines[i]}`);
+	}
+
+	return `Lines ${startLine}-${endLine}:\n${lines.join("\n")}`;
 }
 
 // ── Editor Loop ──
@@ -270,6 +344,10 @@ export async function editorLoop(
 				case "str_replace": {
 					const oldStr = String(args.old_string ?? "");
 					const newStr = String(args.new_string ?? "");
+					const expectedMatches =
+						typeof args.expected_matches === "number"
+							? args.expected_matches
+							: 1;
 
 					if (!oldStr) {
 						messages.push(
@@ -283,15 +361,16 @@ export async function editorLoop(
 						break;
 					}
 
-					const result = applySingleOp(current, oldStr, newStr);
+					const result = applySingleOp(current, oldStr, newStr, expectedMatches);
 					if (result.ok) {
 						current = result.content;
 						editCount++;
+						const context = getReplacementContext(current, newStr);
 						messages.push(
 							toolResult(
 								tc.toolCallId,
 								name,
-								`OK: Replacement applied (edit #${editCount}).`,
+								`OK: Replacement applied (edit #${editCount}).\n${context}`,
 							),
 						);
 						onToolResult?.(round, `str_replace → edit #${editCount}`);
@@ -314,13 +393,50 @@ export async function editorLoop(
 				}
 
 				case "view_file": {
-					messages.push(
-						toolResult(
-							tc.toolCallId,
-							name,
-							`<source_file>\n${current}\n</source_file>`,
-						),
-					);
+					const startLine =
+						typeof args.start_line === "number" ? args.start_line : undefined;
+					const endLine =
+						typeof args.end_line === "number" ? args.end_line : undefined;
+
+					const lines = current.split("\n");
+
+					if (startLine !== undefined || endLine !== undefined) {
+						const start = Math.max(1, startLine ?? 1);
+						const end = Math.min(lines.length, endLine ?? lines.length);
+
+						if (start > end) {
+							messages.push(
+								toolResult(
+									tc.toolCallId,
+									name,
+									`Error: Invalid line range: start_line (${start}) > end_line (${end}).`,
+								),
+							);
+							onToolResult?.(round, "view_file → invalid range");
+							break;
+						}
+
+						const numberedLines = lines
+							.slice(start - 1, end)
+							.map((line, i) => `${start + i}| ${line}`)
+							.join("\n");
+
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								`<source_file lines="${start}-${end}" total="${lines.length}">\n${numberedLines}\n</source_file>`,
+							),
+						);
+					} else {
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								`<source_file>\n${current}\n</source_file>`,
+							),
+						);
+					}
 					onToolResult?.(round, "view_file → ok");
 					break;
 				}
