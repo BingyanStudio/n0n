@@ -9,6 +9,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
+import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig, ProviderConfig } from "./config.ts";
 
 /**
@@ -18,7 +19,7 @@ import type { LLMConfig, ProviderConfig } from "./config.ts";
  * 但 litellm 需要 message-level cache_control 才能触发 Anthropic 的 prompt caching。
  *
  * 此函数创建一个 fetch wrapper，在请求发出前拦截 body，
- * 为 system message 和第一条 user message 注入 cache_control: { type: "ephemeral" }。
+ * 使用 selectCacheBreakpoints（SSOT）选择断点位置，注入 cache_control。
  */
 function createAnthropicCacheFetch(): typeof globalThis.fetch {
 	const baseFetch = globalThis.fetch;
@@ -32,16 +33,8 @@ function createAnthropicCacheFetch(): typeof globalThis.fetch {
 				// AI SDK openai provider 使用 "input"（Responses API）或 "messages"（Chat Completions API）
 				const msgArray = body.input ?? body.messages;
 				if (Array.isArray(msgArray)) {
-					let userCount = 0;
-					for (const msg of msgArray) {
-						if (msg.role === "system") {
-							msg.cache_control = { type: "ephemeral" };
-						} else if (msg.role === "user") {
-							userCount++;
-							if (userCount === 1) {
-								msg.cache_control = { type: "ephemeral" };
-							}
-						}
+					for (const idx of selectCacheBreakpoints(msgArray)) {
+						msgArray[idx].cache_control = { type: "ephemeral" };
 					}
 					init = { ...init, body: JSON.stringify(body) };
 				}
