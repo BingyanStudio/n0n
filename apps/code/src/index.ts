@@ -92,6 +92,12 @@ const { startCodeRepl } = await import("./repl.ts");
 const initialInput =
 	remainingArgs.length > 0 ? remainingArgs.join(" ") : undefined;
 
+const cliOpts = (globalThis as Record<string, unknown>).__n0n_cli_opts as
+	| { resumeFile?: string; saveEveryLoop?: boolean }
+	| undefined;
+const resumeFile = cliOpts?.resumeFile;
+const saveEveryLoop = cliOpts?.saveEveryLoop ?? false;
+
 writeln(
 	style.bold("n0n code") + style.gray(` — Code Agent [${paths.workspace}]`),
 );
@@ -100,4 +106,4 @@ writeln(
 );
 writeln();
 
-await startCodeRepl(paths, initialInput);
+await startCodeRepl(paths, { initialInput, resumeFile, saveEveryLoop });
