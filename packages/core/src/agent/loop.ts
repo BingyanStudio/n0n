@@ -7,6 +7,7 @@
  * 使用 AI SDK streamText 进行流式调用，支持多 provider 和 prompt caching。
  */
 
+import type { TokenUsage } from "@n0n/llm";
 import {
 	chatCompletionStream,
 	getModelId,
@@ -72,6 +73,8 @@ export async function agentLoop<T = unknown>(
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
 	let submitRetries = 0;
+	/** 上一轮 LLM 调用的 token 用量（传给 roundStart 显示） */
+	let lastUsage: TokenUsage | null = null;
 
 	for (let iteration = 0; iteration < maxIter; iteration++) {
 		if (options?.signal?.aborted) {
@@ -86,7 +89,7 @@ export async function agentLoop<T = unknown>(
 			modelId,
 			getProviderType(runtime.llm),
 		);
-		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
+		renderer.roundStart(iteration + 1, maxIter, apiMessages.length, lastUsage);
 
 		const acc = new StreamAccumulator();
 		for await (const event of chatCompletionStream(
@@ -115,6 +118,9 @@ export async function agentLoop<T = unknown>(
 			}
 		}
 		renderer.contentEnd();
+
+		// 记录本轮 usage，下一轮 roundStart 时显示
+		lastUsage = acc.usage;
 
 		if (options?.signal?.aborted) {
 			renderer.aborted();

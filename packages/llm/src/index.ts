@@ -39,6 +39,7 @@ export type {
 	StreamEvent,
 	StreamOptions,
 	StreamRequest,
+	TokenUsage,
 } from "./stream.ts";
 // 流式调用
 export { chatCompletionStream, StreamAccumulator } from "./stream.ts";

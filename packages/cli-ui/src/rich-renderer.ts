@@ -5,10 +5,57 @@
  * 流式工具输出（exec stdout/stderr 实时）、LiveRegion 行替换。
  */
 
-import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
+import type {
+	Renderer,
+	RoundTokenUsage,
+	ToolCallRecord,
+	ToolResult,
+} from "@n0n/types";
 import { parse as parsePartialJSON } from "partial-json";
 import { label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
+
+// ── token 数值人类友好格式化 ──
+
+/** 将 token 数量格式化为紧凑的人类可读字符串（如 1.2k, 15.3k） */
+function fmtTokens(n: number): string {
+	if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+	return String(n);
+}
+
+/** 格式化上一轮 token 用量为紧凑摘要（用于 roundStart 行尾） */
+function formatUsageSummary(usage: RoundTokenUsage): string {
+	const parts: string[] = [];
+
+	// 总 token
+	parts.push(`${fmtTokens(usage.totalTokens)} tok`);
+
+	// cache 状态 — 只在有缓存活动时显示
+	if (usage.cacheReadTokens > 0 || usage.cacheWriteTokens > 0) {
+		const cacheParts: string[] = [];
+		if (usage.cacheReadTokens > 0) {
+			// 计算 cache hit 占输入的百分比
+			const hitPct =
+				usage.inputTokens > 0
+					? Math.round((usage.cacheReadTokens / usage.inputTokens) * 100)
+					: 0;
+			cacheParts.push(
+				style.green(`⚡${fmtTokens(usage.cacheReadTokens)} hit ${hitPct}%`),
+			);
+		}
+		if (usage.cacheWriteTokens > 0) {
+			cacheParts.push(
+				style.yellow(`✎${fmtTokens(usage.cacheWriteTokens)} write`),
+			);
+		}
+		parts.push(cacheParts.join(" "));
+	} else if (usage.inputTokens > 0) {
+		// 无缓存活动 — 提示可能需要关注
+		parts.push(style.dim("no cache"));
+	}
+
+	return parts.join(" · ");
+}
 
 // ── 工具参数结构化渲染 ──
 
@@ -74,10 +121,21 @@ export class RichRenderer implements Renderer {
 		writeln(content);
 	}
 
-	roundStart(round: number, maxRounds: number, msgCount: number): void {
+	roundStart(
+		round: number,
+		maxRounds: number,
+		msgCount: number,
+		lastUsage?: RoundTokenUsage | null,
+	): void {
 		writeln();
 		write(label.agent());
-		writeln(style.gray(`  round ${round}/${maxRounds} (${msgCount} msgs)`));
+
+		const roundInfo = `round ${round}/${maxRounds} (${msgCount} msgs)`;
+		if (lastUsage) {
+			writeln(style.gray(`  ${roundInfo} · ${formatUsageSummary(lastUsage)}`));
+		} else {
+			writeln(style.gray(`  ${roundInfo}`));
+		}
 	}
 
 	thinkingToken(token: string): void {
