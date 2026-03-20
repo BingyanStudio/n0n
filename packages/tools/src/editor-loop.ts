@@ -75,6 +75,27 @@ const EDITOR_TOOL_SET: ToolSet = {
 /** Editor LLM 最大循环轮数 */
 const MAX_ROUNDS = 15;
 
+// ── 辅助函数 ──
+
+/** 构造 AI SDK ToolModelMessage — 消除 editor loop 中的重复模板 */
+function toolResult(
+	toolCallId: string,
+	toolName: string,
+	value: string,
+): ModelMessage {
+	return {
+		role: "tool",
+		content: [
+			{
+				type: "tool-result" as const,
+				toolCallId,
+				toolName,
+				output: { type: "text" as const, value },
+			},
+		],
+	};
+}
+
 // ── applySingleOp ──
 
 /**
@@ -190,7 +211,6 @@ export async function editorLoop(
 		}
 
 		if (!message.toolCalls.length) {
-			// 无工具调用 → 推一轮 assistant + user 提示
 			messages.push({
 				role: "assistant",
 				content: message.content ?? "",
@@ -236,20 +256,13 @@ export async function editorLoop(
 		for (const { tc, args } of parsedToolCalls) {
 			const name = tc.toolName;
 			if (args === null) {
-				messages.push({
-					role: "tool",
-					content: [
-						{
-							type: "tool-result" as const,
-							toolCallId: tc.toolCallId,
-							toolName: name,
-							output: {
-								type: "text" as const,
-								value: "Error: Failed to parse tool arguments as JSON.",
-							},
-						},
-					],
-				});
+				messages.push(
+					toolResult(
+						tc.toolCallId,
+						name,
+						"Error: Failed to parse tool arguments as JSON.",
+					),
+				);
 				onToolResult?.(round, "parse error");
 				continue;
 			}
@@ -260,20 +273,13 @@ export async function editorLoop(
 					const newStr = String(args.new_string ?? "");
 
 					if (!oldStr) {
-						messages.push({
-							role: "tool",
-							content: [
-								{
-									type: "tool-result" as const,
-									toolCallId: tc.toolCallId,
-									toolName: name,
-									output: {
-										type: "text" as const,
-										value: "Error: old_string cannot be empty.",
-									},
-								},
-							],
-						});
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								"Error: old_string cannot be empty.",
+							),
+						);
 						onToolResult?.(round, "str_replace → old_string empty");
 						break;
 					}
@@ -282,61 +288,40 @@ export async function editorLoop(
 					if (result.ok) {
 						current = result.content;
 						editCount++;
-						messages.push({
-							role: "tool",
-							content: [
-								{
-									type: "tool-result" as const,
-									toolCallId: tc.toolCallId,
-									toolName: name,
-									output: {
-										type: "text" as const,
-										value: `OK: Replacement applied (edit #${editCount}).`,
-									},
-								},
-							],
-						});
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								`OK: Replacement applied (edit #${editCount}).`,
+							),
+						);
 						onToolResult?.(round, `str_replace → edit #${editCount}`);
 					} else {
-						messages.push({
-							role: "tool",
-							content: [
-								{
-									type: "tool-result" as const,
-									toolCallId: tc.toolCallId,
-									toolName: name,
-									output: {
-										type: "text" as const,
-										value: [
-											`Error: ${result.error}`,
-											"",
-											"Check whitespace, indentation, and character-for-character accuracy.",
-											"Call view_file to see the current file content.",
-										].join("\n"),
-									},
-								},
-							],
-						});
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								[
+									`Error: ${result.error}`,
+									"",
+									"Check whitespace, indentation, and character-for-character accuracy.",
+									"Call view_file to see the current file content.",
+								].join("\n"),
+							),
+						);
 						onToolResult?.(round, `str_replace → ${result.error}`);
 					}
 					break;
 				}
 
 				case "view_file": {
-					messages.push({
-						role: "tool",
-						content: [
-							{
-								type: "tool-result" as const,
-								toolCallId: tc.toolCallId,
-								toolName: name,
-								output: {
-									type: "text" as const,
-									value: `<source_file>\n${current}\n</source_file>`,
-								},
-							},
-						],
-					});
+					messages.push(
+						toolResult(
+							tc.toolCallId,
+							name,
+							`<source_file>\n${current}\n</source_file>`,
+						),
+					);
 					onToolResult?.(round, "view_file → ok");
 					break;
 				}
@@ -357,20 +342,13 @@ export async function editorLoop(
 				}
 
 				default: {
-					messages.push({
-						role: "tool",
-						content: [
-							{
-								type: "tool-result" as const,
-								toolCallId: tc.toolCallId,
-								toolName: name,
-								output: {
-									type: "text" as const,
-									value: `Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
-								},
-							},
-						],
-					});
+					messages.push(
+						toolResult(
+							tc.toolCallId,
+							name,
+							`Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
+						),
+					);
 					onToolResult?.(round, `unknown tool: ${name}`);
 				}
 			}
