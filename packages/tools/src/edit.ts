@@ -153,7 +153,7 @@ export function computeDiff(oldContent: string, newContent: string): EditDiff {
 		for (let c = contextStart; c < contextEnd; c++) {
 			lines.push({
 				line: c + 1,
-				content: newLines[c]!,
+				content: newLines[c] ?? "",
 				changed: c >= j && c < newEnd,
 			});
 		}

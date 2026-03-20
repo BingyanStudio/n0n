@@ -27,7 +27,7 @@ export function selectCacheBreakpoints(
 
 	// 断点 1：最后一条 system 消息
 	for (let i = messages.length - 1; i >= 0; i--) {
-		if (messages[i]!.role === "system") {
+		if (messages[i]?.role === "system") {
 			breakpoints.push(i);
 			break;
 		}
@@ -36,7 +36,7 @@ export function selectCacheBreakpoints(
 	// 断点 2-4：最后三条 non-assistant 消息
 	let count = 0;
 	for (let i = messages.length - 1; i >= 0; i--) {
-		const role = messages[i]!.role;
+		const role = messages[i]?.role;
 		if (role === "user" || role === "tool") {
 			breakpoints.push(i);
 			count++;
