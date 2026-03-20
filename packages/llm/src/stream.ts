@@ -57,6 +57,7 @@ export interface StreamRequest {
 export interface StreamOptions {
 	signal?: AbortSignal;
 	model: LanguageModel;
+	providerOptions?: unknown;
 }
 
 /**
@@ -77,6 +78,8 @@ export async function* chatCompletionStream(
 		toolChoice: request.toolChoice,
 		temperature: request.temperature,
 		maxOutputTokens: request.maxOutputTokens,
+		// biome-ignore lint/suspicious/noExplicitAny: AI SDK ProviderOptions 类型嵌套过深，此处用 any 透传
+		providerOptions: options.providerOptions as any,
 		abortSignal: options.signal,
 		maxRetries: 3,
 	});
