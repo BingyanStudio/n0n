@@ -26,13 +26,18 @@ import type {
 	EnvVarDef,
 	SetupRenderer,
 } from "@n0n/types";
-import {
-	createModelFromConfig,
-	type LLMConfig,
-	type ProviderConfig,
-} from "@n0n/llm";
-import { generateText } from "ai";
 import { generateEnvTemplate } from "./template.ts";
+
+/**
+ * LLM 连通性测试回调类型。
+ *
+ * 由上层（app 入口）注入，避免 shared 直接依赖 @n0n/llm
+ * （打破 shared ↔ llm 循环依赖）。
+ */
+export type LLMConnectionTester = () => Promise<{
+	ok: boolean;
+	error?: string;
+}>;
 
 /** 从 EnvSpec 提取所有变量（扁平化） */
 function allVars(spec: EnvSpec): EnvVarDef[] {
@@ -79,12 +84,28 @@ function loadEnvFile(
 	return parsed;
 }
 
+/** 掩码密钥：显示前 4 位 + 后 4 位 */
+function maskSecret(value: string): string {
+	if (value.length <= 8) return "****";
+	return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
+
+/**
+ * 检测项目根 .env（Bun 自动加载的那个）。
+ *
+ * Bun 在启动时自动加载 cwd 下的 .env 文件。
+ * 这里不重新加载，只解析文件内容以获取 key-value 映射，用于来源追踪。
+ */
+function detectProjectEnv(): Record<string, string> {
+	const projectEnvPath = resolve(process.cwd(), ".env");
+	if (existsSync(projectEnvPath)) {
+		return parseEnvFile(readFileSync(projectEnvPath, "utf-8"));
+	}
+	return {};
+}
+
 /**
  * 分析每个配置项的最终值和来源。
- *
- * @param spec 环境配置规格
- * @param projectEnv 项目根 .env 中声明的 key-value（Bun 自动加载）
- * @param globalEnv 全局 ~/.n0n/.env 中声明的 key-value
  */
 function resolveConfigSources(
 	spec: EnvSpec,
@@ -105,7 +126,6 @@ function resolveConfigSources(
 			v.default;
 		if (finalValue === undefined) continue;
 
-		// 判断来源
 		let source: ConfigSource;
 		let overridden:
 			| { value: string; source: ConfigSource }
@@ -147,7 +167,7 @@ function resolveConfigSources(
 
 /** 格式化配置摘要日志 */
 function formatConfigSummary(
-	configs: ReturnType<typeof resolveConfigSources>,
+	configs: ConfigEntry[],
 	spec: EnvSpec,
 ): string {
 	const secretKeys = new Set(
@@ -182,64 +202,19 @@ function formatConfigSummary(
 	return lines.join("\n");
 }
 
-/** 掩码密钥：显示前 4 位 + 后 4 位 */
-function maskSecret(value: string): string {
-	if (value.length <= 8) return "****";
-	return `${value.slice(0, 4)}…${value.slice(-4)}`;
-}
-
-/** 测试 LLM API 连通性（通过 AI SDK，支持多 provider） */
-async function testLLMConnection(
-	config: LLMConfig,
-): Promise<{ ok: boolean; error?: string }> {
-	try {
-		const model = createModelFromConfig(config);
-		await generateText({
-			model,
-			messages: [{ role: "user", content: "hi" }],
-			maxOutputTokens: 1,
-			maxRetries: 1,
-		});
-		return { ok: true };
-	} catch (err) {
-		if (err instanceof Error) {
-			if (err.message.includes("401") || err.message.includes("403")) {
-				return { ok: false, error: "认证失败，请检查 API Key" };
-			}
-			if (err.name === "TimeoutError" || err.message.includes("timeout")) {
-				return { ok: false, error: "连接超时（15s），请检查网络或 API 地址" };
-			}
-			return { ok: false, error: err.message.slice(0, 200) };
-		}
-		return { ok: false, error: `连接失败: ${String(err)}` };
-	}
-}
-
-/**
- * 检测项目根 .env（Bun 自动加载的那个）。
- *
- * Bun 在启动时自动加载 cwd 下的 .env 文件。
- * 这里不重新加载，只解析文件内容以获取 key-value 映射，用于来源追踪。
- */
-function detectProjectEnv(): Record<string, string> {
-	const projectEnvPath = resolve(process.cwd(), ".env");
-	if (existsSync(projectEnvPath)) {
-		return parseEnvFile(readFileSync(projectEnvPath, "utf-8"));
-	}
-	return {};
-}
-
 /**
  * 执行 bootstrap 引导流程
  *
  * @param spec 应用环境配置规格
  * @param ui SetupRenderer 实现
  * @param envDir .env 文件所在目录（默认 process.cwd()）
+ * @param testLLM LLM 连通性测试回调（可选，由上层注入）
  */
 export async function bootstrap(
 	spec: EnvSpec,
 	ui: SetupRenderer,
 	envDir?: string,
+	testLLM?: LLMConnectionTester,
 ): Promise<BootstrapResult> {
 	const skipped: string[] = [];
 	const dir = envDir ?? process.cwd();
@@ -249,13 +224,11 @@ export async function bootstrap(
 
 	// ── Step 1: .env 文件加载 ──
 
-	// 检测项目根 .env（Bun 已自动加载到 process.env）
 	const projectEnv = detectProjectEnv();
 	if (Object.keys(projectEnv).length > 0) {
 		ui.info("检测到项目 .env (由 Bun 自动加载)");
 	}
 
-	// 加载全局 .env（不覆盖已存在的值 → 项目级优先）
 	let globalEnv: Record<string, string> = {};
 	if (existsSync(envPath)) {
 		globalEnv = loadEnvFile(envPath);
@@ -310,18 +283,18 @@ export async function bootstrap(
 	const configEntries = resolveConfigSources(spec, projectEnv, globalEnv);
 	const overrides = configEntries.filter((c) => c.overridden);
 
-	// 按 EnvSpec 分组
-	const configGroups: ConfigGroup[] = spec.groups.map((g) => ({
-		title: g.title,
-		entries: configEntries.filter((e) =>
-			g.vars.some((v) => v.key === e.key),
-		),
-	})).filter((g) => g.entries.length > 0);
+	const configGroups: ConfigGroup[] = spec.groups
+		.map((g) => ({
+			title: g.title,
+			entries: configEntries.filter((e) =>
+				g.vars.some((v) => v.key === e.key),
+			),
+		}))
+		.filter((g) => g.entries.length > 0);
 
 	if (ui.configTable) {
 		ui.configTable(configGroups, overrides);
 	} else {
-		// fallback: 纯文本输出
 		if (overrides.length > 0) {
 			ui.warn(
 				`${overrides.length} 项配置被项目 .env 覆盖：\n${overrides.map((c) => `  ${c.key}: ${c.overridden?.value} → ${c.value}`).join("\n")}`,
@@ -334,47 +307,12 @@ export async function bootstrap(
 
 	// ── Step 3: LLM 连通性测试 ──
 
-	const apiKey = process.env.LLM_API_KEY;
-	const model = process.env.LLM_MODEL;
-
-	if (apiKey && model) {
-		const provider = (process.env.LLM_PROVIDER || "openai-compatible") as ProviderConfig["provider"];
-		const baseUrl = process.env.LLM_BASE_URL || "";
-
-		let providerConfig: ProviderConfig;
-		switch (provider) {
-			case "anthropic":
-				providerConfig = { provider: "anthropic", apiKey, model };
-				break;
-			case "google":
-				providerConfig = { provider: "google", apiKey, model };
-				break;
-			case "openai":
-				providerConfig = { provider: "openai", apiKey, model, ...(baseUrl ? { baseUrl } : {}) };
-				break;
-			default: {
-				const backendProvider = (process.env.LLM_BACKEND_PROVIDER || undefined) as
-					| "anthropic" | "google" | "openai" | undefined;
-				providerConfig = {
-					provider: "openai-compatible",
-					apiKey,
-					model,
-					baseUrl,
-					...(backendProvider ? { backendProvider } : {}),
-				};
-				break;
-			}
-		}
-
-		const llmConfig: LLMConfig = {
-			providerConfig,
-			enableThinking: process.env.LLM_ENABLE_THINKING === "true",
-		};
-
+	if (testLLM) {
 		ui.info("测试 LLM 连接…");
-		const conn = await testLLMConnection(llmConfig);
+		const conn = await testLLM();
 
 		if (conn.ok) {
+			const model = process.env.LLM_MODEL ?? "(unknown)";
 			ui.success(`LLM 连接正常 (${model})`);
 		} else {
 			ui.error(`LLM 连接失败: ${conn.error}`);
