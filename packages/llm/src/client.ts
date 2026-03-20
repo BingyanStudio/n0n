@@ -1,9 +1,14 @@
 /**
- * LLM Client — 直接调用 OpenAI-compatible API，无 SDK 依赖
+ * LLM Client — 基于 Vercel AI SDK 的非流式调用
+ *
+ * 使用 generateText() 替代手写 fetch，自动处理：
+ * - 多 provider 协议差异（OpenAI / Anthropic / Google）
+ * - 退避重试（429/5xx）
+ * - 结构化响应解析
  */
 
-import type { LLMRequest, LLMResponse } from "@n0n/types";
-import type { LLMConfig } from "./config.ts";
+import type { LanguageModel, ModelMessage } from "ai";
+import { generateText } from "ai";
 
 export class LLMError extends Error {
 	constructor(
@@ -16,84 +21,66 @@ export class LLMError extends Error {
 	}
 }
 
-/** 轻量结构校验 — 确保外部 API 返回的 JSON 符合 LLMResponse 基本结构 */
-function isLLMResponse(data: unknown): data is LLMResponse {
-	if (typeof data !== "object" || data === null) return false;
-	const obj = data as Record<string, unknown>;
-	return Array.isArray(obj.choices);
+/** 非流式 chat completion 请求参数 */
+export interface ChatCompletionRequest {
+	messages: ModelMessage[];
+	temperature?: number;
+	maxOutputTokens?: number;
+}
+
+/** 非流式 chat completion 响应 */
+export interface ChatCompletionResult {
+	text: string;
+	reasoningText: string | undefined;
+	toolCalls: Array<{
+		toolCallId: string;
+		toolName: string;
+		input: unknown;
+	}>;
+	finishReason: string;
+	usage: {
+		inputTokens: number | undefined;
+		outputTokens: number | undefined;
+	};
 }
 
 /**
- * 发送 chat completion 请求
- * 包含退避重试逻辑（429/5xx）
+ * 发送非流式 chat completion 请求
+ *
+ * 接受 LanguageModel 实例，由外部 DI 构造。
  */
 export async function chatCompletion(
-	request: Omit<LLMRequest, "model">,
-	llm: LLMConfig,
-): Promise<LLMResponse> {
-	const config = llm;
-	const body: LLMRequest = {
-		model: config.model,
-		...request,
-	};
+	request: ChatCompletionRequest,
+	model: LanguageModel,
+): Promise<ChatCompletionResult> {
+	try {
+		const result = await generateText({
+			model,
+			messages: request.messages,
+			temperature: request.temperature,
+			maxOutputTokens: request.maxOutputTokens,
+			maxRetries: 3,
+		});
 
-	// 无工具时不发送空数组
-	if (!body.tools?.length) {
-		body.tools = undefined;
-		body.tool_choice = undefined;
-	}
-
-	const maxRetries = 3;
-	let lastError: Error | null = null;
-
-	for (let attempt = 0; attempt < maxRetries; attempt++) {
-		if (attempt > 0) {
-			const delay = Math.min(1000 * 2 ** attempt, 10_000);
-			await new Promise((r) => setTimeout(r, delay));
+		return {
+			text: result.text,
+			reasoningText: result.reasoningText,
+			toolCalls: result.toolCalls.map((tc) => ({
+				toolCallId: tc.toolCallId,
+				toolName: tc.toolName,
+				input: "input" in tc ? tc.input : undefined,
+			})),
+			finishReason: result.finishReason,
+			usage: {
+				inputTokens: result.usage.inputTokens,
+				outputTokens: result.usage.outputTokens,
+			},
+		};
+	} catch (err) {
+		if (err instanceof Error && "statusCode" in err) {
+			const status = (err as { statusCode: number }).statusCode;
+			throw new LLMError(err.message, status, err);
 		}
-
-		try {
-			const base = config.baseUrl;
-			const url = base.includes("/chat/completions")
-				? base
-				: `${base}/v1/chat/completions`;
-
-			const res = await fetch(url, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${config.apiKey}`,
-				},
-				body: JSON.stringify(body),
-			});
-
-			if (!res.ok) {
-				const text = await res.text();
-				if (res.status === 429 || res.status >= 500) {
-					lastError = new LLMError(
-						`LLM API ${res.status}: ${text}`,
-						res.status,
-						text,
-					);
-					continue;
-				}
-				throw new LLMError(`LLM API ${res.status}: ${text}`, res.status, text);
-			}
-
-			const json: unknown = await res.json();
-			if (!isLLMResponse(json)) {
-				throw new LLMError(
-					`LLM API returned unexpected structure: ${JSON.stringify(json).slice(0, 200)}`,
-					res.status,
-					json,
-				);
-			}
-			return json;
-		} catch (err) {
-			if (err instanceof LLMError) throw err;
-			lastError = err instanceof Error ? err : new Error(String(err));
-		}
+		throw err;
 	}
-
-	throw lastError ?? new Error("LLM request failed after retries");
 }

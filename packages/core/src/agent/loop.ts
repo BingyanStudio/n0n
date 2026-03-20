@@ -3,10 +3,14 @@
  *
  * 接收 DomainMessage[] 历史，驱动 LLM + 工具调用循环，
  * 直到 agent 调用 submit 或达到终止条件。
+ *
+ * 使用 AI SDK streamText 进行流式调用，支持多 provider 和 prompt caching。
  */
 
 import {
 	chatCompletionStream,
+	getModelId,
+	getProviderType,
 	StreamAccumulator,
 	toAPIMessages,
 } from "@n0n/llm";
@@ -53,7 +57,7 @@ export async function agentLoop<T = unknown>(
 	const maxIter = options?.maxIterations ?? getRuntime().agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
 	const runtime = getRuntime();
-	const llm = runtime.llm;
+	const modelId = getModelId(runtime.llm);
 	const toolsConfig: ToolsConfig = {
 		security: runtime.security,
 		agent: runtime.agent,
@@ -63,7 +67,7 @@ export async function agentLoop<T = unknown>(
 			tempDir: ".temp",
 		}),
 	};
-	const toolkit = await makeToolkit(options?.schema, toolsConfig, llm.model);
+	const toolkit = await makeToolkit(options?.schema, toolsConfig, modelId);
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
@@ -72,34 +76,30 @@ export async function agentLoop<T = unknown>(
 	for (let iteration = 0; iteration < maxIter; iteration++) {
 		if (options?.signal?.aborted) {
 			renderer.aborted();
-			return {
-				result: null,
-				report: null,
-				history: messages,
-			};
+			return { result: null, report: null, history: messages };
 		}
 
 		injectReminders(messages, reminders);
 
-		const apiMessages = toAPIMessages(messages, llm.model);
+		const apiMessages = toAPIMessages(
+			messages,
+			modelId,
+			getProviderType(runtime.llm),
+		);
 		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
 
 		const acc = new StreamAccumulator();
 		for await (const event of chatCompletionStream(
 			{
 				messages: apiMessages,
-				tools: toolkit.definitions,
-				tool_choice: "auto",
+				tools: toolkit.toolSet,
+				toolChoice: "auto",
 			},
-			{ signal: options?.signal, llm },
+			{ signal: options?.signal, model: runtime.model },
 		)) {
 			if (options?.signal?.aborted) {
 				renderer.aborted();
-				return {
-					result: null,
-					report: null,
-					history: messages,
-				};
+				return { result: null, report: null, history: messages };
 			}
 			acc.push(event);
 			switch (event.type) {
@@ -116,35 +116,25 @@ export async function agentLoop<T = unknown>(
 		}
 		renderer.contentEnd();
 
-		// stream 正常结束后再次检查 abort（chatCompletionStream abort 时直接 return，
-		// 不抛错，for-await 会正常结束，需在此拦截避免向 history 追加不完整消息）
 		if (options?.signal?.aborted) {
 			renderer.aborted();
-			return {
-				result: null,
-				report: null,
-				history: messages,
-			};
+			return { result: null, report: null, history: messages };
 		}
 
 		const assistantMsg = acc.toMessage();
-		const hasToolCalls =
-			assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0;
+		const hasToolCalls = assistantMsg.toolCalls.length > 0;
 
 		if (!hasToolCalls) {
 			const content = assistantMsg.content ?? "";
+			idleCount++;
 			if (!acc.reasoning && !content) {
-				idleCount++;
 				renderer.textResponse(content, idleCount);
-			} else {
-				idleCount++;
 			}
-			const textMsg: DomainMessage = {
+			messages.push({
 				type: "assistant_text",
 				content,
-				reasoning: assistantMsg.reasoning_content,
-			};
-			messages.push(textMsg);
+				reasoning: assistantMsg.reasoningText,
+			});
 
 			if (idleCount >= getRuntime().agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
@@ -165,7 +155,8 @@ export async function agentLoop<T = unknown>(
 
 		idleCount = 0;
 
-		const toolCalls = parseToolCalls(assistantMsg.tool_calls ?? []).filter(
+		// AI SDK 格式 toolCalls → ToolCallRecord
+		const toolCalls = parseToolCalls(assistantMsg.toolCalls).filter(
 			isValidToolCall,
 		);
 
@@ -175,7 +166,7 @@ export async function agentLoop<T = unknown>(
 			messages.push({
 				type: "assistant_text",
 				content,
-				reasoning: assistantMsg.reasoning_content,
+				reasoning: assistantMsg.reasoningText,
 			});
 			if (idleCount >= getRuntime().agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
@@ -196,7 +187,7 @@ export async function agentLoop<T = unknown>(
 		const toolCallMsg: AssistantToolCallMessage = {
 			type: "assistant_tool_call",
 			content: assistantMsg.content,
-			reasoning: assistantMsg.reasoning_content,
+			reasoning: assistantMsg.reasoningText,
 			toolCalls,
 		};
 		messages.push(toolCallMsg);
@@ -204,11 +195,7 @@ export async function agentLoop<T = unknown>(
 		for (const tc of toolCalls) {
 			if (options?.signal?.aborted) {
 				renderer.aborted();
-				return {
-					result: null,
-					report: null,
-					history: messages,
-				};
+				return { result: null, report: null, history: messages };
 			}
 			renderer.toolCallStart(tc);
 			let result: ToolResult | undefined;
@@ -286,16 +273,6 @@ export async function agentLoop<T = unknown>(
 
 // ── 辅助函数 ──
 
-/**
- * 校验 submit 结果是否符合 schema。
- *
- * LLM tool call arguments 始终是 JSON 对象（由 API 规范保证），
- * 经 parseToolCalls → extractSubmitResult 后 raw 已经是正确的 JS 对象，
- * 无需再做 string → JSON.parse 转换。
- *
- * - 无 schema 时：直接通过，T 默认为 unknown。
- * - 有 schema 时：用 Zod safeParse 校验，失败则返回详细错误。
- */
 function validateSubmit<T = unknown>(
 	raw: unknown,
 	schema?: ZodType<T>,

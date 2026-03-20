@@ -8,14 +8,14 @@
  * - reminder: 延迟提醒
  * - submit: 提交结果（动态生成）
  *
- * 每个工具在此绑定：LLM 定义 + 执行器。
+ * 每个工具通过 AI SDK tool() 定义 + 自定义执行器绑定。
  * 工具参数通过 Zod schema 做运行时校验。
  */
 
+import type { Tool, ToolSet } from "@n0n/llm";
 import type {
 	EditToolCall,
 	ExecToolCall,
-	LLMToolDefinition,
 	ReminderToolCall,
 	SubmitArgs,
 	SubmitToolCall,
@@ -26,7 +26,11 @@ import type {
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import type { ToolsConfig } from "./config.ts";
-import { EDIT_TOOL_DEFINITION, EditArgsSchema, editToolStream } from "./edit.ts";
+import {
+	EDIT_TOOL_DEFINITION,
+	EditArgsSchema,
+	editToolStream,
+} from "./edit.ts";
 import { detectEnv } from "./env.ts";
 import {
 	ExecArgsSchema,
@@ -61,8 +65,8 @@ type SyncExecutor = (
 ) => Promise<ToolResult> | ToolResult;
 
 export type ToolEntry =
-	| { definition: LLMToolDefinition; stream: true; execute: StreamExecutor }
-	| { definition: LLMToolDefinition; stream: false; execute: SyncExecutor };
+	| { definition: Tool; stream: true; execute: StreamExecutor }
+	| { definition: Tool; stream: false; execute: SyncExecutor };
 
 // ── 基础注册表构建 ──
 
@@ -71,7 +75,7 @@ export type ToolEntry =
  * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir/editorLlm）。
  */
 function buildBaseRegistry(
-	execToolDef: LLMToolDefinition,
+	execToolDef: Tool,
 	toolsConfig: ToolsConfig,
 ): Record<string, ToolEntry> {
 	const resolvedWorkspace = toolsConfig.workspace;
@@ -137,7 +141,8 @@ function buildBaseRegistry(
 // ── Toolkit ──
 
 export interface Toolkit {
-	definitions: LLMToolDefinition[];
+	/** AI SDK ToolSet — 供 streamText/generateText 使用 */
+	toolSet: ToolSet;
 	getEntry(name: string): ToolEntry | undefined;
 }
 
@@ -185,8 +190,14 @@ export async function makeToolkit(
 		submit: submitEntry,
 	};
 
+	// 直接从注册表构建 ToolSet — 每个 entry.definition 已经是 AI SDK Tool
+	const toolSet: ToolSet = {};
+	for (const [name, entry] of Object.entries(registry)) {
+		toolSet[name] = entry.definition;
+	}
+
 	return {
-		definitions: Object.values(registry).map((e) => e.definition),
+		toolSet,
 		getEntry: (name) => registry[name],
 	};
 }

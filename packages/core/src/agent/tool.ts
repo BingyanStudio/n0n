@@ -2,6 +2,7 @@
  * 工具调用解析与执行 — agentLoop 的工具层
  */
 
+import type { AssistantToolCallPart } from "@n0n/llm";
 import {
 	type PendingReminder,
 	REGISTERED_TOOLS,
@@ -9,7 +10,6 @@ import {
 } from "@n0n/tools";
 import type {
 	ExecToolCall,
-	LLMToolCall,
 	ToolArgErrorMessage,
 	ToolCallRecord,
 	ToolStreamEvent,
@@ -22,26 +22,24 @@ export type GetToolEntry = (name: string) => ToolEntry | undefined;
 // ── 解析 ──
 
 /**
- * LLM 原始工具调用 → 领域 ToolCallRecord。
+ * AI SDK tool calls → 领域 ToolCallRecord。
  *
+ * 直接接受 AI SDK 格式 { toolCallId, toolName, input }，
  * 解析阶段只做 JSON.parse，参数结构由执行阶段的 Zod schema 校验。
- * 返回 ToolCallRecord[]（as 断言），Zod 校验失败时会产生 ToolArgErrorMessage。
  */
-export function parseToolCalls(raw: LLMToolCall[]): ToolCallRecord[] {
+export function parseToolCalls(raw: AssistantToolCallPart[]): ToolCallRecord[] {
 	return raw.map((tc) => {
 		let args: Record<string, unknown>;
 		try {
 			const parsed =
-				typeof tc.function.arguments === "string"
-					? JSON.parse(tc.function.arguments)
-					: tc.function.arguments;
+				typeof tc.input === "string" ? JSON.parse(tc.input) : tc.input;
 			args = parsed as Record<string, unknown>;
 		} catch {
-			args = { _parseError: true, _raw: tc.function.arguments };
+			args = { _parseError: true, _raw: tc.input };
 		}
 		return {
-			id: tc.id,
-			tool: tc.function.name,
+			id: tc.toolCallId,
+			tool: tc.toolName,
 			args,
 		} as ToolCallRecord;
 	});
@@ -94,11 +92,6 @@ export async function* executeToolStream(
 				error: err.issues
 					.map((i) => `${i.path.join(".")}: ${i.message}`)
 					.join("; "),
-				schema:
-					(entry.definition.function.parameters as unknown as Record<
-						string,
-						unknown
-					>) ?? {},
 			};
 			yield argError;
 			return;

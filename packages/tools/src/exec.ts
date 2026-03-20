@@ -17,11 +17,12 @@
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import type { Tool } from "@n0n/llm";
+import { jsonSchema, tool } from "@n0n/llm";
 import { wrapTagFor } from "@n0n/shared";
 import type {
 	ExecToolCall,
 	ExecToolResult,
-	LLMToolDefinition,
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
@@ -279,45 +280,38 @@ function buildDescription(env: EnvSnapshot, model: string): string {
  * @param env 环境快照（来自 detectEnv）
  * @param model LLM 模型名称（用于选择 tag 风格）
  */
-export function makeExecToolDefinition(
-	env: EnvSnapshot,
-	model = "",
-): LLMToolDefinition {
+export function makeExecToolDefinition(env: EnvSnapshot, model = ""): Tool {
 	const available = env.runtimes.filter((r) => r.available);
 	const runtimeList = available.map((r) => r.name).join(", ");
 
-	return {
-		type: "function",
-		function: {
-			name: "exec",
-			description: buildDescription(env, model),
-			parameters: {
-				type: "object",
-				properties: {
-					script: {
-						type: "string",
-						description:
-							"Script content. Single command or multi-line code with imports, loops, etc.",
-					},
-					runtime: {
-						type: "string",
-						description: `Runtime (default: "${DEFAULT_RUNTIME}"). Available: ${runtimeList}.`,
-					},
-					cwd: {
-						type: "string",
-						description: "Working directory (default: injected workspace root)",
-					},
-					timeout: {
-						type: "number",
-						description:
-							"Timeout in seconds (default: 120). Process continues in background if exceeded.",
-					},
+	return tool({
+		description: buildDescription(env, model),
+		inputSchema: jsonSchema({
+			type: "object",
+			properties: {
+				script: {
+					type: "string",
+					description:
+						"Script content. Single command or multi-line code with imports, loops, etc.",
 				},
-				required: ["script"],
-				additionalProperties: false,
+				runtime: {
+					type: "string",
+					description: `Runtime (default: "${DEFAULT_RUNTIME}"). Available: ${runtimeList}.`,
+				},
+				cwd: {
+					type: "string",
+					description: "Working directory (default: injected workspace root)",
+				},
+				timeout: {
+					type: "number",
+					description:
+						"Timeout in seconds (default: 120). Process continues in background if exceeded.",
+				},
 			},
-		},
-	};
+			required: ["script"],
+			additionalProperties: false,
+		}),
+	});
 }
 function extractCommandNames(script: string): string[] {
 	const parts = script.split(/\r?\n|&&|\|\||;|\||&/);
