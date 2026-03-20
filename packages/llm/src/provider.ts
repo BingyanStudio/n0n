@@ -5,11 +5,11 @@
  * 支持运行时切换、测试 mock、多租户独立实例。
  */
 
-import type { LanguageModel } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
-import type { LLMConfig, OpenAICompatibleProviderConfig, ProviderConfig } from "./config.ts";
+import type { LanguageModel } from "ai";
+import type { LLMConfig, ProviderConfig } from "./config.ts";
 
 /**
  * 为 litellm + Anthropic 后端创建自定义 fetch。
@@ -22,7 +22,10 @@ import type { LLMConfig, OpenAICompatibleProviderConfig, ProviderConfig } from "
  */
 function createAnthropicCacheFetch(): typeof globalThis.fetch {
 	const baseFetch = globalThis.fetch;
-	const cacheFetch = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+	const cacheFetch = async (
+		input: Parameters<typeof fetch>[0],
+		init?: Parameters<typeof fetch>[1],
+	) => {
 		if (init?.body && typeof init.body === "string") {
 			try {
 				const body = JSON.parse(init.body);

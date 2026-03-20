@@ -276,16 +276,21 @@ export class RichRenderer implements Renderer {
 			}
 			case "edit": {
 				const path = result.call.args.path;
-				const duration = style.gray(`${(result.durationMs / 1000).toFixed(1)}s`);
+				const duration = style.gray(
+					`${(result.durationMs / 1000).toFixed(1)}s`,
+				);
 				const rounds = style.gray(`${result.rounds}r`);
 				if (!result.success) {
 					return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${style.red(result.error ?? "failed")}`;
 				}
 				const { added, removed } = result.diff;
-				const lineStats = [
-					added > 0 ? style.green(`+${added}`) : null,
-					removed > 0 ? style.red(`-${removed}`) : null,
-				].filter(Boolean).join(" ") || style.gray("(no changes)");
+				const lineStats =
+					[
+						added > 0 ? style.green(`+${added}`) : null,
+						removed > 0 ? style.red(`-${removed}`) : null,
+					]
+						.filter(Boolean)
+						.join(" ") || style.gray("(no changes)");
 				return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${lineStats} ${style.green("✓")}`;
 			}
 			case "reminder": {

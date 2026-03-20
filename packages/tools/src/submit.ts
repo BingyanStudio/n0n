@@ -13,8 +13,8 @@
  */
 
 import type { SubmitToolCall, SubmitToolResult } from "@n0n/types";
-import { tool as aiTool, jsonSchema } from "ai";
 import type { Tool } from "ai";
+import { tool as aiTool, jsonSchema } from "ai";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 

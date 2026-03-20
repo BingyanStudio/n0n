@@ -7,6 +7,7 @@
 
 // AGENTS.md
 export { formatAgentsMdPrompt, loadAgentsMd } from "./agents-md.ts";
+export type { LLMConnectionTester } from "./bootstrap/index.ts";
 // Bootstrap
 export {
 	bootstrap,
@@ -14,7 +15,6 @@ export {
 	generateEnvTemplate,
 	LLM_ENV_GROUP,
 } from "./bootstrap/index.ts";
-export type { LLMConnectionTester } from "./bootstrap/index.ts";
 // Frontmatter
 export type { RawFrontmatter, TypedFrontmatter } from "./frontmatter.ts";
 export {

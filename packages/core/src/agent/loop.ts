@@ -81,7 +81,11 @@ export async function agentLoop<T = unknown>(
 
 		injectReminders(messages, reminders);
 
-		const apiMessages = toAPIMessages(messages, modelId, getProviderType(runtime.llm));
+		const apiMessages = toAPIMessages(
+			messages,
+			modelId,
+			getProviderType(runtime.llm),
+		);
 		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
 
 		const acc = new StreamAccumulator();
@@ -152,7 +156,9 @@ export async function agentLoop<T = unknown>(
 		idleCount = 0;
 
 		// AI SDK 格式 toolCalls → ToolCallRecord
-		const toolCalls = parseToolCalls(assistantMsg.toolCalls).filter(isValidToolCall);
+		const toolCalls = parseToolCalls(assistantMsg.toolCalls).filter(
+			isValidToolCall,
+		);
 
 		if (toolCalls.length === 0) {
 			const content = assistantMsg.content ?? "";

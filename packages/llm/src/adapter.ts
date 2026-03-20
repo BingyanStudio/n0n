@@ -10,11 +10,6 @@
  */
 
 import type {
-	ModelMessage,
-	AssistantModelMessage,
-	ToolModelMessage,
-} from "ai";
-import type {
 	DomainMessage,
 	EditDiff,
 	EditToolResult,
@@ -22,6 +17,7 @@ import type {
 	ToolResult,
 	WriteToolResult,
 } from "@n0n/types";
+import type { AssistantModelMessage, ModelMessage, ToolModelMessage } from "ai";
 import { adaptTags, wrapTag } from "./tags.ts";
 
 /* ── tool result 格式化 ── */
@@ -125,13 +121,13 @@ export function toAPIMessages(
 ): ModelMessage[] {
 	const result: ModelMessage[] = [];
 	const isAnthropic = providerType === "anthropic";
-	let systemCount = 0;
+	let _systemCount = 0;
 	let userCount = 0;
 
 	for (const msg of messages) {
 		switch (msg.type) {
 			case "system": {
-				systemCount++;
+				_systemCount++;
 				const sysMsg: ModelMessage = {
 					role: "system",
 					content: adaptTags(msg.content, model),
@@ -176,7 +172,9 @@ export function toAPIMessages(
 					role: "assistant",
 					content: [
 						// 文本内容（如果有）
-						...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
+						...(msg.content
+							? [{ type: "text" as const, text: msg.content }]
+							: []),
 						// tool calls → ToolCallPart
 						...msg.toolCalls.map((tc) => ({
 							type: "tool-call" as const,
@@ -270,7 +268,11 @@ export function toAPIMessages(
 							toolName: msg.tool,
 							output: {
 								type: "text" as const,
-								value: wrapTag("error", `Invalid tool arguments: ${msg.error}`, model),
+								value: wrapTag(
+									"error",
+									`Invalid tool arguments: ${msg.error}`,
+									model,
+								),
 							},
 						},
 					],

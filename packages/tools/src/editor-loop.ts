@@ -112,9 +112,7 @@ export function applySingleOp(
 		: newStr.replace(/\r\n/g, "\n");
 
 	const content =
-		normSource.slice(0, idx) +
-		normNew +
-		normSource.slice(idx + normOld.length);
+		normSource.slice(0, idx) + normNew + normSource.slice(idx + normOld.length);
 
 	return {
 		ok: true,
@@ -142,10 +140,7 @@ export async function editorLoop(
 	source: string,
 	intent: string,
 	editorLlm: LLMConfig,
-	onEvent?: (
-		round: number,
-		event: import("@n0n/llm").StreamEvent,
-	) => void,
+	onEvent?: (round: number, event: import("@n0n/llm").StreamEvent) => void,
 	onToolResult?: (round: number, summary: string) => void,
 ): Promise<EditorLoopResult> {
 	let current = source;
