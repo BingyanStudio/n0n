@@ -18,6 +18,7 @@ export type {
 	StreamEvent,
 	StreamRequest,
 	AssistantMessage,
+	AssistantToolCallPart,
 } from "./stream.ts";
 
 // 消息转换
