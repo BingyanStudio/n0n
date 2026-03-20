@@ -121,13 +121,11 @@ export function toAPIMessages(
 ): ModelMessage[] {
 	const result: ModelMessage[] = [];
 	const isAnthropic = providerType === "anthropic";
-	let _systemCount = 0;
 	let userCount = 0;
 
 	for (const msg of messages) {
 		switch (msg.type) {
 			case "system": {
-				_systemCount++;
 				const sysMsg: ModelMessage = {
 					role: "system",
 					content: adaptTags(msg.content, model),
