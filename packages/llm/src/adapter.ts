@@ -94,12 +94,15 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 /* ── Prompt Caching 注解 ── */
 
 /**
- * 为 Anthropic prompt caching 创建 providerOptions
+ * 为原生 Anthropic provider 创建 providerOptions（prompt caching）
  *
- * Anthropic 支持在消息级别标记 cache_control: { type: "ephemeral" }，
- * 让 API 缓存该消息之前的所有 token，后续请求直接复用。
+ * Prompt caching 有两条互斥路径（由 ProviderConfig.provider 判别）：
+ * 1. 原生 Anthropic（provider === "anthropic"）：
+ *    本文件通过 providerOptions 注入 cacheControl，AI SDK @ai-sdk/anthropic 负责传递。
+ * 2. litellm 代理（provider === "openai-compatible" + backendProvider === "anthropic"）：
+ *    provider.ts 通过 fetch wrapper 在 HTTP body 中注入 cache_control。
  *
- * 缓存策略：标记 system prompt 和第一条 user message 作为稳定的缓存前缀。
+ * 两条路径由 providerType 字符串天然互斥，不会双重注入。
  */
 function anthropicCacheControl(): {
 	anthropic: { cacheControl: { type: "ephemeral" } };
