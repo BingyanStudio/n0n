@@ -1,18 +1,24 @@
 /**
- * DomainMessage ↔ LLM API 消息转换
+ * DomainMessage ↔ AI SDK ModelMessage 转换
  *
- * 领域消息是结构化数据记录，这里负责转换为 LLM provider 需要的格式。
+ * 领域消息是结构化数据记录，这里负责转换为 AI SDK 需要的 ModelMessage 格式。
  * 所有输出统一为 XML + Markdown 混合结构：
  * - XML 标签划分内容边界，便于模型理解结构
  * - 标签内部为纯文本 / Markdown，无需 XML 转义
+ *
+ * 支持 Anthropic prompt caching：通过 providerOptions 注入 cache_control。
  */
 
+import type {
+	ModelMessage,
+	AssistantModelMessage,
+	ToolModelMessage,
+} from "ai";
 import type {
 	DomainMessage,
 	EditDiff,
 	EditToolResult,
 	ExecToolResult,
-	LLMRequestMessage,
 	ToolResult,
 	WriteToolResult,
 } from "@n0n/types";
@@ -89,26 +95,65 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 	}
 }
 
+/* ── Prompt Caching 注解 ── */
+
+/**
+ * 为 Anthropic prompt caching 创建 providerOptions
+ *
+ * Anthropic 支持在消息级别标记 cache_control: { type: "ephemeral" }，
+ * 让 API 缓存该消息之前的所有 token，后续请求直接复用。
+ *
+ * 缓存策略：标记 system prompt 和第一条 user message 作为稳定的缓存前缀。
+ */
+function anthropicCacheControl(): {
+	anthropic: { cacheControl: { type: "ephemeral" } };
+} {
+	return { anthropic: { cacheControl: { type: "ephemeral" } } };
+}
+
 /* ── 主转换函数 ── */
 
 /**
- * DomainMessage[] → LLMRequestMessage[]
+ * DomainMessage[] → ModelMessage[]
+ *
+ * @param providerType - provider 类型，用于注入 provider-specific 选项（如 Anthropic cache_control）
  */
 export function toAPIMessages(
 	messages: DomainMessage[],
 	model: string,
-): LLMRequestMessage[] {
-	const result: LLMRequestMessage[] = [];
+	providerType?: string,
+): ModelMessage[] {
+	const result: ModelMessage[] = [];
+	const isAnthropic = providerType === "anthropic";
+	let systemCount = 0;
+	let userCount = 0;
 
 	for (const msg of messages) {
 		switch (msg.type) {
-			case "system":
-				result.push({ role: "system", content: adaptTags(msg.content, model) });
+			case "system": {
+				systemCount++;
+				const sysMsg: ModelMessage = {
+					role: "system",
+					content: adaptTags(msg.content, model),
+					...(isAnthropic ? { providerOptions: anthropicCacheControl() } : {}),
+				};
+				result.push(sysMsg);
 				break;
+			}
 
-			case "user_text":
-				result.push({ role: "user", content: msg.content });
+			case "user_text": {
+				userCount++;
+				const userMsg: ModelMessage = {
+					role: "user",
+					content: msg.content,
+					// 第一条 user message 作为缓存断点
+					...(isAnthropic && userCount === 1
+						? { providerOptions: anthropicCacheControl() }
+						: {}),
+				};
+				result.push(userMsg);
 				break;
+			}
 
 			case "user_image":
 				result.push({
@@ -117,100 +162,72 @@ export function toAPIMessages(
 				});
 				break;
 
-			case "assistant_text":
-				result.push({
+			case "assistant_text": {
+				const assistantMsg: AssistantModelMessage = {
 					role: "assistant",
 					content: msg.content,
-					...(msg.reasoning ? { reasoning_content: msg.reasoning } : {}),
-				});
+				};
+				result.push(assistantMsg);
 				break;
+			}
 
-			case "assistant_tool_call":
-				result.push({
+			case "assistant_tool_call": {
+				const assistantMsg: AssistantModelMessage = {
 					role: "assistant",
-					content: msg.content,
-					...(msg.reasoning ? { reasoning_content: msg.reasoning } : {}),
-					tool_calls: msg.toolCalls.map((tc) => ({
-						id: tc.id,
-						type: "function" as const,
-						function: {
-							name: tc.tool,
-							arguments: JSON.stringify(tc.args),
-						},
-					})),
-				});
+					content: [
+						// 文本内容（如果有）
+						...(msg.content ? [{ type: "text" as const, text: msg.content }] : []),
+						// tool calls → ToolCallPart
+						...msg.toolCalls.map((tc) => ({
+							type: "tool-call" as const,
+							toolCallId: tc.id,
+							toolName: tc.tool,
+							input: tc.args,
+						})),
+					],
+				};
+				result.push(assistantMsg);
 				break;
+			}
 
-			case "tool_result":
-				result.push({
+			case "tool_result": {
+				const toolMsg: ToolModelMessage = {
 					role: "tool",
-					tool_call_id: msg.call.id,
-					content: toolResultToContent(msg, model),
-				});
+					content: [
+						{
+							type: "tool-result" as const,
+							toolCallId: msg.call.id,
+							toolName: msg.call.tool,
+							output: {
+								type: "text" as const,
+								value: toolResultToContent(msg, model),
+							},
+						},
+					],
+				};
+				result.push(toolMsg);
 				break;
+			}
 
 			case "idle_nudge":
 				result.push({
 					role: "user",
 					content: wrapTag(
 						"system_warning",
-						`You replied with plain text without calling any tool (idle ${msg.idleCount}/${msg.maxIdleRounds}).\n\nYou **must** either call \`submit\` to submit your result, or continue calling tools. Do NOT output plain text without a tool call.`,
+						`You replied with plain text without using any tools. You MUST use tools to make progress. Idle ${msg.idleCount}/${msg.maxIdleRounds}.`,
 						model,
 					),
 				});
 				break;
 
-			case "user_input": {
-				const parts: string[] = [];
-				if (msg.context) parts.push(wrapTag("context", msg.context, model));
-				if (msg.capabilities)
-					parts.push(wrapTag("capabilities", msg.capabilities, model));
-				if (msg.hint) parts.push(wrapTag("system_hint", msg.hint, model));
-				parts.push(msg.content);
-				result.push({ role: "user", content: parts.join("\n\n") });
-				break;
-			}
-
-			case "turn_feedback":
+			case "reminder:due":
 				result.push({
 					role: "user",
 					content: wrapTag(
-						"feedback",
-						`**${msg.status}** (${msg.resultType})\n\n${msg.detail}`,
+						"reminder",
+						`Your reminder fired (set ${msg.originalDelay} rounds ago):\n${msg.content}`,
 						model,
 					),
-				});
-				break;
-
-			case "reminder:due": {
-				const reminderBody = [
-					msg.content,
-					"",
-					`⏰ Your commitment of ${msg.originalDelay} rounds has expired.`,
-					"",
-					"You **must** output a `<reflection>` block before your next tool call,",
-					"analyzing why the commitment was not met and how to adjust.",
-					"Then set a new reminder with updated progress and a revised commitment.",
-				].join("\n");
-				result.push({
-					role: "user",
-					content: wrapTag("reminder", reminderBody, model),
-				});
-				break;
-			}
-
-			case "tool_arg_error":
-				result.push({
-					role: "tool",
-					tool_call_id: msg.callId,
-					content: [
-						wrapTag(
-							"error",
-							`Parameter error for tool \`${msg.tool}\`: ${msg.error}`,
-							model,
-						),
-						wrapTag("schema", JSON.stringify(msg.schema, null, 2), model),
-					].join("\n\n"),
 				});
 				break;
 
@@ -218,25 +235,68 @@ export function toAPIMessages(
 				result.push({
 					role: "user",
 					content: wrapTag(
-						"rejected",
-						`${msg.error}\n\nFix the format and submit again. (attempt ${msg.attempt}/${msg.maxAttempts})`,
+						"submit_rejected",
+						`Submit rejected (attempt ${msg.attempt}/${msg.maxAttempts}): ${msg.error}`,
 						model,
 					),
+				});
+				break;
+
+			case "user_input":
+				result.push({
+					role: "user",
+					content: buildUserInputContent(msg, model),
+				});
+				break;
+
+			case "turn_feedback":
+				result.push({
+					role: "user",
+					content: wrapTag(
+						"turn_feedback",
+						`Status: ${msg.status} | Type: ${msg.resultType}\n${msg.detail}`,
+						model,
+					),
+				});
+				break;
+
+			case "tool_arg_error":
+				result.push({
+					role: "tool",
+					content: [
+						{
+							type: "tool-result" as const,
+							toolCallId: msg.callId,
+							toolName: msg.tool,
+							output: {
+								type: "text" as const,
+								value: wrapTag("error", `Invalid tool arguments: ${msg.error}`, model),
+							},
+						},
+					],
 				});
 				break;
 		}
 	}
 
-	// 合并连续的 system 消息 — 部分模型（如 minimax）不支持多个 system 消息
-	const merged: LLMRequestMessage[] = [];
-	for (const msg of result) {
-		const prev = merged[merged.length - 1];
-		if (msg.role === "system" && prev?.role === "system") {
-			prev.content += `\n\n${msg.content}`;
-		} else {
-			merged.push(msg);
-		}
-	}
+	return result;
+}
 
-	return merged;
+/** 构建 user_input 消息内容 */
+function buildUserInputContent(
+	msg: Extract<DomainMessage, { type: "user_input" }>,
+	model: string,
+): string {
+	const parts: string[] = [];
+	if (msg.context) {
+		parts.push(wrapTag("context", msg.context, model));
+	}
+	if (msg.capabilities) {
+		parts.push(wrapTag("capabilities", msg.capabilities, model));
+	}
+	parts.push(msg.content);
+	if (msg.hint) {
+		parts.push(wrapTag("hint", msg.hint, model));
+	}
+	return parts.join("\n\n");
 }
