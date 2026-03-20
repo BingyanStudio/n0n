@@ -15,14 +15,17 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
-import { buildLLMConfigFromEnv, createModelFromConfig } from "@n0n/llm";
+import {
+	buildLLMConfigFromEnv,
+	createModelFromConfig,
+	generateText,
+} from "@n0n/llm";
 import {
 	bootstrap,
 	ensureDirs,
 	parseWorkspaceArg,
 	resolveBasePaths,
 } from "@n0n/shared";
-import { generateText } from "ai";
 
 import { codeEnvSpec } from "./env-spec.ts";
 

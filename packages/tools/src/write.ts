@@ -6,8 +6,8 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { jsonSchema, tool } from "@n0n/llm";
 import type { WriteToolCall, WriteToolResult } from "@n0n/types";
-import { jsonSchema, tool } from "ai";
 
 export { WriteArgsSchema } from "@n0n/types";
 

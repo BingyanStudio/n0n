@@ -12,7 +12,6 @@
 		"@n0n/llm": "workspace:*",
 		"@n0n/shared": "workspace:*",
 		"@n0n/types": "workspace:*",
-		"ai": "^6.0.116",
 		"zod": "^4.3.6"
 	}
 }

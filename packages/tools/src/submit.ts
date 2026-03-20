@@ -12,9 +12,9 @@
  *   这样 LLM 能获得每个字段的类型约束，而非只看到一段描述文本。
  */
 
+import type { Tool } from "@n0n/llm";
+import { tool as aiTool, jsonSchema } from "@n0n/llm";
 import type { SubmitToolCall, SubmitToolResult } from "@n0n/types";
-import type { Tool } from "ai";
-import { tool as aiTool, jsonSchema } from "ai";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 

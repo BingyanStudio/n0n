@@ -16,6 +16,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { LLMConfig } from "@n0n/llm";
+import { jsonSchema, tool } from "@n0n/llm";
 import type {
 	DiffChunk,
 	DiffLine,
@@ -25,7 +26,6 @@ import type {
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
-import { jsonSchema, tool } from "ai";
 import editDescription from "./descriptions/edit.md" with { type: "text" };
 import { applySingleOp, editorLoop } from "./editor-loop.ts";
 

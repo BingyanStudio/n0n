@@ -17,6 +17,8 @@
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import type { Tool } from "@n0n/llm";
+import { jsonSchema, tool } from "@n0n/llm";
 import { wrapTagFor } from "@n0n/shared";
 import type {
 	ExecToolCall,
@@ -24,8 +26,6 @@ import type {
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
-import type { Tool } from "ai";
-import { jsonSchema, tool } from "ai";
 import type { EnvSnapshot } from "./env.ts";
 import { getAvailableByGroup } from "./env.ts";
 

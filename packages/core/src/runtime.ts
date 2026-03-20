@@ -8,9 +8,8 @@
  * 支持运行时依赖注入和多 provider（OpenAI / Anthropic / Google）。
  */
 
-import type { LLMConfig } from "@n0n/llm";
+import type { LanguageModel, LLMConfig } from "@n0n/llm";
 import { buildLLMConfigFromEnv, createModelFromConfig } from "@n0n/llm";
-import type { LanguageModel } from "ai";
 
 // ── 类型 ──
 
