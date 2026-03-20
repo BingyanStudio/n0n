@@ -76,8 +76,14 @@ if (!result.ok) {
 
 // ── 初始化 ──
 
+const cliOpts = (globalThis as Record<string, unknown>).__n0n_cli_opts as
+	| { resumeFile?: string; saveEveryLoop?: boolean; filteredArgs?: string[] }
+	| undefined;
+const resumeFile = cliOpts?.resumeFile;
+const saveEveryLoop = cliOpts?.saveEveryLoop ?? false;
+
 const { workspace, remainingArgs } = parseWorkspaceArg(
-	process.argv.slice(2),
+	cliOpts?.filteredArgs ?? process.argv.slice(2),
 	"N0N_CODE_WORKSPACE",
 	process.cwd(),
 );
@@ -91,12 +97,6 @@ const { startCodeRepl } = await import("./repl.ts");
 
 const initialInput =
 	remainingArgs.length > 0 ? remainingArgs.join(" ") : undefined;
-
-const cliOpts = (globalThis as Record<string, unknown>).__n0n_cli_opts as
-	| { resumeFile?: string; saveEveryLoop?: boolean }
-	| undefined;
-const resumeFile = cliOpts?.resumeFile;
-const saveEveryLoop = cliOpts?.saveEveryLoop ?? false;
 
 writeln(
 	style.bold("n0n code") + style.gray(` — Code Agent [${paths.workspace}]`),

@@ -68,6 +68,7 @@ if (args.includes("--save-every-loop")) {
 (globalThis as Record<string, unknown>).__n0n_cli_opts = {
 	resumeFile,
 	saveEveryLoop,
+	filteredArgs: [...args],
 };
 
 // ── 启动主流程 ──
