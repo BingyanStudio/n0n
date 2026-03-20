@@ -50,10 +50,11 @@ export interface AgentOptions<T = unknown> {
 const MAX_SUBMIT_RETRIES = 4;
 
 /**
- * 将新格式的 toolCalls 转换为旧格式的 LLMToolCall[]
+ * @deprecated 临时桥接层 — 等 parseToolCalls 迁移到 AI SDK 格式后删除
  *
  * AI SDK 返回 { toolCallId, toolName, input }，
- * parseToolCalls 期望 { id, type, function: { name, arguments } }
+ * 旧的 parseToolCalls 期望 { id, type, function: { name, arguments } }。
+ * TODO: 将 parseToolCalls 直接接受新格式，移除此函数。
  */
 function toLLMToolCalls(
 	toolCalls: Array<{ toolCallId: string; toolName: string; input: string }>,
