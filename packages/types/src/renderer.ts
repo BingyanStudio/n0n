@@ -7,12 +7,31 @@
 
 import type { ToolCallRecord, ToolResult } from "./domain.ts";
 
+/** 单轮 LLM 调用的 token 用量统计 */
+export interface RoundTokenUsage {
+	/** 输入 token 总量 */
+	inputTokens: number;
+	/** 输出 token 总量 */
+	outputTokens: number;
+	/** 总 token 量 */
+	totalTokens: number;
+	/** 缓存命中的输入 token 数 */
+	cacheReadTokens: number;
+	/** 写入缓存的输入 token 数 */
+	cacheWriteTokens: number;
+}
+
 export interface Renderer {
 	/** 用户输入展示 */
 	userMessage(content: string): void;
 
 	/** 新一轮 LLM 调用开始 */
-	roundStart(round: number, maxRounds: number, msgCount: number): void;
+	roundStart(
+		round: number,
+		maxRounds: number,
+		msgCount: number,
+		lastUsage?: RoundTokenUsage | null,
+	): void;
 
 	/** LLM 流式输出：thinking token */
 	thinkingToken(token: string): void;

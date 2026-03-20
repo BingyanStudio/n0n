@@ -110,6 +110,7 @@ export const stateUpdaters = {
 		round: number,
 		maxRounds: number,
 		msgCount: number,
+		_lastUsage?: import("@n0n/types").RoundTokenUsage | null,
 	): TuiRendererState => ({
 		...state,
 		round: { current: round, max: maxRounds, msgCount },

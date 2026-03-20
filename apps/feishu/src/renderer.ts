@@ -126,7 +126,12 @@ export class FeishuRenderer implements Renderer {
 
 	userMessage(_content: string): void {}
 
-	roundStart(round: number, maxRounds: number, msgCount: number): void {
+	roundStart(
+		round: number,
+		maxRounds: number,
+		msgCount: number,
+		_lastUsage?: import("@n0n/types").RoundTokenUsage | null,
+	): void {
 		this.conv.setTitle(`n0n · round ${round}/${maxRounds}`);
 		this.conv.startRound(`Round ${round}  ·  ${msgCount} msgs`);
 	}
