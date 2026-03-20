@@ -65,6 +65,7 @@ export function createLanguageModel(config: ProviderConfig): LanguageModel {
 		case "anthropic":
 			return createAnthropic({
 				apiKey: config.apiKey,
+				...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
 			})(config.model);
 
 		case "google":

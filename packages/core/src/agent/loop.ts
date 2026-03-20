@@ -9,6 +9,7 @@
 
 import type { TokenUsage } from "@n0n/llm";
 import {
+	buildThinkingProviderOptions,
 	chatCompletionStream,
 	getModelId,
 	getProviderType,
@@ -75,6 +76,7 @@ export async function agentLoop<T = unknown>(
 	let submitRetries = 0;
 	/** 上一轮 LLM 调用的 token 用量（传给 roundStart 显示） */
 	let lastUsage: TokenUsage | null = null;
+	const thinkingProviderOptions = buildThinkingProviderOptions(runtime.llm);
 
 	for (let iteration = 0; iteration < maxIter; iteration++) {
 		if (options?.signal?.aborted) {
@@ -98,7 +100,11 @@ export async function agentLoop<T = unknown>(
 				tools: toolkit.toolSet,
 				toolChoice: "auto",
 			},
-			{ signal: options?.signal, model: runtime.model },
+			{
+				signal: options?.signal,
+				model: runtime.model,
+				providerOptions: thinkingProviderOptions,
+			},
 		)) {
 			if (options?.signal?.aborted) {
 				renderer.aborted();

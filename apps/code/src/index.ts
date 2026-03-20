@@ -17,8 +17,9 @@ import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
 import {
 	buildLLMConfigFromEnv,
+	buildThinkingProviderOptions,
+	chatCompletionStream,
 	createModelFromConfig,
-	generateText,
 } from "@n0n/llm";
 import {
 	bootstrap,
@@ -43,12 +44,15 @@ const testLLM = async () => {
 	try {
 		const config = buildLLMConfigFromEnv("LLM");
 		const model = createModelFromConfig(config);
-		await generateText({
-			model,
-			messages: [{ role: "user", content: "hi" }],
-			maxOutputTokens: 1,
-			maxRetries: 1,
-		});
+		const providerOptions = buildThinkingProviderOptions(config);
+		// 使用流式调用测试连通性 — 某些代理的非流式响应 schema 不完整（如缺少 thinking.signature），
+		// 会导致 generateText 的 schema 校验失败，但流式调用不受影响。
+		for await (const event of chatCompletionStream(
+			{ messages: [{ role: "user", content: "hi" }], maxOutputTokens: providerOptions ? 2048 : 1 },
+			{ model, providerOptions },
+		)) {
+			if (event.type === "done") break;
+		}
 		return { ok: true as const };
 	} catch (err) {
 		if (err instanceof Error) {

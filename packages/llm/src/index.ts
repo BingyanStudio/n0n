@@ -22,15 +22,21 @@ export type {
 	OpenAICompatibleProviderConfig,
 	OpenAIProviderConfig,
 	ProviderConfig,
+	ThinkingProviderOptions,
 } from "./config.ts";
-export { getModelId, getProviderType } from "./config.ts";
+export {
+	DEFAULT_THINKING_BUDGET_TOKENS,
+	getModelId,
+	getProviderType,
+	isAnthropicProvider,
+} from "./config.ts";
 // 环境变量 → 配置工厂（SSOT：runtime.ts 和 bootstrap/runner.ts 共用）
 export {
 	buildLLMConfigFromEnv,
 	buildProviderConfigFromEnv,
-	inferProvider,
 	isValidProvider,
 	PROVIDER_TYPES,
+	resolveProvider,
 } from "./config-from-env.ts";
 // Provider Factory
 export { createLanguageModel, createModelFromConfig } from "./provider.ts";
@@ -46,3 +52,4 @@ export type {
 export { chatCompletionStream, StreamAccumulator } from "./stream.ts";
 // Tag 工具
 export { adaptTags, wrapTag } from "./tags.ts";
+export { buildThinkingProviderOptions } from "./thinking.ts";
