@@ -5,13 +5,22 @@
  * 各 app 通过展开运算符组合共享 + 专属变量。
  *
  * 支持多 provider：
- * - openai-compatible（默认）：需要 BASE_URL + API_KEY + MODEL
- * - openai：需要 API_KEY + MODEL，BASE_URL 可选
- * - anthropic：需要 API_KEY + MODEL，不需要 BASE_URL
+ * - openai（默认）：需要 API_KEY + MODEL，BASE_URL 可选
+ * - anthropic：需要 API_KEY + MODEL，BASE_URL 可选（代理时填写）
  * - google：需要 API_KEY + MODEL，不需要 BASE_URL
+ * - openai-compatible：需要 BASE_URL + API_KEY + MODEL
  */
 
 import type { EnvGroup } from "@n0n/types";
+
+/**
+ * thinking 预算默认值的字符串表示 — 与 config.ts 中的 DEFAULT_THINKING_BUDGET_TOKENS 保持一致。
+ * common-specs 是纯声明式配置，无法直接引用 @n0n/llm 常量（避免包间循环依赖），
+ * 因此以注释标注 SSOT 来源。
+ *
+ * SSOT: packages/llm/src/config.ts → DEFAULT_THINKING_BUDGET_TOKENS
+ */
+const THINKING_BUDGET_DEFAULT = "1024";
 
 /** LLM 配置组 — 所有使用 LLM 的 app 共享 */
 export const LLM_ENV_GROUP: EnvGroup = {
@@ -20,8 +29,8 @@ export const LLM_ENV_GROUP: EnvGroup = {
 		{
 			key: "LLM_PROVIDER",
 			desc: "LLM provider 类型（openai / anthropic / google / openai-compatible）",
-			example: "openai-compatible",
-			default: "openai-compatible",
+			example: "openai",
+			default: "openai",
 		},
 		{
 			key: "LLM_BACKEND_PROVIDER",
@@ -31,7 +40,7 @@ export const LLM_ENV_GROUP: EnvGroup = {
 		},
 		{
 			key: "LLM_BASE_URL",
-			desc: "LLM API 地址（openai-compatible 必填，其他 provider 可选）",
+			desc: "LLM API 地址（openai-compatible 必填，anthropic 代理时填写，其他可选）",
 			example: "https://api.openai.com",
 			default: "",
 		},
@@ -52,6 +61,12 @@ export const LLM_ENV_GROUP: EnvGroup = {
 			example: "true",
 			default: "false",
 		},
+		{
+			key: "LLM_THINKING_BUDGET_TOKENS",
+			desc: `思考模式的 token 预算（默认 ${THINKING_BUDGET_DEFAULT}，最低 ${THINKING_BUDGET_DEFAULT}）`,
+			example: THINKING_BUDGET_DEFAULT,
+			default: THINKING_BUDGET_DEFAULT,
+		},
 	],
 };
 
@@ -62,7 +77,7 @@ export const EDITOR_LLM_ENV_GROUP: EnvGroup = {
 		{
 			key: "EDITOR_LLM_PROVIDER",
 			desc: "Editor LLM provider 类型",
-			example: "openai-compatible",
+			example: "openai",
 			inheritFrom: "LLM_PROVIDER",
 		},
 		{
@@ -96,6 +111,13 @@ export const EDITOR_LLM_ENV_GROUP: EnvGroup = {
 			example: "true",
 			default: "false",
 			inheritFrom: "LLM_ENABLE_THINKING",
+		},
+		{
+			key: "EDITOR_LLM_THINKING_BUDGET_TOKENS",
+			desc: "Editor LLM 思考模式的 token 预算",
+			example: THINKING_BUDGET_DEFAULT,
+			default: THINKING_BUDGET_DEFAULT,
+			inheritFrom: "LLM_THINKING_BUDGET_TOKENS",
 		},
 	],
 };

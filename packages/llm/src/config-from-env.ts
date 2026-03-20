@@ -29,26 +29,20 @@ export function isValidProvider(
 }
 
 /**
- * 从环境变量推断 provider 类型
+ * 从环境变量解析 provider 类型
+ *
+ * 不做基于 URL 的模糊推断 — 非严格映射的自动判断本质上不稳定，
+ * provider 类型必须由用户显式配置决定。
  *
  * 规则：
  * - 有显式 provider 值且合法时直接使用
- * - 根据 BASE_URL 推断：包含 anthropic → "anthropic"，包含 google → "google"
- * - 有 BASE_URL 但非已知 provider → "openai-compatible"
- * - 无 BASE_URL → "openai"
+ * - 无显式 provider 时，默认 "openai"
  */
-export function inferProvider(
-	baseUrl?: string,
-	explicit?: string,
-): ProviderConfig["provider"] {
+export function resolveProvider(explicit?: string): ProviderConfig["provider"] {
 	if (explicit && isValidProvider(explicit)) {
 		return explicit;
 	}
-	if (!baseUrl) return "openai";
-	if (baseUrl.includes("anthropic")) return "anthropic";
-	if (baseUrl.includes("google") || baseUrl.includes("gemini")) return "google";
-	if (baseUrl.includes("openai.com")) return "openai";
-	return "openai-compatible";
+	return "openai";
 }
 
 /**
@@ -70,7 +64,7 @@ export function buildProviderConfigFromEnv(
 		(fallback && "baseUrl" in fallback
 			? (fallback as { baseUrl?: string }).baseUrl
 			: undefined);
-	const provider = inferProvider(baseUrl, process.env[`${prefix}_PROVIDER`]);
+	const provider = resolveProvider(process.env[`${prefix}_PROVIDER`]);
 
 	switch (provider) {
 		case "openai":
@@ -81,7 +75,12 @@ export function buildProviderConfigFromEnv(
 				...(baseUrl ? { baseUrl } : {}),
 			};
 		case "anthropic":
-			return { provider: "anthropic", apiKey, model };
+			return {
+				provider: "anthropic",
+				apiKey,
+				model,
+				...(baseUrl ? { baseUrl } : {}),
+			};
 		case "google":
 			return { provider: "google", apiKey, model };
 		case "openai-compatible": {
@@ -112,8 +111,13 @@ export function buildLLMConfigFromEnv(
 	fallbackProvider?: ProviderConfig,
 ): LLMConfig {
 	const providerConfig = buildProviderConfigFromEnv(prefix, fallbackProvider);
+	const budgetRaw = process.env[`${prefix}_THINKING_BUDGET_TOKENS`];
+	const budgetTokens = budgetRaw ? Number.parseInt(budgetRaw, 10) : undefined;
 	return {
 		providerConfig,
 		enableThinking: process.env[`${prefix}_ENABLE_THINKING`] === "true",
+		...(budgetTokens !== undefined && !Number.isNaN(budgetTokens)
+			? { thinkingBudgetTokens: budgetTokens }
+			: {}),
 	};
 }
