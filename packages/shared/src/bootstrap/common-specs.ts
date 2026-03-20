@@ -24,6 +24,12 @@ export const LLM_ENV_GROUP: EnvGroup = {
 			default: "openai-compatible",
 		},
 		{
+			key: "LLM_BACKEND_PROVIDER",
+			desc: "代理后端的实际 provider（仅 openai-compatible 模式下有意义，用于缓存控制）",
+			example: "anthropic",
+			default: "",
+		},
+		{
 			key: "LLM_BASE_URL",
 			desc: "LLM API 地址（openai-compatible 必填，其他 provider 可选）",
 			example: "https://api.openai.com",
@@ -58,6 +64,12 @@ export const EDITOR_LLM_ENV_GROUP: EnvGroup = {
 			desc: "Editor LLM provider 类型",
 			example: "openai-compatible",
 			inheritFrom: "LLM_PROVIDER",
+		},
+		{
+			key: "EDITOR_LLM_BACKEND_PROVIDER",
+			desc: "Editor LLM 代理后端的实际 provider",
+			example: "anthropic",
+			inheritFrom: "LLM_BACKEND_PROVIDER",
 		},
 		{
 			key: "EDITOR_LLM_BASE_URL",
