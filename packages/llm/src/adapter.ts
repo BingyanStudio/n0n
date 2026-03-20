@@ -121,7 +121,8 @@ export function toAPIMessages(
 	providerType?: string,
 ): ModelMessage[] {
 	const result: ModelMessage[] = [];
-	const isAnthropic = providerType === "anthropic";
+	const isAnthropic =
+		providerType === "anthropic" || providerType === "anthropic-compatible";
 
 	for (const msg of messages) {
 		switch (msg.type) {
@@ -151,11 +152,20 @@ export function toAPIMessages(
 				break;
 
 			case "assistant_text": {
-				const assistantMsg: AssistantModelMessage = {
-					role: "assistant",
-					content: msg.content,
-				};
-				result.push(assistantMsg);
+				if (msg.reasoning) {
+					result.push({
+						role: "assistant",
+						content: [
+							{ type: "reasoning" as const, text: msg.reasoning },
+							{ type: "text" as const, text: msg.content },
+						],
+					});
+				} else {
+					result.push({
+						role: "assistant",
+						content: msg.content,
+					});
+				}
 				break;
 			}
 
@@ -163,6 +173,10 @@ export function toAPIMessages(
 				const assistantMsg: AssistantModelMessage = {
 					role: "assistant",
 					content: [
+						// reasoning 内容（交替思考需要回传历史 thinking）
+						...(msg.reasoning
+							? [{ type: "reasoning" as const, text: msg.reasoning }]
+							: []),
 						// 文本内容（如果有）
 						...(msg.content
 							? [{ type: "text" as const, text: msg.content }]
