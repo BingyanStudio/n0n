@@ -7,8 +7,8 @@
  * - agent 必须用 <reflection> 标签输出反思结论
  */
 
-import { tool, jsonSchema } from "ai";
 import type { ReminderToolCall, ReminderToolResult } from "@n0n/types";
+import { jsonSchema, tool } from "ai";
 
 export { ReminderArgsSchema } from "@n0n/types";
 

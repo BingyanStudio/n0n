@@ -9,7 +9,12 @@
  */
 
 import { createInterface, type Interface } from "node:readline";
-import type { SetupOption, SetupRenderer, ConfigGroup, ConfigEntry } from "@n0n/types";
+import type {
+	ConfigEntry,
+	ConfigGroup,
+	SetupOption,
+	SetupRenderer,
+} from "@n0n/types";
 import { style, writeln } from "./ansi.ts";
 
 export class CliSetupRenderer implements SetupRenderer {
@@ -150,16 +155,15 @@ export class CliSetupRenderer implements SetupRenderer {
 		// 分组配置表格
 		writeln(`${style.cyan("ℹ")} ${style.bold("当前配置:")}`);
 		for (const group of groups) {
-			writeln(`  ${style.dim("──")} ${style.cyan(group.title)} ${style.dim("──")}`);
+			writeln(
+				`  ${style.dim("──")} ${style.cyan(group.title)} ${style.dim("──")}`,
+			);
 			for (const e of group.entries) {
 				const val = this.maskIfSecret(e.value, e.secret);
 				const src = this.sourceTag(e.source);
 				let line = `    ${style.white(e.key)} ${style.dim("=")} ${val}  ${src}`;
 				if (e.overridden) {
-					const overVal = this.maskIfSecret(
-						e.overridden.value,
-						e.secret,
-					);
+					const overVal = this.maskIfSecret(e.overridden.value, e.secret);
 					line += `  ${style.dim("←")} ${style.dim(`覆盖了${this.sourceLabel(e.overridden.source)}值`)} ${style.dim(overVal)}`;
 				}
 				writeln(line);

@@ -16,13 +16,13 @@ import { resolve } from "node:path";
 import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
 import { buildLLMConfigFromEnv, createModelFromConfig } from "@n0n/llm";
-import { generateText } from "ai";
 import {
 	bootstrap,
 	ensureDirs,
 	parseWorkspaceArg,
 	resolveBasePaths,
 } from "@n0n/shared";
+import { generateText } from "ai";
 
 import { codeEnvSpec } from "./env-spec.ts";
 
@@ -53,7 +53,10 @@ const testLLM = async () => {
 				return { ok: false as const, error: "认证失败，请检查 API Key" };
 			}
 			if (err.name === "TimeoutError" || err.message.includes("timeout")) {
-				return { ok: false as const, error: "连接超时（15s），请检查网络或 API 地址" };
+				return {
+					ok: false as const,
+					error: "连接超时（15s），请检查网络或 API 地址",
+				};
 			}
 			return { ok: false as const, error: err.message.slice(0, 200) };
 		}

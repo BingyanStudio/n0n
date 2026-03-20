@@ -7,8 +7,8 @@
  * - 结构化响应解析
  */
 
-import { generateText } from "ai";
 import type { LanguageModel, ModelMessage } from "ai";
+import { generateText } from "ai";
 
 export class LLMError extends Error {
 	constructor(
@@ -53,7 +53,6 @@ export async function chatCompletion(
 	request: ChatCompletionRequest,
 	model: LanguageModel,
 ): Promise<ChatCompletionResult> {
-
 	try {
 		const result = await generateText({
 			model,

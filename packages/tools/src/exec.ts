@@ -18,14 +18,14 @@
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { wrapTagFor } from "@n0n/shared";
-import { tool, jsonSchema } from "ai";
-import type { Tool } from "ai";
 import type {
 	ExecToolCall,
 	ExecToolResult,
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
+import type { Tool } from "ai";
+import { jsonSchema, tool } from "ai";
 import type { EnvSnapshot } from "./env.ts";
 import { getAvailableByGroup } from "./env.ts";
 
@@ -280,10 +280,7 @@ function buildDescription(env: EnvSnapshot, model: string): string {
  * @param env 环境快照（来自 detectEnv）
  * @param model LLM 模型名称（用于选择 tag 风格）
  */
-export function makeExecToolDefinition(
-	env: EnvSnapshot,
-	model = "",
-): Tool {
+export function makeExecToolDefinition(env: EnvSnapshot, model = ""): Tool {
 	const available = env.runtimes.filter((r) => r.available);
 	const runtimeList = available.map((r) => r.name).join(", ");
 
@@ -294,7 +291,8 @@ export function makeExecToolDefinition(
 			properties: {
 				script: {
 					type: "string",
-					description: "Script content. Single command or multi-line code with imports, loops, etc.",
+					description:
+						"Script content. Single command or multi-line code with imports, loops, etc.",
 				},
 				runtime: {
 					type: "string",
@@ -306,7 +304,8 @@ export function makeExecToolDefinition(
 				},
 				timeout: {
 					type: "number",
-					description: "Timeout in seconds (default: 120). Process continues in background if exceeded.",
+					description:
+						"Timeout in seconds (default: 120). Process continues in background if exceeded.",
 				},
 			},
 			required: ["script"],

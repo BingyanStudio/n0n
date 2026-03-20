@@ -10,8 +10,8 @@
  * StreamEvent 与旧 API 基本兼容（注意：done.finishReason 从 string | null 收窄为 string）。
  */
 
-import { streamText } from "ai";
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
+import { streamText } from "ai";
 import type { LLMConfig } from "./config.ts";
 import { createModelFromConfig } from "./provider.ts";
 
@@ -56,8 +56,7 @@ export async function* chatCompletionStream(
 	request: StreamRequest,
 	options: StreamOptions,
 ): AsyncGenerator<StreamEvent> {
-	const model =
-		options.model ?? createModelFromConfig(options.config);
+	const model = options.model ?? createModelFromConfig(options.config);
 
 	const result = streamText({
 		model,

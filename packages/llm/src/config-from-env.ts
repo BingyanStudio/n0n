@@ -46,8 +46,7 @@ export function inferProvider(
 	}
 	if (!baseUrl) return "openai";
 	if (baseUrl.includes("anthropic")) return "anthropic";
-	if (baseUrl.includes("google") || baseUrl.includes("gemini"))
-		return "google";
+	if (baseUrl.includes("google") || baseUrl.includes("gemini")) return "google";
 	if (baseUrl.includes("openai.com")) return "openai";
 	return "openai-compatible";
 }
@@ -63,20 +62,15 @@ export function buildProviderConfigFromEnv(
 	fallback?: ProviderConfig,
 ): ProviderConfig {
 	const apiKey =
-		process.env[`${prefix}_API_KEY`] ||
-		(fallback ? fallback.apiKey : "");
+		process.env[`${prefix}_API_KEY`] || (fallback ? fallback.apiKey : "");
 	const model =
-		process.env[`${prefix}_MODEL`] ||
-		(fallback ? fallback.model : "");
+		process.env[`${prefix}_MODEL`] || (fallback ? fallback.model : "");
 	const baseUrl =
 		process.env[`${prefix}_BASE_URL`] ||
 		(fallback && "baseUrl" in fallback
 			? (fallback as { baseUrl?: string }).baseUrl
 			: undefined);
-	const provider = inferProvider(
-		baseUrl,
-		process.env[`${prefix}_PROVIDER`],
-	);
+	const provider = inferProvider(baseUrl, process.env[`${prefix}_PROVIDER`]);
 
 	switch (provider) {
 		case "openai":
@@ -91,9 +85,11 @@ export function buildProviderConfigFromEnv(
 		case "google":
 			return { provider: "google", apiKey, model };
 		case "openai-compatible": {
-			const backendProvider = process.env[
-				`${prefix}_BACKEND_PROVIDER`
-			] as "anthropic" | "google" | "openai" | undefined;
+			const backendProvider = process.env[`${prefix}_BACKEND_PROVIDER`] as
+				| "anthropic"
+				| "google"
+				| "openai"
+				| undefined;
 			return {
 				provider: "openai-compatible",
 				apiKey,

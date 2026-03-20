@@ -127,9 +127,7 @@ function resolveConfigSources(
 		if (finalValue === undefined) continue;
 
 		let source: ConfigSource;
-		let overridden:
-			| { value: string; source: ConfigSource }
-			| undefined;
+		let overridden: { value: string; source: ConfigSource } | undefined;
 
 		const inProject = v.key in projectEnv;
 		const inGlobal = v.key in globalEnv;
@@ -166,10 +164,7 @@ function resolveConfigSources(
 }
 
 /** 格式化配置摘要日志 */
-function formatConfigSummary(
-	configs: ConfigEntry[],
-	spec: EnvSpec,
-): string {
+function formatConfigSummary(configs: ConfigEntry[], spec: EnvSpec): string {
 	const secretKeys = new Set(
 		allVars(spec)
 			.filter((v) => v.secret)
@@ -186,9 +181,7 @@ function formatConfigSummary(
 
 	const lines: string[] = [];
 	for (const c of configs) {
-		const displayValue = secretKeys.has(c.key)
-			? maskSecret(c.value)
-			: c.value;
+		const displayValue = secretKeys.has(c.key) ? maskSecret(c.value) : c.value;
 		const src = sourceLabel[c.source];
 		let line = `  ${c.key} = ${displayValue}  (${src})`;
 		if (c.overridden) {
@@ -286,9 +279,7 @@ export async function bootstrap(
 	const configGroups: ConfigGroup[] = spec.groups
 		.map((g) => ({
 			title: g.title,
-			entries: configEntries.filter((e) =>
-				g.vars.some((v) => v.key === e.key),
-			),
+			entries: configEntries.filter((e) => g.vars.some((v) => v.key === e.key)),
 		}))
 		.filter((g) => g.entries.length > 0);
 

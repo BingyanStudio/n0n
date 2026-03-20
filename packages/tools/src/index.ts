@@ -23,10 +23,14 @@ import type {
 	ToolStreamEvent,
 	WriteToolCall,
 } from "@n0n/types";
-import type { ZodType } from "zod";
 import type { Tool, ToolSet } from "ai";
+import type { ZodType } from "zod";
 import type { ToolsConfig } from "./config.ts";
-import { EDIT_TOOL_DEFINITION, EditArgsSchema, editToolStream } from "./edit.ts";
+import {
+	EDIT_TOOL_DEFINITION,
+	EditArgsSchema,
+	editToolStream,
+} from "./edit.ts";
 import { detectEnv } from "./env.ts";
 import {
 	ExecArgsSchema,
