@@ -203,10 +203,11 @@ export type LLMConnectionResult =
 
 **建议：需要修改后合并（Request Changes）**
 
-关键修改项：
-- [ ] 修复 RuntimeContext 的 config/model 冗余（2.1）
-- [ ] 统一 prompt caching 注入点（2.2）
-- [ ] 抽取 editor-loop.ts 的 tool result 构造辅助函数（2.4）
-- [ ] 简化 StreamOptions，删除未使用的 config 分支（2.5）
-- [ ] 收敛 `ai` 依赖到 `@n0n/llm`（3.1）
-- [ ] 删除 `_systemCount` 未使用变量（2.7）
+修复项（已全部完成）：
+- [x] 修复 RuntimeContext 的 config/model 冗余（2.1）→ getter 懒创建
+- [x] 统一 prompt caching 注入点（2.2）→ 添加互斥设计注释
+- [x] 抽取 editor-loop.ts 的 tool result 构造辅助函数（2.4）→ 6处→1处
+- [x] 简化 StreamOptions，删除未使用的 config 分支（2.5）
+- [x] 收敛 `ai` 依赖到 `@n0n/llm`（3.1）→ 10个文件 + 4个 package.json
+- [x] 删除 `_systemCount` 未使用变量（2.7）
+- [x] 恢复连续 system 消息合并逻辑（2.8）→ 防止 minimax 等模型回归
