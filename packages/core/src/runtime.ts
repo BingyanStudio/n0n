@@ -6,6 +6,8 @@
  *
  * LLM 配置使用 @n0n/llm 的 ProviderConfig + LanguageModel，
  * 支持运行时依赖注入和多 provider（OpenAI / Anthropic / Google）。
+ *
+ * LanguageModel 实例通过 getter 懒创建并缓存，保证与 config 始终一致。
  */
 
 import type { LanguageModel, LLMConfig } from "@n0n/llm";
@@ -25,15 +27,15 @@ export interface SecurityConfig {
 
 export interface RuntimeContext {
 	/** 主 LLM 配置 */
-	llm: LLMConfig;
-	/** 主 LLM 的 LanguageModel 实例（运行时注入） */
-	model: LanguageModel;
+	readonly llm: LLMConfig;
+	/** 主 LLM 的 LanguageModel 实例（由 llm 配置懒创建，缓存） */
+	readonly model: LanguageModel;
 	/** Editor LLM 配置 — 用于影子编辑层（shadow edit）。未配置时 fallback 到 llm。 */
-	editorLlm: LLMConfig;
-	/** Editor LLM 的 LanguageModel 实例 */
-	editorModel: LanguageModel;
-	agent: AgentConfig;
-	security: SecurityConfig;
+	readonly editorLlm: LLMConfig;
+	/** Editor LLM 的 LanguageModel 实例（由 editorLlm 配置懒创建，缓存） */
+	readonly editorModel: LanguageModel;
+	readonly agent: AgentConfig;
+	readonly security: SecurityConfig;
 }
 
 // ── 从环境变量构造 ──
@@ -47,19 +49,30 @@ function parseBlockedCommands(): string[] {
 		.filter((c) => c.length > 0);
 }
 
-/** 从环境变量构造 RuntimeContext（纯函数，无副作用） */
+/**
+ * 从环境变量构造 RuntimeContext（纯函数，无副作用）
+ *
+ * LanguageModel 实例通过 getter 懒创建并缓存，
+ * 消除 config 与 model 的数据冗余和不一致隐患。
+ */
 export function createRuntimeContext(): RuntimeContext {
 	const llm = buildLLMConfigFromEnv("LLM");
 	const editorLlm = buildLLMConfigFromEnv("EDITOR_LLM", llm.providerConfig);
 
-	const model = createModelFromConfig(llm);
-	const editorModel = createModelFromConfig(editorLlm);
+	let _model: LanguageModel | null = null;
+	let _editorModel: LanguageModel | null = null;
 
 	return {
 		llm,
-		model,
+		get model() {
+			if (!_model) _model = createModelFromConfig(llm);
+			return _model;
+		},
 		editorLlm,
-		editorModel,
+		get editorModel() {
+			if (!_editorModel) _editorModel = createModelFromConfig(editorLlm);
+			return _editorModel;
+		},
 		agent: {
 			maxIterations: 50,
 			maxIdleRounds: 5,
