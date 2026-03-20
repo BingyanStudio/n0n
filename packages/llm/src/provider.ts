@@ -9,6 +9,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
+import { selectCacheBreakpoints } from "./adapter.ts";
 import type { LLMConfig, ProviderConfig } from "./config.ts";
 
 /**
@@ -18,14 +19,7 @@ import type { LLMConfig, ProviderConfig } from "./config.ts";
  * 但 litellm 需要 message-level cache_control 才能触发 Anthropic 的 prompt caching。
  *
  * 此函数创建一个 fetch wrapper，在请求发出前拦截 body，
- * 注入 cache_control 断点。
- *
- * 缓存断点策略与 adapter.ts 中的 injectAnthropicCacheBreakpoints 保持一致：
- * Anthropic 最多支持 4 个缓存断点（ephemeral），采用激进策略全部用满：
- * 1. 最后一条 system message — 缓存稳定的 system prompt
- * 2. 倒数第四条 non-assistant message — 较早历史的兜底缓存
- * 3. 倒数第三条 non-assistant message — 中段历史缓存
- * 4. 倒数第二条 non-assistant message — 最近历史缓存
+ * 使用 selectCacheBreakpoints（SSOT）选择断点位置，注入 cache_control。
  */
 function createAnthropicCacheFetch(): typeof globalThis.fetch {
 	const baseFetch = globalThis.fetch;
@@ -39,29 +33,9 @@ function createAnthropicCacheFetch(): typeof globalThis.fetch {
 				// AI SDK openai provider 使用 "input"（Responses API）或 "messages"（Chat Completions API）
 				const msgArray = body.input ?? body.messages;
 				if (Array.isArray(msgArray)) {
-					// 断点 1：最后一条 system message
-					for (let i = msgArray.length - 1; i >= 0; i--) {
-						if (msgArray[i].role === "system") {
-							msgArray[i].cache_control = { type: "ephemeral" };
-							break;
-						}
+					for (const idx of selectCacheBreakpoints(msgArray)) {
+						msgArray[idx].cache_control = { type: "ephemeral" };
 					}
-
-					// 断点 2-4：倒数第四、第三、第二条 non-assistant message（梯度兜底）
-					const nonAssistantIndices: number[] = [];
-					for (let i = msgArray.length - 1; i >= 0; i--) {
-						const role = msgArray[i].role;
-						if (role === "user" || role === "tool") {
-							nonAssistantIndices.push(i);
-							if (nonAssistantIndices.length >= 4) break;
-						}
-					}
-
-					// 跳过最新一条（index 0），在倒数第二、第三、第四条上设断点
-					for (let k = 1; k < nonAssistantIndices.length; k++) {
-						msgArray[nonAssistantIndices[k]!].cache_control = { type: "ephemeral" };
-					}
-
 					init = { ...init, body: JSON.stringify(body) };
 				}
 			} catch {

@@ -9,7 +9,7 @@
 export type { LanguageModel, ModelMessage, Tool, ToolSet } from "ai";
 export { generateText, jsonSchema, tool } from "ai";
 // 消息转换
-export { toAPIMessages } from "./adapter.ts";
+export { selectCacheBreakpoints, toAPIMessages } from "./adapter.ts";
 export type { ChatCompletionRequest, ChatCompletionResult } from "./client.ts";
 // 非流式调用
 export { chatCompletion, LLMError } from "./client.ts";
