@@ -6,7 +6,8 @@
  * - XML 标签划分内容边界，便于模型理解结构
  * - 标签内部为纯文本 / Markdown，无需 XML 转义
  *
- * 支持 Anthropic prompt caching：通过 providerOptions 注入 cache_control。
+ * 支持 Anthropic prompt caching：缓存断点选择逻辑见 cache.ts（SSOT），
+ * 本文件通过 providerOptions 注入 AI SDK @ai-sdk/anthropic 的 cacheControl。
  */
 
 import type {
@@ -18,6 +19,7 @@ import type {
 	WriteToolResult,
 } from "@n0n/types";
 import type { AssistantModelMessage, ModelMessage, ToolModelMessage } from "ai";
+import { anthropicCacheControl, selectCacheBreakpoints } from "./cache.ts";
 import { adaptTags, wrapTag } from "./tags.ts";
 
 /* ── tool result 格式化 ── */
@@ -91,23 +93,19 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 	}
 }
 
-/* ── Prompt Caching 注解 ── */
+/* ── Prompt Caching ── */
 
 /**
- * 为原生 Anthropic provider 创建 providerOptions（prompt caching）
+ * 为 Anthropic 消息列表注入缓存断点（后置处理）。
  *
- * Prompt caching 有两条互斥路径（由 ProviderConfig.provider 判别）：
- * 1. 原生 Anthropic（provider === "anthropic"）：
- *    本文件通过 providerOptions 注入 cacheControl，AI SDK @ai-sdk/anthropic 负责传递。
- * 2. litellm 代理（provider === "openai-compatible" + backendProvider === "anthropic"）：
- *    provider.ts 通过 fetch wrapper 在 HTTP body 中注入 cache_control。
- *
- * 两条路径由 providerType 字符串天然互斥，不会双重注入。
+ * 使用 selectCacheBreakpoints（SSOT）选择断点位置，
+ * 通过 providerOptions 注入 AI SDK @ai-sdk/anthropic 的 cacheControl。
  */
-function anthropicCacheControl(): {
-	anthropic: { cacheControl: { type: "ephemeral" } };
-} {
-	return { anthropic: { cacheControl: { type: "ephemeral" } } };
+function injectAnthropicCacheBreakpoints(messages: ModelMessage[]): void {
+	for (const idx of selectCacheBreakpoints(messages)) {
+		(messages[idx] as Record<string, unknown>).providerOptions =
+			anthropicCacheControl();
+	}
 }
 
 /* ── 主转换函数 ── */
@@ -124,7 +122,6 @@ export function toAPIMessages(
 ): ModelMessage[] {
 	const result: ModelMessage[] = [];
 	const isAnthropic = providerType === "anthropic";
-	let userCount = 0;
 
 	for (const msg of messages) {
 		switch (msg.type) {
@@ -132,21 +129,15 @@ export function toAPIMessages(
 				const sysMsg: ModelMessage = {
 					role: "system",
 					content: adaptTags(msg.content, model),
-					...(isAnthropic ? { providerOptions: anthropicCacheControl() } : {}),
 				};
 				result.push(sysMsg);
 				break;
 			}
 
 			case "user_text": {
-				userCount++;
 				const userMsg: ModelMessage = {
 					role: "user",
 					content: msg.content,
-					// 第一条 user message 作为缓存断点
-					...(isAnthropic && userCount === 1
-						? { providerOptions: anthropicCacheControl() }
-						: {}),
 				};
 				result.push(userMsg);
 				break;
@@ -284,7 +275,14 @@ export function toAPIMessages(
 
 	// 合并连续的 system 消息 — 部分模型（如 minimax）不支持多个 system 消息，
 	// AI SDK 不会自动合并。合并对支持多 system 的模型无害（语义等价）。
-	return mergeConsecutiveSystem(result);
+	const merged = mergeConsecutiveSystem(result);
+
+	// Anthropic prompt caching：后置注入缓存断点
+	if (isAnthropic) {
+		injectAnthropicCacheBreakpoints(merged);
+	}
+
+	return merged;
 }
 
 /** 合并连续的 system 消息为单条（保留最后一条的 providerOptions） */

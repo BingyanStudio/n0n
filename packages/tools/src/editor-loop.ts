@@ -193,7 +193,6 @@ export async function editorLoop(
 					messages,
 					tools: EDITOR_TOOL_SET,
 					toolChoice: "required",
-					temperature: 0,
 				},
 				{ model },
 			)) {
