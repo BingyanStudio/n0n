@@ -75,6 +75,36 @@ async function gatherContext(paths: ReplContextPaths): Promise<string | null> {
 	}
 	return parts.length > 0 ? parts.join("\n") : null;
 }
+
+function injectUserResponse(history: DomainMessage[], response: string): void {
+	for (let i = history.length - 1; i >= 0; i--) {
+		const msg = history[i];
+		if (
+			msg !== undefined &&
+			msg.type === "tool_result" &&
+			"tool" in msg &&
+			msg.tool === "submit"
+		) {
+			(msg as SubmitToolResult).userResponse = response;
+			return;
+		}
+	}
+}
+
+/** 构造 user_input 消息 */
+async function makeUserInput(
+	content: string,
+	paths: ReplContextPaths,
+): Promise<DomainMessage> {
+	return {
+		type: "user_input",
+		content,
+		context: await gatherContext(paths),
+		capabilities: null,
+		hint: USER_INPUT_HINT,
+	};
+}
+
 export async function startRepl(
 	paths: ReplContextPaths,
 	initialInput?: string,
@@ -151,16 +181,12 @@ export async function startRepl(
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
 		{ type: "system", content: buildWorkspaceContext(paths) },
-		{
-			type: "user_input",
-			content: userInput,
-			context: await gatherContext(paths),
-			capabilities: null,
-			hint: USER_INPUT_HINT,
-		},
 	];
 
 	while (userInput.trim().toLowerCase() !== "exit") {
+		// ── 将用户输入推入 history（在 exit 检测之后，确保指令不污染对话历史）──
+		history.push(await makeUserInput(userInput, paths));
+
 		abortController = new AbortController();
 		agentRunning = true;
 		let agentResult: Awaited<ReturnType<typeof agentLoop<InteractiveResult>>>;
@@ -181,13 +207,6 @@ export async function startRepl(
 			writeln(style.gray(`  ${message}`));
 			writeln();
 			userInput = await prompt(`${label.user()} `);
-			history.push({
-				type: "user_input",
-				content: userInput,
-				context: await gatherContext(paths),
-				capabilities: null,
-				hint: USER_INPUT_HINT,
-			});
 			continue;
 		} finally {
 			agentRunning = false;
@@ -198,13 +217,6 @@ export async function startRepl(
 		if (abortController.signal.aborted) {
 			writeln();
 			userInput = await prompt(`${label.user()} `);
-			history.push({
-				type: "user_input",
-				content: userInput,
-				context: await gatherContext(paths),
-				capabilities: null,
-				hint: USER_INPUT_HINT,
-			});
 			continue;
 		}
 
@@ -218,13 +230,6 @@ export async function startRepl(
 			writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
 			writeln();
 			userInput = await prompt(`${label.user()} `);
-			history.push({
-				type: "user_input",
-				content: userInput,
-				context: await gatherContext(paths),
-				capabilities: null,
-				hint: USER_INPUT_HINT,
-			});
 			continue;
 		}
 
@@ -256,13 +261,6 @@ export async function startRepl(
 				writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
-				history.push({
-					type: "user_input",
-					content: userInput,
-					context: await gatherContext(paths),
-					capabilities: null,
-					hint: USER_INPUT_HINT,
-				});
 				break;
 			}
 			case "error": {
@@ -273,13 +271,6 @@ export async function startRepl(
 				writeln(style.gray("继续输入新任务，或输入 'exit' 退出:"));
 				writeln();
 				userInput = await prompt(`${label.user()} `);
-				history.push({
-					type: "user_input",
-					content: userInput,
-					context: await gatherContext(paths),
-					capabilities: null,
-					hint: USER_INPUT_HINT,
-				});
 				break;
 			}
 		}
@@ -287,18 +278,4 @@ export async function startRepl(
 
 	rl.close();
 	writeln(style.gray("Bye!"));
-}
-function injectUserResponse(history: DomainMessage[], response: string): void {
-	for (let i = history.length - 1; i >= 0; i--) {
-		const msg = history[i];
-		if (
-			msg !== undefined &&
-			msg.type === "tool_result" &&
-			"tool" in msg &&
-			msg.tool === "submit"
-		) {
-			(msg as SubmitToolResult).userResponse = response;
-			return;
-		}
-	}
 }
