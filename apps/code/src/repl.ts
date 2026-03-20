@@ -8,6 +8,11 @@
  * - System prompt 为 code.md（代码 agent 而非 workflow builder）
  * - Submit schema 为 CodeResultSchema（completed/need_info）
  * - Context 注入项目结构和 git 状态，而非 workflow 列表
+ *
+ * 对话持久化：
+ * - `log` 命令：导出当前对话历史到 workspace 根目录
+ * - `--resume <file>`：从文件恢复对话继续
+ * - `--save-every-loop`：每轮 agentLoop 结束后自动保存到 n0n-conversation-latest.json
  */
 
 import { createInterface } from "node:readline";
@@ -17,6 +22,8 @@ import {
 	type BaseWorkspacePaths,
 	formatAgentsMdPrompt,
 	loadAgentsMd,
+	loadConversation,
+	saveConversation,
 } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
@@ -28,6 +35,16 @@ const USER_INPUT_HINT = [
 	"If genuinely stuck or ambiguous, submit `need_info` with specific options for the user.",
 	"Otherwise, reason out what the engineer wrote — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
 ].join("\n");
+
+/** REPL 启动选项 */
+export interface CodeReplOptions {
+	/** 初始用户输入（来自命令行裸参数） */
+	initialInput?: string;
+	/** --resume 指定的对话日志文件路径 */
+	resumeFile?: string;
+	/** --save-every-loop 是否每轮自动保存 */
+	saveEveryLoop?: boolean;
+}
 
 type CodeWorkspacePaths = BaseWorkspacePaths;
 
@@ -80,10 +97,13 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 		}
 	}
 }
+
 export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
-	initialInput?: string,
+	options: CodeReplOptions = {},
 ): Promise<void> {
+	const { initialInput, resumeFile, saveEveryLoop = false } = options;
+
 	let systemPrompt = codePromptText;
 	const agentsMd = await loadAgentsMd(paths.workspace);
 	if (agentsMd) {
@@ -138,20 +158,86 @@ export async function startCodeRepl(
 		});
 	}
 
-	let userInput = initialInput ?? (await prompt(`${label.user()} `));
-	let history: DomainMessage[] = [
-		{ type: "system", content: systemPrompt },
-		{ type: "system", content: buildWorkspaceContext(paths.workspace) },
-		{
-			type: "user_input",
-			content: userInput,
-			context: await gatherContext(paths.workspace),
-			capabilities: null,
-			hint: USER_INPUT_HINT,
-		},
-	];
+	// ── 初始化 history：恢复模式 or 全新对话 ──
+	let history: DomainMessage[];
+	let userInput: string;
+
+	if (resumeFile) {
+		try {
+			const log = loadConversation(resumeFile);
+			history = log.history;
+			writeln(
+				style.green("✓") +
+					style.gray(
+						` 已从 ${resumeFile} 恢复对话（${log.metadata.messageCount} 条消息）`,
+					),
+			);
+			writeln();
+			userInput = await prompt(`${label.user()} `);
+			history.push({
+				type: "user_input",
+				content: userInput,
+				context: await gatherContext(paths.workspace),
+				capabilities: null,
+				hint: USER_INPUT_HINT,
+			});
+		} catch (err) {
+			const message =
+				err instanceof Error ? err.message : String(err ?? "未知错误");
+			writeln(`${style.red("✗")} 恢复对话失败: ${message}`);
+			writeln(style.gray("  将以全新对话启动。"));
+			writeln();
+			userInput = initialInput ?? (await prompt(`${label.user()} `));
+			history = [
+				{ type: "system", content: systemPrompt },
+				{ type: "system", content: buildWorkspaceContext(paths.workspace) },
+				{
+					type: "user_input",
+					content: userInput,
+					context: await gatherContext(paths.workspace),
+					capabilities: null,
+					hint: USER_INPUT_HINT,
+				},
+			];
+		}
+	} else {
+		userInput = initialInput ?? (await prompt(`${label.user()} `));
+		history = [
+			{ type: "system", content: systemPrompt },
+			{ type: "system", content: buildWorkspaceContext(paths.workspace) },
+			{
+				type: "user_input",
+				content: userInput,
+				context: await gatherContext(paths.workspace),
+				capabilities: null,
+				hint: USER_INPUT_HINT,
+			},
+		];
+	}
 
 	while (userInput.trim().toLowerCase() !== "exit") {
+		// ── `log` 命令：导出对话历史 ──
+		if (userInput.trim().toLowerCase() === "log") {
+			try {
+				const filePath = saveConversation(
+					history,
+					paths.workspace,
+					paths.workspace,
+				);
+				writeln(
+					`${style.green("✓")} 对话已保存到 ${style.cyan(filePath)}`,
+				);
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : String(err ?? "未知错误");
+				writeln(`${style.red("✗")} 保存对话失败: ${message}`);
+			}
+			writeln();
+			userInput = await prompt(`${label.user()} `);
+			// log 命令不推入 history，直接继续
+			continue;
+		}
+
 		abortController = new AbortController();
 		agentRunning = true;
 		let agentResult: Awaited<ReturnType<typeof agentLoop<CodeResult>>>;
@@ -184,6 +270,20 @@ export async function startCodeRepl(
 			agentRunning = false;
 		}
 		history = agentResult.history;
+
+		// ── --save-every-loop：每轮自动保存 ──
+		if (saveEveryLoop) {
+			try {
+				saveConversation(
+					history,
+					paths.workspace,
+					paths.workspace,
+					"n0n-conversation-latest.json",
+				);
+			} catch {
+				// 自动保存失败不阻断 REPL
+			}
+		}
 
 		// ── 被用户中断（通过 AbortController.signal 判断，避免与 submit report 冲突） ──
 		if (abortController.signal.aborted) {
