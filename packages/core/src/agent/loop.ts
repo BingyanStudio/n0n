@@ -11,15 +11,12 @@ import {
 	chatCompletionStream,
 	StreamAccumulator,
 	toAPIMessages,
-	getModelId,
 } from "@n0n/llm";
-import type { LLMConfig } from "@n0n/llm";
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
-	LLMToolCall,
 	Renderer,
 	ToolResult,
 } from "@n0n/types";
@@ -48,26 +45,6 @@ export interface AgentOptions<T = unknown> {
 }
 
 const MAX_SUBMIT_RETRIES = 4;
-
-/**
- * @deprecated 临时桥接层 — 等 parseToolCalls 迁移到 AI SDK 格式后删除
- *
- * AI SDK 返回 { toolCallId, toolName, input }，
- * 旧的 parseToolCalls 期望 { id, type, function: { name, arguments } }。
- * TODO: 将 parseToolCalls 直接接受新格式，移除此函数。
- */
-function toLLMToolCalls(
-	toolCalls: Array<{ toolCallId: string; toolName: string; input: string }>,
-): LLMToolCall[] {
-	return toolCalls.map((tc) => ({
-		id: tc.toolCallId,
-		type: "function" as const,
-		function: {
-			name: tc.toolName,
-			arguments: tc.input,
-		},
-	}));
-}
 
 // ── Agent Loop ──
 
@@ -172,9 +149,8 @@ export async function agentLoop<T = unknown>(
 
 		idleCount = 0;
 
-		// 适配：新 toolCalls 格式 → 旧 LLMToolCall 格式 → ToolCallRecord
-		const llmToolCalls = toLLMToolCalls(assistantMsg.toolCalls);
-		const toolCalls = parseToolCalls(llmToolCalls).filter(isValidToolCall);
+		// AI SDK 格式 toolCalls → ToolCallRecord
+		const toolCalls = parseToolCalls(assistantMsg.toolCalls).filter(isValidToolCall);
 
 		if (toolCalls.length === 0) {
 			const content = assistantMsg.content ?? "";
