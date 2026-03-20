@@ -1,8 +1,14 @@
 /**
  * common-specs — 各 app 共享的环境变量组定义
  *
- * LLM 三件套（BASE_URL / API_KEY / MODEL）几乎所有 app 都需要，
+ * LLM 配置（PROVIDER / BASE_URL / API_KEY / MODEL）几乎所有 app 都需要，
  * 各 app 通过展开运算符组合共享 + 专属变量。
+ *
+ * 支持多 provider：
+ * - openai-compatible（默认）：需要 BASE_URL + API_KEY + MODEL
+ * - openai：需要 API_KEY + MODEL，BASE_URL 可选
+ * - anthropic：需要 API_KEY + MODEL，不需要 BASE_URL
+ * - google：需要 API_KEY + MODEL，不需要 BASE_URL
  */
 
 import type { EnvGroup } from "@n0n/types";
@@ -12,9 +18,16 @@ export const LLM_ENV_GROUP: EnvGroup = {
 	title: "LLM 配置",
 	vars: [
 		{
+			key: "LLM_PROVIDER",
+			desc: "LLM provider 类型（openai / anthropic / google / openai-compatible）",
+			example: "openai-compatible",
+			default: "openai-compatible",
+		},
+		{
 			key: "LLM_BASE_URL",
-			desc: "LLM API 地址（OpenAI 兼容接口）",
+			desc: "LLM API 地址（openai-compatible 必填，其他 provider 可选）",
 			example: "https://api.openai.com",
+			default: "",
 		},
 		{
 			key: "LLM_API_KEY",
@@ -40,6 +53,12 @@ export const LLM_ENV_GROUP: EnvGroup = {
 export const EDITOR_LLM_ENV_GROUP: EnvGroup = {
 	title: "Editor LLM 配置（影子编辑层）",
 	vars: [
+		{
+			key: "EDITOR_LLM_PROVIDER",
+			desc: "Editor LLM provider 类型",
+			example: "openai-compatible",
+			inheritFrom: "LLM_PROVIDER",
+		},
 		{
 			key: "EDITOR_LLM_BASE_URL",
 			desc: "Editor LLM API 地址",

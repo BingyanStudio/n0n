@@ -18,6 +18,12 @@ import type {
 	EnvVarDef,
 	SetupRenderer,
 } from "@n0n/types";
+import {
+	createModelFromConfig,
+	type LLMConfig,
+	type ProviderConfig,
+} from "@n0n/llm";
+import { generateText } from "ai";
 import { generateEnvTemplate } from "./template.ts";
 
 /** 从 EnvSpec 提取所有变量（扁平化） */
@@ -65,49 +71,30 @@ function loadEnvFile(
 	return parsed;
 }
 
-/** 测试 LLM API 连通性 */
+/** 测试 LLM API 连通性（通过 AI SDK，支持多 provider） */
 async function testLLMConnection(
-	baseUrl: string,
-	apiKey: string,
-	model: string,
+	config: LLMConfig,
 ): Promise<{ ok: boolean; error?: string }> {
 	try {
-		const url = baseUrl.includes("/chat/completions")
-			? baseUrl
-			: `${baseUrl}/v1/chat/completions`;
-
-		const res = await fetch(url, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${apiKey}`,
-			},
-			body: JSON.stringify({
-				model,
-				messages: [{ role: "user", content: "hi" }],
-				max_tokens: 1,
-			}),
-			signal: AbortSignal.timeout(15_000),
+		const model = createModelFromConfig(config);
+		await generateText({
+			model,
+			messages: [{ role: "user", content: "hi" }],
+			maxOutputTokens: 1,
+			maxRetries: 1,
 		});
-
-		if (res.ok || res.status === 400) {
-			// 400 也算连通（可能是参数问题但网络和认证是通的）
-			return { ok: true };
-		}
-		if (res.status === 401 || res.status === 403) {
-			return { ok: false, error: `认证失败 (${res.status})，请检查 API Key` };
-		}
-		const text = await res.text().catch(() => "");
-		return {
-			ok: false,
-			error: `API 返回 ${res.status}: ${text.slice(0, 200)}`,
-		};
+		return { ok: true };
 	} catch (err) {
-		if (err instanceof Error && err.name === "TimeoutError") {
-			return { ok: false, error: "连接超时（15s），请检查网络或 API 地址" };
+		if (err instanceof Error) {
+			if (err.message.includes("401") || err.message.includes("403")) {
+				return { ok: false, error: "认证失败，请检查 API Key" };
+			}
+			if (err.name === "TimeoutError" || err.message.includes("timeout")) {
+				return { ok: false, error: "连接超时（15s），请检查网络或 API 地址" };
+			}
+			return { ok: false, error: err.message.slice(0, 200) };
 		}
-		const msg = err instanceof Error ? err.message : String(err);
-		return { ok: false, error: `连接失败: ${msg}` };
+		return { ok: false, error: `连接失败: ${String(err)}` };
 	}
 }
 
@@ -182,13 +169,36 @@ export async function bootstrap(
 
 	// ── Step 3: LLM 连通性测试 ──
 
-	const baseUrl = process.env.LLM_BASE_URL;
 	const apiKey = process.env.LLM_API_KEY;
 	const model = process.env.LLM_MODEL;
 
-	if (baseUrl && apiKey && model) {
+	if (apiKey && model) {
+		const provider = (process.env.LLM_PROVIDER || "openai-compatible") as ProviderConfig["provider"];
+		const baseUrl = process.env.LLM_BASE_URL || "";
+
+		let providerConfig: ProviderConfig;
+		switch (provider) {
+			case "anthropic":
+				providerConfig = { provider: "anthropic", apiKey, model };
+				break;
+			case "google":
+				providerConfig = { provider: "google", apiKey, model };
+				break;
+			case "openai":
+				providerConfig = { provider: "openai", apiKey, model, ...(baseUrl ? { baseUrl } : {}) };
+				break;
+			default:
+				providerConfig = { provider: "openai-compatible", apiKey, model, baseUrl };
+				break;
+		}
+
+		const llmConfig: LLMConfig = {
+			providerConfig: providerConfig,
+			enableThinking: process.env.LLM_ENABLE_THINKING === "true",
+		};
+
 		ui.info("测试 LLM 连接…");
-		const conn = await testLLMConnection(baseUrl, apiKey, model);
+		const conn = await testLLMConnection(llmConfig);
 
 		if (conn.ok) {
 			ui.success(`LLM 连接正常 (${model})`);
