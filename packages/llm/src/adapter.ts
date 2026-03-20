@@ -7,6 +7,8 @@
  * - 标签内部为纯文本 / Markdown，无需 XML 转义
  *
  * 支持 Anthropic prompt caching：通过 providerOptions 注入 cache_control。
+ * 缓存断点策略：system prompt + 倒数第二条 user/tool 消息，
+ * 确保历史对话大部分都在缓存前缀范围内，只有最新一轮需要重新计算。
  */
 
 import type {
@@ -110,6 +112,46 @@ function anthropicCacheControl(): {
 	return { anthropic: { cacheControl: { type: "ephemeral" } } };
 }
 
+/**
+ * 为 Anthropic 消息列表注入缓存断点（后置处理）。
+ *
+ * 策略：在 system prompt 和「倒数第二条 user/tool 消息」上设置 cache_control。
+ * 这样每轮对话只有最新一条 user/tool 消息不在缓存中，
+ * 历史部分全部命中缓存，实现 ~90%+ 的 cache hit rate。
+ *
+ * Anthropic 最多支持 4 个缓存断点（ephemeral），这里最多使用 2 个：
+ * 1. 最后一条 system 消息 — 缓存稳定的 system prompt
+ * 2. 倒数第二条 non-assistant 消息 — 缓存绝大部分对话历史
+ */
+function injectAnthropicCacheBreakpoints(messages: ModelMessage[]): void {
+	// 断点 1：最后一条 system 消息
+	for (let i = messages.length - 1; i >= 0; i--) {
+		if (messages[i]!.role === "system") {
+			(messages[i] as Record<string, unknown>).providerOptions =
+				anthropicCacheControl();
+			break;
+		}
+	}
+
+	// 断点 2：倒数第二条 non-assistant 消息（user 或 tool）
+	// 找到最后两条 non-assistant 消息，在倒数第二条上设断点
+	const nonAssistantIndices: number[] = [];
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const role = messages[i]!.role;
+		if (role === "user" || role === "tool") {
+			nonAssistantIndices.push(i);
+			if (nonAssistantIndices.length >= 2) break;
+		}
+	}
+
+	// 如果有至少 2 条 non-assistant 消息，在倒数第二条上设断点
+	if (nonAssistantIndices.length >= 2) {
+		const targetIdx = nonAssistantIndices[1]!;
+		(messages[targetIdx] as Record<string, unknown>).providerOptions =
+			anthropicCacheControl();
+	}
+}
+
 /* ── 主转换函数 ── */
 
 /**
@@ -124,7 +166,6 @@ export function toAPIMessages(
 ): ModelMessage[] {
 	const result: ModelMessage[] = [];
 	const isAnthropic = providerType === "anthropic";
-	let userCount = 0;
 
 	for (const msg of messages) {
 		switch (msg.type) {
@@ -132,21 +173,15 @@ export function toAPIMessages(
 				const sysMsg: ModelMessage = {
 					role: "system",
 					content: adaptTags(msg.content, model),
-					...(isAnthropic ? { providerOptions: anthropicCacheControl() } : {}),
 				};
 				result.push(sysMsg);
 				break;
 			}
 
 			case "user_text": {
-				userCount++;
 				const userMsg: ModelMessage = {
 					role: "user",
 					content: msg.content,
-					// 第一条 user message 作为缓存断点
-					...(isAnthropic && userCount === 1
-						? { providerOptions: anthropicCacheControl() }
-						: {}),
 				};
 				result.push(userMsg);
 				break;
@@ -284,7 +319,14 @@ export function toAPIMessages(
 
 	// 合并连续的 system 消息 — 部分模型（如 minimax）不支持多个 system 消息，
 	// AI SDK 不会自动合并。合并对支持多 system 的模型无害（语义等价）。
-	return mergeConsecutiveSystem(result);
+	const merged = mergeConsecutiveSystem(result);
+
+	// Anthropic prompt caching：后置注入缓存断点
+	if (isAnthropic) {
+		injectAnthropicCacheBreakpoints(merged);
+	}
+
+	return merged;
 }
 
 /** 合并连续的 system 消息为单条（保留最后一条的 providerOptions） */
