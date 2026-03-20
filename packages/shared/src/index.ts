@@ -47,3 +47,11 @@ export {
 	parseWorkspaceArg,
 	resolveBasePaths,
 } from "./workspace.ts";
+
+// Conversation Log
+export type { ConversationLog, ConversationMetadata } from "./conversation-log/index.ts";
+export {
+	saveConversation,
+	loadConversation,
+	generateLogFileName,
+} from "./conversation-log/index.ts";
