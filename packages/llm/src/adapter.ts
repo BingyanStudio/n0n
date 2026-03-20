@@ -6,9 +6,8 @@
  * - XML 标签划分内容边界，便于模型理解结构
  * - 标签内部为纯文本 / Markdown，无需 XML 转义
  *
- * 支持 Anthropic prompt caching：通过 providerOptions 注入 cache_control。
- * 缓存断点策略：system prompt + 倒数第二条 user/tool 消息，
- * 确保历史对话大部分都在缓存前缀范围内，只有最新一轮需要重新计算。
+ * 支持 Anthropic prompt caching：缓存断点选择逻辑见 cache.ts（SSOT），
+ * 本文件通过 providerOptions 注入 AI SDK @ai-sdk/anthropic 的 cacheControl。
  */
 
 import type {
@@ -20,6 +19,7 @@ import type {
 	WriteToolResult,
 } from "@n0n/types";
 import type { AssistantModelMessage, ModelMessage, ToolModelMessage } from "ai";
+import { anthropicCacheControl, selectCacheBreakpoints } from "./cache.ts";
 import { adaptTags, wrapTag } from "./tags.ts";
 
 /* ── tool result 格式化 ── */
@@ -96,61 +96,9 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 /* ── Prompt Caching ── */
 
 /**
- * 为原生 Anthropic provider 创建 providerOptions（prompt caching）
- */
-function anthropicCacheControl(): {
-	anthropic: { cacheControl: { type: "ephemeral" } };
-} {
-	return { anthropic: { cacheControl: { type: "ephemeral" } } };
-}
-
-/**
- * 选择 Anthropic prompt caching 断点位置 — SSOT 纯函数。
- *
- * 返回应设置 cache_control 的消息索引列表。
- * adapter.ts（原生 Anthropic）和 provider.ts（litellm 代理）
- * 共用此函数，各自负责标记方式（providerOptions vs cache_control）。
- *
- * Anthropic 最多支持 4 个缓存断点（ephemeral），激进策略全部用满：
- * 1. 最后一条 system 消息 — 缓存稳定的 system prompt
- * 2. 倒数第三条 non-assistant 消息 — 较早历史兜底
- * 3. 倒数第二条 non-assistant 消息 — 中段历史缓存
- * 4. 最后一条 non-assistant 消息 — 最新历史缓存
- *
- * 激进策略：不跳过最后一条 non-assistant 消息，下一轮调用时它已是历史的一部分，
- * 提前标记可以让缓存在下一轮立即命中。
- */
-export function selectCacheBreakpoints(
-	messages: readonly { role: string }[],
-): number[] {
-	const breakpoints: number[] = [];
-
-	// 断点 1：最后一条 system 消息
-	for (let i = messages.length - 1; i >= 0; i--) {
-		if (messages[i]!.role === "system") {
-			breakpoints.push(i);
-			break;
-		}
-	}
-
-	// 断点 2-4：最后三条 non-assistant 消息
-	let count = 0;
-	for (let i = messages.length - 1; i >= 0; i--) {
-		const role = messages[i]!.role;
-		if (role === "user" || role === "tool") {
-			breakpoints.push(i);
-			count++;
-			if (count >= 3) break;
-		}
-	}
-
-	return breakpoints;
-}
-
-/**
  * 为 Anthropic 消息列表注入缓存断点（后置处理）。
  *
- * 使用 selectCacheBreakpoints 选择断点位置，
+ * 使用 selectCacheBreakpoints（SSOT）选择断点位置，
  * 通过 providerOptions 注入 AI SDK @ai-sdk/anthropic 的 cacheControl。
  */
 function injectAnthropicCacheBreakpoints(messages: ModelMessage[]): void {

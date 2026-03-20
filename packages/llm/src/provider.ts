@@ -9,7 +9,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
-import { selectCacheBreakpoints } from "./adapter.ts";
+import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig, ProviderConfig } from "./config.ts";
 
 /**
