@@ -19,6 +19,7 @@ export const PROVIDER_TYPES: readonly ProviderConfig["provider"][] = [
 	"anthropic",
 	"google",
 	"openai-compatible",
+	"anthropic-compatible",
 ] as const;
 
 /** 类型守卫：判断字符串是否为合法的 provider 类型 */
@@ -33,7 +34,8 @@ export function isValidProvider(
  *
  * 规则：
  * - 有显式 provider 值且合法时直接使用
- * - 根据 BASE_URL 推断：包含 anthropic → "anthropic"，包含 google → "google"
+ * - 根据 BASE_URL 推断：包含 anthropic → "anthropic-compatible"（有自定义 URL 说明是代理）
+ * - 包含 google → "google"
  * - 有 BASE_URL 但非已知 provider → "openai-compatible"
  * - 无 BASE_URL → "openai"
  */
@@ -45,7 +47,7 @@ export function inferProvider(
 		return explicit;
 	}
 	if (!baseUrl) return "openai";
-	if (baseUrl.includes("anthropic")) return "anthropic";
+	if (baseUrl.includes("anthropic")) return "anthropic-compatible";
 	if (baseUrl.includes("google") || baseUrl.includes("gemini")) return "google";
 	if (baseUrl.includes("openai.com")) return "openai";
 	return "openai-compatible";
@@ -98,6 +100,13 @@ export function buildProviderConfigFromEnv(
 				...(backendProvider ? { backendProvider } : {}),
 			};
 		}
+		case "anthropic-compatible":
+			return {
+				provider: "anthropic-compatible",
+				apiKey,
+				model,
+				baseUrl: baseUrl ?? "",
+			};
 	}
 }
 
@@ -112,8 +121,13 @@ export function buildLLMConfigFromEnv(
 	fallbackProvider?: ProviderConfig,
 ): LLMConfig {
 	const providerConfig = buildProviderConfigFromEnv(prefix, fallbackProvider);
+	const budgetRaw = process.env[`${prefix}_THINKING_BUDGET_TOKENS`];
+	const budgetTokens = budgetRaw ? Number.parseInt(budgetRaw, 10) : undefined;
 	return {
 		providerConfig,
 		enableThinking: process.env[`${prefix}_ENABLE_THINKING`] === "true",
+		...(budgetTokens && !Number.isNaN(budgetTokens)
+			? { thinkingBudgetTokens: budgetTokens }
+			: {}),
 	};
 }

@@ -16,6 +16,7 @@ export type { ChatCompletionRequest, ChatCompletionResult } from "./client.ts";
 export { chatCompletion, LLMError } from "./client.ts";
 // 配置类型
 export type {
+	AnthropicCompatibleProviderConfig,
 	AnthropicProviderConfig,
 	GoogleProviderConfig,
 	LLMConfig,
@@ -46,3 +47,4 @@ export type {
 export { chatCompletionStream, StreamAccumulator } from "./stream.ts";
 // Tag 工具
 export { adaptTags, wrapTag } from "./tags.ts";
+export { buildThinkingProviderOptions } from "./thinking.ts";
