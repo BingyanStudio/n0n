@@ -52,6 +52,22 @@ export interface OpenAICompatibleProviderConfig {
 }
 
 /**
+ * Anthropic 兼容 API 配置（第三方代理提供 Anthropic Messages 协议端点）
+ *
+ * 适用于 ppio 等代理的 `/anthropic` 端点，使用 @ai-sdk/anthropic SDK
+ * 通过自定义 baseURL 访问。相比 openai-compatible，此路径原生支持：
+ * - thinking/reasoning 流式输出（thinking_delta 事件）
+ * - prompt caching（cacheControl providerOptions）
+ * - 交替思考（thinking content block 回传）
+ */
+export interface AnthropicCompatibleProviderConfig {
+	provider: "anthropic-compatible";
+	apiKey: string;
+	baseUrl: string;
+	model: string;
+}
+
+/**
  * ProviderConfig — 统一的 LLM provider 配置
  *
  * 通过 `provider` 字段判别，各分支具有独立的字段约束。
@@ -60,7 +76,8 @@ export type ProviderConfig =
 	| OpenAIProviderConfig
 	| AnthropicProviderConfig
 	| GoogleProviderConfig
-	| OpenAICompatibleProviderConfig;
+	| OpenAICompatibleProviderConfig
+	| AnthropicCompatibleProviderConfig;
 
 /**
  * LLMConfig — 运行时完整配置
@@ -73,6 +90,8 @@ export interface LLMConfig {
 	providerConfig: ProviderConfig;
 	/** 启用 thinking/reasoning 模式（deepseek、claude 等支持的模型） */
 	enableThinking?: boolean;
+	/** thinking 的 token 预算（默认 1024） */
+	thinkingBudgetTokens?: number;
 }
 
 /**

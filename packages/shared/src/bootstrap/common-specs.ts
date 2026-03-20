@@ -19,7 +19,7 @@ export const LLM_ENV_GROUP: EnvGroup = {
 	vars: [
 		{
 			key: "LLM_PROVIDER",
-			desc: "LLM provider 类型（openai / anthropic / google / openai-compatible）",
+			desc: "LLM provider 类型（openai / anthropic / google / openai-compatible / anthropic-compatible）",
 			example: "openai-compatible",
 			default: "openai-compatible",
 		},
@@ -51,6 +51,12 @@ export const LLM_ENV_GROUP: EnvGroup = {
 			desc: "启用思考模式（deepseek 等支持的模型）",
 			example: "true",
 			default: "false",
+		},
+		{
+			key: "LLM_THINKING_BUDGET_TOKENS",
+			desc: "思考模式的 token 预算（默认 1024，最低 1024）",
+			example: "1024",
+			default: "1024",
 		},
 	],
 };
@@ -96,6 +102,13 @@ export const EDITOR_LLM_ENV_GROUP: EnvGroup = {
 			example: "true",
 			default: "false",
 			inheritFrom: "LLM_ENABLE_THINKING",
+		},
+		{
+			key: "EDITOR_LLM_THINKING_BUDGET_TOKENS",
+			desc: "Editor LLM 思考模式的 token 预算",
+			example: "1024",
+			default: "1024",
+			inheritFrom: "LLM_THINKING_BUDGET_TOKENS",
 		},
 	],
 };
