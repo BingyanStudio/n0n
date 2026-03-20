@@ -219,13 +219,12 @@ export interface ReminderDueMessage {
 }
 
 // ── 工具参数错误 ──
-/** 工具调用参数校验失败时注入的消息，包含错误详情和正确的工具 schema */
+/** 工具调用参数校验失败时注入的消息 */
 export interface ToolArgErrorMessage {
 	type: "tool_arg_error";
 	callId: string;
 	tool: string;
 	error: string;
-	schema: Record<string, unknown>;
 }
 
 // ── 提交被拒 ──

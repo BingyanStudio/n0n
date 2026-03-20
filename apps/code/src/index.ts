@@ -16,6 +16,11 @@ import { resolve } from "node:path";
 import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
 import {
+	buildLLMConfigFromEnv,
+	createModelFromConfig,
+	generateText,
+} from "@n0n/llm";
+import {
 	bootstrap,
 	ensureDirs,
 	parseWorkspaceArg,
@@ -32,7 +37,37 @@ if (!existsSync(globalConfigDir)) {
 }
 
 const setupUI = new CliSetupRenderer();
-const result = await bootstrap(codeEnvSpec, setupUI, globalConfigDir);
+
+/** LLM 连通性测试回调 — 注入到 bootstrap，避免 shared 直接依赖 llm */
+const testLLM = async () => {
+	try {
+		const config = buildLLMConfigFromEnv("LLM");
+		const model = createModelFromConfig(config);
+		await generateText({
+			model,
+			messages: [{ role: "user", content: "hi" }],
+			maxOutputTokens: 1,
+			maxRetries: 1,
+		});
+		return { ok: true as const };
+	} catch (err) {
+		if (err instanceof Error) {
+			if (err.message.includes("401") || err.message.includes("403")) {
+				return { ok: false as const, error: "认证失败，请检查 API Key" };
+			}
+			if (err.name === "TimeoutError" || err.message.includes("timeout")) {
+				return {
+					ok: false as const,
+					error: "连接超时（15s），请检查网络或 API 地址",
+				};
+			}
+			return { ok: false as const, error: err.message.slice(0, 200) };
+		}
+		return { ok: false as const, error: `连接失败: ${String(err)}` };
+	}
+};
+
+const result = await bootstrap(codeEnvSpec, setupUI, globalConfigDir, testLLM);
 setupUI.dispose();
 
 if (!result.ok) {

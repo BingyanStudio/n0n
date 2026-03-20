@@ -1,6 +1,11 @@
 /**
  * runner — bootstrap 主流程
  *
+ * 配置加载优先级（高→低）：
+ * 1. 项目根 .env（由 Bun 运行时自动加载）
+ * 2. 全局 ~/.n0n/.env（由 bootstrap 加载，不覆盖已存在值）
+ * 3. 环境变量默认值（EnvSpec 中的 default 字段）
+ *
  * 检测顺序：.env 文件 → 必填变量 → LLM 连通性
  * 缺什么补什么，全部通过才继续运行。
  */
@@ -14,11 +19,25 @@ import {
 import { resolve } from "node:path";
 import type {
 	BootstrapResult,
+	ConfigEntry,
+	ConfigGroup,
+	ConfigSource,
 	EnvSpec,
 	EnvVarDef,
 	SetupRenderer,
 } from "@n0n/types";
 import { generateEnvTemplate } from "./template.ts";
+
+/**
+ * LLM 连通性测试回调类型。
+ *
+ * 由上层（app 入口）注入，避免 shared 直接依赖 @n0n/llm
+ * （打破 shared ↔ llm 循环依赖）。
+ */
+export type LLMConnectionTester = () => Promise<{
+	ok: boolean;
+	error?: string;
+}>;
 
 /** 从 EnvSpec 提取所有变量（扁平化） */
 function allVars(spec: EnvSpec): EnvVarDef[] {
@@ -65,50 +84,115 @@ function loadEnvFile(
 	return parsed;
 }
 
-/** 测试 LLM API 连通性 */
-async function testLLMConnection(
-	baseUrl: string,
-	apiKey: string,
-	model: string,
-): Promise<{ ok: boolean; error?: string }> {
-	try {
-		const url = baseUrl.includes("/chat/completions")
-			? baseUrl
-			: `${baseUrl}/v1/chat/completions`;
+/** 掩码密钥：显示前 4 位 + 后 4 位 */
+function maskSecret(value: string): string {
+	if (value.length <= 8) return "****";
+	return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
 
-		const res = await fetch(url, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${apiKey}`,
-			},
-			body: JSON.stringify({
-				model,
-				messages: [{ role: "user", content: "hi" }],
-				max_tokens: 1,
-			}),
-			signal: AbortSignal.timeout(15_000),
-		});
-
-		if (res.ok || res.status === 400) {
-			// 400 也算连通（可能是参数问题但网络和认证是通的）
-			return { ok: true };
-		}
-		if (res.status === 401 || res.status === 403) {
-			return { ok: false, error: `认证失败 (${res.status})，请检查 API Key` };
-		}
-		const text = await res.text().catch(() => "");
-		return {
-			ok: false,
-			error: `API 返回 ${res.status}: ${text.slice(0, 200)}`,
-		};
-	} catch (err) {
-		if (err instanceof Error && err.name === "TimeoutError") {
-			return { ok: false, error: "连接超时（15s），请检查网络或 API 地址" };
-		}
-		const msg = err instanceof Error ? err.message : String(err);
-		return { ok: false, error: `连接失败: ${msg}` };
+/**
+ * 检测项目根 .env（Bun 自动加载的那个）。
+ *
+ * Bun 在启动时自动加载 cwd 下的 .env 文件。
+ * 这里不重新加载，只解析文件内容以获取 key-value 映射，用于来源追踪。
+ */
+function detectProjectEnv(): Record<string, string> {
+	const projectEnvPath = resolve(process.cwd(), ".env");
+	if (existsSync(projectEnvPath)) {
+		return parseEnvFile(readFileSync(projectEnvPath, "utf-8"));
 	}
+	return {};
+}
+
+/**
+ * 分析每个配置项的最终值和来源。
+ */
+function resolveConfigSources(
+	spec: EnvSpec,
+	projectEnv: Record<string, string>,
+	globalEnv: Record<string, string>,
+): ConfigEntry[] {
+	const secretKeys = new Set(
+		allVars(spec)
+			.filter((v) => v.secret)
+			.map((v) => v.key),
+	);
+	const result: ConfigEntry[] = [];
+
+	for (const v of allVars(spec)) {
+		const finalValue =
+			process.env[v.key] ??
+			(v.inheritFrom ? process.env[v.inheritFrom] : undefined) ??
+			v.default;
+		if (finalValue === undefined) continue;
+
+		let source: ConfigSource;
+		let overridden: { value: string; source: ConfigSource } | undefined;
+
+		const inProject = v.key in projectEnv;
+		const inGlobal = v.key in globalEnv;
+
+		if (inProject) {
+			source = "project";
+			if (inGlobal && projectEnv[v.key] !== globalEnv[v.key]) {
+				overridden = { value: globalEnv[v.key] ?? "", source: "global" };
+			}
+		} else if (inGlobal) {
+			source = "global";
+		} else if (
+			v.inheritFrom &&
+			!process.env[v.key] &&
+			process.env[v.inheritFrom]
+		) {
+			source = "inherit";
+		} else if (v.default !== undefined && finalValue === v.default) {
+			source = "default";
+		} else {
+			source = "env";
+		}
+
+		result.push({
+			key: v.key,
+			value: finalValue,
+			source,
+			secret: secretKeys.has(v.key),
+			overridden,
+		});
+	}
+
+	return result;
+}
+
+/** 格式化配置摘要日志 */
+function formatConfigSummary(configs: ConfigEntry[], spec: EnvSpec): string {
+	const secretKeys = new Set(
+		allVars(spec)
+			.filter((v) => v.secret)
+			.map((v) => v.key),
+	);
+
+	const sourceLabel: Record<ConfigSource, string> = {
+		project: "项目",
+		global: "全局",
+		env: "环境变量",
+		default: "默认",
+		inherit: "继承",
+	};
+
+	const lines: string[] = [];
+	for (const c of configs) {
+		const displayValue = secretKeys.has(c.key) ? maskSecret(c.value) : c.value;
+		const src = sourceLabel[c.source];
+		let line = `  ${c.key} = ${displayValue}  (${src})`;
+		if (c.overridden) {
+			const overriddenDisplay = secretKeys.has(c.key)
+				? maskSecret(c.overridden.value)
+				: c.overridden.value;
+			line += `  ← 覆盖了${sourceLabel[c.overridden.source]}值 ${overriddenDisplay}`;
+		}
+		lines.push(line);
+	}
+	return lines.join("\n");
 }
 
 /**
@@ -117,11 +201,13 @@ async function testLLMConnection(
  * @param spec 应用环境配置规格
  * @param ui SetupRenderer 实现
  * @param envDir .env 文件所在目录（默认 process.cwd()）
+ * @param testLLM LLM 连通性测试回调（可选，由上层注入）
  */
 export async function bootstrap(
 	spec: EnvSpec,
 	ui: SetupRenderer,
 	envDir?: string,
+	testLLM?: LLMConnectionTester,
 ): Promise<BootstrapResult> {
 	const skipped: string[] = [];
 	const dir = envDir ?? process.cwd();
@@ -129,16 +215,25 @@ export async function bootstrap(
 
 	ui.info(`正在检查 ${spec.appName} 运行环境…`);
 
-	// ── Step 1: .env 文件 ──
+	// ── Step 1: .env 文件加载 ──
 
+	const projectEnv = detectProjectEnv();
+	if (Object.keys(projectEnv).length > 0) {
+		ui.info("检测到项目 .env (由 Bun 自动加载)");
+	}
+
+	let globalEnv: Record<string, string> = {};
 	if (existsSync(envPath)) {
-		loadEnvFile(envPath);
+		globalEnv = loadEnvFile(envPath);
 		ui.success(`.env 已加载 (${envPath})`);
 	} else {
 		ui.warn("未找到 .env 文件");
 		const shouldCreate = await ui.confirm("是否创建 .env 配置文件？");
 		if (shouldCreate) {
 			await createEnvInteractive(spec, ui, envPath);
+			globalEnv = existsSync(envPath)
+				? parseEnvFile(readFileSync(envPath, "utf-8"))
+				: {};
 		} else {
 			ui.info("跳过 .env 创建，将使用环境变量");
 			skipped.push("env_file");
@@ -163,14 +258,12 @@ export async function bootstrap(
 
 			if (value) {
 				process.env[v.key] = value;
-				// 追加到 .env 文件
 				if (existsSync(envPath)) {
 					appendFileSync(envPath, `\n${v.key}=${value}\n`, { mode: 0o600 });
 				}
 			}
 		}
 
-		// 再次检查
 		missing = findMissing(spec);
 		if (missing.length > 0) {
 			ui.error(`仍缺少必填配置: ${missing.map((v) => v.key).join(", ")}`);
@@ -178,19 +271,39 @@ export async function bootstrap(
 		}
 	}
 
+	// ── Step 2.5: 配置摘要 ──
+
+	const configEntries = resolveConfigSources(spec, projectEnv, globalEnv);
+	const overrides = configEntries.filter((c) => c.overridden);
+
+	const configGroups: ConfigGroup[] = spec.groups
+		.map((g) => ({
+			title: g.title,
+			entries: configEntries.filter((e) => g.vars.some((v) => v.key === e.key)),
+		}))
+		.filter((g) => g.entries.length > 0);
+
+	if (ui.configTable) {
+		ui.configTable(configGroups, overrides);
+	} else {
+		if (overrides.length > 0) {
+			ui.warn(
+				`${overrides.length} 项配置被项目 .env 覆盖：\n${overrides.map((c) => `  ${c.key}: ${c.overridden?.value} → ${c.value}`).join("\n")}`,
+			);
+		}
+		ui.info(`当前配置:\n${formatConfigSummary(configEntries, spec)}`);
+	}
+
 	ui.success("配置检查通过");
 
 	// ── Step 3: LLM 连通性测试 ──
 
-	const baseUrl = process.env.LLM_BASE_URL;
-	const apiKey = process.env.LLM_API_KEY;
-	const model = process.env.LLM_MODEL;
-
-	if (baseUrl && apiKey && model) {
+	if (testLLM) {
 		ui.info("测试 LLM 连接…");
-		const conn = await testLLMConnection(baseUrl, apiKey, model);
+		const conn = await testLLM();
 
 		if (conn.ok) {
+			const model = process.env.LLM_MODEL ?? "(unknown)";
 			ui.success(`LLM 连接正常 (${model})`);
 		} else {
 			ui.error(`LLM 连接失败: ${conn.error}`);
@@ -200,13 +313,11 @@ export async function bootstrap(
 			]);
 			if (action === "edit") {
 				ui.info(`请编辑: ${envPath}`);
-				// 尝试用系统默认编辑器打开
 				try {
 					const editor = process.env.EDITOR || "vi";
 					Bun.spawnSync([editor, envPath], {
 						stdio: ["inherit", "inherit", "inherit"],
 					});
-					// 重新加载
 					loadEnvFile(envPath, { override: true });
 					ui.info("配置已重新加载");
 				} catch {
@@ -242,20 +353,17 @@ async function createEnvInteractive(
 	const values: Record<string, string> = {};
 
 	for (const group of spec.groups) {
-		// 检查该组是否所有必填变量都有 inheritFrom（即可继承组）
 		const requiredVars = group.vars.filter((v) => v.default === undefined);
 		const allInheritable =
 			requiredVars.length > 0 && requiredVars.every((v) => v.inheritFrom);
 
 		if (allInheritable) {
-			// 可继承组：逐字段询问是否复用主配置
 			ui.info(`\n${group.title}:`);
 			for (const v of requiredVars) {
 				const parentKey = v.inheritFrom;
 				if (!parentKey) continue;
 				const parentVal = values[parentKey] ?? process.env[parentKey];
 				if (!parentVal) {
-					// 父变量不存在，必须手动输入
 					const prompt = v.example
 						? `  ${v.desc} (${v.key}, 例如: ${v.example})`
 						: `  ${v.desc} (${v.key})`;
@@ -275,7 +383,6 @@ async function createEnvInteractive(
 					true,
 				);
 				if (reuse) {
-					// 不写入 .env，运行时 fallback 到主配置
 					process.env[v.key] = parentVal;
 				} else {
 					const prompt = v.example
@@ -293,7 +400,6 @@ async function createEnvInteractive(
 			continue;
 		}
 
-		// 普通组：逐个输入
 		for (const v of group.vars) {
 			if (v.default !== undefined) continue;
 			const prompt = v.example

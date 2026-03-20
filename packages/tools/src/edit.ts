@@ -16,13 +16,13 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { LLMConfig } from "@n0n/llm";
+import { jsonSchema, tool } from "@n0n/llm";
 import type {
 	DiffChunk,
 	DiffLine,
 	EditDiff,
 	EditToolCall,
 	EditToolResult,
-	LLMToolDefinition,
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
@@ -34,29 +34,25 @@ export { editorLoop } from "./editor-loop.ts";
 
 // ── 主模型工具定义（intent 驱动） ──
 
-export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "edit",
-		description: editDescription,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: "File path relative to project root",
-				},
-				intent: {
-					type: "string",
-					description:
-						"Edit intent in free-form text: natural language description, code snippets, or a mix of both. Describe what to change and where.",
-				},
+export const EDIT_TOOL_DEFINITION = tool({
+	description: editDescription,
+	inputSchema: jsonSchema({
+		type: "object",
+		properties: {
+			path: {
+				type: "string",
+				description: "File path relative to project root",
 			},
-			required: ["path", "intent"],
-			additionalProperties: false,
+			intent: {
+				type: "string",
+				description:
+					"Edit intent in free-form text: natural language description, code snippets, or a mix of both. Describe what to change and where.",
+			},
 		},
-	},
-};
+		required: ["path", "intent"],
+		additionalProperties: false,
+	}),
+});
 
 // ── Types ──
 
@@ -97,10 +93,7 @@ export function applyOps(
  * 计算两个文本之间的结构化 diff。
  * 返回 EditDiff 对象，包含变更块列表和增删行数统计。
  */
-export function computeDiff(
-	oldContent: string,
-	newContent: string,
-): EditDiff {
+export function computeDiff(oldContent: string, newContent: string): EditDiff {
 	if (oldContent === newContent) {
 		return { chunks: [], added: 0, removed: 0 };
 	}
@@ -139,8 +132,7 @@ export function computeDiff(
 				while (
 					oldEnd + matchCount < oldLines.length &&
 					newEnd + matchCount < newLines.length &&
-					oldLines[oldEnd + matchCount] ===
-						newLines[newEnd + matchCount]
+					oldLines[oldEnd + matchCount] === newLines[newEnd + matchCount]
 				) {
 					matchCount++;
 					if (matchCount >= 3) break;
@@ -248,10 +240,7 @@ export async function editTool(
 			durationMs,
 		};
 	} catch (err) {
-		return failResult(
-			call,
-			err instanceof Error ? err.message : String(err),
-		);
+		return failResult(call, err instanceof Error ? err.message : String(err));
 	}
 }
 
@@ -293,10 +282,7 @@ export async function* editToolStream(
 		};
 
 		let lastRound = -1;
-		const onEvent = (
-			round: number,
-			_event: import("@n0n/llm").StreamEvent,
-		) => {
+		const onEvent = (round: number, _event: import("@n0n/llm").StreamEvent) => {
 			if (round !== lastRound) {
 				push(`[round ${round + 1}]\n`);
 				lastRound = round;
@@ -345,12 +331,7 @@ export async function* editToolStream(
 			} satisfies ToolOutputChunk;
 		}
 
-		const {
-			content: newContent,
-			feedback,
-			error,
-			rounds,
-		} = await loopPromise;
+		const { content: newContent, feedback, error, rounds } = await loopPromise;
 		const durationMs = Date.now() - startTime;
 
 		if (error) {
@@ -378,9 +359,6 @@ export async function* editToolStream(
 			durationMs,
 		};
 	} catch (err) {
-		yield failResult(
-			call,
-			err instanceof Error ? err.message : String(err),
-		);
+		yield failResult(call, err instanceof Error ? err.message : String(err));
 	}
 }

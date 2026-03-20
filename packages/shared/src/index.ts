@@ -7,6 +7,7 @@
 
 // AGENTS.md
 export { formatAgentsMdPrompt, loadAgentsMd } from "./agents-md.ts";
+export type { LLMConnectionTester } from "./bootstrap/index.ts";
 // Bootstrap
 export {
 	bootstrap,

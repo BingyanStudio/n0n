@@ -12,11 +12,9 @@
  *   这样 LLM 能获得每个字段的类型约束，而非只看到一段描述文本。
  */
 
-import type {
-	LLMToolDefinition,
-	SubmitToolCall,
-	SubmitToolResult,
-} from "@n0n/types";
+import type { Tool } from "@n0n/llm";
+import { tool as aiTool, jsonSchema } from "@n0n/llm";
+import type { SubmitToolCall, SubmitToolResult } from "@n0n/types";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 
@@ -69,7 +67,7 @@ function flattenVariantProperties(schema: JsonSchema): JsonSchema {
 }
 
 /* placeholder — will be filled below */
-export const SUBMIT_TOOL_DEFINITION: LLMToolDefinition =
+export const SUBMIT_TOOL_DEFINITION: Tool =
 	/* @__PURE__ */ makeSubmitToolDefinition();
 
 /* placeholder end */
@@ -81,42 +79,38 @@ export const SUBMIT_TOOL_DEFINITION: LLMToolDefinition =
  * - 有 schema：将 schema 的 JSON Schema 属性展开到 parameters 顶层，
  *   与 report 字段并列。LLM 直接生成符合 schema 的扁平 JSON 对象。
  */
-export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
+export function makeSubmitToolDefinition(schema?: ZodType): Tool {
 	if (!schema) {
-		return {
-			type: "function",
-			function: {
-				name: "submit",
-				description: DEFAULT_DESCRIPTION,
-				parameters: {
-					type: "object",
-					properties: {
-						result: {
-							description:
-								"The result value. For success: the requested output. For error: { type: 'error', error: 'description' }.",
-						},
-						report: {
-							type: "string",
-							description:
-								"Optional brief report of what was done and any notable findings.",
-						},
+		return aiTool({
+			description: DEFAULT_DESCRIPTION,
+			inputSchema: jsonSchema({
+				type: "object",
+				properties: {
+					result: {
+						description:
+							"The result value. For success: the requested output. For error: { type: 'error', error: 'description' }.",
 					},
-					required: ["result"],
-					additionalProperties: false,
+					report: {
+						type: "string",
+						description:
+							"Optional brief report of what was done and any notable findings.",
+					},
 				},
-			},
-		};
+				required: ["result"],
+				additionalProperties: false,
+			}),
+		});
 	}
 
 	// 将 Zod schema 转为 JSON Schema，提取 properties 和 required
-	const jsonSchema = toJSONSchema(schema) as JsonSchema;
-	const schemaProperties = flattenVariantProperties(jsonSchema);
+	const zodJsonSchema = toJSONSchema(schema) as JsonSchema;
+	const schemaProperties = flattenVariantProperties(zodJsonSchema);
 	// 从顶层读取 required；若缺失且为 discriminated union，从各 variant 求交集
-	let schemaRequired: string[] = Array.isArray(jsonSchema.required)
-		? [...(jsonSchema.required as string[])]
+	let schemaRequired: string[] = Array.isArray(zodJsonSchema.required)
+		? [...(zodJsonSchema.required as string[])]
 		: [];
 	if (schemaRequired.length === 0) {
-		const variants = [jsonSchema.oneOf, jsonSchema.anyOf]
+		const variants = [zodJsonSchema.oneOf, zodJsonSchema.anyOf]
 			.flat()
 			.filter(isJsonSchema);
 		if (variants.length > 0) {
@@ -144,24 +138,20 @@ export function makeSubmitToolDefinition(schema?: ZodType): LLMToolDefinition {
 	// required 只包含 schema 自身的 required 字段，report 始终可选
 	const mergedRequired = [...schemaRequired];
 
-	const schemaStr = JSON.stringify(jsonSchema, null, 2);
+	const schemaStr = JSON.stringify(zodJsonSchema, null, 2);
 	const sanitizedProperties = stripFieldDescriptions(
 		mergedProperties,
 	) as Record<string, unknown>;
 
-	return {
-		type: "function",
-		function: {
-			name: "submit",
-			description: `Submit your final result. Fill in the fields directly as parameters — they must conform to this schema:\n\n\`\`\`json\n${schemaStr}\n\`\`\`\n\nValidation is enforced — non-conforming submissions will be rejected.`,
-			parameters: {
-				type: "object",
-				properties: sanitizedProperties,
-				required: mergedRequired,
-				additionalProperties: false,
-			},
-		},
-	};
+	return aiTool({
+		description: `Submit your final result. Fill in the fields directly as parameters — they must conform to this schema:\n\n\`\`\`json\n${schemaStr}\n\`\`\`\n\nValidation is enforced — non-conforming submissions will be rejected.`,
+		inputSchema: jsonSchema({
+			type: "object",
+			properties: sanitizedProperties,
+			required: mergedRequired,
+			additionalProperties: false,
+		}),
+	});
 }
 
 // ── 执行器 ──

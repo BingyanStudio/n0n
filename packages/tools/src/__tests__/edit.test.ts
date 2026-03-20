@@ -183,9 +183,7 @@ describe("computeDiff", () => {
 		expect(diff.chunks).toHaveLength(1);
 		const chunk = diff.chunks[0]!;
 		expect(chunk.startLine).toBeGreaterThan(0);
-		expect(chunk.endLine).toBeGreaterThanOrEqual(
-			chunk.startLine,
-		);
+		expect(chunk.endLine).toBeGreaterThanOrEqual(chunk.startLine);
 		// 每行都有行号
 		for (const line of chunk.lines) {
 			expect(line.line).toBeGreaterThan(0);

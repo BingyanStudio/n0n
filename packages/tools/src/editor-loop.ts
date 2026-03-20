@@ -12,62 +12,53 @@
  * 5. 达到上限 → 返回最后的错误
  */
 
-import type { LLMConfig } from "@n0n/llm";
-import { chatCompletionStream, StreamAccumulator } from "@n0n/llm";
-import type { LLMRequestMessage, LLMToolDefinition } from "@n0n/types";
+import type { LLMConfig, ModelMessage, ToolSet } from "@n0n/llm";
+import {
+	chatCompletionStream,
+	createModelFromConfig,
+	jsonSchema,
+	StreamAccumulator,
+	tool,
+} from "@n0n/llm";
 import editorAgentPrompt from "./descriptions/editor-agent.md" with {
 	type: "text",
 };
 
-// ── Editor LLM 内部工具定义 ──
+// ── Editor LLM 内部工具定义（AI SDK ToolSet 格式） ──
 
-const STR_REPLACE_TOOL: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "str_replace",
+const EDITOR_TOOL_SET: ToolSet = {
+	str_replace: tool({
 		description:
 			"Replace an exact substring in the file. The old_string must match character-for-character (including whitespace). Use the minimal unique fragment needed to identify the location.",
-		parameters: {
+		inputSchema: jsonSchema({
 			type: "object",
 			properties: {
 				old_string: {
 					type: "string",
-					description:
-						"Exact substring to find in the current file content",
+					description: "Exact substring to find in the current file content",
 				},
 				new_string: {
 					type: "string",
-					description:
-						"Replacement text. Use empty string for deletions.",
+					description: "Replacement text. Use empty string for deletions.",
 				},
 			},
 			required: ["old_string", "new_string"],
 			additionalProperties: false,
-		},
-	},
-};
-
-const VIEW_FILE_TOOL: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "view_file",
+		}),
+	}),
+	view_file: tool({
 		description:
 			"View the current file content after previous edits. Use this to verify the file state before making further changes.",
-		parameters: {
+		inputSchema: jsonSchema({
 			type: "object",
 			properties: {},
 			additionalProperties: false,
-		},
-	},
-};
-
-const SUBMIT_TOOL: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "submit",
+		}),
+	}),
+	submit: tool({
 		description:
 			"Submit when all edits are complete. Optionally provide feedback on the caller's intent quality.",
-		parameters: {
+		inputSchema: jsonSchema({
 			type: "object",
 			properties: {
 				feedback: {
@@ -77,18 +68,33 @@ const SUBMIT_TOOL: LLMToolDefinition = {
 				},
 			},
 			additionalProperties: false,
-		},
-	},
+		}),
+	}),
 };
-
-const EDITOR_TOOLS: LLMToolDefinition[] = [
-	STR_REPLACE_TOOL,
-	VIEW_FILE_TOOL,
-	SUBMIT_TOOL,
-];
 
 /** Editor LLM 最大循环轮数 */
 const MAX_ROUNDS = 15;
+
+// ── 辅助函数 ──
+
+/** 构造 AI SDK ToolModelMessage — 消除 editor loop 中的重复模板 */
+function toolResult(
+	toolCallId: string,
+	toolName: string,
+	value: string,
+): ModelMessage {
+	return {
+		role: "tool",
+		content: [
+			{
+				type: "tool-result" as const,
+				toolCallId,
+				toolName,
+				output: { type: "text" as const, value },
+			},
+		],
+	};
+}
 
 // ── applySingleOp ──
 
@@ -127,9 +133,7 @@ export function applySingleOp(
 		: newStr.replace(/\r\n/g, "\n");
 
 	const content =
-		normSource.slice(0, idx) +
-		normNew +
-		normSource.slice(idx + normOld.length);
+		normSource.slice(0, idx) + normNew + normSource.slice(idx + normOld.length);
 
 	return {
 		ok: true,
@@ -157,16 +161,14 @@ export async function editorLoop(
 	source: string,
 	intent: string,
 	editorLlm: LLMConfig,
-	onEvent?: (
-		round: number,
-		event: import("@n0n/llm").StreamEvent,
-	) => void,
+	onEvent?: (round: number, event: import("@n0n/llm").StreamEvent) => void,
 	onToolResult?: (round: number, summary: string) => void,
 ): Promise<EditorLoopResult> {
 	let current = source;
 	let editCount = 0;
+	const model = createModelFromConfig(editorLlm);
 
-	const messages: LLMRequestMessage[] = [
+	const messages: ModelMessage[] = [
 		{ role: "system", content: editorAgentPrompt },
 		{
 			role: "user",
@@ -183,17 +185,17 @@ export async function editorLoop(
 	];
 
 	for (let round = 0; round < MAX_ROUNDS; round++) {
+		const acc = new StreamAccumulator();
 		let message: ReturnType<StreamAccumulator["toMessage"]>;
 		try {
-			const acc = new StreamAccumulator();
 			for await (const event of chatCompletionStream(
 				{
 					messages,
-					tools: EDITOR_TOOLS,
-					tool_choice: "required",
+					tools: EDITOR_TOOL_SET,
+					toolChoice: "required",
 					temperature: 0,
 				},
-				{ llm: editorLlm },
+				{ model },
 			)) {
 				acc.push(event);
 				onEvent?.(round, event);
@@ -208,7 +210,7 @@ export async function editorLoop(
 			};
 		}
 
-		if (!message.tool_calls?.length) {
+		if (!message.toolCalls.length) {
 			messages.push({
 				role: "assistant",
 				content: message.content ?? "",
@@ -221,27 +223,46 @@ export async function editorLoop(
 			continue;
 		}
 
-		messages.push({
-			role: "assistant",
-			content: message.content,
-			tool_calls: message.tool_calls?.map((tc) => ({
-				id: tc.id,
-				type: tc.type,
-				function: tc.function,
-			})),
+		// 预解析所有 tool call 参数（避免 double parse）
+		const parsedToolCalls: Array<{
+			tc: (typeof message.toolCalls)[number];
+			args: Record<string, unknown> | null;
+		}> = message.toolCalls.map((tc) => {
+			try {
+				return { tc, args: JSON.parse(tc.input) as Record<string, unknown> };
+			} catch {
+				return { tc, args: null };
+			}
 		});
 
-		for (const tc of message.tool_calls) {
-			const name = tc.function.name;
-			let args: Record<string, unknown>;
-			try {
-				args = JSON.parse(tc.function.arguments);
-			} catch {
-				messages.push({
-					role: "tool",
-					tool_call_id: tc.id,
-					content: "Error: Failed to parse tool arguments as JSON.",
-				});
+		// 构建 assistant 消息（包含 tool calls）
+		messages.push({
+			role: "assistant",
+			content: [
+				...(message.content
+					? [{ type: "text" as const, text: message.content }]
+					: []),
+				...parsedToolCalls
+					.filter((p) => p.args !== null)
+					.map((p) => ({
+						type: "tool-call" as const,
+						toolCallId: p.tc.toolCallId,
+						toolName: p.tc.toolName,
+						input: p.args,
+					})),
+			],
+		});
+
+		for (const { tc, args } of parsedToolCalls) {
+			const name = tc.toolName;
+			if (args === null) {
+				messages.push(
+					toolResult(
+						tc.toolCallId,
+						name,
+						"Error: Failed to parse tool arguments as JSON.",
+					),
+				);
 				onToolResult?.(round, "parse error");
 				continue;
 			}
@@ -252,11 +273,13 @@ export async function editorLoop(
 					const newStr = String(args.new_string ?? "");
 
 					if (!oldStr) {
-						messages.push({
-							role: "tool",
-							tool_call_id: tc.id,
-							content: "Error: old_string cannot be empty.",
-						});
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								"Error: old_string cannot be empty.",
+							),
+						);
 						onToolResult?.(round, "str_replace → old_string empty");
 						break;
 					}
@@ -265,48 +288,47 @@ export async function editorLoop(
 					if (result.ok) {
 						current = result.content;
 						editCount++;
-						messages.push({
-							role: "tool",
-							tool_call_id: tc.id,
-							content: `OK: Replacement applied (edit #${editCount}).`,
-						});
-						onToolResult?.(
-							round,
-							`str_replace → edit #${editCount}`,
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								`OK: Replacement applied (edit #${editCount}).`,
+							),
 						);
+						onToolResult?.(round, `str_replace → edit #${editCount}`);
 					} else {
-						messages.push({
-							role: "tool",
-							tool_call_id: tc.id,
-							content: [
-								`Error: ${result.error}`,
-								"",
-								"Check whitespace, indentation, and character-for-character accuracy.",
-								"Call view_file to see the current file content.",
-							].join("\n"),
-						});
-						onToolResult?.(
-							round,
-							`str_replace → ${result.error}`,
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								[
+									`Error: ${result.error}`,
+									"",
+									"Check whitespace, indentation, and character-for-character accuracy.",
+									"Call view_file to see the current file content.",
+								].join("\n"),
+							),
 						);
+						onToolResult?.(round, `str_replace → ${result.error}`);
 					}
 					break;
 				}
 
 				case "view_file": {
-					messages.push({
-						role: "tool",
-						tool_call_id: tc.id,
-						content: `<source_file>\n${current}\n</source_file>`,
-					});
+					messages.push(
+						toolResult(
+							tc.toolCallId,
+							name,
+							`<source_file>\n${current}\n</source_file>`,
+						),
+					);
 					onToolResult?.(round, "view_file → ok");
 					break;
 				}
 
 				case "submit": {
 					const feedback =
-						typeof args.feedback === "string" &&
-						args.feedback.length > 0
+						typeof args.feedback === "string" && args.feedback.length > 0
 							? args.feedback
 							: null;
 
@@ -320,11 +342,13 @@ export async function editorLoop(
 				}
 
 				default: {
-					messages.push({
-						role: "tool",
-						tool_call_id: tc.id,
-						content: `Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
-					});
+					messages.push(
+						toolResult(
+							tc.toolCallId,
+							name,
+							`Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
+						),
+					);
 					onToolResult?.(round, `unknown tool: ${name}`);
 				}
 			}
