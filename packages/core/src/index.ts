@@ -14,7 +14,6 @@ export { agentLoop } from "./agent/loop.ts";
 // 运行时上下文
 export type {
 	AgentConfig,
-	LLMConfig,
 	RuntimeContext,
 	SecurityConfig,
 } from "./runtime.ts";

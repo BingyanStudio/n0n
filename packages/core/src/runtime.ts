@@ -3,16 +3,19 @@
  *
  * 从 app 入口构造，通过参数显式传递到各层（包括 LLM / tools）。
  * 如需共享，可在应用入口集中构造 RuntimeContext 再下发使用。
+ *
+ * LLM 配置使用 @n0n/llm 的 ProviderConfig + LanguageModel，
+ * 支持运行时依赖注入和多 provider（OpenAI / Anthropic / Google）。
  */
 
-// ── 类型 ──
+import type { LanguageModel } from "ai";
+import type {
+	LLMConfig,
+	ProviderConfig,
+} from "@n0n/llm";
+import { createModelFromConfig, getModelId, getProviderType } from "@n0n/llm";
 
-export interface LLMConfig {
-	baseUrl: string;
-	apiKey: string;
-	model: string;
-	enableThinking: boolean;
-}
+// ── 类型 ──
 
 export interface AgentConfig {
 	maxIterations: number;
@@ -25,9 +28,18 @@ export interface SecurityConfig {
 }
 
 export interface RuntimeContext {
+	/** 主 LLM 配置 */
 	llm: LLMConfig;
+	/** 主 LLM 的 LanguageModel 实例（运行时注入） */
+	model: LanguageModel;
 	/** Editor LLM 配置 — 用于影子编辑层（shadow edit）。未配置时 fallback 到 llm。 */
 	editorLlm: LLMConfig;
+	/** Editor LLM 的 LanguageModel 实例 */
+	editorModel: LanguageModel;
+	/** model ID — 用于 adapter 层 tag 风格选择 */
+	modelId: string;
+	/** provider 类型 — 用于 caching 策略判断 */
+	providerType: string;
 	agent: AgentConfig;
 	security: SecurityConfig;
 }
@@ -49,29 +61,71 @@ function parseBlockedCommands(): string[] {
 		.filter((c) => c.length > 0);
 }
 
+/**
+ * 从环境变量推断 provider 类型
+ *
+ * 规则：
+ * - 有 LLM_PROVIDER 环境变量时直接使用
+ * - 根据 BASE_URL 推断：包含 anthropic → "anthropic"，包含 google → "google"
+ * - 有 BASE_URL 但非已知 provider → "openai-compatible"
+ * - 无 BASE_URL → "openai"
+ */
+function inferProvider(baseUrl?: string, explicit?: string): ProviderConfig["provider"] {
+	if (explicit) {
+		const valid = ["openai", "anthropic", "google", "openai-compatible"];
+		if (valid.includes(explicit)) return explicit as ProviderConfig["provider"];
+	}
+	if (!baseUrl) return "openai";
+	if (baseUrl.includes("anthropic")) return "anthropic";
+	if (baseUrl.includes("google") || baseUrl.includes("gemini")) return "google";
+	if (baseUrl.includes("openai.com")) return "openai";
+	return "openai-compatible";
+}
+
+/** 从环境变量构造 ProviderConfig */
+function buildProviderConfig(prefix: string, fallback?: ProviderConfig): ProviderConfig {
+	const apiKey = process.env[`${prefix}_API_KEY`] || (fallback && "apiKey" in fallback ? fallback.apiKey : "");
+	const model = process.env[`${prefix}_MODEL`] || (fallback ? fallback.model : "");
+	const baseUrl = process.env[`${prefix}_BASE_URL`] || (fallback && "baseUrl" in fallback ? (fallback as { baseUrl?: string }).baseUrl : undefined);
+	const provider = inferProvider(baseUrl, process.env[`${prefix}_PROVIDER`]);
+
+	switch (provider) {
+		case "openai":
+			return { provider: "openai", apiKey, model, ...(baseUrl ? { baseUrl } : {}) };
+		case "anthropic":
+			return { provider: "anthropic", apiKey, model };
+		case "google":
+			return { provider: "google", apiKey, model };
+		case "openai-compatible":
+			return { provider: "openai-compatible", apiKey, model, baseUrl: baseUrl ?? "" };
+	}
+}
+
+/** 从环境变量构造 LLMConfig */
+function buildLLMConfig(prefix: string, fallbackProvider?: ProviderConfig): LLMConfig {
+	const providerConfig = buildProviderConfig(prefix, fallbackProvider);
+	const enableThinkingKey = `${prefix}_ENABLE_THINKING`;
+	return {
+		providerConfig,
+		enableThinking: process.env[enableThinkingKey] === "true",
+	};
+}
+
 /** 从环境变量构造 RuntimeContext（纯函数，无副作用） */
 export function createRuntimeContext(): RuntimeContext {
-	const llm: LLMConfig = {
-		baseUrl: requireEnv("LLM_BASE_URL"),
-		apiKey: requireEnv("LLM_API_KEY"),
-		model: requireEnv("LLM_MODEL"),
-		enableThinking: process.env.LLM_ENABLE_THINKING === "true",
-	};
+	const llm = buildLLMConfig("LLM");
+	const editorLlm = buildLLMConfig("EDITOR_LLM", llm.providerConfig);
 
-	// Editor LLM: 各字段独立 fallback 到主 LLM 配置
-	const editorLlm: LLMConfig = {
-		baseUrl: process.env.EDITOR_LLM_BASE_URL || llm.baseUrl,
-		apiKey: process.env.EDITOR_LLM_API_KEY || llm.apiKey,
-		model: process.env.EDITOR_LLM_MODEL || llm.model,
-		enableThinking:
-			process.env.EDITOR_LLM_ENABLE_THINKING !== undefined
-				? process.env.EDITOR_LLM_ENABLE_THINKING === "true"
-				: llm.enableThinking,
-	};
+	const model = createModelFromConfig(llm);
+	const editorModel = createModelFromConfig(editorLlm);
 
 	return {
 		llm,
+		model,
 		editorLlm,
+		editorModel,
+		modelId: getModelId(llm),
+		providerType: getProviderType(llm),
 		agent: {
 			maxIterations: 50,
 			maxIdleRounds: 5,
