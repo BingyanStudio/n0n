@@ -12,6 +12,7 @@
  * 工具参数通过 Zod schema 做运行时校验。
  */
 
+import type { Tool, ToolSet } from "@n0n/llm";
 import type {
 	EditToolCall,
 	ExecToolCall,
@@ -23,7 +24,6 @@ import type {
 	ToolStreamEvent,
 	WriteToolCall,
 } from "@n0n/types";
-import type { Tool, ToolSet } from "ai";
 import type { ZodType } from "zod";
 import type { ToolsConfig } from "./config.ts";
 import {

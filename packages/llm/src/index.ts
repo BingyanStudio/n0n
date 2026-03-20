@@ -5,8 +5,9 @@
  * 运行时依赖注入、prompt caching。
  */
 
-// Re-export AI SDK 核心类型（消费方可能需要）
-export type { LanguageModel, ModelMessage } from "ai";
+// Re-export AI SDK 核心类型和工具函数 — 消费方统一从 @n0n/llm 导入，不直接依赖 ai 包
+export type { LanguageModel, ModelMessage, Tool, ToolSet } from "ai";
+export { generateText, jsonSchema, tool } from "ai";
 // 消息转换
 export { toAPIMessages } from "./adapter.ts";
 export type { ChatCompletionRequest, ChatCompletionResult } from "./client.ts";

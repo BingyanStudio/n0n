@@ -12,14 +12,14 @@
  * 5. 达到上限 → 返回最后的错误
  */
 
-import type { LLMConfig } from "@n0n/llm";
+import type { LLMConfig, ModelMessage, ToolSet } from "@n0n/llm";
 import {
 	chatCompletionStream,
 	createModelFromConfig,
+	jsonSchema,
 	StreamAccumulator,
+	tool,
 } from "@n0n/llm";
-import type { ModelMessage, ToolSet } from "ai";
-import { jsonSchema, tool } from "ai";
 import editorAgentPrompt from "./descriptions/editor-agent.md" with {
 	type: "text",
 };

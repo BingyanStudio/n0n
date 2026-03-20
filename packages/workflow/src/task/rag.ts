@@ -5,8 +5,8 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { getRuntime } from "@n0n/core";
+import type { ModelMessage } from "@n0n/llm";
 import { chatCompletion } from "@n0n/llm";
-import type { ModelMessage } from "ai";
 import { Glob } from "bun";
 import type { RagHit, RagSearchResult, SearchSpace } from "../types.ts";
 import type { WorkflowPaths } from "../workspace.ts";
