@@ -16,22 +16,27 @@ export type { ChatCompletionRequest, ChatCompletionResult } from "./client.ts";
 export { chatCompletion, LLMError } from "./client.ts";
 // 配置类型
 export type {
-	AnthropicCompatibleProviderConfig,
 	AnthropicProviderConfig,
 	GoogleProviderConfig,
 	LLMConfig,
 	OpenAICompatibleProviderConfig,
 	OpenAIProviderConfig,
 	ProviderConfig,
+	ThinkingProviderOptions,
 } from "./config.ts";
-export { getModelId, getProviderType } from "./config.ts";
+export {
+	DEFAULT_THINKING_BUDGET_TOKENS,
+	getModelId,
+	getProviderType,
+	isAnthropicProvider,
+} from "./config.ts";
 // 环境变量 → 配置工厂（SSOT：runtime.ts 和 bootstrap/runner.ts 共用）
 export {
 	buildLLMConfigFromEnv,
 	buildProviderConfigFromEnv,
-	inferProvider,
 	isValidProvider,
 	PROVIDER_TYPES,
+	resolveProvider,
 } from "./config-from-env.ts";
 // Provider Factory
 export { createLanguageModel, createModelFromConfig } from "./provider.ts";

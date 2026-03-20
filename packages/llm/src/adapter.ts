@@ -20,6 +20,7 @@ import type {
 } from "@n0n/types";
 import type { AssistantModelMessage, ModelMessage, ToolModelMessage } from "ai";
 import { anthropicCacheControl, selectCacheBreakpoints } from "./cache.ts";
+import { isAnthropicProvider } from "./config.ts";
 import { adaptTags, wrapTag } from "./tags.ts";
 
 /* ── tool result 格式化 ── */
@@ -121,8 +122,7 @@ export function toAPIMessages(
 	providerType?: string,
 ): ModelMessage[] {
 	const result: ModelMessage[] = [];
-	const isAnthropic =
-		providerType === "anthropic" || providerType === "anthropic-compatible";
+	const isAnthropic = isAnthropicProvider(providerType ?? "");
 
 	for (const msg of messages) {
 		switch (msg.type) {

@@ -65,6 +65,7 @@ export function createLanguageModel(config: ProviderConfig): LanguageModel {
 		case "anthropic":
 			return createAnthropic({
 				apiKey: config.apiKey,
+				...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
 			})(config.model);
 
 		case "google":
@@ -86,12 +87,6 @@ export function createLanguageModel(config: ProviderConfig): LanguageModel {
 			// litellm 等代理对 Chat Completions API 的 cache_control 支持更完善。
 			return provider.chat(config.model);
 		}
-
-		case "anthropic-compatible":
-			return createAnthropic({
-				apiKey: config.apiKey,
-				baseURL: config.baseUrl,
-			})(config.model);
 	}
 }
 

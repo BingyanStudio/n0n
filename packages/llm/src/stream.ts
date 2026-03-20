@@ -12,6 +12,7 @@
 
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { streamText } from "ai";
+import type { ThinkingProviderOptions } from "./config.ts";
 
 // ── Token Usage 类型 ──
 
@@ -57,7 +58,7 @@ export interface StreamRequest {
 export interface StreamOptions {
 	signal?: AbortSignal;
 	model: LanguageModel;
-	providerOptions?: unknown;
+	providerOptions?: ThinkingProviderOptions;
 }
 
 /**
@@ -78,8 +79,7 @@ export async function* chatCompletionStream(
 		toolChoice: request.toolChoice,
 		temperature: request.temperature,
 		maxOutputTokens: request.maxOutputTokens,
-		// biome-ignore lint/suspicious/noExplicitAny: AI SDK ProviderOptions 类型嵌套过深，此处用 any 透传
-		providerOptions: options.providerOptions as any,
+		providerOptions: options.providerOptions,
 		abortSignal: options.signal,
 		maxRetries: 3,
 	});
