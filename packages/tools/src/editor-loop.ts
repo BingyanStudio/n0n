@@ -124,7 +124,7 @@ function countOccurrences(text: string, pattern: string): number {
 	let pos = 0;
 	while ((pos = text.indexOf(pattern, pos)) !== -1) {
 		count++;
-		pos += 1;
+		pos += pattern.length;
 	}
 	return count;
 }
