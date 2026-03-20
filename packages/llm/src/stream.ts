@@ -7,7 +7,7 @@
  * - thinking/reasoning token 流式输出
  * - tool call 流式参数输出
  *
- * StreamEvent 保持与旧 API 兼容，消费方无需改动事件处理逻辑。
+ * StreamEvent 与旧 API 基本兼容（注意：done.finishReason 从 string | null 收窄为 string）。
  */
 
 import { streamText } from "ai";
