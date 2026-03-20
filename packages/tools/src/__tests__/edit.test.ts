@@ -146,7 +146,8 @@ describe("computeDiff", () => {
 		expect(diff.added).toBeGreaterThan(0);
 		expect(diff.removed).toBeGreaterThan(0);
 		expect(diff.chunks).toHaveLength(1);
-		const chunk = diff.chunks[0]!;
+		const chunk = diff.chunks[0];
+		if (!chunk) throw new Error("expected chunk");
 		// 变更行应包含新内容
 		const changedLines = chunk.lines.filter((l) => l.changed);
 		expect(changedLines.length).toBeGreaterThan(0);
@@ -181,7 +182,8 @@ describe("computeDiff", () => {
 		const now = "line1\nchanged\nline3";
 		const diff = computeDiff(old, now);
 		expect(diff.chunks).toHaveLength(1);
-		const chunk = diff.chunks[0]!;
+		const chunk = diff.chunks[0];
+		if (!chunk) throw new Error("expected chunk");
 		expect(chunk.startLine).toBeGreaterThan(0);
 		expect(chunk.endLine).toBeGreaterThanOrEqual(chunk.startLine);
 		// 每行都有行号
