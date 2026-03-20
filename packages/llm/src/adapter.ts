@@ -93,18 +93,10 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 	}
 }
 
-/* ── Prompt Caching 注解 ── */
+/* ── Prompt Caching ── */
 
 /**
  * 为原生 Anthropic provider 创建 providerOptions（prompt caching）
- *
- * Prompt caching 有两条互斥路径（由 ProviderConfig.provider 判别）：
- * 1. 原生 Anthropic（provider === "anthropic"）：
- *    本文件通过 providerOptions 注入 cacheControl，AI SDK @ai-sdk/anthropic 负责传递。
- * 2. litellm 代理（provider === "openai-compatible" + backendProvider === "anthropic"）：
- *    provider.ts 通过 fetch wrapper 在 HTTP body 中注入 cache_control。
- *
- * 两条路径由 providerType 字符串天然互斥，不会双重注入。
  */
 function anthropicCacheControl(): {
 	anthropic: { cacheControl: { type: "ephemeral" } };
@@ -113,42 +105,57 @@ function anthropicCacheControl(): {
 }
 
 /**
- * 为 Anthropic 消息列表注入缓存断点（后置处理）。
+ * 选择 Anthropic prompt caching 断点位置 — SSOT 纯函数。
  *
- * Anthropic 最多支持 4 个缓存断点（ephemeral），采用激进策略全部用满：
+ * 返回应设置 cache_control 的消息索引列表。
+ * adapter.ts（原生 Anthropic）和 provider.ts（litellm 代理）
+ * 共用此函数，各自负责标记方式（providerOptions vs cache_control）。
+ *
+ * Anthropic 最多支持 4 个缓存断点（ephemeral），激进策略全部用满：
  * 1. 最后一条 system 消息 — 缓存稳定的 system prompt
- * 2. 倒数第四条 non-assistant 消息 — 较早历史的兜底缓存
- * 3. 倒数第三条 non-assistant 消息 — 中段历史缓存
- * 4. 倒数第二条 non-assistant 消息 — 最近历史缓存
+ * 2. 倒数第三条 non-assistant 消息 — 较早历史兜底
+ * 3. 倒数第二条 non-assistant 消息 — 中段历史缓存
+ * 4. 最后一条 non-assistant 消息 — 最新历史缓存
  *
- * 梯度兜底：即使对话快速增长导致某个断点失效，后续断点仍能命中，
- * 最大化 cache hit rate。最新一条 non-assistant 消息始终不缓存（刚发出，下轮才有价值）。
+ * 激进策略：不跳过最后一条 non-assistant 消息，下一轮调用时它已是历史的一部分，
+ * 提前标记可以让缓存在下一轮立即命中。
  */
-function injectAnthropicCacheBreakpoints(messages: ModelMessage[]): void {
+export function selectCacheBreakpoints(
+	messages: readonly { role: string }[],
+): number[] {
+	const breakpoints: number[] = [];
+
 	// 断点 1：最后一条 system 消息
 	for (let i = messages.length - 1; i >= 0; i--) {
 		if (messages[i]!.role === "system") {
-			(messages[i] as Record<string, unknown>).providerOptions =
-				anthropicCacheControl();
+			breakpoints.push(i);
 			break;
 		}
 	}
 
-	// 断点 2-4：倒数第四、第三、第二条 non-assistant 消息（梯度兜底）
-	// 收集从末尾开始的 non-assistant 消息索引
-	const nonAssistantIndices: number[] = [];
+	// 断点 2-4：最后三条 non-assistant 消息
+	let count = 0;
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const role = messages[i]!.role;
 		if (role === "user" || role === "tool") {
-			nonAssistantIndices.push(i);
-			if (nonAssistantIndices.length >= 4) break;
+			breakpoints.push(i);
+			count++;
+			if (count >= 3) break;
 		}
 	}
 
-	// 跳过最新一条（index 0），在倒数第二、第三、第四条上设断点
-	for (let k = 1; k < nonAssistantIndices.length; k++) {
-		const targetIdx = nonAssistantIndices[k]!;
-		(messages[targetIdx] as Record<string, unknown>).providerOptions =
+	return breakpoints;
+}
+
+/**
+ * 为 Anthropic 消息列表注入缓存断点（后置处理）。
+ *
+ * 使用 selectCacheBreakpoints 选择断点位置，
+ * 通过 providerOptions 注入 AI SDK @ai-sdk/anthropic 的 cacheControl。
+ */
+function injectAnthropicCacheBreakpoints(messages: ModelMessage[]): void {
+	for (const idx of selectCacheBreakpoints(messages)) {
+		(messages[idx] as Record<string, unknown>).providerOptions =
 			anthropicCacheControl();
 	}
 }
