@@ -8,11 +8,16 @@
  * 用法: bun run scripts/test-caching.ts
  */
 
-const BASE_URL = process.env.LLM_BASE_URL ?? "https://ai-gateway.wepieoa.com";
+const BASE_URL = process.env.LLM_BASE_URL ?? "";
 const API_KEY = process.env.LLM_API_KEY ?? "";
 
 if (!API_KEY) {
 	console.error("请设置 LLM_API_KEY 环境变量");
+	process.exit(1);
+}
+
+if (!BASE_URL) {
+	console.error("请设置 LLM_BASE_URL 环境变量");
 	process.exit(1);
 }
 
