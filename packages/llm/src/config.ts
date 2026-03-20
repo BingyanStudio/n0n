@@ -36,6 +36,19 @@ export interface OpenAICompatibleProviderConfig {
 	apiKey: string;
 	baseUrl: string;
 	model: string;
+	/**
+	 * 代理后端的实际 provider 类型。
+	 *
+	 * 当通过 litellm 等代理访问 Anthropic/Google 模型时，
+	 * AI SDK 的 @ai-sdk/openai provider 不会传递 provider-specific 字段
+	 * （如 Anthropic 的 cache_control）。设置此字段后，
+	 * 会在 fetch 层自动注入对应 provider 的缓存控制标记。
+	 *
+	 * 值：
+	 * - "anthropic"：注入 message-level cache_control: { type: "ephemeral" }
+	 * - undefined / 其他：不注入额外字段
+	 */
+	backendProvider?: "anthropic" | "google" | "openai";
 }
 
 /**

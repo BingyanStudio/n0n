@@ -96,8 +96,17 @@ function buildProviderConfig(prefix: string, fallback?: ProviderConfig): Provide
 			return { provider: "anthropic", apiKey, model };
 		case "google":
 			return { provider: "google", apiKey, model };
-		case "openai-compatible":
-			return { provider: "openai-compatible", apiKey, model, baseUrl: baseUrl ?? "" };
+		case "openai-compatible": {
+			const backendProvider = process.env[`${prefix}_BACKEND_PROVIDER`] as
+				| "anthropic" | "google" | "openai" | undefined;
+			return {
+				provider: "openai-compatible",
+				apiKey,
+				model,
+				baseUrl: baseUrl ?? "",
+				...(backendProvider ? { backendProvider } : {}),
+			};
+		}
 	}
 }
 

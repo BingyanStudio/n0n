@@ -187,9 +187,18 @@ export async function bootstrap(
 			case "openai":
 				providerConfig = { provider: "openai", apiKey, model, ...(baseUrl ? { baseUrl } : {}) };
 				break;
-			default:
-				providerConfig = { provider: "openai-compatible", apiKey, model, baseUrl };
+			default: {
+				const backendProvider = (process.env.LLM_BACKEND_PROVIDER || undefined) as
+					| "anthropic" | "google" | "openai" | undefined;
+				providerConfig = {
+					provider: "openai-compatible",
+					apiKey,
+					model,
+					baseUrl,
+					...(backendProvider ? { backendProvider } : {}),
+				};
 				break;
+			}
 		}
 
 		const llmConfig: LLMConfig = {
