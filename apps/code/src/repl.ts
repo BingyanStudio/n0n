@@ -121,6 +121,8 @@ export async function startCodeRepl(
 			if (agentRunning) {
 				abortController.abort();
 			} else {
+				writeln();
+				writeln(style.gray("Bye!"));
 				rl.close();
 			}
 		});
@@ -129,6 +131,8 @@ export async function startCodeRepl(
 			if (agentRunning) {
 				abortController.abort();
 			} else {
+				writeln();
+				writeln(style.gray("Bye!"));
 				process.exit(0);
 			}
 		});
