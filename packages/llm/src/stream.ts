@@ -125,7 +125,7 @@ export async function* chatCompletionStream(
 				break;
 
 			case "finish": {
-				const u = part.usage;
+				const u = part.totalUsage;
 				const usage: TokenUsage | null = u
 					? {
 							inputTokens: u.inputTokens ?? 0,
