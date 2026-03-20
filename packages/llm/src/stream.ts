@@ -13,6 +13,22 @@
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { streamText } from "ai";
 
+// ── Token Usage 类型 ──
+
+/** 单轮 LLM 调用的 token 用量统计（从 AI SDK LanguageModelUsage 映射） */
+export interface TokenUsage {
+	/** 输入 token 总量 */
+	inputTokens: number;
+	/** 输出 token 总量 */
+	outputTokens: number;
+	/** 总 token 量 */
+	totalTokens: number;
+	/** 缓存命中的输入 token 数 */
+	cacheReadTokens: number;
+	/** 写入缓存的输入 token 数 */
+	cacheWriteTokens: number;
+}
+
 // ── StreamEvent — 流式事件类型（与旧 API 兼容） ──
 
 export type StreamEvent =
@@ -26,7 +42,7 @@ export type StreamEvent =
 			name: string | undefined;
 			arguments: string;
 	  }
-	| { type: "done"; finishReason: string };
+	| { type: "done"; finishReason: string; usage: TokenUsage | null };
 
 // ── 流式请求 ──
 
@@ -46,8 +62,7 @@ export interface StreamOptions {
 /**
  * 流式 chat completion — 生成 StreamEvent 序列
  *
- * 运行时依赖注入：
- * - 传入 LanguageModel 实例（推荐）
+ * 运行时依赖注入：传入 LanguageModel 实例
  */
 export async function* chatCompletionStream(
 	request: StreamRequest,
@@ -109,9 +124,20 @@ export async function* chatCompletionStream(
 				};
 				break;
 
-			case "finish":
-				yield { type: "done", finishReason: part.finishReason };
+			case "finish": {
+				const u = part.usage;
+				const usage: TokenUsage | null = u
+					? {
+							inputTokens: u.inputTokens ?? 0,
+							outputTokens: u.outputTokens ?? 0,
+							totalTokens: u.totalTokens ?? 0,
+							cacheReadTokens: u.inputTokenDetails?.cacheReadTokens ?? 0,
+							cacheWriteTokens: u.inputTokenDetails?.cacheWriteTokens ?? 0,
+						}
+					: null;
+				yield { type: "done", finishReason: part.finishReason, usage };
 				break;
+			}
 		}
 	}
 }
@@ -142,6 +168,8 @@ export class StreamAccumulator {
 		{ toolCallId: string; toolName: string; input: string }
 	>();
 	finishReason: string | null = null;
+	/** 本轮 LLM 调用的 token 用量 */
+	usage: TokenUsage | null = null;
 
 	push(event: StreamEvent): void {
 		switch (event.type) {
@@ -168,6 +196,7 @@ export class StreamAccumulator {
 			}
 			case "done":
 				this.finishReason = event.finishReason;
+				this.usage = event.usage;
 				break;
 		}
 	}
