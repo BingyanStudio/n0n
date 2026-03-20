@@ -1,15 +1,12 @@
 {
 	"name": "@n0n/shared",
-	"version": "0.0.0",
 	"private": true,
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts"
 	},
 	"dependencies": {
-		"@n0n/llm": "workspace:*",
 		"@n0n/types": "workspace:*",
-		"ai": "^6.0.0",
 		"zod": "^4.3.6"
 	}
 }

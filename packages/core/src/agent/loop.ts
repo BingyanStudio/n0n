@@ -9,6 +9,8 @@
 
 import {
 	chatCompletionStream,
+	getModelId,
+	getProviderType,
 	StreamAccumulator,
 	toAPIMessages,
 } from "@n0n/llm";
@@ -55,7 +57,7 @@ export async function agentLoop<T = unknown>(
 	const maxIter = options?.maxIterations ?? getRuntime().agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
 	const runtime = getRuntime();
-	const modelId = runtime.modelId;
+	const modelId = getModelId(runtime.llm);
 	const toolsConfig: ToolsConfig = {
 		security: runtime.security,
 		agent: runtime.agent,
@@ -79,7 +81,7 @@ export async function agentLoop<T = unknown>(
 
 		injectReminders(messages, reminders);
 
-		const apiMessages = toAPIMessages(messages, modelId, runtime.providerType);
+		const apiMessages = toAPIMessages(messages, modelId, getProviderType(runtime.llm));
 		renderer.roundStart(iteration + 1, maxIter, apiMessages.length);
 
 		const acc = new StreamAccumulator();
