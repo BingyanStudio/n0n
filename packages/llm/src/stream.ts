@@ -40,6 +40,11 @@ export interface StreamRequest {
 	maxOutputTokens?: number;
 }
 
+/** 流式调用选项 — model 和 config 至少提供一个 */
+export type StreamOptions =
+	| { signal?: AbortSignal; model: LanguageModel; config?: never }
+	| { signal?: AbortSignal; model?: never; config: LLMConfig };
+
 /**
  * 流式 chat completion — 生成 StreamEvent 序列
  *
@@ -49,15 +54,10 @@ export interface StreamRequest {
  */
 export async function* chatCompletionStream(
 	request: StreamRequest,
-	options: { signal?: AbortSignal; model?: LanguageModel; config?: LLMConfig },
+	options: StreamOptions,
 ): AsyncGenerator<StreamEvent> {
 	const model =
-		options.model ?? (options.config ? createModelFromConfig(options.config) : null);
-	if (!model) {
-		throw new Error(
-			"chatCompletionStream requires either options.model or options.config",
-		);
-	}
+		options.model ?? createModelFromConfig(options.config);
 
 	const result = streamText({
 		model,

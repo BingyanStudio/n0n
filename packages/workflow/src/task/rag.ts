@@ -134,7 +134,7 @@ export async function ragSearch(
 				messages,
 				temperature: 0,
 			},
-			getRuntime().llm,
+			getRuntime().model,
 		);
 
 		const text = response.text?.trim() ?? "[]";
