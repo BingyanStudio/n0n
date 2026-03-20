@@ -119,6 +119,8 @@ export async function startRepl(
 				abortController.abort();
 			} else {
 				// 不在 agent 运行中，正常退出
+				writeln();
+				writeln(style.gray("Bye!"));
 				rl.close();
 			}
 		});
@@ -127,6 +129,8 @@ export async function startRepl(
 			if (agentRunning) {
 				abortController.abort();
 			} else {
+				writeln();
+				writeln(style.gray("Bye!"));
 				process.exit(0);
 			}
 		});
