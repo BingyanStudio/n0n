@@ -12,8 +12,6 @@
 
 import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { streamText } from "ai";
-import type { LLMConfig } from "./config.ts";
-import { createModelFromConfig } from "./provider.ts";
 
 // ── StreamEvent — 流式事件类型（与旧 API 兼容） ──
 
@@ -40,23 +38,22 @@ export interface StreamRequest {
 	maxOutputTokens?: number;
 }
 
-/** 流式调用选项 — model 和 config 至少提供一个 */
-export type StreamOptions =
-	| { signal?: AbortSignal; model: LanguageModel; config?: never }
-	| { signal?: AbortSignal; model?: never; config: LLMConfig };
+export interface StreamOptions {
+	signal?: AbortSignal;
+	model: LanguageModel;
+}
 
 /**
  * 流式 chat completion — 生成 StreamEvent 序列
  *
  * 运行时依赖注入：
  * - 传入 LanguageModel 实例（推荐）
- * - 或传入 LLMConfig 内部构造
  */
 export async function* chatCompletionStream(
 	request: StreamRequest,
 	options: StreamOptions,
 ): AsyncGenerator<StreamEvent> {
-	const model = options.model ?? createModelFromConfig(options.config);
+	const model = options.model;
 
 	const result = streamText({
 		model,
