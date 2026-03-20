@@ -98,6 +98,20 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 	}
 }
 
+/** 构造 user_input 消息 */
+async function makeUserInput(
+	content: string,
+	workspace: string,
+): Promise<DomainMessage> {
+	return {
+		type: "user_input",
+		content,
+		context: await gatherContext(workspace),
+		capabilities: null,
+		hint: USER_INPUT_HINT,
+	};
+}
+
 export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
 	options: CodeReplOptions = {},
@@ -174,13 +188,6 @@ export async function startCodeRepl(
 			);
 			writeln();
 			userInput = await prompt(`${label.user()} `);
-			history.push({
-				type: "user_input",
-				content: userInput,
-				context: await gatherContext(paths.workspace),
-				capabilities: null,
-				hint: USER_INPUT_HINT,
-			});
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : String(err ?? "未知错误");
@@ -191,13 +198,6 @@ export async function startCodeRepl(
 			history = [
 				{ type: "system", content: systemPrompt },
 				{ type: "system", content: buildWorkspaceContext(paths.workspace) },
-				{
-					type: "user_input",
-					content: userInput,
-					context: await gatherContext(paths.workspace),
-					capabilities: null,
-					hint: USER_INPUT_HINT,
-				},
 			];
 		}
 	} else {
@@ -205,13 +205,6 @@ export async function startCodeRepl(
 		history = [
 			{ type: "system", content: systemPrompt },
 			{ type: "system", content: buildWorkspaceContext(paths.workspace) },
-			{
-				type: "user_input",
-				content: userInput,
-				context: await gatherContext(paths.workspace),
-				capabilities: null,
-				hint: USER_INPUT_HINT,
-			},
 		];
 	}
 
@@ -238,6 +231,9 @@ export async function startCodeRepl(
 			continue;
 		}
 
+		// ── 将用户输入推入 history（在 log/exit 检测之后，确保指令不污染对话历史）──
+		history.push(await makeUserInput(userInput, paths.workspace));
+
 		abortController = new AbortController();
 		agentRunning = true;
 		let agentResult: Awaited<ReturnType<typeof agentLoop<CodeResult>>>;
@@ -258,13 +254,6 @@ export async function startCodeRepl(
 			writeln(style.gray(`  ${message}`));
 			writeln();
 			userInput = await prompt(`${label.user()} `);
-			history.push({
-				type: "user_input",
-				content: userInput,
-				context: await gatherContext(paths.workspace),
-				capabilities: null,
-				hint: USER_INPUT_HINT,
-			});
 			continue;
 		} finally {
 			agentRunning = false;
@@ -289,13 +278,6 @@ export async function startCodeRepl(
 		if (abortController.signal.aborted) {
 			writeln();
 			userInput = await prompt(`${label.user()} `);
-			history.push({
-				type: "user_input",
-				content: userInput,
-				context: await gatherContext(paths.workspace),
-				capabilities: null,
-				hint: USER_INPUT_HINT,
-			});
 			continue;
 		}
 
@@ -307,13 +289,6 @@ export async function startCodeRepl(
 			if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 			writeln();
 			userInput = await prompt(`${label.user()} `);
-			history.push({
-				type: "user_input",
-				content: userInput,
-				context: await gatherContext(paths.workspace),
-				capabilities: null,
-				hint: USER_INPUT_HINT,
-			});
 			continue;
 		}
 
@@ -339,13 +314,6 @@ export async function startCodeRepl(
 				}
 				writeln();
 				userInput = await prompt(`${label.user()} `);
-				history.push({
-					type: "user_input",
-					content: userInput,
-					context: await gatherContext(paths.workspace),
-					capabilities: null,
-					hint: USER_INPUT_HINT,
-				});
 				break;
 			}
 		}
