@@ -25,6 +25,8 @@ import type {
 	WriteToolCall,
 } from "@n0n/types";
 import type { ZodType } from "zod";
+import { jsonSchema, tool } from "ai";
+import type { ToolSet } from "ai";
 import type { ToolsConfig } from "./config.ts";
 import { EDIT_TOOL_DEFINITION, EditArgsSchema, editToolStream } from "./edit.ts";
 import { detectEnv } from "./env.ts";
@@ -136,8 +138,34 @@ function buildBaseRegistry(
 
 // ── Toolkit ──
 
+/**
+ * 将 LLMToolDefinition 注册表转换为 AI SDK ToolSet 格式。
+ *
+ * AI SDK streamText/generateText 期望 ToolSet = Record<string, { description, parameters }>，
+ * 而现有工具注册表使用 LLMToolDefinition (OpenAI function calling 格式)。
+ * 此函数做格式桥接，后续工具注册表迁移到 AI SDK tool() 后可移除。
+ *
+ * @deprecated 临时桥接 — 等工具注册表直接使用 AI SDK tool() 定义后删除
+ */
+function buildToolSet(
+	registry: Record<string, ToolEntry>,
+): ToolSet {
+	const toolSet: ToolSet = {};
+	for (const [name, entry] of Object.entries(registry)) {
+		const fn = entry.definition.function;
+		toolSet[name] = tool({
+			description: fn.description,
+			inputSchema: jsonSchema(fn.parameters as Parameters<typeof jsonSchema>[0]),
+		});
+	}
+	return toolSet;
+}
+
 export interface Toolkit {
+	/** @deprecated 旧格式工具定义，用于尚未迁移的消费方 */
 	definitions: LLMToolDefinition[];
+	/** AI SDK ToolSet 格式的工具定义，供 chatCompletionStream 使用 */
+	toolSet: ToolSet;
 	getEntry(name: string): ToolEntry | undefined;
 }
 
@@ -187,6 +215,7 @@ export async function makeToolkit(
 
 	return {
 		definitions: Object.values(registry).map((e) => e.definition),
+		toolSet: buildToolSet(registry),
 		getEntry: (name) => registry[name],
 	};
 }

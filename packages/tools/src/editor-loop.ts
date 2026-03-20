@@ -13,61 +13,52 @@
  */
 
 import type { LLMConfig } from "@n0n/llm";
-import { chatCompletionStream, StreamAccumulator } from "@n0n/llm";
-import type { LLMRequestMessage, LLMToolDefinition } from "@n0n/types";
+import {
+	chatCompletionStream,
+	createModelFromConfig,
+	StreamAccumulator,
+} from "@n0n/llm";
+import type { ModelMessage, ToolSet } from "ai";
+import { jsonSchema, tool } from "ai";
 import editorAgentPrompt from "./descriptions/editor-agent.md" with {
 	type: "text",
 };
 
-// ── Editor LLM 内部工具定义 ──
+// ── Editor LLM 内部工具定义（AI SDK ToolSet 格式） ──
 
-const STR_REPLACE_TOOL: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "str_replace",
+const EDITOR_TOOL_SET: ToolSet = {
+	str_replace: tool({
 		description:
 			"Replace an exact substring in the file. The old_string must match character-for-character (including whitespace). Use the minimal unique fragment needed to identify the location.",
-		parameters: {
+		inputSchema: jsonSchema({
 			type: "object",
 			properties: {
 				old_string: {
 					type: "string",
-					description:
-						"Exact substring to find in the current file content",
+					description: "Exact substring to find in the current file content",
 				},
 				new_string: {
 					type: "string",
-					description:
-						"Replacement text. Use empty string for deletions.",
+					description: "Replacement text. Use empty string for deletions.",
 				},
 			},
 			required: ["old_string", "new_string"],
 			additionalProperties: false,
-		},
-	},
-};
-
-const VIEW_FILE_TOOL: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "view_file",
+		}),
+	}),
+	view_file: tool({
 		description:
 			"View the current file content after previous edits. Use this to verify the file state before making further changes.",
-		parameters: {
+		inputSchema: jsonSchema({
 			type: "object",
 			properties: {},
 			additionalProperties: false,
-		},
-	},
-};
-
-const SUBMIT_TOOL: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "submit",
+		}),
+	}),
+	submit: tool({
 		description:
 			"Submit when all edits are complete. Optionally provide feedback on the caller's intent quality.",
-		parameters: {
+		inputSchema: jsonSchema({
 			type: "object",
 			properties: {
 				feedback: {
@@ -77,15 +68,9 @@ const SUBMIT_TOOL: LLMToolDefinition = {
 				},
 			},
 			additionalProperties: false,
-		},
-	},
+		}),
+	}),
 };
-
-const EDITOR_TOOLS: LLMToolDefinition[] = [
-	STR_REPLACE_TOOL,
-	VIEW_FILE_TOOL,
-	SUBMIT_TOOL,
-];
 
 /** Editor LLM 最大循环轮数 */
 const MAX_ROUNDS = 15;
@@ -165,8 +150,9 @@ export async function editorLoop(
 ): Promise<EditorLoopResult> {
 	let current = source;
 	let editCount = 0;
+	const model = createModelFromConfig(editorLlm);
 
-	const messages: LLMRequestMessage[] = [
+	const messages: ModelMessage[] = [
 		{ role: "system", content: editorAgentPrompt },
 		{
 			role: "user",
@@ -183,17 +169,17 @@ export async function editorLoop(
 	];
 
 	for (let round = 0; round < MAX_ROUNDS; round++) {
+		const acc = new StreamAccumulator();
 		let message: ReturnType<StreamAccumulator["toMessage"]>;
 		try {
-			const acc = new StreamAccumulator();
 			for await (const event of chatCompletionStream(
 				{
 					messages,
-					tools: EDITOR_TOOLS,
-					tool_choice: "required",
+					tools: EDITOR_TOOL_SET,
+					toolChoice: "required",
 					temperature: 0,
 				},
-				{ llm: editorLlm },
+				{ model },
 			)) {
 				acc.push(event);
 				onEvent?.(round, event);
@@ -208,7 +194,8 @@ export async function editorLoop(
 			};
 		}
 
-		if (!message.tool_calls?.length) {
+		if (!message.toolCalls.length) {
+			// 无工具调用 → 推一轮 assistant + user 提示
 			messages.push({
 				role: "assistant",
 				content: message.content ?? "",
@@ -221,26 +208,41 @@ export async function editorLoop(
 			continue;
 		}
 
+		// 构建 assistant 消息（包含 tool calls）
 		messages.push({
 			role: "assistant",
-			content: message.content,
-			tool_calls: message.tool_calls?.map((tc) => ({
-				id: tc.id,
-				type: tc.type,
-				function: tc.function,
-			})),
+			content: [
+				...(message.content
+					? [{ type: "text" as const, text: message.content }]
+					: []),
+				...message.toolCalls.map((tc) => ({
+					type: "tool-call" as const,
+					toolCallId: tc.toolCallId,
+					toolName: tc.toolName,
+					input: JSON.parse(tc.input),
+				})),
+			],
 		});
 
-		for (const tc of message.tool_calls) {
-			const name = tc.function.name;
+		for (const tc of message.toolCalls) {
+			const name = tc.toolName;
 			let args: Record<string, unknown>;
 			try {
-				args = JSON.parse(tc.function.arguments);
+				args = JSON.parse(tc.input);
 			} catch {
 				messages.push({
 					role: "tool",
-					tool_call_id: tc.id,
-					content: "Error: Failed to parse tool arguments as JSON.",
+					content: [
+						{
+							type: "tool-result" as const,
+							toolCallId: tc.toolCallId,
+							toolName: name,
+							output: {
+								type: "text" as const,
+								value: "Error: Failed to parse tool arguments as JSON.",
+							},
+						},
+					],
 				});
 				onToolResult?.(round, "parse error");
 				continue;
@@ -254,8 +256,17 @@ export async function editorLoop(
 					if (!oldStr) {
 						messages.push({
 							role: "tool",
-							tool_call_id: tc.id,
-							content: "Error: old_string cannot be empty.",
+							content: [
+								{
+									type: "tool-result" as const,
+									toolCallId: tc.toolCallId,
+									toolName: name,
+									output: {
+										type: "text" as const,
+										value: "Error: old_string cannot be empty.",
+									},
+								},
+							],
 						});
 						onToolResult?.(round, "str_replace → old_string empty");
 						break;
@@ -267,28 +278,40 @@ export async function editorLoop(
 						editCount++;
 						messages.push({
 							role: "tool",
-							tool_call_id: tc.id,
-							content: `OK: Replacement applied (edit #${editCount}).`,
+							content: [
+								{
+									type: "tool-result" as const,
+									toolCallId: tc.toolCallId,
+									toolName: name,
+									output: {
+										type: "text" as const,
+										value: `OK: Replacement applied (edit #${editCount}).`,
+									},
+								},
+							],
 						});
-						onToolResult?.(
-							round,
-							`str_replace → edit #${editCount}`,
-						);
+						onToolResult?.(round, `str_replace → edit #${editCount}`);
 					} else {
 						messages.push({
 							role: "tool",
-							tool_call_id: tc.id,
 							content: [
-								`Error: ${result.error}`,
-								"",
-								"Check whitespace, indentation, and character-for-character accuracy.",
-								"Call view_file to see the current file content.",
-							].join("\n"),
+								{
+									type: "tool-result" as const,
+									toolCallId: tc.toolCallId,
+									toolName: name,
+									output: {
+										type: "text" as const,
+										value: [
+											`Error: ${result.error}`,
+											"",
+											"Check whitespace, indentation, and character-for-character accuracy.",
+											"Call view_file to see the current file content.",
+										].join("\n"),
+									},
+								},
+							],
 						});
-						onToolResult?.(
-							round,
-							`str_replace → ${result.error}`,
-						);
+						onToolResult?.(round, `str_replace → ${result.error}`);
 					}
 					break;
 				}
@@ -296,8 +319,17 @@ export async function editorLoop(
 				case "view_file": {
 					messages.push({
 						role: "tool",
-						tool_call_id: tc.id,
-						content: `<source_file>\n${current}\n</source_file>`,
+						content: [
+							{
+								type: "tool-result" as const,
+								toolCallId: tc.toolCallId,
+								toolName: name,
+								output: {
+									type: "text" as const,
+									value: `<source_file>\n${current}\n</source_file>`,
+								},
+							},
+						],
 					});
 					onToolResult?.(round, "view_file → ok");
 					break;
@@ -305,8 +337,7 @@ export async function editorLoop(
 
 				case "submit": {
 					const feedback =
-						typeof args.feedback === "string" &&
-						args.feedback.length > 0
+						typeof args.feedback === "string" && args.feedback.length > 0
 							? args.feedback
 							: null;
 
@@ -322,8 +353,17 @@ export async function editorLoop(
 				default: {
 					messages.push({
 						role: "tool",
-						tool_call_id: tc.id,
-						content: `Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
+						content: [
+							{
+								type: "tool-result" as const,
+								toolCallId: tc.toolCallId,
+								toolName: name,
+								output: {
+									type: "text" as const,
+									value: `Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
+								},
+							},
+						],
 					});
 					onToolResult?.(round, `unknown tool: ${name}`);
 				}
