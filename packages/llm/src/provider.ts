@@ -18,7 +18,11 @@ import type { LLMConfig, ProviderConfig } from "./config.ts";
  * 但 litellm 需要 message-level cache_control 才能触发 Anthropic 的 prompt caching。
  *
  * 此函数创建一个 fetch wrapper，在请求发出前拦截 body，
- * 为 system message 和第一条 user message 注入 cache_control: { type: "ephemeral" }。
+ * 为 system message 和倒数第二条 user/tool message 注入 cache_control。
+ *
+ * 缓存断点策略与 adapter.ts 中的 injectAnthropicCacheBreakpoints 保持一致：
+ * 1. 最后一条 system message — 缓存稳定的 system prompt
+ * 2. 倒数第二条 non-assistant message — 缓存绝大部分对话历史
  */
 function createAnthropicCacheFetch(): typeof globalThis.fetch {
 	const baseFetch = globalThis.fetch;
@@ -32,17 +36,27 @@ function createAnthropicCacheFetch(): typeof globalThis.fetch {
 				// AI SDK openai provider 使用 "input"（Responses API）或 "messages"（Chat Completions API）
 				const msgArray = body.input ?? body.messages;
 				if (Array.isArray(msgArray)) {
-					let userCount = 0;
-					for (const msg of msgArray) {
-						if (msg.role === "system") {
-							msg.cache_control = { type: "ephemeral" };
-						} else if (msg.role === "user") {
-							userCount++;
-							if (userCount === 1) {
-								msg.cache_control = { type: "ephemeral" };
+					// 断点 1：最后一条 system message
+					for (let i = msgArray.length - 1; i >= 0; i--) {
+						if (msgArray[i].role === "system") {
+							msgArray[i].cache_control = { type: "ephemeral" };
+							break;
+						}
+					}
+
+					// 断点 2：倒数第二条 non-assistant message（user 或 tool）
+					let nonAssistantCount = 0;
+					for (let i = msgArray.length - 1; i >= 0; i--) {
+						const role = msgArray[i].role;
+						if (role === "user" || role === "tool") {
+							nonAssistantCount++;
+							if (nonAssistantCount >= 2) {
+								msgArray[i].cache_control = { type: "ephemeral" };
+								break;
 							}
 						}
 					}
+
 					init = { ...init, body: JSON.stringify(body) };
 				}
 			} catch {
