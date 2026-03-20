@@ -122,16 +122,20 @@ export async function* chatCompletionStream(
 
 // ── StreamAccumulator — 累积流式事件为完整消息 ──
 
+/** 流式累积后的单个 tool call — SSOT 类型，tool.ts 中的 parseToolCalls 也使用此类型 */
+export interface AssistantToolCallPart {
+	toolCallId: string;
+	toolName: string;
+	/** JSON 字符串形式的参数 */
+	input: string;
+}
+
 /** AI SDK 格式的 assistant 消息 */
 export interface AssistantMessage {
 	role: "assistant";
 	content: string | null;
 	reasoningText: string | null;
-	toolCalls: Array<{
-		toolCallId: string;
-		toolName: string;
-		input: string;
-	}>;
+	toolCalls: AssistantToolCallPart[];
 }
 
 export class StreamAccumulator {

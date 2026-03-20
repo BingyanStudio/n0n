@@ -2,6 +2,7 @@
  * 工具调用解析与执行 — agentLoop 的工具层
  */
 
+import type { AssistantToolCallPart } from "@n0n/llm";
 import {
 	type PendingReminder,
 	REGISTERED_TOOLS,
@@ -18,16 +19,6 @@ import { ZodError } from "zod";
 /** 工具查找函数类型 — 由 Toolkit 提供 */
 export type GetToolEntry = (name: string) => ToolEntry | undefined;
 
-// ── AI SDK tool call 格式 ──
-
-/** AI SDK StreamAccumulator 输出的 tool call 格式 */
-export interface StreamToolCall {
-	toolCallId: string;
-	toolName: string;
-	/** JSON 字符串形式的参数 */
-	input: string;
-}
-
 // ── 解析 ──
 
 /**
@@ -36,7 +27,7 @@ export interface StreamToolCall {
  * 直接接受 AI SDK 格式 { toolCallId, toolName, input }，
  * 解析阶段只做 JSON.parse，参数结构由执行阶段的 Zod schema 校验。
  */
-export function parseToolCalls(raw: StreamToolCall[]): ToolCallRecord[] {
+export function parseToolCalls(raw: AssistantToolCallPart[]): ToolCallRecord[] {
 	return raw.map((tc) => {
 		let args: Record<string, unknown>;
 		try {
