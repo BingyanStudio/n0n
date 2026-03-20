@@ -4,13 +4,26 @@
  * 最小化实现，用于非交互场景（delegateTask、workflow 等）。
  */
 
-import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
+import type {
+	Renderer,
+	RoundTokenUsage,
+	ToolCallRecord,
+	ToolResult,
+} from "@n0n/types";
 
 export class PlainRenderer implements Renderer {
 	userMessage(_content: string): void {}
 
-	roundStart(round: number, maxRounds: number, msgCount: number): void {
-		console.error(`  [agent] round ${round}/${maxRounds} (${msgCount} msgs)`);
+	roundStart(
+		round: number,
+		maxRounds: number,
+		msgCount: number,
+		lastUsage?: RoundTokenUsage | null,
+	): void {
+		const usagePart = lastUsage ? ` | ${lastUsage.totalTokens} tok` : "";
+		console.error(
+			`  [agent] round ${round}/${maxRounds} (${msgCount} msgs${usagePart})`,
+		);
 	}
 
 	thinkingToken(_token: string): void {}

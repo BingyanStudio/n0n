@@ -41,7 +41,12 @@ export class TuiRenderer implements Renderer {
 		this.updateState((s) => stateUpdaters.userMessage(s, content));
 	}
 
-	roundStart(round: number, maxRounds: number, msgCount: number): void {
+	roundStart(
+		round: number,
+		maxRounds: number,
+		msgCount: number,
+		_lastUsage?: import("@n0n/types").RoundTokenUsage | null,
+	): void {
 		this.updateState((s) =>
 			stateUpdaters.roundStart(s, round, maxRounds, msgCount),
 		);
