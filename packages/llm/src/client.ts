@@ -9,8 +9,6 @@
 
 import { generateText } from "ai";
 import type { LanguageModel, ModelMessage } from "ai";
-import type { LLMConfig } from "./config.ts";
-import { createModelFromConfig } from "./provider.ts";
 
 export class LLMError extends Error {
 	constructor(
@@ -49,18 +47,12 @@ export interface ChatCompletionResult {
 /**
  * 发送非流式 chat completion 请求
  *
- * 运行时依赖注入：
- * - 传入 LanguageModel 实例（推荐，由外部 DI 构造）
- * - 或传入 LLMConfig 内部构造（向后兼容）
+ * 接受 LanguageModel 实例，由外部 DI 构造。
  */
 export async function chatCompletion(
 	request: ChatCompletionRequest,
-	modelOrConfig: LanguageModel | LLMConfig,
+	model: LanguageModel,
 ): Promise<ChatCompletionResult> {
-	const model =
-		typeof modelOrConfig === "object" && "providerConfig" in modelOrConfig
-			? createModelFromConfig(modelOrConfig)
-			: (modelOrConfig as LanguageModel);
 
 	try {
 		const result = await generateText({

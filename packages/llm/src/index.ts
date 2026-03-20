@@ -16,6 +16,7 @@ export type { ChatCompletionRequest, ChatCompletionResult } from "./client.ts";
 export { chatCompletionStream, StreamAccumulator } from "./stream.ts";
 export type {
 	StreamEvent,
+	StreamOptions,
 	StreamRequest,
 	AssistantMessage,
 	AssistantToolCallPart,
