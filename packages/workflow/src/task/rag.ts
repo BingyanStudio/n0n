@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { getRuntime } from "@n0n/core";
 import { chatCompletion } from "@n0n/llm";
-import type { LLMRequestMessage } from "@n0n/types";
+import type { ModelMessage } from "ai";
 import { Glob } from "bun";
 import type { RagHit, RagSearchResult, SearchSpace } from "../types.ts";
 import type { WorkflowPaths } from "../workspace.ts";
@@ -106,7 +106,7 @@ export async function ragSearch(
 		.map((c, i) => `[${i}] ${c.source}\n${c.summary}`)
 		.join("\n---\n");
 
-	const messages: LLMRequestMessage[] = [
+	const messages: ModelMessage[] = [
 		{
 			role: "system",
 			content: [
@@ -137,7 +137,7 @@ export async function ragSearch(
 			getRuntime().llm,
 		);
 
-		const text = response.choices[0]?.message?.content?.trim() ?? "[]";
+		const text = response.text?.trim() ?? "[]";
 		const selections = parseSelections(text);
 
 		const results: RagHit[] = [];
