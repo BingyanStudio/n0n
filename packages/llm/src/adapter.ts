@@ -282,7 +282,35 @@ export function toAPIMessages(
 		}
 	}
 
-	return result;
+	// 合并连续的 system 消息 — 部分模型（如 minimax）不支持多个 system 消息，
+	// AI SDK 不会自动合并。合并对支持多 system 的模型无害（语义等价）。
+	return mergeConsecutiveSystem(result);
+}
+
+/** 合并连续的 system 消息为单条（保留最后一条的 providerOptions） */
+function mergeConsecutiveSystem(messages: ModelMessage[]): ModelMessage[] {
+	const merged: ModelMessage[] = [];
+	for (const msg of messages) {
+		const prev = merged[merged.length - 1];
+		if (
+			msg.role === "system" &&
+			prev?.role === "system" &&
+			typeof msg.content === "string" &&
+			typeof prev.content === "string"
+		) {
+			// 合并内容，保留后者的 providerOptions（如 cache_control）
+			merged[merged.length - 1] = {
+				...prev,
+				content: `${prev.content}\n\n${msg.content}`,
+				...("providerOptions" in msg && msg.providerOptions
+					? { providerOptions: msg.providerOptions }
+					: {}),
+			};
+		} else {
+			merged.push(msg);
+		}
+	}
+	return merged;
 }
 
 /** 构建 user_input 消息内容 */
