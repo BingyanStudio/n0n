@@ -73,7 +73,7 @@ describe("applyOps", () => {
 		const result = applyOps(source, ops);
 		expect(result.applied).toBe(0);
 		expect(result.errors).toHaveLength(1);
-		expect(result.errors[0]).toContain("multiple");
+		expect(result.errors[0]).toContain("actual matches: 2");
 	});
 
 	test("部分操作失败不影响其他操作", () => {
