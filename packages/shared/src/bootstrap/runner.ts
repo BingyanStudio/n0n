@@ -119,7 +119,8 @@ export async function bootstrap(
 	// ── Step 1: .env 文件 ──
 
 	if (existsSync(envPath)) {
-		loadEnvFile(envPath);
+		// override: true — 全局配置（~/.n0n/.env）优先于 Bun 自动加载的项目根 .env
+		loadEnvFile(envPath, { override: true });
 		ui.success(`.env 已加载 (${envPath})`);
 	} else {
 		ui.warn("未找到 .env 文件");

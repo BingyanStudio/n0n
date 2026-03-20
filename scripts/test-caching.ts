@@ -8,8 +8,13 @@
  * 用法: bun run scripts/test-caching.ts
  */
 
-const BASE_URL = "https://your-ai-gateway.example.com";
-const API_KEY = "$LLM_API_KEY";
+const BASE_URL = process.env.LLM_BASE_URL ?? "https://your-ai-gateway.example.com";
+const API_KEY = process.env.LLM_API_KEY ?? "";
+
+if (!API_KEY) {
+	console.error("请设置 LLM_API_KEY 环境变量");
+	process.exit(1);
+}
 
 // 生成一个足够长的 system prompt（> 1024 tokens）以触发缓存
 const LONG_SYSTEM_PROMPT = [
