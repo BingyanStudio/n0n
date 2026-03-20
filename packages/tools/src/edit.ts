@@ -16,13 +16,13 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type { LLMConfig } from "@n0n/llm";
+import { jsonSchema, tool } from "ai";
 import type {
 	DiffChunk,
 	DiffLine,
 	EditDiff,
 	EditToolCall,
 	EditToolResult,
-	LLMToolDefinition,
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
@@ -34,29 +34,18 @@ export { editorLoop } from "./editor-loop.ts";
 
 // ── 主模型工具定义（intent 驱动） ──
 
-export const EDIT_TOOL_DEFINITION: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "edit",
-		description: editDescription,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: "File path relative to project root",
-				},
-				intent: {
-					type: "string",
-					description:
-						"Edit intent in free-form text: natural language description, code snippets, or a mix of both. Describe what to change and where.",
-				},
-			},
-			required: ["path", "intent"],
-			additionalProperties: false,
+export const EDIT_TOOL_DEFINITION = tool({
+	description: editDescription,
+	inputSchema: jsonSchema({
+		type: "object",
+		properties: {
+			path: { type: "string", description: "File path relative to project root" },
+			intent: { type: "string", description: "Edit intent in free-form text: natural language description, code snippets, or a mix of both. Describe what to change and where." },
 		},
-	},
-};
+		required: ["path", "intent"],
+		additionalProperties: false,
+	}),
+});
 
 // ── Types ──
 

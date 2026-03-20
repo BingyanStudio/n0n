@@ -18,10 +18,11 @@
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { wrapTagFor } from "@n0n/shared";
+import { tool, jsonSchema } from "ai";
+import type { Tool } from "ai";
 import type {
 	ExecToolCall,
 	ExecToolResult,
-	LLMToolDefinition,
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
@@ -282,42 +283,36 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 export function makeExecToolDefinition(
 	env: EnvSnapshot,
 	model = "",
-): LLMToolDefinition {
+): Tool {
 	const available = env.runtimes.filter((r) => r.available);
 	const runtimeList = available.map((r) => r.name).join(", ");
 
-	return {
-		type: "function",
-		function: {
-			name: "exec",
-			description: buildDescription(env, model),
-			parameters: {
-				type: "object",
-				properties: {
-					script: {
-						type: "string",
-						description:
-							"Script content. Single command or multi-line code with imports, loops, etc.",
-					},
-					runtime: {
-						type: "string",
-						description: `Runtime (default: "${DEFAULT_RUNTIME}"). Available: ${runtimeList}.`,
-					},
-					cwd: {
-						type: "string",
-						description: "Working directory (default: injected workspace root)",
-					},
-					timeout: {
-						type: "number",
-						description:
-							"Timeout in seconds (default: 120). Process continues in background if exceeded.",
-					},
+	return tool({
+		description: buildDescription(env, model),
+		inputSchema: jsonSchema({
+			type: "object",
+			properties: {
+				script: {
+					type: "string",
+					description: "Script content. Single command or multi-line code with imports, loops, etc.",
 				},
-				required: ["script"],
-				additionalProperties: false,
+				runtime: {
+					type: "string",
+					description: `Runtime (default: "${DEFAULT_RUNTIME}"). Available: ${runtimeList}.`,
+				},
+				cwd: {
+					type: "string",
+					description: "Working directory (default: injected workspace root)",
+				},
+				timeout: {
+					type: "number",
+					description: "Timeout in seconds (default: 120). Process continues in background if exceeded.",
+				},
 			},
-		},
-	};
+			required: ["script"],
+			additionalProperties: false,
+		}),
+	});
 }
 function extractCommandNames(script: string): string[] {
 	const parts = script.split(/\r?\n|&&|\|\||;|\||&/);

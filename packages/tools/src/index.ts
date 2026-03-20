@@ -8,14 +8,13 @@
  * - reminder: 延迟提醒
  * - submit: 提交结果（动态生成）
  *
- * 每个工具在此绑定：LLM 定义 + 执行器。
+ * 每个工具通过 AI SDK tool() 定义 + 自定义执行器绑定。
  * 工具参数通过 Zod schema 做运行时校验。
  */
 
 import type {
 	EditToolCall,
 	ExecToolCall,
-	LLMToolDefinition,
 	ReminderToolCall,
 	SubmitArgs,
 	SubmitToolCall,
@@ -25,8 +24,7 @@ import type {
 	WriteToolCall,
 } from "@n0n/types";
 import type { ZodType } from "zod";
-import { jsonSchema, tool } from "ai";
-import type { ToolSet } from "ai";
+import type { Tool, ToolSet } from "ai";
 import type { ToolsConfig } from "./config.ts";
 import { EDIT_TOOL_DEFINITION, EditArgsSchema, editToolStream } from "./edit.ts";
 import { detectEnv } from "./env.ts";
@@ -63,8 +61,8 @@ type SyncExecutor = (
 ) => Promise<ToolResult> | ToolResult;
 
 export type ToolEntry =
-	| { definition: LLMToolDefinition; stream: true; execute: StreamExecutor }
-	| { definition: LLMToolDefinition; stream: false; execute: SyncExecutor };
+	| { definition: Tool; stream: true; execute: StreamExecutor }
+	| { definition: Tool; stream: false; execute: SyncExecutor };
 
 // ── 基础注册表构建 ──
 
@@ -73,7 +71,7 @@ export type ToolEntry =
  * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir/editorLlm）。
  */
 function buildBaseRegistry(
-	execToolDef: LLMToolDefinition,
+	execToolDef: Tool,
 	toolsConfig: ToolsConfig,
 ): Record<string, ToolEntry> {
 	const resolvedWorkspace = toolsConfig.workspace;
@@ -138,33 +136,8 @@ function buildBaseRegistry(
 
 // ── Toolkit ──
 
-/**
- * 将 LLMToolDefinition 注册表转换为 AI SDK ToolSet 格式。
- *
- * AI SDK streamText/generateText 期望 ToolSet = Record<string, { description, parameters }>，
- * 而现有工具注册表使用 LLMToolDefinition (OpenAI function calling 格式)。
- * 此函数做格式桥接，后续工具注册表迁移到 AI SDK tool() 后可移除。
- *
- * @deprecated 临时桥接 — 等工具注册表直接使用 AI SDK tool() 定义后删除
- */
-function buildToolSet(
-	registry: Record<string, ToolEntry>,
-): ToolSet {
-	const toolSet: ToolSet = {};
-	for (const [name, entry] of Object.entries(registry)) {
-		const fn = entry.definition.function;
-		toolSet[name] = tool({
-			description: fn.description,
-			inputSchema: jsonSchema(fn.parameters as Parameters<typeof jsonSchema>[0]),
-		});
-	}
-	return toolSet;
-}
-
 export interface Toolkit {
-	/** @deprecated 旧格式工具定义，用于尚未迁移的消费方 */
-	definitions: LLMToolDefinition[];
-	/** AI SDK ToolSet 格式的工具定义，供 chatCompletionStream 使用 */
+	/** AI SDK ToolSet — 供 streamText/generateText 使用 */
 	toolSet: ToolSet;
 	getEntry(name: string): ToolEntry | undefined;
 }
@@ -213,9 +186,14 @@ export async function makeToolkit(
 		submit: submitEntry,
 	};
 
+	// 直接从注册表构建 ToolSet — 每个 entry.definition 已经是 AI SDK Tool
+	const toolSet: ToolSet = {};
+	for (const [name, entry] of Object.entries(registry)) {
+		toolSet[name] = entry.definition;
+	}
+
 	return {
-		definitions: Object.values(registry).map((e) => e.definition),
-		toolSet: buildToolSet(registry),
+		toolSet,
 		getEntry: (name) => registry[name],
 	};
 }

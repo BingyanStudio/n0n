@@ -7,52 +7,45 @@
  * - agent 必须用 <reflection> 标签输出反思结论
  */
 
-import type {
-	LLMToolDefinition,
-	ReminderToolCall,
-	ReminderToolResult,
-} from "@n0n/types";
+import { tool, jsonSchema } from "ai";
+import type { ReminderToolCall, ReminderToolResult } from "@n0n/types";
 
 export { ReminderArgsSchema } from "@n0n/types";
 
-export const REMINDER_TOOL_DEFINITION: LLMToolDefinition = {
-	type: "function",
-	function: {
-		name: "reminder",
-		description: [
-			"Set a memo/reminder for yourself (overwrites any previous — only one active at a time).",
-			"The content will appear as `<reminder>` tag in a future user message after the specified delay (rounds).",
-			"",
-			"**delay is a commitment** — you are promising to complete the current phase within N rounds.",
-			"If the reminder fires (delay expires), it means your commitment was not met.",
-			"You MUST then output a `<reflection>` block analyzing why, before setting the next reminder.",
-			"",
-			"Usage: After breaking down the task, create a reminder summarizing:",
-			"  1. The overall Objective",
-			"  2. Key Results (checklist of what remains)",
-			"  3. Current progress and next step",
-			"",
-			"Prefer conservative estimates — overdelivering early is better than breaking a commitment.",
-		].join("\n"),
-		parameters: {
-			type: "object",
-			properties: {
-				content: {
-					type: "string",
-					description:
-						"Reminder content: include OKR summary, progress status, and next steps",
-				},
-				delay: {
-					type: "number",
-					description:
-						"Number of rounds you commit to for the current phase (default: 7). This is a promise, not a guess.",
-				},
+export const REMINDER_TOOL_DEFINITION = tool({
+	description: [
+		"Set a memo/reminder for yourself (overwrites any previous — only one active at a time).",
+		"The content will appear as `<reminder>` tag in a future user message after the specified delay (rounds).",
+		"",
+		"**delay is a commitment** — you are promising to complete the current phase within N rounds.",
+		"If the reminder fires (delay expires), it means your commitment was not met.",
+		"You MUST then output a `<reflection>` block analyzing why, before setting the next reminder.",
+		"",
+		"Usage: After breaking down the task, create a reminder summarizing:",
+		"  1. The overall Objective",
+		"  2. Key Results (checklist of what remains)",
+		"  3. Current progress and next step",
+		"",
+		"Prefer conservative estimates — overdelivering early is better than breaking a commitment.",
+	].join("\n"),
+	inputSchema: jsonSchema({
+		type: "object",
+		properties: {
+			content: {
+				type: "string",
+				description:
+					"Reminder content: include OKR summary, progress status, and next steps",
 			},
-			required: ["content"],
-			additionalProperties: false,
+			delay: {
+				type: "number",
+				description:
+					"Number of rounds you commit to for the current phase (default: 7). This is a promise, not a guess.",
+			},
 		},
-	},
-};
+		required: ["content"],
+		additionalProperties: false,
+	}),
+});
 
 export interface PendingReminder {
 	content: string;
