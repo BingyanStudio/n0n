@@ -115,13 +115,14 @@ function anthropicCacheControl(): {
 /**
  * 为 Anthropic 消息列表注入缓存断点（后置处理）。
  *
- * 策略：在 system prompt 和「倒数第二条 user/tool 消息」上设置 cache_control。
- * 这样每轮对话只有最新一条 user/tool 消息不在缓存中，
- * 历史部分全部命中缓存，实现 ~90%+ 的 cache hit rate。
- *
- * Anthropic 最多支持 4 个缓存断点（ephemeral），这里最多使用 2 个：
+ * Anthropic 最多支持 4 个缓存断点（ephemeral），采用激进策略全部用满：
  * 1. 最后一条 system 消息 — 缓存稳定的 system prompt
- * 2. 倒数第二条 non-assistant 消息 — 缓存绝大部分对话历史
+ * 2. 倒数第四条 non-assistant 消息 — 较早历史的兜底缓存
+ * 3. 倒数第三条 non-assistant 消息 — 中段历史缓存
+ * 4. 倒数第二条 non-assistant 消息 — 最近历史缓存
+ *
+ * 梯度兜底：即使对话快速增长导致某个断点失效，后续断点仍能命中，
+ * 最大化 cache hit rate。最新一条 non-assistant 消息始终不缓存（刚发出，下轮才有价值）。
  */
 function injectAnthropicCacheBreakpoints(messages: ModelMessage[]): void {
 	// 断点 1：最后一条 system 消息
@@ -133,20 +134,20 @@ function injectAnthropicCacheBreakpoints(messages: ModelMessage[]): void {
 		}
 	}
 
-	// 断点 2：倒数第二条 non-assistant 消息（user 或 tool）
-	// 找到最后两条 non-assistant 消息，在倒数第二条上设断点
+	// 断点 2-4：倒数第四、第三、第二条 non-assistant 消息（梯度兜底）
+	// 收集从末尾开始的 non-assistant 消息索引
 	const nonAssistantIndices: number[] = [];
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const role = messages[i]!.role;
 		if (role === "user" || role === "tool") {
 			nonAssistantIndices.push(i);
-			if (nonAssistantIndices.length >= 2) break;
+			if (nonAssistantIndices.length >= 4) break;
 		}
 	}
 
-	// 如果有至少 2 条 non-assistant 消息，在倒数第二条上设断点
-	if (nonAssistantIndices.length >= 2) {
-		const targetIdx = nonAssistantIndices[1]!;
+	// 跳过最新一条（index 0），在倒数第二、第三、第四条上设断点
+	for (let k = 1; k < nonAssistantIndices.length; k++) {
+		const targetIdx = nonAssistantIndices[k]!;
 		(messages[targetIdx] as Record<string, unknown>).providerOptions =
 			anthropicCacheControl();
 	}
