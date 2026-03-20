@@ -19,6 +19,9 @@ import {
 import { resolve } from "node:path";
 import type {
 	BootstrapResult,
+	ConfigEntry,
+	ConfigGroup,
+	ConfigSource,
 	EnvSpec,
 	EnvVarDef,
 	SetupRenderer,
@@ -30,9 +33,6 @@ import {
 } from "@n0n/llm";
 import { generateText } from "ai";
 import { generateEnvTemplate } from "./template.ts";
-
-/** 配置项来源标记 */
-type ConfigSource = "project" | "global" | "env" | "default" | "inherit";
 
 /** 从 EnvSpec 提取所有变量（扁平化） */
 function allVars(spec: EnvSpec): EnvVarDef[] {
@@ -90,18 +90,13 @@ function resolveConfigSources(
 	spec: EnvSpec,
 	projectEnv: Record<string, string>,
 	globalEnv: Record<string, string>,
-): Array<{
-	key: string;
-	value: string;
-	source: ConfigSource;
-	overridden?: { value: string; source: ConfigSource };
-}> {
-	const result: Array<{
-		key: string;
-		value: string;
-		source: ConfigSource;
-		overridden?: { value: string; source: ConfigSource };
-	}> = [];
+): ConfigEntry[] {
+	const secretKeys = new Set(
+		allVars(spec)
+			.filter((v) => v.secret)
+			.map((v) => v.key),
+	);
+	const result: ConfigEntry[] = [];
 
 	for (const v of allVars(spec)) {
 		const finalValue =
@@ -138,7 +133,13 @@ function resolveConfigSources(
 			source = "env";
 		}
 
-		result.push({ key: v.key, value: finalValue, source, overridden });
+		result.push({
+			key: v.key,
+			value: finalValue,
+			source,
+			secret: secretKeys.has(v.key),
+			overridden,
+		});
 	}
 
 	return result;
@@ -306,14 +307,28 @@ export async function bootstrap(
 
 	// ── Step 2.5: 配置摘要 ──
 
-	const configSources = resolveConfigSources(spec, projectEnv, globalEnv);
-	const overrides = configSources.filter((c) => c.overridden);
-	if (overrides.length > 0) {
-		ui.warn(
-			`${overrides.length} 项配置被项目 .env 覆盖：\n${overrides.map((c) => `  ${c.key}: ${c.overridden?.value} → ${c.value}`).join("\n")}`,
-		);
+	const configEntries = resolveConfigSources(spec, projectEnv, globalEnv);
+	const overrides = configEntries.filter((c) => c.overridden);
+
+	// 按 EnvSpec 分组
+	const configGroups: ConfigGroup[] = spec.groups.map((g) => ({
+		title: g.title,
+		entries: configEntries.filter((e) =>
+			g.vars.some((v) => v.key === e.key),
+		),
+	})).filter((g) => g.entries.length > 0);
+
+	if (ui.configTable) {
+		ui.configTable(configGroups, overrides);
+	} else {
+		// fallback: 纯文本输出
+		if (overrides.length > 0) {
+			ui.warn(
+				`${overrides.length} 项配置被项目 .env 覆盖：\n${overrides.map((c) => `  ${c.key}: ${c.overridden?.value} → ${c.value}`).join("\n")}`,
+			);
+		}
+		ui.info(`当前配置:\n${formatConfigSummary(configEntries, spec)}`);
 	}
-	ui.info(`当前配置:\n${formatConfigSummary(configSources, spec)}`);
 
 	ui.success("配置检查通过");
 

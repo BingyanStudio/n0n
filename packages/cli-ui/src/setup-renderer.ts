@@ -9,7 +9,7 @@
  */
 
 import { createInterface, type Interface } from "node:readline";
-import type { SetupOption, SetupRenderer } from "@n0n/types";
+import type { SetupOption, SetupRenderer, ConfigGroup, ConfigEntry } from "@n0n/types";
 import { style, writeln } from "./ansi.ts";
 
 export class CliSetupRenderer implements SetupRenderer {
@@ -127,6 +127,79 @@ export class CliSetupRenderer implements SetupRenderer {
 				else resolve(a === "y" || a === "yes");
 			});
 		});
+	}
+
+	// ── 配置摘要 ──
+
+	configTable(groups: ConfigGroup[], overrides: ConfigEntry[]): void {
+		// 覆盖警告
+		if (overrides.length > 0) {
+			writeln(
+				`${style.yellow("⚠")} ${style.yellow(`${overrides.length} 项配置被项目 .env 覆盖:`)}`,
+			);
+			for (const o of overrides) {
+				const from = this.maskIfSecret(o.overridden?.value ?? "", o.secret);
+				const to = this.maskIfSecret(o.value, o.secret);
+				writeln(
+					`  ${style.dim("•")} ${style.bold(o.key)}: ${style.dim(from)} ${style.yellow("→")} ${to}`,
+				);
+			}
+			writeln();
+		}
+
+		// 分组配置表格
+		writeln(`${style.cyan("ℹ")} ${style.bold("当前配置:")}`);
+		for (const group of groups) {
+			writeln(`  ${style.dim("──")} ${style.cyan(group.title)} ${style.dim("──")}`);
+			for (const e of group.entries) {
+				const val = this.maskIfSecret(e.value, e.secret);
+				const src = this.sourceTag(e.source);
+				let line = `    ${style.white(e.key)} ${style.dim("=")} ${val}  ${src}`;
+				if (e.overridden) {
+					const overVal = this.maskIfSecret(
+						e.overridden.value,
+						e.secret,
+					);
+					line += `  ${style.dim("←")} ${style.dim(`覆盖了${this.sourceLabel(e.overridden.source)}值`)} ${style.dim(overVal)}`;
+				}
+				writeln(line);
+			}
+		}
+		writeln();
+	}
+
+	private maskIfSecret(value: string, secret?: boolean): string {
+		if (!secret || !value) return value;
+		if (value.length <= 8) return "****";
+		return `${value.slice(0, 4)}${style.dim("…")}${value.slice(-4)}`;
+	}
+
+	private sourceTag(source: string): string {
+		switch (source) {
+			case "project":
+				return style.green("[项目]");
+			case "global":
+				return style.cyan("[全局]");
+			case "inherit":
+				return style.dim("[继承]");
+			case "default":
+				return style.dim("[默认]");
+			case "env":
+				return style.yellow("[环境变量]");
+			default:
+				return style.dim(`[${source}]`);
+		}
+	}
+
+	private sourceLabel(source: string): string {
+		switch (source) {
+			case "project":
+				return "项目";
+			case "global":
+				return "全局";
+			default:
+				return source;
+		}
 	}
 
 	// ── 资源清理 ──
