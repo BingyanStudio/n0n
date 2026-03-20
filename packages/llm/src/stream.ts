@@ -22,7 +22,8 @@ export type StreamEvent =
 	| { type: "content"; text: string }
 	| {
 			type: "tool_call_delta";
-			index: string;
+			/** 工具调用的顺序索引（从 0 开始），兼容 Renderer.toolCallArgChunk */
+			index: number;
 			id: string | undefined;
 			name: string | undefined;
 			arguments: string;
@@ -69,6 +70,19 @@ export async function* chatCompletionStream(
 		maxRetries: 3,
 	});
 
+	/** id → 顺序 index 映射，兼容 Renderer.toolCallArgChunk(index: number) */
+	const idToIndex = new Map<string, number>();
+	let nextIndex = 0;
+
+	function resolveIndex(id: string): number {
+		let idx = idToIndex.get(id);
+		if (idx === undefined) {
+			idx = nextIndex++;
+			idToIndex.set(id, idx);
+		}
+		return idx;
+	}
+
 	for await (const part of result.fullStream) {
 		switch (part.type) {
 			case "reasoning-delta":
@@ -82,7 +96,7 @@ export async function* chatCompletionStream(
 			case "tool-input-start":
 				yield {
 					type: "tool_call_delta",
-					index: part.id,
+					index: resolveIndex(part.id),
 					id: part.id,
 					name: part.toolName,
 					arguments: "",
@@ -92,7 +106,7 @@ export async function* chatCompletionStream(
 			case "tool-input-delta":
 				yield {
 					type: "tool_call_delta",
-					index: part.id,
+					index: resolveIndex(part.id),
 					id: undefined,
 					name: undefined,
 					arguments: part.delta,
@@ -124,7 +138,7 @@ export class StreamAccumulator {
 	content = "";
 	reasoning = "";
 	toolCalls = new Map<
-		string,
+		number,
 		{ toolCallId: string; toolName: string; input: string }
 	>();
 	finishReason: string | null = null;
