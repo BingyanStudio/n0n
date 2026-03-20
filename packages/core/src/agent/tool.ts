@@ -92,7 +92,6 @@ export async function* executeToolStream(
 				error: err.issues
 					.map((i) => `${i.path.join(".")}: ${i.message}`)
 					.join("; "),
-				schema: {},
 			};
 			yield argError;
 			return;
