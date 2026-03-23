@@ -13,38 +13,49 @@
  *
  * Anthropic 最多支持 4 个缓存断点（ephemeral），激进策略全部用满：
  * 1. 最后一条 system 消息 — 缓存稳定的 system prompt
- * 2. 倒数第三条 non-assistant 消息 — 较早历史兜底
- * 3. 倒数第二条 non-assistant 消息 — 中段历史缓存
- * 4. 最后一条 non-assistant 消息 — 最新历史缓存
+ * 2. 倒数第二个 user 消息 — **交错思考下的稳定缓存边界**
+ *    （新 user 消息插入后，服务端会清空其与上一个 user 之间的 thinking content，
+ *    导致 token 分布剧变。在上一个 user 处设 anchor，确保 S..prev_user 前缀仍可命中缓存）
+ * 3-4. 从末尾向前补满剩余 non-assistant 消息 — 最新历史缓存
  *
- * 激进策略：不跳过最后一条 non-assistant 消息，下一轮调用时它已是历史的一部分，
- * 提前标记可以让缓存在下一轮立即命中。
+ * 当只有 1 个 user 消息时（无 reminder），断点 2 不存在，
+ * 退化为 system + 最后 3 条 non-assistant（与旧策略等价）。
  */
 export function selectCacheBreakpoints(
 	messages: readonly { role: string }[],
 ): number[] {
-	const breakpoints: number[] = [];
+	const selected = new Set<number>();
 
 	// 断点 1：最后一条 system 消息
 	for (let i = messages.length - 1; i >= 0; i--) {
 		if (messages[i]?.role === "system") {
-			breakpoints.push(i);
+			selected.add(i);
 			break;
 		}
 	}
 
-	// 断点 2-4：最后三条 non-assistant 消息
-	let count = 0;
+	// 断点 2：倒数第二个 user 消息（thinking 清空后的稳定缓存边界）
+	let userCount = 0;
 	for (let i = messages.length - 1; i >= 0; i--) {
-		const role = messages[i]?.role;
-		if (role === "user" || role === "tool") {
-			breakpoints.push(i);
-			count++;
-			if (count >= 3) break;
+		if (messages[i]?.role === "user") {
+			userCount++;
+			if (userCount === 2) {
+				selected.add(i);
+				break;
+			}
 		}
 	}
 
-	return breakpoints;
+	// 断点 3-4（补满到 4 个）：从末尾向前取 non-assistant 消息，跳过已选中的
+	for (let i = messages.length - 1; i >= 0 && selected.size < 4; i--) {
+		if (selected.has(i)) continue;
+		const role = messages[i]?.role;
+		if (role === "user" || role === "tool") {
+			selected.add(i);
+		}
+	}
+
+	return [...selected];
 }
 
 /**

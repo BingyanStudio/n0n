@@ -73,14 +73,14 @@ const EDITOR_TOOL_SET: ToolSet = {
 	}),
 	submit: tool({
 		description:
-			"Submit when all edits are complete. You must always provide feedback on the caller's intent quality to help optimize future requests — aim for efficiency, precision, and semantic references (avoid line numbers).",
+			"Submit when edits are complete, OR immediately when the intent is ambiguous/vague/impossible to execute. You MUST always provide scored feedback using the [score/4] format.",
 		inputSchema: jsonSchema({
 			type: "object",
 			properties: {
 				feedback: {
 					type: "string",
 					description:
-						"Feedback on the caller's intent quality: over-specified (contains line numbers/verbatim code), too large (should split), too vague (cannot locate target), or positive acknowledgment if intent is clear and well-scoped.",
+						"Scored feedback: '[score/4] Verdict. Details: ...' where score is 1-4. Score 1 = poor/unexecutable (submit without editing), 2 = marginal (had to guess), 3 = good (minor interpretation), 4 = excellent (rare, no ambiguity).",
 				},
 			},
 			required: ["feedback"],
