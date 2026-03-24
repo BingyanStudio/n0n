@@ -7,7 +7,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { toAPIMessages } from "@n0n/llm";
+import { formatPrompt } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import type { FairyPaths } from "../state.ts";
 import { buildView } from "../view.ts";
@@ -182,7 +182,7 @@ for (let r = 1; r <= 60; r++) {
 	history = [...history, ...round];
 
 	const view = buildView(history, paths, "test");
-	const serialized = toAPIMessages(view, MODEL);
+	const serialized = formatPrompt(view, MODEL);
 	const totalChars = serialized.reduce(
 		(s, m) => s + (typeof m.content === "string" ? m.content.length : 0),
 		0,

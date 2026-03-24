@@ -11,7 +11,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { toAPIMessages } from "@n0n/llm";
+import { formatPrompt } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import type { FairyPaths } from "../state.ts";
 import { buildView } from "../view.ts";
@@ -181,8 +181,8 @@ function makeHeavyToolRound(i: number): DomainMessage[] {
 const MODEL = "gpt-4";
 
 function serializeView(messages: DomainMessage[]): string {
-	const apiMsgs = toAPIMessages(messages, MODEL);
-	return apiMsgs
+	const promptMsgs = formatPrompt(messages, MODEL);
+	return promptMsgs
 		.map(
 			(m) =>
 				`[${m.role}] ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`,
