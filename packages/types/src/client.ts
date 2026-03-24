@@ -28,6 +28,7 @@ export interface TokenUsage {
 
 export type StreamEvent =
 	| { type: "thinking"; text: string }
+	| { type: "thinking_signature"; signature: string }
 	| { type: "content"; text: string }
 	| {
 			type: "tool_call_delta";
@@ -63,6 +64,7 @@ export type PromptMessage =
 			role: "assistant";
 			content: string;
 			reasoning?: string;
+			reasoningSignature?: string;
 			toolCalls?: ToolCallPart[];
 	  }
 	| { role: "tool"; toolCallId: string; toolName: string; content: string };
@@ -152,6 +154,7 @@ export interface AssistantMessage {
 	role: "assistant";
 	content: string | null;
 	reasoningText: string | null;
+	reasoningSignature: string | null;
 	toolCalls: AssistantToolCallPart[];
 }
 
@@ -159,6 +162,7 @@ export interface AssistantMessage {
 export class StreamAccumulator {
 	content = "";
 	reasoning = "";
+	reasoningSignature = "";
 	toolCalls = new Map<
 		number,
 		{ toolCallId: string; toolName: string; input: string }
@@ -171,6 +175,9 @@ export class StreamAccumulator {
 		switch (event.type) {
 			case "thinking":
 				this.reasoning += event.text;
+				break;
+			case "thinking_signature":
+				this.reasoningSignature = event.signature;
 				break;
 			case "content":
 				this.content += event.text;
@@ -205,6 +212,7 @@ export class StreamAccumulator {
 			role: "assistant",
 			content: this.content || null,
 			reasoningText: this.reasoning || null,
+			reasoningSignature: this.reasoningSignature || null,
 			toolCalls: [...this.toolCalls.values()],
 		};
 	}

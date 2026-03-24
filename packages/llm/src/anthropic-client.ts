@@ -34,7 +34,7 @@ import { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
 
 type AnthropicContent =
 	| { type: "text"; text: string }
-	| { type: "thinking"; type_: "enabled"; thinking: string; signature?: string }
+	| { type: "thinking"; thinking: string; signature?: string }
 	| { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
 	| { type: "tool_result"; tool_use_id: string; content: string };
 
@@ -144,13 +144,13 @@ function toAnthropicFormat(
 
 			case "assistant": {
 				const content: AnthropicContent[] = [];
-				if (msg.reasoning) {
+				// 只有同时具备 reasoning 和 signature 才回传 thinking block
+				// Anthropic 要求 thinking block 必须有 signature 字段
+				if (msg.reasoning && msg.reasoningSignature) {
 					content.push({
 						type: "thinking",
-						type_: "enabled",
 						thinking: msg.reasoning,
-						// signature 在回传历史时需要，但我们没有存储它
-						// Anthropic 会忽略缺失的 signature
+						signature: msg.reasoningSignature,
 					});
 				}
 				if (msg.content) {
@@ -411,8 +411,9 @@ export class AnthropicClient implements LLMClient {
 									name: undefined,
 									arguments: delta.partial_json,
 								};
+							} else if (delta.type === "signature_delta") {
+								yield { type: "thinking_signature", signature: delta.signature };
 							}
-							// signature_delta: 忽略
 							break;
 						}
 
