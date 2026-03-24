@@ -1,5 +1,3 @@
-import type { JSONValue } from "ai";
-
 /**
  * LLM 配置类型 — Discriminated Union Provider Config
  *
@@ -16,15 +14,14 @@ import type { JSONValue } from "ai";
 export const DEFAULT_THINKING_BUDGET_TOKENS = 1024;
 
 /**
- * Thinking ProviderOptions 类型 — AI SDK streamText() 的 providerOptions 参数类型
+ * Thinking ProviderOptions 类型
  *
- * 等价于 AI SDK 内部的 SharedV3ProviderOptions（= Record<string, JSONObject>），
- * 但 AI SDK 不直接从 'ai' 包 re-export 此类型，因此本地定义兼容类型。
- * 使用 JSONValue 从 'ai' 包导入保证序列化兼容性。
+ * 旧 AI SDK 架构下用于 streamText() 的 providerOptions 参数。
+ * 新架构中 thinking 配置内化到各 Client，此类型仅保留向后兼容。
  */
 export type ThinkingProviderOptions = Record<
 	string,
-	Record<string, JSONValue | undefined>
+	Record<string, unknown>
 >;
 
 // ── Provider 配置 ──
