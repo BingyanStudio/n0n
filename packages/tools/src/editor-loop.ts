@@ -226,6 +226,7 @@ export async function editorLoop(
 	editorClient: LLMClient,
 	onEvent?: (round: number, event: StreamEvent) => void,
 	onToolResult?: (round: number, summary: string) => void,
+	signal?: AbortSignal,
 ): Promise<EditorLoopResult> {
 	let current = source;
 	let editCount = 0;
@@ -247,6 +248,15 @@ export async function editorLoop(
 	];
 
 	for (let round = 0; round < MAX_ROUNDS; round++) {
+		if (signal?.aborted) {
+			return {
+				content: current,
+				feedback: null,
+				error: "Editor loop aborted",
+				rounds: round,
+			};
+		}
+
 		const acc = new StreamAccumulator();
 		let message: ReturnType<StreamAccumulator["toMessage"]>;
 		try {
@@ -257,6 +267,7 @@ export async function editorLoop(
 					tools: EDITOR_TOOLS,
 					toolChoice: "required",
 				},
+				signal,
 			)) {
 				acc.push(event);
 				onEvent?.(round, event);
