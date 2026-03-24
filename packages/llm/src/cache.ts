@@ -1,9 +1,9 @@
 /**
- * Anthropic Prompt Caching — 断点选择与标记工具
+ * Anthropic Prompt Caching — 断点选择工具
  *
- * SSOT：缓存断点的选择逻辑集中在此文件，
- * adapter.ts（原生 Anthropic）和 provider.ts（litellm 代理）
- * 各自负责标记方式（providerOptions vs cache_control），共用断点选择。
+ * SSOT：缓存断点的选择逻辑集中在此文件。
+ * anthropic-client.ts（原生 Anthropic）和 openai-client.ts（litellm 代理）
+ * 共用断点选择算法，各自负责 cache_control 注入方式。
  */
 
 /**
@@ -56,16 +56,4 @@ export function selectCacheBreakpoints(
 	}
 
 	return [...selected];
-}
-
-/**
- * 为原生 Anthropic provider 创建 providerOptions（prompt caching）
- *
- * 用于 AI SDK @ai-sdk/anthropic 的 cacheControl 注入。
- * litellm 路径使用 cache_control 字段，不经过此函数。
- */
-export function anthropicCacheControl(): {
-	anthropic: { cacheControl: { type: "ephemeral" } };
-} {
-	return { anthropic: { cacheControl: { type: "ephemeral" } } };
 }
