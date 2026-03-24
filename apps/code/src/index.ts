@@ -86,7 +86,12 @@ const { workspace, remainingArgs } = parseWorkspaceArg(
 
 const paths = resolveBasePaths(workspace);
 ensureDirs(paths);
-const runtime = createRuntimeContext();
+const llmConfig = buildLLMConfigFromEnv("LLM");
+const editorLlmConfig = buildLLMConfigFromEnv("EDITOR_LLM", llmConfig.providerConfig);
+const runtime = createRuntimeContext({
+	client: createLLMClient(llmConfig),
+	editorClient: createLLMClient(editorLlmConfig),
+});
 initRuntime(runtime);
 
 const { startCodeRepl } = await import("./repl.ts");

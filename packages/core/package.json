@@ -7,7 +7,6 @@
 		".": "./src/index.ts"
 	},
 	"dependencies": {
-		"@n0n/llm": "workspace:*",
 		"@n0n/tools": "workspace:*",
 		"@n0n/types": "workspace:*",
 		"zod": "^4.3.6"
