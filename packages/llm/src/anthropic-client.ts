@@ -267,9 +267,10 @@ export class AnthropicClient implements LLMClient {
 			?? formatPrompt(request.messages, this.modelId);
 		const { system, messages } = toAnthropicFormat(promptMessages, true);
 
+		const defaultMaxTokens = this.config.maxOutputTokens ?? 8192;
 		const body: AnthropicRequest = {
 			model: this.modelId,
-			max_tokens: 8192,
+			max_tokens: defaultMaxTokens,
 			system,
 			messages,
 			stream: true,
@@ -285,7 +286,7 @@ export class AnthropicClient implements LLMClient {
 			const budget =
 				this.config.thinkingBudgetTokens ?? DEFAULT_THINKING_BUDGET_TOKENS;
 			body.thinking = { type: "enabled", budget_tokens: budget };
-			body.max_tokens = Math.max(body.max_tokens, budget + 4096);
+			body.max_tokens = Math.max(defaultMaxTokens, budget + 4096);
 			// Anthropic requires temperature=1 when thinking is enabled
 			body.temperature = 1;
 		}
@@ -530,7 +531,7 @@ export class AnthropicClient implements LLMClient {
 
 		const body: AnthropicRequest = {
 			model: this.modelId,
-			max_tokens: 4096,
+			max_tokens: this.config.maxOutputTokens ?? 4096,
 			system,
 			messages,
 			stream: false,
