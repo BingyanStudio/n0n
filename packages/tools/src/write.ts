@@ -6,15 +6,15 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { jsonSchema, tool } from "@n0n/llm";
-import type { WriteToolCall, WriteToolResult } from "@n0n/types";
+import type { ToolDefinition, WriteToolCall, WriteToolResult } from "@n0n/types";
 
 export { WriteArgsSchema } from "@n0n/types";
 
-export const WRITE_TOOL_DEFINITION = tool({
+export const WRITE_TOOL_DEFINITION: ToolDefinition = {
+	name: "write",
 	description:
 		"Create or overwrite a file with the given content. Directories are created automatically. For modifying existing files, use the edit tool instead.",
-	inputSchema: jsonSchema({
+	parameters: {
 		type: "object",
 		properties: {
 			path: {
@@ -28,8 +28,8 @@ export const WRITE_TOOL_DEFINITION = tool({
 		},
 		required: ["path", "content"],
 		additionalProperties: false,
-	}),
-});
+	},
+};
 
 export async function writeTool(
 	call: WriteToolCall,
