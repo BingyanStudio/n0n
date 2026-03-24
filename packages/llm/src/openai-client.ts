@@ -199,9 +199,13 @@ export class OpenAIClient implements LLMClient {
 		const pc = config.providerConfig;
 		const base =
 			("baseUrl" in pc && pc.baseUrl) ? pc.baseUrl : "https://api.openai.com";
-		this.apiUrl = base.includes("/chat/completions")
-			? base
-			: `${base}/v1/chat/completions`;
+		// 处理 baseUrl 可能已包含 /v1 或完整路径的情况
+		if (base.includes("/chat/completions")) {
+			this.apiUrl = base;
+		} else {
+			const cleanBase = base.replace(/\/v1\/?$/, "").replace(/\/$/, "");
+			this.apiUrl = `${cleanBase}/v1/chat/completions`;
+		}
 	}
 
 	async *stream(
