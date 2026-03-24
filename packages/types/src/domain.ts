@@ -49,12 +49,14 @@ export interface AssistantTextMessage {
 	type: "assistant_text";
 	content: string;
 	reasoning?: string | null;
+	reasoningSignature?: string | null;
 }
 
 export interface AssistantToolCallMessage {
 	type: "assistant_tool_call";
 	content: string | null;
 	reasoning?: string | null;
+	reasoningSignature?: string | null;
 	toolCalls: ToolCallRecord[];
 }
 

@@ -193,6 +193,7 @@ export function formatPrompt(
 					role: "assistant",
 					content: msg.content,
 					reasoning: msg.reasoning ?? undefined,
+					reasoningSignature: msg.reasoningSignature ?? undefined,
 				});
 				break;
 
@@ -206,6 +207,7 @@ export function formatPrompt(
 					role: "assistant",
 					content: msg.content ?? "",
 					reasoning: msg.reasoning ?? undefined,
+					reasoningSignature: msg.reasoningSignature ?? undefined,
 					toolCalls,
 				});
 				break;
