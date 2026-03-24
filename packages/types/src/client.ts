@@ -82,7 +82,10 @@ import type { DomainMessage } from "./domain.ts";
 /** 流式请求 — 走 DomainMessage 领域层，或直接传入 PromptMessage */
 export interface StreamRequest {
 	messages: DomainMessage[];
-	/** 预格式化的提示词消息（跳过 formatPrompt）。设置后忽略 messages 字段。 */
+	/**
+	 * 预格式化的提示词消息（跳过 formatPrompt）。设置后忽略 messages 字段。
+	 * @internal 仅供 editor-loop 等内部模块使用，外部调用方不应直接使用此字段。
+	 */
 	promptMessages?: PromptMessage[];
 	tools?: ToolDefinition[];
 	toolChoice?: "auto" | "none" | "required";
