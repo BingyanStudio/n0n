@@ -95,6 +95,8 @@ export interface LLMConfig {
 	enableThinking?: boolean;
 	/** thinking 的 token 预算（默认 DEFAULT_THINKING_BUDGET_TOKENS） */
 	thinkingBudgetTokens?: number;
+	/** 最大输出 token 数。Anthropic 默认 8192（stream）/ 4096（complete）。 */
+	maxOutputTokens?: number;
 }
 
 // ── 辅助函数（内部使用） ──
