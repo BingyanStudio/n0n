@@ -34,10 +34,12 @@ function formatUsageSummary(usage: RoundTokenUsage): string {
 	if (usage.cacheReadTokens > 0 || usage.cacheWriteTokens > 0) {
 		const cacheParts: string[] = [];
 		if (usage.cacheReadTokens > 0) {
-			// 计算 cache hit 占输入的百分比
+			// 计算 cache hit 占总输入的百分比
+			// 总输入 = inputTokens(新计算) + cacheReadTokens(缓存命中) + cacheWriteTokens(缓存写入)
+			const totalInput = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
 			const hitPct =
-				usage.inputTokens > 0
-					? Math.round((usage.cacheReadTokens / usage.inputTokens) * 100)
+				totalInput > 0
+					? Math.round((usage.cacheReadTokens / totalInput) * 100)
 					: 0;
 			cacheParts.push(
 				style.green(`⚡${fmtTokens(usage.cacheReadTokens)} hit ${hitPct}%`),
