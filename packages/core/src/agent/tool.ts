@@ -2,7 +2,7 @@
  * 工具调用解析与执行 — agentLoop 的工具层
  */
 
-import type { AssistantToolCallPart } from "@n0n/llm";
+import type { AssistantToolCallPart } from "@n0n/types";
 import {
 	type PendingReminder,
 	REGISTERED_TOOLS,
@@ -12,6 +12,7 @@ import type {
 	ExecToolCall,
 	ToolArgErrorMessage,
 	ToolCallRecord,
+	ToolDefinition,
 	ToolStreamEvent,
 } from "@n0n/types";
 import { ZodError } from "zod";
@@ -22,9 +23,9 @@ export type GetToolEntry = (name: string) => ToolEntry | undefined;
 // ── 解析 ──
 
 /**
- * AI SDK tool calls → 领域 ToolCallRecord。
+ * tool calls → 领域 ToolCallRecord。
  *
- * 直接接受 AI SDK 格式 { toolCallId, toolName, input }，
+ * 接受 { toolCallId, toolName, input } 格式，
  * 解析阶段只做 JSON.parse，参数结构由执行阶段的 Zod schema 校验。
  */
 export function parseToolCalls(raw: AssistantToolCallPart[]): ToolCallRecord[] {
@@ -85,6 +86,8 @@ export async function* executeToolStream(
 		}
 	} catch (err) {
 		if (err instanceof ZodError) {
+			// 恢复 schema 字段 — 为模型提供修复依据
+			const toolDef: ToolDefinition | undefined = entry.definition;
 			const argError: ToolArgErrorMessage = {
 				type: "tool_arg_error",
 				callId: tc.id,
@@ -92,6 +95,7 @@ export async function* executeToolStream(
 				error: err.issues
 					.map((i) => `${i.path.join(".")}: ${i.message}`)
 					.join("; "),
+				schema: toolDef?.parameters as Record<string, unknown> | undefined,
 			};
 			yield argError;
 			return;
