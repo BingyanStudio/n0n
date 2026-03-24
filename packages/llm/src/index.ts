@@ -1,19 +1,18 @@
 /**
- * @n0n/llm — LLM 客户端公共 API
+ * @n0n/llm — LLM Client 实现层
  *
- * 基于 Vercel AI SDK，支持多 provider（OpenAI / Anthropic / Google）、
- * 运行时依赖注入、prompt caching。
+ * 自实现 OpenAI + Anthropic 双协议，不依赖 AI SDK。
+ * 唯一接触 HTTP / SSE 的地方。
+ *
+ * 对外仅导出：
+ * - createLLMClient 工厂函数
+ * - Config 类型和工厂
+ * - LLMError
  */
 
-// Re-export AI SDK 核心类型和工具函数 — 消费方统一从 @n0n/llm 导入，不直接依赖 ai 包
-export type { LanguageModel, ModelMessage, Tool, ToolSet } from "ai";
-export { generateText, jsonSchema, tool } from "ai";
-// 消息转换
-export { toAPIMessages } from "./adapter.ts";
-export { selectCacheBreakpoints } from "./cache.ts";
-export type { ChatCompletionRequest, ChatCompletionResult } from "./client.ts";
-// 非流式调用
-export { chatCompletion, LLMError } from "./client.ts";
+// Client 工厂
+export { createLLMClient } from "./factory.ts";
+
 // 配置类型
 export type {
 	AnthropicProviderConfig,
@@ -22,7 +21,6 @@ export type {
 	OpenAICompatibleProviderConfig,
 	OpenAIProviderConfig,
 	ProviderConfig,
-	ThinkingProviderOptions,
 } from "./config.ts";
 export {
 	DEFAULT_THINKING_BUDGET_TOKENS,
@@ -30,7 +28,8 @@ export {
 	getProviderType,
 	isAnthropicProvider,
 } from "./config.ts";
-// 环境变量 → 配置工厂（SSOT：runtime.ts 和 bootstrap/runner.ts 共用）
+
+// 环境变量 → 配置工厂（SSOT：runtime.ts 和 bootstrap 共用）
 export {
 	buildLLMConfigFromEnv,
 	buildProviderConfigFromEnv,
@@ -38,18 +37,6 @@ export {
 	PROVIDER_TYPES,
 	resolveProvider,
 } from "./config-from-env.ts";
-// Provider Factory
-export { createLanguageModel, createModelFromConfig } from "./provider.ts";
-export type {
-	AssistantMessage,
-	AssistantToolCallPart,
-	StreamEvent,
-	StreamOptions,
-	StreamRequest,
-	TokenUsage,
-} from "./stream.ts";
-// 流式调用
-export { chatCompletionStream, StreamAccumulator } from "./stream.ts";
-// Tag 工具
-export { adaptTags, wrapTag } from "./tags.ts";
-export { buildThinkingProviderOptions } from "./thinking.ts";
+
+// Error
+export { LLMError } from "./openai-client.ts";
