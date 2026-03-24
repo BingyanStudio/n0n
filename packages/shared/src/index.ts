@@ -48,6 +48,9 @@ export {
 	resolveBasePaths,
 } from "./workspace.ts";
 
+// Format Prompt
+export { formatPrompt } from "./format-prompt.ts";
+
 // Conversation Log
 export type { ConversationLog, ConversationMetadata } from "./conversation-log/index.ts";
 export {
