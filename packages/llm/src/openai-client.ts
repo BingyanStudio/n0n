@@ -218,11 +218,13 @@ export class OpenAIClient implements LLMClient {
 		const apiMessages = toOpenAIMessages(promptMessages);
 
 		// 如果后端是 anthropic（通过 litellm），注入 cache_control
+		// Anthropic 限制最多 4 个 cache_control 断点，selectCacheBreakpoints 已保证 ≤ 4
 		if (
 			this.config.providerConfig.provider === "openai-compatible" &&
 			this.config.providerConfig.backendProvider === "anthropic"
 		) {
-			for (const idx of selectCacheBreakpoints(apiMessages)) {
+			const breakpoints = selectCacheBreakpoints(apiMessages).slice(0, 4);
+			for (const idx of breakpoints) {
 				const msg = apiMessages[idx];
 				if (msg) {
 					(msg as unknown as Record<string, unknown>).cache_control = {
