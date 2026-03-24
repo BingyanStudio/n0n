@@ -247,7 +247,9 @@ export class AnthropicClient implements LLMClient {
 		const pc = config.providerConfig;
 		const base =
 			("baseUrl" in pc && pc.baseUrl) ? pc.baseUrl : "https://api.anthropic.com";
-		this.apiUrl = `${base.replace(/\/$/, "")}/v1/messages`;
+		// 处理 baseUrl 可能已包含 /v1 的情况（如代理 URL）
+		const cleanBase = base.replace(/\/v1\/?$/, "").replace(/\/$/, "");
+		this.apiUrl = `${cleanBase}/v1/messages`;
 	}
 
 	async *stream(
@@ -310,8 +312,8 @@ export class AnthropicClient implements LLMClient {
 			return;
 		}
 
-		// Track tool_use blocks by index for tool_call_delta mapping
-		const toolBlocks = new Map<number, { id: string; name: string }>();
+		// Track tool_use blocks by SSE index → sequential tool call index
+		const toolBlocks = new Map<number, { id: string; name: string; idx: number }>();
 		let toolCallIndex = 0;
 		let inputUsage: TokenUsage | null = null;
 
@@ -381,6 +383,7 @@ export class AnthropicClient implements LLMClient {
 								toolBlocks.set(event.index, {
 									id: block.id,
 									name: block.name,
+									idx,
 								});
 								yield {
 									type: "tool_call_delta",
@@ -403,7 +406,7 @@ export class AnthropicClient implements LLMClient {
 								const tb = toolBlocks.get(event.index);
 								yield {
 									type: "tool_call_delta",
-									index: event.index,
+									index: tb?.idx ?? event.index,
 									id: tb?.id,
 									name: undefined,
 									arguments: delta.partial_json,
