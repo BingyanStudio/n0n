@@ -74,6 +74,7 @@ interface OpenAIRequest {
 	temperature?: number;
 	max_tokens?: number;
 	stream?: boolean;
+	stream_options?: { include_usage: boolean };
 	enable_thinking?: boolean;
 }
 
@@ -235,6 +236,7 @@ export class OpenAIClient implements LLMClient {
 			model: this.modelId,
 			messages: apiMessages,
 			stream: true,
+			stream_options: { include_usage: true },
 		};
 
 		if (request.tools?.length) {
@@ -275,6 +277,7 @@ export class OpenAIClient implements LLMClient {
 		}
 
 		let lastUsage: TokenUsage | null = null;
+		let lastFinishReason: string | null = null;
 
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
@@ -297,6 +300,9 @@ export class OpenAIClient implements LLMClient {
 						const payload = line.slice(6);
 
 						if (payload === "[DONE]") {
+							if (lastFinishReason) {
+								yield { type: "done", finishReason: lastFinishReason, usage: lastUsage };
+							}
 							return;
 						}
 
@@ -352,11 +358,7 @@ export class OpenAIClient implements LLMClient {
 
 						const finish = chunk.choices?.[0]?.finish_reason;
 						if (finish) {
-							yield {
-								type: "done",
-								finishReason: finish,
-								usage: lastUsage,
-							};
+							lastFinishReason = finish;
 						}
 					}
 					boundary = buffer.indexOf("\n\n");
@@ -411,9 +413,14 @@ export class OpenAIClient implements LLMClient {
 					}
 					const finish = chunk.choices?.[0]?.finish_reason;
 					if (finish) {
-						yield { type: "done", finishReason: finish, usage: lastUsage };
+						lastFinishReason = finish;
 					}
 				}
+			}
+
+			// If stream ended without [DONE], emit deferred done event
+			if (lastFinishReason) {
+				yield { type: "done", finishReason: lastFinishReason, usage: lastUsage };
 			}
 		} catch (err) {
 			if (!isAbortError(err)) {
