@@ -254,7 +254,8 @@ export class AnthropicClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = formatPrompt(request.messages, this.modelId);
+		const promptMessages = request.promptMessages
+			?? formatPrompt(request.messages, this.modelId);
 		const { system, messages } = toAnthropicFormat(promptMessages, true);
 
 		const body: AnthropicRequest = {

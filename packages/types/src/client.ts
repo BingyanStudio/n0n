@@ -77,9 +77,11 @@ export interface ToolCallPart {
 
 import type { DomainMessage } from "./domain.ts";
 
-/** 流式请求 — 走 DomainMessage 领域层 */
+/** 流式请求 — 走 DomainMessage 领域层，或直接传入 PromptMessage */
 export interface StreamRequest {
 	messages: DomainMessage[];
+	/** 预格式化的提示词消息（跳过 formatPrompt）。设置后忽略 messages 字段。 */
+	promptMessages?: PromptMessage[];
 	tools?: ToolDefinition[];
 	toolChoice?: "auto" | "none" | "required";
 }
