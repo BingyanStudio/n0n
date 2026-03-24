@@ -121,7 +121,7 @@ function isAbortError(err: unknown): boolean {
 // ── PromptMessage → Anthropic Message 转换 ──
 
 interface AnthropicConversionResult {
-	system: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+	system: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> | undefined;
 	messages: AnthropicMessage[];
 }
 
@@ -222,9 +222,11 @@ function toAnthropicFormat(
 	}
 
 	const system =
-		systemParts.length === 1 && !systemParts[0]?.cache_control
-			? systemParts[0]!.text
-			: systemParts;
+		systemParts.length === 0
+			? undefined
+			: systemParts.length === 1 && !systemParts[0]?.cache_control
+				? systemParts[0]!.text
+				: systemParts;
 
 	return { system, messages };
 }
