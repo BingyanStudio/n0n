@@ -362,6 +362,59 @@ export class OpenAIClient implements LLMClient {
 					boundary = buffer.indexOf("\n\n");
 				}
 			}
+
+			// Flush remaining buffer — handle case where stream ends without trailing \n\n
+			if (buffer.trim()) {
+				for (const line of buffer.split("\n")) {
+					if (!line.startsWith("data: ")) continue;
+					const payload = line.slice(6);
+					if (payload === "[DONE]") break;
+					let chunk: unknown;
+					try {
+						chunk = JSON.parse(payload);
+					} catch {
+						continue;
+					}
+					if (!isSSEChunk(chunk)) continue;
+					if (chunk.usage) {
+						const u = chunk.usage;
+						lastUsage = {
+							inputTokens: u.prompt_tokens ?? 0,
+							outputTokens: u.completion_tokens ?? 0,
+							totalTokens: u.total_tokens ?? 0,
+							cacheReadTokens:
+								u.prompt_tokens_details?.cached_tokens ??
+								u.prompt_cache_hit_tokens ??
+								0,
+							cacheWriteTokens: u.prompt_cache_miss_tokens ?? 0,
+						};
+					}
+					const delta = chunk.choices?.[0]?.delta;
+					if (delta) {
+						if (delta.reasoning_content) {
+							yield { type: "thinking", text: delta.reasoning_content };
+						}
+						if (delta.content) {
+							yield { type: "content", text: delta.content };
+						}
+						if (delta.tool_calls) {
+							for (const tc of delta.tool_calls) {
+								yield {
+									type: "tool_call_delta",
+									index: tc.index,
+									id: tc.id,
+									name: tc.function?.name,
+									arguments: tc.function?.arguments ?? "",
+								};
+							}
+						}
+					}
+					const finish = chunk.choices?.[0]?.finish_reason;
+					if (finish) {
+						yield { type: "done", finishReason: finish, usage: lastUsage };
+					}
+				}
+			}
 		} catch (err) {
 			if (!isAbortError(err)) {
 				yield {

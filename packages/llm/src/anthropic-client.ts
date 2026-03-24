@@ -461,6 +461,48 @@ export class AnthropicClient implements LLMClient {
 					boundary = buffer.indexOf("\n\n");
 				}
 			}
+
+			// Flush remaining buffer — handle case where stream ends without trailing \n\n
+			if (buffer.trim()) {
+				let eventData = "";
+				for (const line of buffer.split("\n")) {
+					if (line.startsWith("event: ")) {
+						// skip event type line
+					} else if (line.startsWith("data: ")) {
+						eventData = line.slice(6);
+					}
+				}
+				if (eventData) {
+					try {
+						const event = JSON.parse(eventData) as AnthropicSSEEvent;
+						if (event.type === "message_delta") {
+							const stopReason = event.delta.stop_reason ?? "stop";
+							const outputTokens = event.usage?.output_tokens ?? 0;
+							const usage: TokenUsage | null = inputUsage
+								? {
+										...inputUsage,
+										outputTokens: inputUsage.outputTokens + outputTokens,
+										totalTokens: inputUsage.inputTokens + inputUsage.outputTokens + outputTokens,
+									}
+								: null;
+							yield {
+								type: "done",
+								finishReason:
+									stopReason === "end_turn"
+										? "stop"
+										: stopReason === "max_tokens"
+											? "length"
+											: stopReason === "tool_use"
+												? "tool_calls"
+												: stopReason,
+								usage,
+							};
+						}
+					} catch {
+						// ignore parse errors in residual buffer
+					}
+				}
+			}
 		} catch (err) {
 			if (!isAbortError(err)) {
 				yield {
