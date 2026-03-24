@@ -29,6 +29,7 @@ import type {
 import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
 import { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
+import { LLMError } from "./openai-client.ts";
 
 // ── Anthropic API Types ──
 
@@ -562,10 +563,18 @@ export class AnthropicClient implements LLMClient {
 				if (!res.ok) {
 					const text = await res.text();
 					if (res.status === 429 || res.status >= 500) {
-						lastError = new Error(`Anthropic API ${res.status}: ${text}`);
+						lastError = new LLMError(
+							`Anthropic API ${res.status}: ${text}`,
+							res.status,
+							text,
+						);
 						continue;
 					}
-					throw new Error(`Anthropic API ${res.status}: ${text}`);
+					throw new LLMError(
+						`Anthropic API ${res.status}: ${text}`,
+						res.status,
+						text,
+					);
 				}
 
 				const json = (await res.json()) as {
@@ -574,14 +583,8 @@ export class AnthropicClient implements LLMClient {
 				const textBlock = json?.content?.find((b) => b.type === "text");
 				return { text: textBlock?.text ?? "" };
 			} catch (err) {
-				if (
-					err instanceof Error &&
-					!err.message.startsWith("Anthropic API")
-				) {
-					lastError = err;
-				} else {
-					throw err;
-				}
+				if (err instanceof LLMError) throw err;
+				lastError = err instanceof Error ? err : new Error(String(err));
 			}
 		}
 
