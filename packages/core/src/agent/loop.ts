@@ -105,6 +105,14 @@ export async function agentLoop<T = unknown>(
 				case "tool_call_delta":
 					renderer.toolCallArgChunk(event.index, event.name, event.arguments);
 					break;
+				case "error":
+					renderer.contentEnd();
+					renderer.agentTerminated(`LLM error: ${event.error}`);
+					return {
+						result: null,
+						report: `LLM error: ${event.error}`,
+						history: messages,
+					};
 			}
 		}
 		renderer.contentEnd();

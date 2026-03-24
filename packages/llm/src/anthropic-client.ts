@@ -191,12 +191,16 @@ function toAnthropicFormat(
 	// Prompt caching: 注入 cache_control
 	if (enableCache) {
 		// System 部分：最后一个 system block 加 cache
+		let cacheCount = 0;
 		if (systemParts.length > 0) {
 			systemParts[systemParts.length - 1]!.cache_control = { type: "ephemeral" };
+			cacheCount++;
 		}
 
 		// Messages 部分：使用 selectCacheBreakpoints 选择断点
-		const breakpoints = selectCacheBreakpoints(messages);
+		// Anthropic 限制最多 4 个 cache_control，减去 system 已用的配额
+		const maxMessageBreakpoints = 4 - cacheCount;
+		const breakpoints = selectCacheBreakpoints(messages).slice(0, maxMessageBreakpoints);
 		for (const idx of breakpoints) {
 			const msg = messages[idx];
 			if (!msg) continue;
