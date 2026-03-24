@@ -225,6 +225,8 @@ export interface ToolArgErrorMessage {
 	callId: string;
 	tool: string;
 	error: string;
+	/** 工具参数的 JSON Schema，供模型参考修复。undefined 时表示 schema 不可用。 */
+	schema?: Record<string, unknown>;
 }
 
 // ── 提交被拒 ──
