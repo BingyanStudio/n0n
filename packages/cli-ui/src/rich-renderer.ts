@@ -81,25 +81,68 @@ function renderToolArgs(
 	const lines: string[] = [];
 	lines.push(`${style.dim("▸")} ${style.cyan(toolName)}`);
 
+	const maxLines = 12;
 	const entries = Object.entries(args);
 	for (const [key, value] of entries) {
 		const strValue = typeof value === "string" ? value : JSON.stringify(value);
 		lines.push(`  ${style.dim("├")} ${style.gray(key)}`);
-		// 值可能多行，每行缩进
+		// 值可能多行，超长时中间折叠（保留头尾，省略中间）
 		const valueLines = strValue.split("\n");
-		const maxLines = 12;
-		for (const vl of valueLines.slice(0, maxLines)) {
-			lines.push(`  ${style.dim("│")} ${vl}`);
-		}
-		if (valueLines.length > maxLines) {
+		if (valueLines.length <= maxLines) {
+			for (const vl of valueLines) {
+				lines.push(`  ${style.dim("│")} ${vl}`);
+			}
+		} else {
+			const headCount = Math.ceil(maxLines / 2);
+			const tailCount = maxLines - headCount;
+			for (const vl of valueLines.slice(0, headCount)) {
+				lines.push(`  ${style.dim("│")} ${vl}`);
+			}
 			lines.push(
 				style.gray(
 					`  ${style.dim("│")} ... (${valueLines.length - maxLines} more lines)`,
 				),
 			);
+			for (const vl of valueLines.slice(-tailCount)) {
+				lines.push(`  ${style.dim("│")} ${vl}`);
+			}
 		}
 	}
 	lines.push(`  ${style.dim("├")}${style.dim("─".repeat(30))}`);
+	return lines;
+}
+
+/** 流式阶段：尾部滚动窗口渲染（只显示工具名 + 每个参数的最后 N 行） */
+function renderToolArgsStreaming(
+	toolName: string,
+	args: Record<string, unknown>,
+): string[] {
+	const lines: string[] = [];
+	lines.push(
+		`${style.dim("▸")} ${style.cyan(toolName)} ${style.gray("(streaming…)")}`,
+	);
+
+	const maxTailLines = 6;
+	const entries = Object.entries(args);
+	for (const [key, value] of entries) {
+		const strValue = typeof value === "string" ? value : JSON.stringify(value);
+		lines.push(`  ${style.dim("├")} ${style.gray(key)}`);
+		const valueLines = strValue.split("\n");
+		if (valueLines.length <= maxTailLines) {
+			for (const vl of valueLines) {
+				lines.push(`  ${style.dim("│")} ${vl}`);
+			}
+		} else {
+			lines.push(
+				style.gray(
+					`  ${style.dim("│")} ... (${valueLines.length - maxTailLines} lines above)`,
+				),
+			);
+			for (const vl of valueLines.slice(-maxTailLines)) {
+				lines.push(`  ${style.dim("│")} ${vl}`);
+			}
+		}
+	}
 	return lines;
 }
 
@@ -135,9 +178,7 @@ export class RichRenderer implements Renderer {
 
 		const roundInfo = `round ${round}/${maxRounds} (${msgCount} msgs)`;
 		if (lastUsage) {
-			writeln(
-				style.gray(`  ${roundInfo} · ${formatUsageSummary(lastUsage)}`),
-			);
+			writeln(style.gray(`  ${roundInfo} · ${formatUsageSummary(lastUsage)}`));
 		} else {
 			writeln(style.gray(`  ${roundInfo}`));
 		}
@@ -198,9 +239,7 @@ export class RichRenderer implements Renderer {
 			writeln(content);
 		}
 		writeln(
-			style.gray(
-				`(text response, ${content.length} chars, idle=${idleCount})`,
-			),
+			style.gray(`(text response, ${content.length} chars, idle=${idleCount})`),
 		);
 	}
 
@@ -259,18 +298,19 @@ export class RichRenderer implements Renderer {
 		if (!isTTY) return;
 
 		// TTY：重绘整个流式区域（LiveRegion clear+rewrite 实现原地刷新）
+		// 使用尾部滚动渲染，让用户始终看到最新的流式内容
 		this.streamRegion.clear();
 		for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
 			(a, b) => a[0] - b[0],
 		)) {
 			const parsed = tryParseArgs(tc.args);
 			if (parsed && Object.keys(parsed).length > 0) {
-				for (const line of renderToolArgs(tc.name, parsed)) {
+				for (const line of renderToolArgsStreaming(tc.name, parsed)) {
 					this.streamRegion.writeln(line);
 				}
 			} else {
 				this.streamRegion.writeln(
-					`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray("(streaming...")}`,
+					`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray("(streaming…)")}`,
 				);
 			}
 		}
