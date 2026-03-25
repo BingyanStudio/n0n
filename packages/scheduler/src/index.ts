@@ -9,6 +9,7 @@ export { cronMatches, parseCron } from "./cron.ts";
 export type {
 	ScheduleEntry,
 	SchedulePaths,
+	SchedulerCallbacks,
 	SchedulerHandle,
 	SchedulerPaths,
 } from "./scheduler.ts";

@@ -100,12 +100,18 @@ export async function setScheduleEnabled(
 
 // ── 触发循环 ──
 
+export interface SchedulerCallbacks {
+	onTaskComplete?: (entry: ScheduleEntry, result: unknown) => void | Promise<void>;
+	onTaskError?: (entry: ScheduleEntry, error: unknown) => void | Promise<void>;
+}
+
 export interface SchedulerHandle {
 	stop(): void;
 }
 
 export async function startScheduler(
 	paths: SchedulerPaths,
+	callbacks?: SchedulerCallbacks,
 ): Promise<SchedulerHandle> {
 	let running = true;
 
@@ -140,14 +146,16 @@ export async function startScheduler(
 					const workflowPath = resolve(paths.workspace, entry.workflow);
 					executing.add(entry.name);
 					runWorkflow(workflowPath, undefined, paths.workspace)
-						.then((result) => {
+						.then(async (result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
 								typeof result === "string" ? result.slice(0, 200) : result,
 							);
+							await callbacks?.onTaskComplete?.(entry, result);
 						})
-						.catch((err) => {
+						.catch(async (err) => {
 							console.error(`[scheduler] ❌ Workflow failed: ${entry.name}:`, err);
+							await callbacks?.onTaskError?.(entry, err);
 						})
 						.finally(() => {
 							executing.delete(entry.name);
@@ -156,14 +164,16 @@ export async function startScheduler(
 					// 传播 workspace 配置给 delegateTask
 					executing.add(entry.name);
 					delegateTask(entry.prompt, { paths })
-						.then((result) => {
+						.then(async (result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
 								result.report ?? result.result,
 							);
+							await callbacks?.onTaskComplete?.(entry, result);
 						})
-						.catch((err) => {
+						.catch(async (err) => {
 							console.error(`[scheduler] ❌ Delegate task failed: ${entry.name}:`, err);
+							await callbacks?.onTaskError?.(entry, err);
 						})
 						.finally(() => {
 							executing.delete(entry.name);
