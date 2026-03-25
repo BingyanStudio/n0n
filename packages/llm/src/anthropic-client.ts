@@ -32,6 +32,15 @@ import type { LLMConfig } from "./config.ts";
 import { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
 import { LLMError, isAbortError } from "./errors.ts";
 
+// ── Anthropic 默认常量 ──
+
+/** stream() 默认最大输出 token 数 */
+const DEFAULT_STREAM_MAX_TOKENS = 8192;
+/** complete() 默认最大输出 token 数 */
+const DEFAULT_COMPLETE_MAX_TOKENS = 4096;
+/** thinking 模式下输出 token 的额外 buffer（Anthropic 要求 max_tokens > budget_tokens） */
+const THINKING_OUTPUT_BUFFER = 4096;
+
 // ── Anthropic API Types ──
 
 type AnthropicContent =
@@ -264,7 +273,7 @@ export class AnthropicClient implements LLMClient {
 			?? formatPrompt(request.messages, this.modelId);
 		const { system, messages } = toAnthropicFormat(promptMessages, true);
 
-		const defaultMaxTokens = this.config.maxOutputTokens ?? 8192;
+		const defaultMaxTokens = this.config.maxOutputTokens ?? DEFAULT_STREAM_MAX_TOKENS;
 		const body: AnthropicRequest = {
 			model: this.modelId,
 			max_tokens: defaultMaxTokens,
@@ -283,7 +292,7 @@ export class AnthropicClient implements LLMClient {
 			const budget =
 				this.config.thinkingBudgetTokens ?? DEFAULT_THINKING_BUDGET_TOKENS;
 			body.thinking = { type: "enabled", budget_tokens: budget };
-			body.max_tokens = Math.max(defaultMaxTokens, budget + 4096);
+			body.max_tokens = Math.max(defaultMaxTokens, budget + THINKING_OUTPUT_BUFFER);
 			// Anthropic requires temperature=1 when thinking is enabled
 			body.temperature = 1;
 		}
@@ -513,7 +522,7 @@ export class AnthropicClient implements LLMClient {
 
 		const body: AnthropicRequest = {
 			model: this.modelId,
-			max_tokens: this.config.maxOutputTokens ?? 4096,
+			max_tokens: this.config.maxOutputTokens ?? DEFAULT_COMPLETE_MAX_TOKENS,
 			system,
 			messages,
 			stream: false,
