@@ -6,7 +6,7 @@
  * 其余目录为 per-user 隔离。
  */
 
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ensureDirs } from "@n0n/shared";
 import type { WorkflowPaths } from "@n0n/workflow";
@@ -38,6 +38,18 @@ export function resolveFeishuPaths(senderOpenId: string): WorkflowPaths {
 	};
 
 	ensureDirs(paths);
+
+	// 确保用户 workspace 有 tsconfig.json，使 bun 能解析 @n0n/* 等路径映射
+	const tsconfigPath = resolve(workspace, "tsconfig.json");
+	if (!existsSync(tsconfigPath)) {
+		const projectRoot = resolve(FEISHU_BASE, "..", "..");
+		const tsconfig = JSON.stringify(
+			{ extends: resolve(projectRoot, "tsconfig.json") },
+			null,
+			"\t",
+		);
+		writeFileSync(tsconfigPath, tsconfig);
+	}
 	return paths;
 }
 
