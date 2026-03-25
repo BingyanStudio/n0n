@@ -65,10 +65,14 @@ export async function discoverWorkflows(
 
 /**
  * 执行一个 workflow 文件
+ *
+ * @param cwd 可选，执行时的工作目录。传入后会在执行期间切换 process.cwd()，
+ *            执行完成后恢复。用于 scheduler / commands 等需要 cwd 隔离的场景。
  */
 export async function runWorkflow(
 	workflowPath: string,
 	args?: unknown,
+	cwd?: string,
 ): Promise<unknown> {
 	const absPath = resolve(workflowPath);
 
@@ -87,6 +91,16 @@ export async function runWorkflow(
 				`Found exports: [${exports.join(", ")}]\n` +
 				`See WorkflowModule interface in @n0n/workflow for the expected contract.`,
 		);
+	}
+
+	if (cwd) {
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(cwd);
+			return await entryFn(args);
+		} finally {
+			process.chdir(originalCwd);
+		}
 	}
 
 	return entryFn(args);

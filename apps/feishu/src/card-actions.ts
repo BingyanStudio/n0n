@@ -134,7 +134,7 @@ async function onWorkflowRun(
 	}
 
 	// 异步执行工作流（回调有 5s 超时限制），完成后通过 PATCH API 发送结果
-	runWorkflow(wf.path).then(
+	runWorkflow(wf.path, undefined, ctx.paths.workspace).then(
 		async (result) => {
 			await sendFeedback(ctx, `✅ ${name}`, formatResult(result), "green");
 		},
@@ -192,7 +192,7 @@ async function onCronRun(
 	}
 
 	// 异步执行工作流，完成后通过 PATCH API 发送结果
-	runWorkflow(schedule.workflow).then(
+	runWorkflow(schedule.workflow, undefined, ctx.paths.workspace).then(
 		async (result) => {
 			await sendFeedback(ctx, `✅ ${name}`, formatResult(result), "green");
 		},
