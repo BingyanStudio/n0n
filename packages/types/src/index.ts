@@ -26,4 +26,4 @@ export type {
 	ToolCallPart,
 	ToolDefinition,
 } from "./client.ts";
-export { StreamAccumulator } from "./client.ts";
+export { FinishReason, StreamAccumulator } from "./client.ts";
