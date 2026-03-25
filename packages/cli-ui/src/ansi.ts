@@ -76,3 +76,21 @@ export function writeln(text = ""): void {
 
 /** 检测是否为 TTY（支持 ANSI） */
 export const isTTY: boolean = out.isTTY ?? false;
+
+/** 去除 ANSI 转义序列 */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape stripping requires control chars
+const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9;]*[a-zA-Z]/g;
+
+export function stripAnsi(s: string): string {
+	return s.replace(ANSI_RE, "");
+}
+
+/** 计算字符串的可见宽度（去除 ANSI 转义序列后的字符数） */
+export function visibleWidth(s: string): number {
+	return stripAnsi(s).length;
+}
+
+/** 获取终端列宽 */
+export function terminalColumns(): number {
+	return out.columns || 80;
+}
