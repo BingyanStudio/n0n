@@ -189,6 +189,11 @@ export class FeishuConversation {
 
 	private enqueue(task: () => Promise<void>): void {
 		this.queue = this.queue.then(task).catch((err) => {
+			// TODO: 卡片 API 错误被静默吞噬。initStreamingCard 失败后 cardEntityId=null，
+			// 后续所有更新都变为空操作，用户看不到任何输出。需要：
+			// 1. 添加重试机制（飞书 API 有 rate limit）
+			// 2. 降级为普通消息（CardKit 流式卡片不可用时）
+			// 3. 结构化错误追踪
 			console.error("[feishu] card update failed:", err);
 		});
 	}
