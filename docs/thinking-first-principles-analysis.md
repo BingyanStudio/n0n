@@ -20,7 +20,7 @@ AI SDK `@ai-sdk/openai` 的 Chat Completions SSE 解析器只处理 `delta.conte
 
 ### 真正的解决方案
 
-**网关 `your-ai-gateway.example.com` 实际上支持 Anthropic Messages API！**
+**网关支持 Anthropic Messages API！**
 
 端点路径是 `/v1/messages`（不是 `/messages`），实测确认：
 - ✅ Anthropic Messages 协议完整支持
@@ -28,14 +28,14 @@ AI SDK `@ai-sdk/openai` 的 Chat Completions SSE 解析器只处理 `delta.conte
 - ✅ tool calling 正常
 - ✅ prompt caching token 统计正常
 
-只需配置 `@ai-sdk/anthropic` 的 `baseURL` 为 `https://your-ai-gateway.example.com/v1`，
-AI SDK 会拼接为 `{baseURL}/messages` → `https://your-ai-gateway.example.com/v1/messages`。
+只需配置 `@ai-sdk/anthropic` 的 `baseURL` 为你的网关地址，
+AI SDK 会拼接为 `{baseURL}/messages` → `{baseURL}/messages`。
 
 ## 用户配置修改
 
 ```env
 LLM_PROVIDER=anthropic
-LLM_BASE_URL=https://your-ai-gateway.example.com/v1
+LLM_BASE_URL=<your-gateway-url>/v1
 LLM_ENABLE_THINKING=true
 ```
 

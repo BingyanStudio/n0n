@@ -222,7 +222,7 @@ bun install
 # 配置环境变量
 cat > .env << 'EOF'
 LLM_BASE_URL=https://api.example.com
-LLM_API_KEY=sk-xxx
+LLM_API_KEY=your-api-key-here
 LLM_MODEL=deepseek/deepseek-v3.2
 EOF
 
