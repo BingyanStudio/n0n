@@ -117,9 +117,6 @@ function buildUserInputContent(
 	if (msg.context) {
 		parts.push(wrapTag("context", msg.context, model));
 	}
-	if (msg.capabilities) {
-		parts.push(wrapTag("capabilities", msg.capabilities, model));
-	}
 	parts.push(msg.content);
 	if (msg.hint) {
 		parts.push(wrapTag("hint", msg.hint, model));
