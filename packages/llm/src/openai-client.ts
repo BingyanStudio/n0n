@@ -200,10 +200,12 @@ export class OpenAIClient implements LLMClient {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const apiMessages = toOpenAIMessages(promptMessages);
 
-		// openai-compatible 统一注入 cache_control：
-		// 对不支持该字段的 provider 通常是 no-op；对支持 Anthropic 风格 cache_control
-		// 的 provider（如 ppio.com）可启用提示缓存。最多注入 4 个断点。
-		if (this.config.providerConfig.provider === "openai-compatible") {
+		// 如果后端是 anthropic（通过 litellm），注入 cache_control
+		// Anthropic 限制最多 4 个 cache_control 断点，selectCacheBreakpoints 已保证 ≤ 4
+		if (
+			this.config.providerConfig.provider === "openai-compatible" &&
+			this.config.providerConfig.backendProvider === "anthropic"
+		) {
 			const breakpoints = selectCacheBreakpoints(apiMessages).slice(0, 4);
 			for (const idx of breakpoints) {
 				const msg = apiMessages[idx];
