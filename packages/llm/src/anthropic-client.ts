@@ -29,7 +29,7 @@ import type {
 import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
 import { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
-import { LLMError } from "./openai-client.ts";
+import { LLMError, isAbortError } from "./errors.ts";
 
 // ── Anthropic API Types ──
 
@@ -114,10 +114,6 @@ type AnthropicSSEEvent =
 	| { type: "message_stop" }
 	| { type: "ping" }
 	| { type: "error"; error: { type: string; message: string } };
-
-function isAbortError(err: unknown): boolean {
-	return err instanceof Error && err.name === "AbortError";
-}
 
 // ── PromptMessage → Anthropic Message 转换 ──
 

@@ -34,4 +34,4 @@ export {
 } from "./config-from-env.ts";
 
 // Error
-export { LLMError } from "./openai-client.ts";
+export { LLMError } from "./errors.ts";

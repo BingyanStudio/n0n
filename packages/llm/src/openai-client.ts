@@ -24,19 +24,7 @@ import type {
 } from "@n0n/types";
 import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
-
-// ── Error ──
-
-export class LLMError extends Error {
-	constructor(
-		message: string,
-		public status: number,
-		public body: unknown,
-	) {
-		super(message);
-		this.name = "LLMError";
-	}
-}
+import { LLMError, isAbortError } from "./errors.ts";
 
 // ── OpenAI API Types ──
 
@@ -115,10 +103,6 @@ function isSSEChunk(data: unknown): data is SSEChunk {
 	if (typeof data !== "object" || data === null) return false;
 	const obj = data as Record<string, unknown>;
 	return Array.isArray(obj.choices) || obj.usage !== undefined;
-}
-
-function isAbortError(err: unknown): boolean {
-	return err instanceof Error && err.name === "AbortError";
 }
 
 // ── PromptMessage → OpenAI Message 转换 ──
