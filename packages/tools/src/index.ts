@@ -8,11 +8,10 @@
  * - reminder: 延迟提醒
  * - submit: 提交结果（动态生成）
  *
- * 每个工具通过 AI SDK tool() 定义 + 自定义执行器绑定。
+ * 每个工具使用 ToolDefinition 格式定义 + 自定义执行器绑定。
  * 工具参数通过 Zod schema 做运行时校验。
  */
 
-import type { Tool, ToolSet } from "@n0n/llm";
 import type {
 	EditToolCall,
 	ExecToolCall,
@@ -20,6 +19,7 @@ import type {
 	SubmitArgs,
 	SubmitToolCall,
 	ToolCallRecord,
+	ToolDefinition,
 	ToolResult,
 	ToolStreamEvent,
 	WriteToolCall,
@@ -65,17 +65,17 @@ type SyncExecutor = (
 ) => Promise<ToolResult> | ToolResult;
 
 export type ToolEntry =
-	| { definition: Tool; stream: true; execute: StreamExecutor }
-	| { definition: Tool; stream: false; execute: SyncExecutor };
+	| { definition: ToolDefinition; stream: true; execute: StreamExecutor }
+	| { definition: ToolDefinition; stream: false; execute: SyncExecutor };
 
 // ── 基础注册表构建 ──
 
 /**
  * 构建基础工具注册表（不含 submit）。
- * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir/editorLlm）。
+ * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir/editorClient）。
  */
 function buildBaseRegistry(
-	execToolDef: Tool,
+	execToolDef: ToolDefinition,
 	toolsConfig: ToolsConfig,
 ): Record<string, ToolEntry> {
 	const resolvedWorkspace = toolsConfig.workspace;
@@ -120,7 +120,7 @@ function buildBaseRegistry(
 					tool: "edit" as const,
 					args: EditArgsSchema.parse(tc.args),
 				};
-				return editToolStream(call, resolvedWorkspace, toolsConfig.editorLlm);
+				return editToolStream(call, resolvedWorkspace, toolsConfig.editorClient);
 			},
 		},
 		reminder: {
@@ -141,8 +141,8 @@ function buildBaseRegistry(
 // ── Toolkit ──
 
 export interface Toolkit {
-	/** AI SDK ToolSet — 供 streamText/generateText 使用 */
-	toolSet: ToolSet;
+	/** ToolDefinition 列表 — 供 client.stream() 使用 */
+	tools: ToolDefinition[];
 	getEntry(name: string): ToolEntry | undefined;
 }
 
@@ -159,7 +159,7 @@ export const REGISTERED_TOOLS = new Set([
  * 异步：首次调用会探测系统可用 runtime（~1-2s），后续调用使用缓存。
  *
  * @param schema 可选的 Zod schema，用于约束 submit 的参数结构。
- * @param toolsConfig 工具配置，包含 workspace、tempDir、security、editorLlm 等。
+ * @param toolsConfig 工具配置，包含 workspace、tempDir、security、editorClient 等。
  * @param model LLM 模型名称，用于选择 XML tag 风格（可选）。
  */
 export async function makeToolkit(
@@ -190,14 +190,13 @@ export async function makeToolkit(
 		submit: submitEntry,
 	};
 
-	// 直接从注册表构建 ToolSet — 每个 entry.definition 已经是 AI SDK Tool
-	const toolSet: ToolSet = {};
-	for (const [name, entry] of Object.entries(registry)) {
-		toolSet[name] = entry.definition;
-	}
+	// 从注册表构建 ToolDefinition 列表
+	const tools: ToolDefinition[] = Object.values(registry).map(
+		(entry) => entry.definition,
+	);
 
 	return {
-		toolSet,
+		tools,
 		getEntry: (name) => registry[name],
 	};
 }

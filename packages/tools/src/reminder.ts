@@ -7,12 +7,12 @@
  * - agent 必须用 <reflection> 标签输出反思结论
  */
 
-import { jsonSchema, tool } from "@n0n/llm";
-import type { ReminderToolCall, ReminderToolResult } from "@n0n/types";
+import type { ReminderToolCall, ReminderToolResult, ToolDefinition } from "@n0n/types";
 
 export { ReminderArgsSchema } from "@n0n/types";
 
-export const REMINDER_TOOL_DEFINITION = tool({
+export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
+	name: "reminder",
 	description: [
 		"Set a memo/reminder for yourself (overwrites any previous — only one active at a time).",
 		"The content will appear as `<reminder>` tag in a future user message after the specified delay (rounds).",
@@ -28,7 +28,7 @@ export const REMINDER_TOOL_DEFINITION = tool({
 		"",
 		"Prefer conservative estimates — overdelivering early is better than breaking a commitment.",
 	].join("\n"),
-	inputSchema: jsonSchema({
+	parameters: {
 		type: "object",
 		properties: {
 			content: {
@@ -44,8 +44,8 @@ export const REMINDER_TOOL_DEFINITION = tool({
 		},
 		required: ["content"],
 		additionalProperties: false,
-	}),
-});
+	},
+};
 
 export interface PendingReminder {
 	content: string;

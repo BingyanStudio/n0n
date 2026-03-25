@@ -5,8 +5,6 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { getRuntime } from "@n0n/core";
-import type { ModelMessage } from "@n0n/llm";
-import { chatCompletion } from "@n0n/llm";
 import { Glob } from "bun";
 import type { RagHit, RagSearchResult, SearchSpace } from "../types.ts";
 import type { WorkflowPaths } from "../workspace.ts";
@@ -106,36 +104,31 @@ export async function ragSearch(
 		.map((c, i) => `[${i}] ${c.source}\n${c.summary}`)
 		.join("\n---\n");
 
-	const messages: ModelMessage[] = [
-		{
-			role: "system",
-			content: [
-				"You are a retrieval assistant. Given a query and a list of candidate documents,",
-				"select the documents most relevant to the query.",
-				"",
-				"Respond with ONLY a JSON array. Each element must have:",
-				'  - "index": number (the candidate index)',
-				'  - "relevance": "high" | "medium" | "low"',
-				'  - "reason": string (brief explanation, 1 sentence)',
-				"",
-				"Only include documents that are at least somewhat relevant. If nothing is relevant, return [].",
-				"Do NOT include any text outside the JSON array.",
-			].join("\n"),
-		},
-		{
-			role: "user",
-			content: `## Query\n${query}\n\n## Candidates\n${candidateList}`,
-		},
-	];
-
 	try {
-		const response = await chatCompletion(
-			{
-				messages,
-				temperature: 0,
-			},
-			getRuntime().model,
-		);
+		const response = await getRuntime().client.complete({
+			messages: [
+				{
+					role: "system",
+					content: [
+						"You are a retrieval assistant. Given a query and a list of candidate documents,",
+						"select the documents most relevant to the query.",
+						"",
+						"Respond with ONLY a JSON array. Each element must have:",
+						'  - "index": number (the candidate index)',
+						'  - "relevance": "high" | "medium" | "low"',
+						'  - "reason": string (brief explanation, 1 sentence)',
+						"",
+						"Only include documents that are at least somewhat relevant. If nothing is relevant, return [].",
+						"Do NOT include any text outside the JSON array.",
+					].join("\n"),
+				},
+				{
+					role: "user",
+					content: `## Query\n${query}\n\n## Candidates\n${candidateList}`,
+				},
+			],
+			temperature: 0,
+		});
 
 		const text = response.text?.trim() ?? "[]";
 		const selections = parseSelections(text);

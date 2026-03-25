@@ -15,14 +15,14 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { LLMConfig } from "@n0n/llm";
-import { jsonSchema, tool } from "@n0n/llm";
 import type {
 	DiffChunk,
 	DiffLine,
 	EditDiff,
 	EditToolCall,
 	EditToolResult,
+	LLMClient,
+	ToolDefinition,
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
@@ -34,9 +34,10 @@ export { editorLoop } from "./editor-loop.ts";
 
 // ── 主模型工具定义（intent 驱动） ──
 
-export const EDIT_TOOL_DEFINITION = tool({
+export const EDIT_TOOL_DEFINITION: ToolDefinition = {
+	name: "edit",
 	description: editDescription,
-	inputSchema: jsonSchema({
+	parameters: {
 		type: "object",
 		properties: {
 			path: {
@@ -51,8 +52,8 @@ export const EDIT_TOOL_DEFINITION = tool({
 		},
 		required: ["path", "intent"],
 		additionalProperties: false,
-	}),
-});
+	},
+};
 
 // ── Types ──
 
@@ -192,7 +193,7 @@ function failResult(call: EditToolCall, error: string): EditToolResult {
 export async function editTool(
 	call: EditToolCall,
 	workspace: string,
-	editorLlm: LLMConfig,
+	editorClient: LLMClient,
 ): Promise<EditToolResult> {
 	const filePath = isAbsolute(call.args.path)
 		? call.args.path
@@ -213,7 +214,7 @@ export async function editTool(
 			feedback,
 			error,
 			rounds,
-		} = await editorLoop(source, intent, editorLlm);
+		} = await editorLoop(source, intent, editorClient);
 
 		const durationMs = Date.now() - startTime;
 
@@ -251,7 +252,7 @@ export async function editTool(
 export async function* editToolStream(
 	call: EditToolCall,
 	workspace: string,
-	editorLlm: LLMConfig,
+	editorClient: LLMClient,
 ): AsyncGenerator<ToolStreamEvent> {
 	const filePath = isAbsolute(call.args.path)
 		? call.args.path
@@ -282,7 +283,7 @@ export async function* editToolStream(
 		};
 
 		let lastRound = -1;
-		const onEvent = (round: number, _event: import("@n0n/llm").StreamEvent) => {
+		const onEvent = (round: number, _event: import("@n0n/types").StreamEvent) => {
 			if (round !== lastRound) {
 				push(`[round ${round + 1}]\n`);
 				lastRound = round;
@@ -296,7 +297,7 @@ export async function* editToolStream(
 		const loopPromise = editorLoop(
 			source,
 			intent,
-			editorLlm,
+			editorClient,
 			onEvent,
 			onToolResult,
 		).then((result) => {

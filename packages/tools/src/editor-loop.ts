@@ -12,25 +12,25 @@
  * 5. 达到上限 → 返回最后的错误
  */
 
-import type { LLMConfig, ModelMessage, ToolSet } from "@n0n/llm";
-import {
-	chatCompletionStream,
-	createModelFromConfig,
-	jsonSchema,
-	StreamAccumulator,
-	tool,
-} from "@n0n/llm";
+import type {
+	LLMClient,
+	PromptMessage,
+	StreamEvent,
+	ToolDefinition,
+} from "@n0n/types";
+import { StreamAccumulator } from "@n0n/types";
 import editorAgentPrompt from "./descriptions/editor-agent.md" with {
 	type: "text",
 };
 
-// ── Editor LLM 内部工具定义（AI SDK ToolSet 格式） ──
+// ── Editor LLM 内部工具定义（ToolDefinition 格式） ──
 
-const EDITOR_TOOL_SET: ToolSet = {
-	str_replace: tool({
+const EDITOR_TOOLS: ToolDefinition[] = [
+	{
+		name: "str_replace",
 		description:
 			"Replace an exact substring in the file. The old_string must match character-for-character (including whitespace). Use the minimal unique fragment needed to identify the location.",
-		inputSchema: jsonSchema({
+		parameters: {
 			type: "object",
 			properties: {
 				old_string: {
@@ -49,12 +49,13 @@ const EDITOR_TOOL_SET: ToolSet = {
 			},
 			required: ["old_string", "new_string"],
 			additionalProperties: false,
-		}),
-	}),
-	view_file: tool({
+		},
+	},
+	{
+		name: "view_file",
 		description:
 			"View the current file content after previous edits. Optionally specify a line range to avoid reading the entire file.",
-		inputSchema: jsonSchema({
+		parameters: {
 			type: "object",
 			properties: {
 				start_line: {
@@ -69,12 +70,13 @@ const EDITOR_TOOL_SET: ToolSet = {
 				},
 			},
 			additionalProperties: false,
-		}),
-	}),
-	submit: tool({
+		},
+	},
+	{
+		name: "submit",
 		description:
 			"Submit when edits are complete, OR immediately when the intent is ambiguous/vague/impossible to execute. You MUST always provide scored feedback using the [score/4] format.",
-		inputSchema: jsonSchema({
+		parameters: {
 			type: "object",
 			properties: {
 				feedback: {
@@ -85,31 +87,26 @@ const EDITOR_TOOL_SET: ToolSet = {
 			},
 			required: ["feedback"],
 			additionalProperties: false,
-		}),
-	}),
-};
+		},
+	},
+];
 
 /** Editor LLM 最大循环轮数 */
 const MAX_ROUNDS = 15;
 
 // ── 辅助函数 ──
 
-/** 构造 AI SDK ToolModelMessage — 消除 editor loop 中的重复模板 */
+/** 构造 tool result PromptMessage */
 function toolResult(
 	toolCallId: string,
 	toolName: string,
 	value: string,
-): ModelMessage {
+): PromptMessage {
 	return {
 		role: "tool",
-		content: [
-			{
-				type: "tool-result" as const,
-				toolCallId,
-				toolName,
-				output: { type: "text" as const, value },
-			},
-		],
+		toolCallId,
+		toolName,
+		content: value,
 	};
 }
 
@@ -167,55 +164,45 @@ export function applySingleOp(
 	const normNew = useCrlf
 		? newStr.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n")
 		: newStr.replace(/\r\n/g, "\n");
-
-	// 执行替换：替换所有匹配（expectedMatches 个）
-	let content = normSource;
-	let pos = 0;
-	for (let i = 0; i < actualMatches; i++) {
-		const idx = content.indexOf(normOld, pos);
-		if (idx === -1) break;
-		content =
-			content.slice(0, idx) + normNew + content.slice(idx + normOld.length);
-		pos = idx + normNew.length;
-	}
-
-	return {
-		ok: true,
-		content: useCrlf ? content.replace(/\n/g, "\r\n") : content,
-	};
+	const content = normSource.split(normOld).join(normNew);
+	return { ok: true, content: useCrlf ? content : content };
 }
 
 // ── getReplacementContext ──
 
 /**
- * 获取替换后在内容中的行号和内容上下文。
- * 返回修改处的行号范围和对应行内容。
+ * 获取替换后的上下文（替换位置前后各 2 行），帮助 LLM 确认替换结果。
  */
 function getReplacementContext(
 	content: string,
 	newStr: string,
+	contextLines = 2,
 ): string {
-	if (!newStr) return "Deletion applied.";
+	if (!newStr) return "(deletion — no replacement context)";
 
-	const normContent = content.replace(/\r\n/g, "\n");
-	const normNew = newStr.replace(/\r\n/g, "\n");
-	const idx = normContent.indexOf(normNew);
-	if (idx === -1) return "Replacement applied.";
+	const pos = content.indexOf(newStr);
+	if (pos === -1) return "";
 
-	const beforeMatch = normContent.slice(0, idx);
-	const startLine = beforeMatch.split("\n").length;
-	const newLines = normNew.split("\n");
-	const endLine = startLine + newLines.length - 1;
+	const lines = content.split("\n");
+	const linesBefore = content.slice(0, pos).split("\n");
+	const replacementStartLine = linesBefore.length;
+	const replacementLines = newStr.split("\n").length;
 
-	const lines: string[] = [];
-	for (let i = 0; i < newLines.length; i++) {
-		lines.push(`${startLine + i}| ${newLines[i]}`);
-	}
+	const start = Math.max(0, replacementStartLine - contextLines - 1);
+	const end = Math.min(
+		lines.length,
+		replacementStartLine + replacementLines + contextLines,
+	);
 
-	return `Lines ${startLine}-${endLine}:\n${lines.join("\n")}`;
+	const numbered = lines
+		.slice(start, end)
+		.map((line, i) => `${start + i + 1}| ${line}`)
+		.join("\n");
+
+	return `Context (L${start + 1}-${end}):\n${numbered}`;
 }
 
-// ── Editor Loop ──
+// ── EditorLoopResult ──
 
 export interface EditorLoopResult {
 	content: string;
@@ -223,6 +210,8 @@ export interface EditorLoopResult {
 	error: string | null;
 	rounds: number;
 }
+
+// ── Editor Loop ──
 
 /**
  * Editor LLM 专用循环：驱动 Editor LLM 通过 str_replace/view_file/submit
@@ -234,15 +223,14 @@ export interface EditorLoopResult {
 export async function editorLoop(
 	source: string,
 	intent: string,
-	editorLlm: LLMConfig,
-	onEvent?: (round: number, event: import("@n0n/llm").StreamEvent) => void,
+	editorClient: LLMClient,
+	onEvent?: (round: number, event: StreamEvent) => void,
 	onToolResult?: (round: number, summary: string) => void,
 ): Promise<EditorLoopResult> {
 	let current = source;
 	let editCount = 0;
-	const model = createModelFromConfig(editorLlm);
 
-	const messages: ModelMessage[] = [
+	const messages: PromptMessage[] = [
 		{ role: "system", content: editorAgentPrompt },
 		{
 			role: "user",
@@ -262,13 +250,13 @@ export async function editorLoop(
 		const acc = new StreamAccumulator();
 		let message: ReturnType<StreamAccumulator["toMessage"]>;
 		try {
-			for await (const event of chatCompletionStream(
+			for await (const event of editorClient.stream(
 				{
-					messages,
-					tools: EDITOR_TOOL_SET,
+					messages: [],
+					promptMessages: messages,
+					tools: EDITOR_TOOLS,
 					toolChoice: "required",
 				},
-				{ model },
 			)) {
 				acc.push(event);
 				onEvent?.(round, event);
@@ -278,25 +266,20 @@ export async function editorLoop(
 			return {
 				content: current,
 				feedback: null,
-				error: `Editor LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
+				error: `Editor LLM error: ${err instanceof Error ? err.message : String(err)}`,
 				rounds: round + 1,
 			};
 		}
 
-		if (!message.toolCalls.length) {
-			messages.push({
-				role: "assistant",
-				content: message.content ?? "",
-			});
-			messages.push({
-				role: "user",
-				content:
-					"You must call a tool. Use str_replace to make changes, view_file to check the file, or submit when done.",
-			});
-			continue;
+		if (message.toolCalls.length === 0) {
+			return {
+				content: current,
+				feedback: null,
+				error: "Editor LLM returned no tool calls",
+				rounds: round + 1,
+			};
 		}
 
-		// 预解析所有 tool call 参数（避免 double parse）
 		const parsedToolCalls: Array<{
 			tc: (typeof message.toolCalls)[number];
 			args: Record<string, unknown> | null;
@@ -311,19 +294,14 @@ export async function editorLoop(
 		// 构建 assistant 消息（包含 tool calls）
 		messages.push({
 			role: "assistant",
-			content: [
-				...(message.content
-					? [{ type: "text" as const, text: message.content }]
-					: []),
-				...parsedToolCalls
-					.filter((p) => p.args !== null)
-					.map((p) => ({
-						type: "tool-call" as const,
-						toolCallId: p.tc.toolCallId,
-						toolName: p.tc.toolName,
-						input: p.args,
-					})),
-			],
+			content: message.content ?? "",
+			toolCalls: parsedToolCalls
+				.filter((p) => p.args !== null)
+				.map((p) => ({
+					id: p.tc.toolCallId,
+					tool: p.tc.toolName,
+					args: p.args!,
+				})),
 		});
 
 		for (const { tc, args } of parsedToolCalls) {
