@@ -14,7 +14,7 @@ import type {
 	TokenUsage,
 	ToolResult,
 } from "@n0n/types";
-import { StreamAccumulator } from "@n0n/types";
+import { FinishReason, StreamAccumulator } from "@n0n/types";
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
 import type { ZodType } from "zod";
@@ -123,6 +123,43 @@ export async function agentLoop<T = unknown>(
 		if (options?.signal?.aborted) {
 			renderer.aborted();
 			return { result: null, report: null, history: messages };
+		}
+
+		// finishReason 检查 — 截断恢复与内容过滤处理
+		if (acc.finishReason === FinishReason.LENGTH) {
+			// 模型输出因 max_tokens 截断，工具调用 JSON 可能不完整
+			// 将已有内容保存为 assistant_text，通知用户截断情况
+			const partialContent = acc.content || "";
+			messages.push({
+				type: "assistant_text",
+				content: partialContent,
+				reasoning: acc.reasoning || undefined,
+				reasoningSignature: acc.reasoningSignature || undefined,
+			});
+			messages.push({
+				type: "user_text",
+				content:
+					"Your previous response was truncated due to max_tokens limit. " +
+					"The tool call JSON was incomplete and could not be parsed. " +
+					"Please retry with a shorter response, or break the task into smaller steps.",
+			});
+			continue;
+		}
+
+		if (acc.finishReason === FinishReason.CONTENT_FILTER) {
+			const partialContent = acc.content || "";
+			messages.push({
+				type: "assistant_text",
+				content: partialContent,
+				reasoning: acc.reasoning || undefined,
+				reasoningSignature: acc.reasoningSignature || undefined,
+			});
+			renderer.agentTerminated("Content was filtered by the model provider.");
+			return {
+				result: null,
+				report: "Agent terminated: content filter triggered",
+				history: messages,
+			};
 		}
 
 		const assistantMsg = acc.toMessage();

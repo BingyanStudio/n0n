@@ -22,12 +22,7 @@ export type {
 	OpenAIProviderConfig,
 	ProviderConfig,
 } from "./config.ts";
-export {
-	DEFAULT_THINKING_BUDGET_TOKENS,
-	getModelId,
-	getProviderType,
-	isAnthropicProvider,
-} from "./config.ts";
+export { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
 
 // 环境变量 → 配置工厂（SSOT：runtime.ts 和 bootstrap 共用）
 export {
@@ -39,4 +34,4 @@ export {
 } from "./config-from-env.ts";
 
 // Error
-export { LLMError } from "./openai-client.ts";
+export { LLMError } from "./errors.ts";

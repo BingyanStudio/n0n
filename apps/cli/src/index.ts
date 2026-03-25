@@ -15,6 +15,7 @@ import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
+import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
 import { loadSchedules } from "@n0n/scheduler";
 import { ensureDirs, parseWorkspaceArg } from "@n0n/shared";
 import {
@@ -35,7 +36,12 @@ const { workspace, remainingArgs } = parseWorkspaceArg(
 
 const workspacePaths = resolveWorkflowPaths(workspace);
 ensureDirs(workspacePaths);
-const runtime = createRuntimeContext();
+const llmConfig = buildLLMConfigFromEnv("LLM");
+const editorLlmConfig = buildLLMConfigFromEnv("EDITOR_LLM", llmConfig.providerConfig);
+const runtime = createRuntimeContext({
+	client: createLLMClient(llmConfig),
+	editorClient: createLLMClient(editorLlmConfig),
+});
 initRuntime(runtime);
 
 // ── 子命令路由 ──

@@ -24,19 +24,7 @@ import type {
 } from "@n0n/types";
 import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
-
-// ── Error ──
-
-export class LLMError extends Error {
-	constructor(
-		message: string,
-		public status: number,
-		public body: unknown,
-	) {
-		super(message);
-		this.name = "LLMError";
-	}
-}
+import { LLMError, isAbortError } from "./errors.ts";
 
 // ── OpenAI API Types ──
 
@@ -74,6 +62,7 @@ interface OpenAIRequest {
 	temperature?: number;
 	max_tokens?: number;
 	stream?: boolean;
+	stream_options?: { include_usage: boolean };
 	enable_thinking?: boolean;
 }
 
@@ -114,10 +103,6 @@ function isSSEChunk(data: unknown): data is SSEChunk {
 	if (typeof data !== "object" || data === null) return false;
 	const obj = data as Record<string, unknown>;
 	return Array.isArray(obj.choices) || obj.usage !== undefined;
-}
-
-function isAbortError(err: unknown): boolean {
-	return err instanceof Error && err.name === "AbortError";
 }
 
 // ── PromptMessage → OpenAI Message 转换 ──
@@ -212,16 +197,17 @@ export class OpenAIClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = request.promptMessages
-			?? formatPrompt(request.messages, this.modelId);
+		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const apiMessages = toOpenAIMessages(promptMessages);
 
 		// 如果后端是 anthropic（通过 litellm），注入 cache_control
+		// Anthropic 限制最多 4 个 cache_control 断点，selectCacheBreakpoints 已保证 ≤ 4
 		if (
 			this.config.providerConfig.provider === "openai-compatible" &&
 			this.config.providerConfig.backendProvider === "anthropic"
 		) {
-			for (const idx of selectCacheBreakpoints(apiMessages)) {
+			const breakpoints = selectCacheBreakpoints(apiMessages).slice(0, 4);
+			for (const idx of breakpoints) {
 				const msg = apiMessages[idx];
 				if (msg) {
 					(msg as unknown as Record<string, unknown>).cache_control = {
@@ -235,6 +221,7 @@ export class OpenAIClient implements LLMClient {
 			model: this.modelId,
 			messages: apiMessages,
 			stream: true,
+			stream_options: { include_usage: true },
 		};
 
 		if (request.tools?.length) {
@@ -275,6 +262,67 @@ export class OpenAIClient implements LLMClient {
 		}
 
 		let lastUsage: TokenUsage | null = null;
+		let lastFinishReason: string | null = null;
+
+		// 内部函数：处理单个 data: 行，消除主循环与 flush 间的重复（#009）
+		const processDataLine = function* (payload: string): Generator<StreamEvent> {
+			if (!payload || payload === "[DONE]") return;
+
+			let chunk: unknown;
+			try {
+				chunk = JSON.parse(payload);
+			} catch {
+				return;
+			}
+
+			if (!isSSEChunk(chunk)) return;
+
+			// usage 统计（部分 provider 在最后一个 chunk 发送 usage）
+			if (chunk.usage) {
+				const u = chunk.usage;
+				const cacheReadTokens =
+					u.prompt_tokens_details?.cached_tokens ??
+					u.prompt_cache_hit_tokens ??
+					0;
+				const cacheWriteTokens = u.prompt_cache_miss_tokens ?? 0;
+				// OpenAI prompt_tokens 包含 cached tokens，需扣除以对齐 Anthropic 语义
+				// （inputTokens 统一表示"新计算的输入 token"）
+				const rawInput = u.prompt_tokens ?? 0;
+				lastUsage = {
+					inputTokens: rawInput - cacheReadTokens,
+					outputTokens: u.completion_tokens ?? 0,
+					totalTokens: u.total_tokens ?? 0,
+					cacheReadTokens,
+					cacheWriteTokens,
+				};
+			}
+
+			const delta = chunk.choices?.[0]?.delta;
+			if (delta) {
+				if (delta.reasoning_content) {
+					yield { type: "thinking", text: delta.reasoning_content };
+				}
+				if (delta.content) {
+					yield { type: "content", text: delta.content };
+				}
+				if (delta.tool_calls) {
+					for (const tc of delta.tool_calls) {
+						yield {
+							type: "tool_call_delta",
+							index: tc.index,
+							id: tc.id,
+							name: tc.function?.name,
+							arguments: tc.function?.arguments ?? "",
+						};
+					}
+				}
+			}
+
+			const finish = chunk.choices?.[0]?.finish_reason;
+			if (finish) {
+				lastFinishReason = finish;
+			}
+		};
 
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
@@ -297,70 +345,31 @@ export class OpenAIClient implements LLMClient {
 						const payload = line.slice(6);
 
 						if (payload === "[DONE]") {
+							if (lastFinishReason) {
+								yield { type: "done", finishReason: lastFinishReason, usage: lastUsage };
+							}
 							return;
 						}
 
-						let chunk: unknown;
-						try {
-							chunk = JSON.parse(payload);
-						} catch {
-							continue;
-						}
-
-						if (!isSSEChunk(chunk)) continue;
-
-						// usage 统计（部分 provider 在最后一个 chunk 发送 usage）
-						if (chunk.usage) {
-							const u = chunk.usage;
-							lastUsage = {
-								inputTokens: u.prompt_tokens ?? 0,
-								outputTokens: u.completion_tokens ?? 0,
-								totalTokens: u.total_tokens ?? 0,
-								cacheReadTokens:
-									u.prompt_tokens_details?.cached_tokens ??
-									u.prompt_cache_hit_tokens ??
-									0,
-								cacheWriteTokens: u.prompt_cache_miss_tokens ?? 0,
-							};
-						}
-
-						const delta = chunk.choices?.[0]?.delta;
-						if (!delta) continue;
-
-						if (delta.reasoning_content) {
-							yield {
-								type: "thinking",
-								text: delta.reasoning_content,
-							};
-						}
-
-						if (delta.content) {
-							yield { type: "content", text: delta.content };
-						}
-
-						if (delta.tool_calls) {
-							for (const tc of delta.tool_calls) {
-								yield {
-									type: "tool_call_delta",
-									index: tc.index,
-									id: tc.id,
-									name: tc.function?.name,
-									arguments: tc.function?.arguments ?? "",
-								};
-							}
-						}
-
-						const finish = chunk.choices?.[0]?.finish_reason;
-						if (finish) {
-							yield {
-								type: "done",
-								finishReason: finish,
-								usage: lastUsage,
-							};
-						}
+						yield* processDataLine(payload);
 					}
 					boundary = buffer.indexOf("\n\n");
 				}
+			}
+
+			// Flush remaining buffer — handle case where stream ends without trailing \n\n
+			if (buffer.trim()) {
+				for (const line of buffer.split("\n")) {
+					if (!line.startsWith("data: ")) continue;
+					const payload = line.slice(6);
+					if (payload === "[DONE]") break;
+					yield* processDataLine(payload);
+				}
+			}
+
+			// If stream ended without [DONE], emit deferred done event
+			if (lastFinishReason) {
+				yield { type: "done", finishReason: lastFinishReason, usage: lastUsage };
 			}
 		} catch (err) {
 			if (!isAbortError(err)) {

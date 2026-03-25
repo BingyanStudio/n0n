@@ -12,7 +12,7 @@
 
 /** 单轮 LLM 调用的 token 用量统计 */
 export interface TokenUsage {
-	/** 输入 token 总量 */
+	/** 新计算的输入 token 数（不含缓存命中部分，各 provider 已统一为此语义） */
 	inputTokens: number;
 	/** 输出 token 总量 */
 	outputTokens: number;
@@ -23,6 +23,26 @@ export interface TokenUsage {
 	/** 写入缓存的输入 token 数 */
 	cacheWriteTokens: number;
 }
+
+// ── FinishReason ──
+
+/**
+ * 归一化的完成原因常量 — SSOT
+ *
+ * 各 LLM Client 负责将 provider 原生值映射到此枚举。
+ * 消费方（agent loop 等）只引用这些常量，不使用魔法字符串。
+ */
+export const FinishReason = {
+	/** 模型正常结束输出 */
+	STOP: "stop",
+	/** 输出因 max_tokens 截断 */
+	LENGTH: "length",
+	/** 模型请求调用工具 */
+	TOOL_CALLS: "tool_calls",
+	/** 内容被 provider 安全过滤器拦截 */
+	CONTENT_FILTER: "content_filter",
+} as const;
+export type FinishReason = (typeof FinishReason)[keyof typeof FinishReason];
 
 // ── StreamEvent ──
 
@@ -82,8 +102,6 @@ import type { DomainMessage } from "./domain.ts";
 /** 流式请求 — 走 DomainMessage 领域层，或直接传入 PromptMessage */
 export interface StreamRequest {
 	messages: DomainMessage[];
-	/** 预格式化的提示词消息（跳过 formatPrompt）。设置后忽略 messages 字段。 */
-	promptMessages?: PromptMessage[];
 	tools?: ToolDefinition[];
 	toolChoice?: "auto" | "none" | "required";
 }

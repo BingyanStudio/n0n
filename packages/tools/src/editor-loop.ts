@@ -13,8 +13,8 @@
  */
 
 import type {
+	DomainMessage,
 	LLMClient,
-	PromptMessage,
 	StreamEvent,
 	ToolDefinition,
 } from "@n0n/types";
@@ -101,10 +101,10 @@ function toolResult(
 	toolCallId: string,
 	toolName: string,
 	value: string,
-): PromptMessage {
+): DomainMessage {
 	return {
-		role: "tool",
-		toolCallId,
+		type: "generic_tool_result",
+		callId: toolCallId,
 		toolName,
 		content: value,
 	};
@@ -226,14 +226,15 @@ export async function editorLoop(
 	editorClient: LLMClient,
 	onEvent?: (round: number, event: StreamEvent) => void,
 	onToolResult?: (round: number, summary: string) => void,
+	signal?: AbortSignal,
 ): Promise<EditorLoopResult> {
 	let current = source;
 	let editCount = 0;
 
-	const messages: PromptMessage[] = [
-		{ role: "system", content: editorAgentPrompt },
+	const messages: DomainMessage[] = [
+		{ type: "system", content: editorAgentPrompt },
 		{
-			role: "user",
+			type: "user_text",
 			content: [
 				"<source_file>",
 				source,
@@ -247,16 +248,25 @@ export async function editorLoop(
 	];
 
 	for (let round = 0; round < MAX_ROUNDS; round++) {
+		if (signal?.aborted) {
+			return {
+				content: current,
+				feedback: null,
+				error: "Editor loop aborted",
+				rounds: round,
+			};
+		}
+
 		const acc = new StreamAccumulator();
 		let message: ReturnType<StreamAccumulator["toMessage"]>;
 		try {
 			for await (const event of editorClient.stream(
 				{
-					messages: [],
-					promptMessages: messages,
+					messages,
 					tools: EDITOR_TOOLS,
 					toolChoice: "required",
 				},
+				signal,
 			)) {
 				acc.push(event);
 				onEvent?.(round, event);
@@ -293,7 +303,7 @@ export async function editorLoop(
 
 		// 构建 assistant 消息（包含 tool calls）
 		messages.push({
-			role: "assistant",
+			type: "generic_tool_call",
 			content: message.content ?? "",
 			toolCalls: parsedToolCalls
 				.filter((p) => p.args !== null)

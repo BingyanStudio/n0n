@@ -1,49 +1,42 @@
-# Review 汇总 — refactor/remove-ai-sdk
+# Code Review 总结 — SSOT 与关注点分离（二次审查）
 
-## 总体评价
+> 审查对象：当前 `fix/review-issues` 分支代码
+> 审查基准：`docs/plan-remove-ai-sdk.md` 所描述的目标架构
+> 审查重点：SSOT（Single Source of Truth）违背、关注点分离不足
+> **二次审查重点：区分「真正的 SSOT 违背」与「过度工程化的提取建议」**
 
-此次重构总体质量较高，8 个 Step 按 Plan 依赖顺序执行，commit 粒度清晰，3 个修复 commit 也说明有端到端测试验证。核心设计（LLMClient 接口、StreamEvent、ToolDefinition 回退、format-prompt 分离）实现到位。
+## 二次审查总体判断
 
-## 问题分布
+初次审查识别出的 11 个问题中，有些确实是应该修复的 SSOT 违背，但有些建议的「提取复用」实质上是**过度工程化** —— 当两处代码的语义上下文完全不同时，机械地提取共同子串并不能带来真正的工程收益，反而增加了间接层和认知负担。
 
-| 严重程度 | 数量 | 编号 |
-|---------|------|------|
-| 高 | 2 | #001, #015 |
-| 中 | 5 | #005, #006, #007, #009, #011, #013 |
-| 低 | 8 | #002, #003, #004, #008, #010, #012, #014, #016, #017 |
+## 问题清单（二次审查评级）
 
-## 高优先级问题
+| 编号 | 初评 | 二评 | 标题 | 二次审查结论 |
+|------|------|------|------|-------------|
+| 001 | 🔴 高 | 🟡→🟢 降级 | SSE 解析逻辑在 OpenAI/Anthropic Client 中大量重复 | **过度工程化**。两者 SSE 语义模型完全不同，不应提取 |
+| 002 | 🟡 中 | 🟡 维持 | StreamRequest.promptMessages 旁路 | 技术债务，但当前是合理的务实妥协 |
+| 003 | 🟡 中 | 🟡→🟢 降级 | cache 注入逻辑分散 | **语义不同**。两者注入方式是 provider 格式差异导致的，不是 SSOT 问题 |
+| 004 | 🟡 中 | 🟡 维持 | finishReason 魔法字符串 | **真正的 SSOT 问题**，建议修复 |
+| 005 | 🟡 中 | 🟢 降级 | isAbortError 重复 | **过度工程化**。3 行工具函数重复不构成维护风险 |
+| 006 | 🟡 中 | 🟡 维持 | Anthropic max_tokens 硬编码 | **真正的问题**，但是具名常量化即可 |
+| 007 | 🟢 低 | 🟢 维持 | user_image 降级为文本 | 功能缺失，低优先级 |
+| 008 | 🟢 低 | 🟢 维持 | types 包含 StreamAccumulator | 架构洁癖问题，低优先级 |
+| 009 | 🟢 低 | 🟡 升级 | OpenAI flush buffer 逻辑与主循环重复 | **真正的 DRY 问题**，同一个函数内的复制粘贴 |
+| 010 | 🟢 低 | 🟡 升级 | LLMError 定义在 openai-client | **真正的耦合问题**，简单移动即可修复 |
+| 011 | 🟢 低 | 🟢 维持 | config.ts 死代码 | 直接删除 |
 
-### #001 — finishReason 截断恢复逻辑未实现
-Plan 的核心动机之一（§1.2）是修复 finishReason 未检查的问题，Plan Step 7 明确要求添加截断恢复逻辑，但 agent loop 中完全没有实现。StreamAccumulator 已正确累积 finishReason，但 loop 从未读取。
+## 需要行动的项（按优先级排序）
 
-### #015 — 新核心模块缺少单元测试
-format-prompt（纯函数）、StreamAccumulator（状态类）、两个 Client 的 SSE 解析和消息格式转换均无测试。Plan §9 列出了详细测试矩阵但未落地。三个修复 commit 证明了端到端测试发现 bug 的能力，但这些 bug 若有单元测试可更早发现。
+1. **010 — LLMError 提取到 errors.ts**（简单，收益高）
+2. **011 — 删除 config.ts 死代码**（简单，无风险）
+3. **009 — OpenAI Client 内提取 processChunk 内部函数**（中等，消除函数内 DRY 违背）
+4. **004 — finishReason 常量枚举**（中等，消除跨模块魔法字符串）
+5. **006 — Anthropic 默认值具名常量化**（简单）
 
-## 中优先级问题
+## 不建议行动的项
 
-- **#011** — tool_arg_error.schema 恢复了数据存储但 format-prompt 未将 schema 包含在提示词中，模型仍看不到
-- **#013** — @n0n/core/runtime.ts 仍直接 import @n0n/llm，依赖反转未完全实现
-- **#005** — OpenAI usage 可能因 chunk 顺序问题丢失
-- **#006** — Anthropic max_tokens 硬编码，thinking 大预算场景可能超限
-- **#007** — editor-loop 不支持 AbortSignal，Ctrl+C 无法终止编辑中的 LLM 调用
-- **#009** — OpenAI litellm 路径的 cache 注入没有 budget 限制
-
-## 低优先级问题（代码卫生）
-
-- **#002, #003, #004** — 残留旧注释和死代码（ThinkingProviderOptions、anthropicCacheControl、旧导出）
-- **#008** — 两个 Client 的 complete() 重试逻辑不统一
-- **#010** — user_image 降级为纯文本占位
-- **#012** — SSE buffer 残留数据理论上可能丢失
-- **#014** — Anthropic 空 system 数组
-- **#016** — promptMessages 旁路是 Plan 外设计变更
-- **#017** — node_modules 残留
-
-## 正面评价
-
-1. **commit 粒度优秀** — 每个 Step 一个 commit，消息清晰，改动范围与 Plan 一致
-2. **修复 commit 证明了实践验证** — baseUrl 双 /v1、Anthropic tool_call_delta index、thinking signature、cache overflow 4 个 bug 都在端到端测试中发现并修复
-3. **@n0n/tools 依赖反转完全实现** — 不再依赖 @n0n/llm
-4. **format-prompt 模块清晰** — 纯函数，职责边界明确
-5. **SSE 解析实现健壮** — 正确处理了 abort、网络错误、API 错误等边界场景
-6. **Anthropic thinking signature 全链路** — 从 SSE 解析到 DomainMessage 到 PromptMessage 到 API 消息格式的完整传递
+- **001** — SSE 提取（过度工程化，详见 001 二审报告）
+- **003** — cache 注入统一（语义不同，详见 003 二审报告）
+- **005** — isAbortError 提取（收益太低）
+- **002** — promptMessages 重构（务实妥协，当前可接受）
+- **007/008** — 低优先级功能/架构问题
