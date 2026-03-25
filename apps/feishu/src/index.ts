@@ -14,6 +14,7 @@
 
 import * as lark from "@larksuiteoapi/node-sdk";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
+import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
 import {
 	loadSchedules,
 	type SchedulerHandle,
@@ -48,7 +49,12 @@ export async function startFeishuService(): Promise<void> {
 	const bot = new FeishuBot({ appId, appSecret, domain });
 	const systemPrompt = feishuPromptText;
 
-	const runtime = createRuntimeContext();
+	const llmConfig = buildLLMConfigFromEnv("LLM");
+	const editorLlmConfig = buildLLMConfigFromEnv("EDITOR_LLM", llmConfig.providerConfig);
+	const runtime = createRuntimeContext({
+		client: createLLMClient(llmConfig),
+		editorClient: createLLMClient(editorLlmConfig),
+	});
 	initRuntime(runtime);
 
 	// 扫描所有已有用户目录，为有 schedule 的用户启动 scheduler

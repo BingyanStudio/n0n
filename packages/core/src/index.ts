@@ -15,6 +15,7 @@ export { agentLoop } from "./agent/loop.ts";
 export type {
 	AgentConfig,
 	RuntimeContext,
+	RuntimeOptions,
 	SecurityConfig,
 } from "./runtime.ts";
 export { createRuntimeContext, getRuntime, initRuntime } from "./runtime.ts";

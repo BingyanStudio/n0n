@@ -1,30 +1,45 @@
-# Review Issue #006: Anthropic Client max_tokens 硬编码
+# 006 — Anthropic max_tokens 硬编码，未走统一配置路径
 
-## 严重程度：中
+**初评严重度**: 🟡 中（违背 SSOT）
+**二次审查**: 🟡 **维持 — 具名常量化即可**
+**文件**: `packages/llm/src/anthropic-client.ts`, `packages/llm/src/config.ts`
 
-## 位置
-- `packages/llm/src/anthropic-client.ts` (L269, L488)
+## 初评描述
 
-## 描述
+Anthropic Client 中 `max_tokens` 有多处硬编码：stream 默认 8192，complete 默认 4096，thinking buffer 4096。
 
-AnthropicClient 的 `max_tokens` 在两处硬编码：
+## 二次审查：确认问题，但范围收窄
 
-1. **stream()** (L269): `max_tokens: 8192`
-2. **complete()** (L488): `max_tokens: 4096`
+### 1. 默认值分散确实不利于维护
 
-Anthropic API 要求必须传 `max_tokens`，这一点无误。但问题是：
+- `stream()`: `this.config.maxOutputTokens ?? 8192`
+- `complete()`: `this.config.maxOutputTokens ?? 4096`
+- thinking 模式: `budget + 4096`
 
-1. 不同模型有不同的 `max_output_tokens` 上限（Claude 3.5 Sonnet 为 8192，Claude 3 Opus 为 4096，Claude 4 可能更高）。硬编码 8192 可能不适用于所有模型。
+三处硬编码值分散在方法内部，修改时容易遗漏。
 
-2. 当 `enableThinking` 开启时 (L285)，`max_tokens` 被设为 `Math.max(8192, budget + 4096)`。对于默认的 `budget = 1024`，结果为 8192 不变。但如果用户设置更大的 thinking budget（如 10000），则 max_tokens = 14096，这可能超过模型上限。
+### 2. config.ts 的 JSDoc 已经暗示了默认值
 
-3. LLMConfig 中没有 `maxOutputTokens` 配置项，用户无法自定义。
+```ts
+/** 最大输出 token 数。Anthropic 默认 8192（stream）/ 4096（complete）。 */
+maxOutputTokens?: number;
+```
 
-## 影响
+但 JSDoc 中的值和代码中的值是两个维护点——如果改了代码不改注释，就会误导。
 
-- 大部分场景下 8192 足够，但不够灵活
-- thinking 大预算场景可能超模型限制导致 API 400 错误
+### 3. 具名常量化即可，不需要复杂配置系统
 
-## 建议
+在 `anthropic-client.ts` 头部定义文件级常量：
 
-在 LLMConfig 中添加可选的 `maxOutputTokens` 字段，带合理默认值。
+```ts
+const ANTHROPIC_DEFAULT_STREAM_MAX_TOKENS = 8192;
+const ANTHROPIC_DEFAULT_COMPLETE_MAX_TOKENS = 4096;
+/** thinking 模式下输出 token 的额外 buffer（Anthropic 要求 max_tokens > budget_tokens） */
+const ANTHROPIC_THINKING_OUTPUT_BUFFER = 4096;
+```
+
+不需要放到 `config.ts` 中——这些是 Anthropic Client 的实现细节，不是全局配置。
+
+## 结论
+
+**建议修复**。在 `anthropic-client.ts` 中定义具名常量，替换硬编码值。修复成本约 5 分钟。注意常量应留在 Client 文件内部，不必导出到 config.ts。

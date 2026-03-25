@@ -273,16 +273,40 @@ export function formatPrompt(
 				});
 				break;
 
-			case "tool_arg_error":
+			case "tool_arg_error": {
+				let errorContent = `Invalid tool arguments: ${msg.error}`;
+				if (msg.schema) {
+					errorContent += `\n\nExpected schema:\n${JSON.stringify(msg.schema, null, 2)}`;
+				}
 				result.push({
 					role: "tool",
 					toolCallId: msg.callId,
 					toolName: msg.tool,
-					content: wrapTag(
-						"error",
-						`Invalid tool arguments: ${msg.error}`,
-						modelId,
-					),
+					content: wrapTag("error", errorContent, modelId),
+				});
+				break;
+			}
+
+			case "generic_tool_call": {
+				const toolCalls: ToolCallPart[] = msg.toolCalls.map((tc) => ({
+					id: tc.id,
+					tool: tc.tool,
+					args: tc.args,
+				}));
+				result.push({
+					role: "assistant",
+					content: msg.content ?? "",
+					toolCalls,
+				});
+				break;
+			}
+
+			case "generic_tool_result":
+				result.push({
+					role: "tool",
+					toolCallId: msg.callId,
+					toolName: msg.toolName,
+					content: msg.content,
 				});
 				break;
 		}

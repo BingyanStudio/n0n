@@ -16,19 +16,30 @@
  */
 
 import { formatPrompt } from "@n0n/shared";
-import type {
-	CompleteRequest,
-	CompleteResponse,
-	LLMClient,
-	PromptMessage,
-	StreamEvent,
-	StreamRequest,
-	TokenUsage,
-	ToolDefinition,
+import {
+	FinishReason,
+	type CompleteRequest,
+	type CompleteResponse,
+	type LLMClient,
+	type PromptMessage,
+	type StreamEvent,
+	type StreamRequest,
+	type TokenUsage,
+	type ToolDefinition,
 } from "@n0n/types";
 import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
 import { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
+import { LLMError, isAbortError } from "./errors.ts";
+
+// ── Anthropic 默认常量 ──
+
+/** stream() 默认最大输出 token 数 */
+const DEFAULT_STREAM_MAX_TOKENS = 8192;
+/** complete() 默认最大输出 token 数 */
+const DEFAULT_COMPLETE_MAX_TOKENS = 4096;
+/** thinking 模式下输出 token 的额外 buffer（Anthropic 要求 max_tokens > budget_tokens） */
+const THINKING_OUTPUT_BUFFER = 4096;
 
 // ── Anthropic API Types ──
 
@@ -114,14 +125,10 @@ type AnthropicSSEEvent =
 	| { type: "ping" }
 	| { type: "error"; error: { type: string; message: string } };
 
-function isAbortError(err: unknown): boolean {
-	return err instanceof Error && err.name === "AbortError";
-}
-
 // ── PromptMessage → Anthropic Message 转换 ──
 
 interface AnthropicConversionResult {
-	system: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+	system: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> | undefined;
 	messages: AnthropicMessage[];
 }
 
@@ -222,9 +229,11 @@ function toAnthropicFormat(
 	}
 
 	const system =
-		systemParts.length === 1 && !systemParts[0]?.cache_control
-			? systemParts[0]!.text
-			: systemParts;
+		systemParts.length === 0
+			? undefined
+			: systemParts.length === 1 && !systemParts[0]?.cache_control
+				? systemParts[0]!.text
+				: systemParts;
 
 	return { system, messages };
 }
@@ -260,13 +269,13 @@ export class AnthropicClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = request.promptMessages
-			?? formatPrompt(request.messages, this.modelId);
+		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const { system, messages } = toAnthropicFormat(promptMessages, true);
 
+		const defaultMaxTokens = this.config.maxOutputTokens ?? DEFAULT_STREAM_MAX_TOKENS;
 		const body: AnthropicRequest = {
 			model: this.modelId,
-			max_tokens: 8192,
+			max_tokens: defaultMaxTokens,
 			system,
 			messages,
 			stream: true,
@@ -282,7 +291,7 @@ export class AnthropicClient implements LLMClient {
 			const budget =
 				this.config.thinkingBudgetTokens ?? DEFAULT_THINKING_BUDGET_TOKENS;
 			body.thinking = { type: "enabled", budget_tokens: budget };
-			body.max_tokens = Math.max(body.max_tokens, budget + 4096);
+			body.max_tokens = Math.max(defaultMaxTokens, budget + THINKING_OUTPUT_BUFFER);
 			// Anthropic requires temperature=1 when thinking is enabled
 			body.temperature = 1;
 		}
@@ -320,6 +329,33 @@ export class AnthropicClient implements LLMClient {
 		const toolBlocks = new Map<number, { id: string; name: string; idx: number }>();
 		let toolCallIndex = 0;
 		let inputUsage: TokenUsage | null = null;
+
+		// 内部函数：将 Anthropic stop_reason 映射为归一化的 done 事件（#009）
+		const mapMessageDelta = function* (event: MessageDelta): Generator<StreamEvent> {
+			const stopReason = event.delta.stop_reason ?? "stop";
+			const outputTokens = event.usage?.output_tokens ?? 0;
+			const usage: TokenUsage | null = inputUsage
+				? {
+						...inputUsage,
+						outputTokens:
+							inputUsage.outputTokens + outputTokens,
+						totalTokens:
+							inputUsage.inputTokens + inputUsage.outputTokens + outputTokens,
+					}
+				: null;
+			yield {
+				type: "done",
+				finishReason:
+					stopReason === "end_turn"
+						? FinishReason.STOP
+						: stopReason === "max_tokens"
+							? FinishReason.LENGTH
+							: stopReason === "tool_use"
+								? FinishReason.TOOL_CALLS
+								: stopReason,
+				usage,
+			};
+		};
 
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
@@ -422,29 +458,7 @@ export class AnthropicClient implements LLMClient {
 						}
 
 						case "message_delta": {
-							const stopReason = event.delta.stop_reason ?? "stop";
-							const outputTokens = event.usage?.output_tokens ?? 0;
-							const usage: TokenUsage | null = inputUsage
-								? {
-										...inputUsage,
-										outputTokens:
-											inputUsage.outputTokens + outputTokens,
-										totalTokens:
-											inputUsage.inputTokens + inputUsage.outputTokens + outputTokens,
-									}
-								: null;
-							yield {
-								type: "done",
-								finishReason:
-									stopReason === "end_turn"
-										? "stop"
-										: stopReason === "max_tokens"
-											? "length"
-											: stopReason === "tool_use"
-												? "tool_calls"
-												: stopReason,
-								usage,
-							};
+							yield* mapMessageDelta(event);
 							break;
 						}
 
@@ -457,6 +471,28 @@ export class AnthropicClient implements LLMClient {
 					}
 
 					boundary = buffer.indexOf("\n\n");
+				}
+			}
+
+			// Flush remaining buffer — handle case where stream ends without trailing \n\n
+			if (buffer.trim()) {
+				let eventData = "";
+				for (const line of buffer.split("\n")) {
+					if (line.startsWith("event: ")) {
+						// skip event type line
+					} else if (line.startsWith("data: ")) {
+						eventData = line.slice(6);
+					}
+				}
+				if (eventData) {
+					try {
+						const event = JSON.parse(eventData) as AnthropicSSEEvent;
+						if (event.type === "message_delta") {
+							yield* mapMessageDelta(event);
+						}
+					} catch {
+						// ignore parse errors in residual buffer
+					}
 				}
 			}
 		} catch (err) {
@@ -485,7 +521,7 @@ export class AnthropicClient implements LLMClient {
 
 		const body: AnthropicRequest = {
 			model: this.modelId,
-			max_tokens: 4096,
+			max_tokens: this.config.maxOutputTokens ?? DEFAULT_COMPLETE_MAX_TOKENS,
 			system,
 			messages,
 			stream: false,
@@ -518,10 +554,18 @@ export class AnthropicClient implements LLMClient {
 				if (!res.ok) {
 					const text = await res.text();
 					if (res.status === 429 || res.status >= 500) {
-						lastError = new Error(`Anthropic API ${res.status}: ${text}`);
+						lastError = new LLMError(
+							`Anthropic API ${res.status}: ${text}`,
+							res.status,
+							text,
+						);
 						continue;
 					}
-					throw new Error(`Anthropic API ${res.status}: ${text}`);
+					throw new LLMError(
+						`Anthropic API ${res.status}: ${text}`,
+						res.status,
+						text,
+					);
 				}
 
 				const json = (await res.json()) as {
@@ -530,14 +574,8 @@ export class AnthropicClient implements LLMClient {
 				const textBlock = json?.content?.find((b) => b.type === "text");
 				return { text: textBlock?.text ?? "" };
 			} catch (err) {
-				if (
-					err instanceof Error &&
-					!err.message.startsWith("Anthropic API")
-				) {
-					lastError = err;
-				} else {
-					throw err;
-				}
+				if (err instanceof LLMError) throw err;
+				lastError = err instanceof Error ? err : new Error(String(err));
 			}
 		}
 
