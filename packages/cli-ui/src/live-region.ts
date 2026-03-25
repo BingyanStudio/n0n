@@ -5,7 +5,7 @@
  * 仅在 TTY 模式下支持行替换，非 TTY 时退化为追加输出。
  */
 
-import { clearLine, cursorUp, isTTY, write } from "./ansi.ts";
+import { clearDown, cursorUp, isTTY, write } from "./ansi.ts";
 
 export class LiveRegion {
 	private lineCount = 0;
@@ -30,15 +30,10 @@ export class LiveRegion {
 			this.lineCount = 0;
 			return;
 		}
-		// 上移 lineCount 行，逐行清除
+		// 上移到区域起始位置，然后清除到屏幕末尾
+		// 使用 clearDown 而非逐行清除，避免行数增长时残留未清除的行
 		cursorUp(this.lineCount);
-		for (let i = 0; i < this.lineCount; i++) {
-			clearLine();
-			if (i < this.lineCount - 1) write("\n");
-		}
-		// 回到第一行
-		cursorUp(this.lineCount - 1);
-		clearLine();
+		clearDown();
 		this.lineCount = 0;
 	}
 
