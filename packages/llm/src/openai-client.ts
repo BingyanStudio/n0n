@@ -197,8 +197,7 @@ export class OpenAIClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = request.promptMessages
-			?? formatPrompt(request.messages, this.modelId);
+		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const apiMessages = toOpenAIMessages(promptMessages);
 
 		// 如果后端是 anthropic（通过 litellm），注入 cache_control

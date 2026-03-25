@@ -13,8 +13,8 @@
  */
 
 import type {
+	DomainMessage,
 	LLMClient,
-	PromptMessage,
 	StreamEvent,
 	ToolDefinition,
 } from "@n0n/types";
@@ -101,10 +101,10 @@ function toolResult(
 	toolCallId: string,
 	toolName: string,
 	value: string,
-): PromptMessage {
+): DomainMessage {
 	return {
-		role: "tool",
-		toolCallId,
+		type: "generic_tool_result",
+		callId: toolCallId,
 		toolName,
 		content: value,
 	};
@@ -231,10 +231,10 @@ export async function editorLoop(
 	let current = source;
 	let editCount = 0;
 
-	const messages: PromptMessage[] = [
-		{ role: "system", content: editorAgentPrompt },
+	const messages: DomainMessage[] = [
+		{ type: "system", content: editorAgentPrompt },
 		{
-			role: "user",
+			type: "user_text",
 			content: [
 				"<source_file>",
 				source,
@@ -262,8 +262,7 @@ export async function editorLoop(
 		try {
 			for await (const event of editorClient.stream(
 				{
-					messages: [],
-					promptMessages: messages,
+					messages,
 					tools: EDITOR_TOOLS,
 					toolChoice: "required",
 				},
@@ -304,7 +303,7 @@ export async function editorLoop(
 
 		// 构建 assistant 消息（包含 tool calls）
 		messages.push({
-			role: "assistant",
+			type: "generic_tool_call",
 			content: message.content ?? "",
 			toolCalls: parsedToolCalls
 				.filter((p) => p.args !== null)

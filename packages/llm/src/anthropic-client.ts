@@ -269,8 +269,7 @@ export class AnthropicClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = request.promptMessages
-			?? formatPrompt(request.messages, this.modelId);
+		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const { system, messages } = toAnthropicFormat(promptMessages, true);
 
 		const defaultMaxTokens = this.config.maxOutputTokens ?? DEFAULT_STREAM_MAX_TOKENS;
