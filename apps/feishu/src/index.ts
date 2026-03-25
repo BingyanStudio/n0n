@@ -92,7 +92,14 @@ export async function startFeishuService(): Promise<void> {
 			}
 
 			const text = FeishuBot.readText(data);
-			if (!text) return;
+			if (!text) {
+				// 非文本消息（图片、文件等）暂不支持，发送提示
+				if (ctx.senderOpenId) {
+					const card = buildTextCard("暂不支持", "目前仅支持文本消息，图片、文件等类型暂不支持。", "grey");
+					await bot.createCardMessage(ctx, card);
+				}
+				return;
+			}
 
 			if (!ctx.senderOpenId) {
 				console.warn("[feishu] message with empty senderOpenId, skipping");
