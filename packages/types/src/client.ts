@@ -12,7 +12,7 @@
 
 /** 单轮 LLM 调用的 token 用量统计 */
 export interface TokenUsage {
-	/** 输入 token 总量 */
+	/** 新计算的输入 token 数（不含缓存命中部分，各 provider 已统一为此语义） */
 	inputTokens: number;
 	/** 输出 token 总量 */
 	outputTokens: number;

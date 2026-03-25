@@ -280,15 +280,20 @@ export class OpenAIClient implements LLMClient {
 			// usage 统计（部分 provider 在最后一个 chunk 发送 usage）
 			if (chunk.usage) {
 				const u = chunk.usage;
+				const cacheReadTokens =
+					u.prompt_tokens_details?.cached_tokens ??
+					u.prompt_cache_hit_tokens ??
+					0;
+				const cacheWriteTokens = u.prompt_cache_miss_tokens ?? 0;
+				// OpenAI prompt_tokens 包含 cached tokens，需扣除以对齐 Anthropic 语义
+				// （inputTokens 统一表示"新计算的输入 token"）
+				const rawInput = u.prompt_tokens ?? 0;
 				lastUsage = {
-					inputTokens: u.prompt_tokens ?? 0,
+					inputTokens: rawInput - cacheReadTokens,
 					outputTokens: u.completion_tokens ?? 0,
 					totalTokens: u.total_tokens ?? 0,
-					cacheReadTokens:
-						u.prompt_tokens_details?.cached_tokens ??
-						u.prompt_cache_hit_tokens ??
-						0,
-					cacheWriteTokens: u.prompt_cache_miss_tokens ?? 0,
+					cacheReadTokens,
+					cacheWriteTokens,
 				};
 			}
 
