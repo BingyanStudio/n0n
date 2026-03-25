@@ -2,7 +2,7 @@
  * Tools 配置类型
  */
 
-import type { LLMConfig } from "@n0n/llm";
+import type { LLMClient } from "@n0n/types";
 
 export interface ToolsConfig {
 	security: {
@@ -15,6 +15,6 @@ export interface ToolsConfig {
 	workspace: string;
 	/** 临时文件目录（exec 临时脚本等） */
 	tempDir: string;
-	/** Editor LLM 配置 — 用于影子编辑层 */
-	editorLlm: LLMConfig;
+	/** Editor LLM Client — 用于影子编辑层 */
+	editorClient: LLMClient;
 }

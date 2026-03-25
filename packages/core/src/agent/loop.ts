@@ -4,26 +4,19 @@
  * 接收 DomainMessage[] 历史，驱动 LLM + 工具调用循环，
  * 直到 agent 调用 submit 或达到终止条件。
  *
- * 使用 AI SDK streamText 进行流式调用，支持多 provider 和 prompt caching。
+ * 使用 LLMClient.stream() 进行流式调用，支持多 provider。
  */
 
-import type { TokenUsage } from "@n0n/llm";
-import {
-	buildThinkingProviderOptions,
-	chatCompletionStream,
-	getModelId,
-	getProviderType,
-	StreamAccumulator,
-	toAPIMessages,
-} from "@n0n/llm";
-import type { PendingReminder, ToolsConfig } from "@n0n/tools";
-import { makeToolkit } from "@n0n/tools";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
 	Renderer,
+	TokenUsage,
 	ToolResult,
 } from "@n0n/types";
+import { StreamAccumulator } from "@n0n/types";
+import type { PendingReminder, ToolsConfig } from "@n0n/tools";
+import { makeToolkit } from "@n0n/tools";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 import { getRuntime } from "../runtime.ts";
@@ -59,11 +52,12 @@ export async function agentLoop<T = unknown>(
 	const maxIter = options?.maxIterations ?? getRuntime().agent.maxIterations;
 	const renderer = options?.renderer ?? new PlainRenderer();
 	const runtime = getRuntime();
-	const modelId = getModelId(runtime.llm);
+	const client = runtime.client;
+	const modelId = client.modelId;
 	const toolsConfig: ToolsConfig = {
 		security: runtime.security,
 		agent: runtime.agent,
-		editorLlm: runtime.editorLlm,
+		editorClient: runtime.editorClient,
 		...(options?.toolsWorkspace ?? {
 			workspace: process.cwd(),
 			tempDir: ".temp",
@@ -76,7 +70,6 @@ export async function agentLoop<T = unknown>(
 	let submitRetries = 0;
 	/** 上一轮 LLM 调用的 token 用量（传给 roundStart 显示） */
 	let lastUsage: TokenUsage | null = null;
-	const thinkingProviderOptions = buildThinkingProviderOptions(runtime.llm);
 
 	for (let iteration = 0; iteration < maxIter; iteration++) {
 		if (options?.signal?.aborted) {
@@ -86,25 +79,16 @@ export async function agentLoop<T = unknown>(
 
 		injectReminders(messages, reminders);
 
-		const apiMessages = toAPIMessages(
-			messages,
-			modelId,
-			getProviderType(runtime.llm),
-		);
-		renderer.roundStart(iteration + 1, maxIter, apiMessages.length, lastUsage);
+		renderer.roundStart(iteration + 1, maxIter, messages.length, lastUsage);
 
 		const acc = new StreamAccumulator();
-		for await (const event of chatCompletionStream(
+		for await (const event of client.stream(
 			{
-				messages: apiMessages,
-				tools: toolkit.toolSet,
+				messages,
+				tools: toolkit.tools,
 				toolChoice: "auto",
 			},
-			{
-				signal: options?.signal,
-				model: runtime.model,
-				providerOptions: thinkingProviderOptions,
-			},
+			options?.signal,
 		)) {
 			if (options?.signal?.aborted) {
 				renderer.aborted();
@@ -121,6 +105,14 @@ export async function agentLoop<T = unknown>(
 				case "tool_call_delta":
 					renderer.toolCallArgChunk(event.index, event.name, event.arguments);
 					break;
+				case "error":
+					renderer.contentEnd();
+					renderer.agentTerminated(`LLM error: ${event.error}`);
+					return {
+						result: null,
+						report: `LLM error: ${event.error}`,
+						history: messages,
+					};
 			}
 		}
 		renderer.contentEnd();
@@ -146,6 +138,7 @@ export async function agentLoop<T = unknown>(
 				type: "assistant_text",
 				content,
 				reasoning: assistantMsg.reasoningText,
+				reasoningSignature: assistantMsg.reasoningSignature,
 			});
 
 			if (idleCount >= getRuntime().agent.maxIdleRounds) {
@@ -167,7 +160,7 @@ export async function agentLoop<T = unknown>(
 
 		idleCount = 0;
 
-		// AI SDK 格式 toolCalls → ToolCallRecord
+		// tool calls → ToolCallRecord
 		const toolCalls = parseToolCalls(assistantMsg.toolCalls).filter(
 			isValidToolCall,
 		);
@@ -179,6 +172,7 @@ export async function agentLoop<T = unknown>(
 				type: "assistant_text",
 				content,
 				reasoning: assistantMsg.reasoningText,
+				reasoningSignature: assistantMsg.reasoningSignature,
 			});
 			if (idleCount >= getRuntime().agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
@@ -200,6 +194,7 @@ export async function agentLoop<T = unknown>(
 			type: "assistant_tool_call",
 			content: assistantMsg.content,
 			reasoning: assistantMsg.reasoningText,
+			reasoningSignature: assistantMsg.reasoningSignature,
 			toolCalls,
 		};
 		messages.push(toolCallMsg);

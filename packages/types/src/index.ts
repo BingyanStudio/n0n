@@ -10,3 +10,20 @@ export {
 	SubmitArgsSchema,
 	WriteArgsSchema,
 } from "./tool-args.ts";
+
+// LLM Client 抽象接口 + 流式事件类型
+export type {
+	AssistantMessage,
+	AssistantToolCallPart,
+	CompleteRequest,
+	CompleteResponse,
+	LLMClient,
+	PromptMessage,
+	SimpleMessage,
+	StreamEvent,
+	StreamRequest,
+	TokenUsage,
+	ToolCallPart,
+	ToolDefinition,
+} from "./client.ts";
+export { StreamAccumulator } from "./client.ts";

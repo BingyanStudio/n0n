@@ -12,9 +12,7 @@
  *   这样 LLM 能获得每个字段的类型约束，而非只看到一段描述文本。
  */
 
-import type { Tool } from "@n0n/llm";
-import { tool as aiTool, jsonSchema } from "@n0n/llm";
-import type { SubmitToolCall, SubmitToolResult } from "@n0n/types";
+import type { SubmitToolCall, SubmitToolResult, ToolDefinition } from "@n0n/types";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 
@@ -67,7 +65,7 @@ function flattenVariantProperties(schema: JsonSchema): JsonSchema {
 }
 
 /* placeholder — will be filled below */
-export const SUBMIT_TOOL_DEFINITION: Tool =
+export const SUBMIT_TOOL_DEFINITION: ToolDefinition =
 	/* @__PURE__ */ makeSubmitToolDefinition();
 
 /* placeholder end */
@@ -79,11 +77,12 @@ export const SUBMIT_TOOL_DEFINITION: Tool =
  * - 有 schema：将 schema 的 JSON Schema 属性展开到 parameters 顶层，
  *   与 report 字段并列。LLM 直接生成符合 schema 的扁平 JSON 对象。
  */
-export function makeSubmitToolDefinition(schema?: ZodType): Tool {
+export function makeSubmitToolDefinition(schema?: ZodType): ToolDefinition {
 	if (!schema) {
-		return aiTool({
+		return {
+			name: "submit",
 			description: DEFAULT_DESCRIPTION,
-			inputSchema: jsonSchema({
+			parameters: {
 				type: "object",
 				properties: {
 					result: {
@@ -98,8 +97,8 @@ export function makeSubmitToolDefinition(schema?: ZodType): Tool {
 				},
 				required: ["result"],
 				additionalProperties: false,
-			}),
-		});
+			},
+		};
 	}
 
 	// 将 Zod schema 转为 JSON Schema，提取 properties 和 required
@@ -143,15 +142,16 @@ export function makeSubmitToolDefinition(schema?: ZodType): Tool {
 		mergedProperties,
 	) as Record<string, unknown>;
 
-	return aiTool({
+	return {
+		name: "submit",
 		description: `Submit your final result. Fill in the fields directly as parameters — they must conform to this schema:\n\n\`\`\`json\n${schemaStr}\n\`\`\`\n\nValidation is enforced — non-conforming submissions will be rejected.`,
-		inputSchema: jsonSchema({
+		parameters: {
 			type: "object",
 			properties: sanitizedProperties,
 			required: mergedRequired,
 			additionalProperties: false,
-		}),
-	});
+		},
+	};
 }
 
 // ── 执行器 ──

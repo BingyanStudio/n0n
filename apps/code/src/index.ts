@@ -15,12 +15,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
-import {
-	buildLLMConfigFromEnv,
-	buildThinkingProviderOptions,
-	chatCompletionStream,
-	createModelFromConfig,
-} from "@n0n/llm";
+import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
 import {
 	bootstrap,
 	ensureDirs,
@@ -43,15 +38,12 @@ const setupUI = new CliSetupRenderer();
 const testLLM = async () => {
 	try {
 		const config = buildLLMConfigFromEnv("LLM");
-		const model = createModelFromConfig(config);
-		const providerOptions = buildThinkingProviderOptions(config);
-		// 使用流式调用测试连通性 — 某些代理的非流式响应 schema 不完整（如缺少 thinking.signature），
-		// 会导致 generateText 的 schema 校验失败，但流式调用不受影响。
-		for await (const event of chatCompletionStream(
-			{ messages: [{ role: "user", content: "hi" }], maxOutputTokens: providerOptions ? 2048 : 1 },
-			{ model, providerOptions },
-		)) {
-			if (event.type === "done") break;
+		const client = createLLMClient(config);
+		// 使用流式调用测试连通性 — 发送最小请求验证 API key 和网络
+		for await (const event of client.stream({
+			messages: [{ type: "user_text", content: "hi" }],
+		})) {
+			if (event.type === "done" || event.type === "error") break;
 		}
 		return { ok: true as const };
 	} catch (err) {

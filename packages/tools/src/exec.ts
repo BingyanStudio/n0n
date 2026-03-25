@@ -17,8 +17,7 @@
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
-import type { Tool } from "@n0n/llm";
-import { jsonSchema, tool } from "@n0n/llm";
+import type { ToolDefinition } from "@n0n/types";
 import { wrapTagFor } from "@n0n/shared";
 import type {
 	ExecToolCall,
@@ -280,13 +279,14 @@ function buildDescription(env: EnvSnapshot, model: string): string {
  * @param env 环境快照（来自 detectEnv）
  * @param model LLM 模型名称（用于选择 tag 风格）
  */
-export function makeExecToolDefinition(env: EnvSnapshot, model = ""): Tool {
+export function makeExecToolDefinition(env: EnvSnapshot, model = ""): ToolDefinition {
 	const available = env.runtimes.filter((r) => r.available);
 	const runtimeList = available.map((r) => r.name).join(", ");
 
-	return tool({
+	return {
+		name: "exec",
 		description: buildDescription(env, model),
-		inputSchema: jsonSchema({
+		parameters: {
 			type: "object",
 			properties: {
 				script: {
@@ -310,8 +310,8 @@ export function makeExecToolDefinition(env: EnvSnapshot, model = ""): Tool {
 			},
 			required: ["script"],
 			additionalProperties: false,
-		}),
-	});
+		},
+	};
 }
 function extractCommandNames(script: string): string[] {
 	const parts = script.split(/\r?\n|&&|\|\||;|\||&/);

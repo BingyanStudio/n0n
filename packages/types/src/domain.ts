@@ -49,12 +49,14 @@ export interface AssistantTextMessage {
 	type: "assistant_text";
 	content: string;
 	reasoning?: string | null;
+	reasoningSignature?: string | null;
 }
 
 export interface AssistantToolCallMessage {
 	type: "assistant_tool_call";
 	content: string | null;
 	reasoning?: string | null;
+	reasoningSignature?: string | null;
 	toolCalls: ToolCallRecord[];
 }
 
@@ -225,6 +227,8 @@ export interface ToolArgErrorMessage {
 	callId: string;
 	tool: string;
 	error: string;
+	/** 工具参数的 JSON Schema，供模型参考修复。undefined 时表示 schema 不可用。 */
+	schema?: Record<string, unknown>;
 }
 
 // ── 提交被拒 ──
