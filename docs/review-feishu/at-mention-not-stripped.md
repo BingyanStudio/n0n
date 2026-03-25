@@ -42,3 +42,7 @@ static readText(data: FeishuMessageEventData): string {
 |------|------|
 | `apps/feishu/src/bot.ts` `readText` | 未清理 mention 占位符 |
 | `apps/feishu/src/index.ts` L106 | 直接使用 `FeishuBot.readText(data)` 的结果 |
+
+## 人类评估
+
+

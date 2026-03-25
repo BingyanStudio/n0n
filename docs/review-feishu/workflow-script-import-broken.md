@@ -73,3 +73,7 @@ bun run test.ts
 | `packages/tools/src/exec.ts` | exec 工具以 workspace 为 cwd 执行脚本 |
 | `tsconfig.json` | `paths` 映射 `@n0n/*`，仅从项目根有效 |
 | `package.json` | `workspaces` 只包含 `packages/*` 和 `apps/*` |
+
+## 人类评估
+
+严重问题需要修复

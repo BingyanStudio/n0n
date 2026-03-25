@@ -56,3 +56,7 @@ for (const userPaths of allUserPaths) {
 | `apps/feishu/src/index.ts` | L72-87 | 启动时一次性扫描并启动 scheduler |
 | `apps/feishu/src/round.ts` | 全文件 | `runFeishuRound` 完成后没有触发 scheduler 注册 |
 | `packages/scheduler/src/scheduler.ts` | `startScheduler` | 每 60s tick 重新扫描文件（已有 scheduler 的用户没问题） |
+
+## 人类评估
+
+这个地方确实应该修复

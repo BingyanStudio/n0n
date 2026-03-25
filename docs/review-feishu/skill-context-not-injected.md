@@ -49,3 +49,7 @@ formatSkillContents(contents)  // → XML 格式的完整内容
 | `apps/feishu/src/round.ts` | L44-52 | `buildFeishuCapabilityContext` 硬编码 skill 路径 |
 | `apps/feishu/src/session.ts` | L211 | 只注入 skills 绝对路径字符串 |
 | `packages/shared/src/skills/discovery.ts` | 全文件 | 已有完整的 skill 发现能力，未被飞书使用 |
+
+## 人类评估
+
+严重问题，需要修复。
