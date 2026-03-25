@@ -2,63 +2,30 @@
 
 ## 严重程度：中
 
+## 状态：✅ 已修复 (5b61920)
+
 ## 问题描述
 
-`paths.ts` 中为用户 workspace 自动生成 `tsconfig.json` 的逻辑，硬编码了项目根目录的推算方式 (`resolve(FEISHU_BASE, "..", "..")`)，当使用 `N0N_FEISHU_WORKSPACE` 环境变量自定义工作区路径时，生成的 `extends` 路径指向错误位置。
+`paths.ts` 中 `projectRoot = resolve(FEISHU_BASE, "..", "..")` 硬编码了目录层级，当使用 `N0N_FEISHU_WORKSPACE` 自定义路径时，生成的 tsconfig extends 路径指向错误位置。
 
-## 问题代码
+## 修复方案
 
-### `apps/feishu/src/paths.ts`
+新增 `findProjectRoot()` 函数，通过多级回退策略查找项目根目录：
 
-```typescript
-const FEISHU_BASE = resolve(
-    process.env.N0N_FEISHU_WORKSPACE ??
-        resolve(process.cwd(), ".runtime", "feishu"),
-);
+1. **import.meta.dir**：基于源文件位置推算（编译时确定，最可靠）
+2. **process.cwd()**：基于当前工作目录
+3. **向上查找**：从 FEISHU_BASE 向上遍历，查找包含 `tsconfig.json` 的目录
 
-// ...
-const tsconfigPath = resolve(workspace, "tsconfig.json");
-if (!existsSync(tsconfigPath)) {
-    const projectRoot = resolve(FEISHU_BASE, "..", "..");  // ← 假设固定层级
-    const tsconfig = JSON.stringify(
-        { extends: resolve(projectRoot, "tsconfig.json") },
-        null,
-        "\t",
-    );
-    writeFileSync(tsconfigPath, tsconfig);
-}
-```
+同时增加了安全检查：只在确认 `rootTsconfig` 存在时才生成 extends。
 
-### 默认场景（正确）
+## 附带清理
 
-```
-FEISHU_BASE = <cwd>/.runtime/feishu
-projectRoot = resolve(<cwd>/.runtime/feishu, "../..") = <cwd>  ✅
-tsconfig extends: <cwd>/tsconfig.json  ✅
-```
-
-### 自定义路径场景（错误）
-
-```
-N0N_FEISHU_WORKSPACE=/data/feishu-workspaces
-FEISHU_BASE = /data/feishu-workspaces
-projectRoot = resolve(/data/feishu-workspaces, "../..") = /  ❌
-tsconfig extends: /tsconfig.json  ❌  (不存在)
-```
-
-## 影响
-
-- 使用 `N0N_FEISHU_WORKSPACE` 环境变量时，workflow 脚本的 `@n0n/*` 模块导入失败
-- 生成的 tsconfig.json 指向不存在的文件，bun 执行时报错
-
-## 建议修复
-
-1. 将项目根目录通过独立环境变量（如 `N0N_PROJECT_ROOT`）或编译时常量传入，不依赖相对路径推算
-2. 或者在生成 tsconfig 前验证 `projectRoot/tsconfig.json` 存在，不存在时生成完整的 paths 配置而非 extends
+移除了废弃的 `UserInputMessage.capabilities` 字段（已被 skills 注入取代），涉及 types/shared/cli 三个包。
 
 ## 相关文件
 
 | 文件 | 说明 |
 |------|------|
-| `apps/feishu/src/paths.ts` | tsconfig 生成逻辑 |
-| `tsconfig.json` (项目根) | 包含 `@n0n/*` 路径映射 |
+| `apps/feishu/src/paths.ts` | findProjectRoot() + tsconfig 生成修复 |
+| `packages/types/src/domain.ts` | 移除 capabilities 字段 |
+| `packages/shared/src/format-prompt.ts` | 移除 capabilities 处理 |
