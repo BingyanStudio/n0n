@@ -16,15 +16,16 @@
  */
 
 import { formatPrompt } from "@n0n/shared";
-import type {
-	CompleteRequest,
-	CompleteResponse,
-	LLMClient,
-	PromptMessage,
-	StreamEvent,
-	StreamRequest,
-	TokenUsage,
-	ToolDefinition,
+import {
+	FinishReason,
+	type CompleteRequest,
+	type CompleteResponse,
+	type LLMClient,
+	type PromptMessage,
+	type StreamEvent,
+	type StreamRequest,
+	type TokenUsage,
+	type ToolDefinition,
 } from "@n0n/types";
 import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
@@ -338,11 +339,11 @@ export class AnthropicClient implements LLMClient {
 				type: "done",
 				finishReason:
 					stopReason === "end_turn"
-						? "stop"
+						? FinishReason.STOP
 						: stopReason === "max_tokens"
-							? "length"
+							? FinishReason.LENGTH
 							: stopReason === "tool_use"
-								? "tool_calls"
+								? FinishReason.TOOL_CALLS
 								: stopReason,
 				usage,
 			};

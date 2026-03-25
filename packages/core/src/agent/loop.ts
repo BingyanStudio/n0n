@@ -14,7 +14,7 @@ import type {
 	TokenUsage,
 	ToolResult,
 } from "@n0n/types";
-import { StreamAccumulator } from "@n0n/types";
+import { FinishReason, StreamAccumulator } from "@n0n/types";
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
 import type { ZodType } from "zod";
@@ -126,7 +126,7 @@ export async function agentLoop<T = unknown>(
 		}
 
 		// finishReason 检查 — 截断恢复与内容过滤处理
-		if (acc.finishReason === "length") {
+		if (acc.finishReason === FinishReason.LENGTH) {
 			// 模型输出因 max_tokens 截断，工具调用 JSON 可能不完整
 			// 将已有内容保存为 assistant_text，通知用户截断情况
 			const partialContent = acc.content || "";
@@ -146,10 +146,7 @@ export async function agentLoop<T = unknown>(
 			continue;
 		}
 
-		if (
-			acc.finishReason === "content_filter" ||
-			acc.finishReason === "content-filter"
-		) {
+		if (acc.finishReason === FinishReason.CONTENT_FILTER) {
 			const partialContent = acc.content || "";
 			messages.push({
 				type: "assistant_text",

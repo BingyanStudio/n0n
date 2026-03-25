@@ -24,6 +24,26 @@ export interface TokenUsage {
 	cacheWriteTokens: number;
 }
 
+// ── FinishReason ──
+
+/**
+ * 归一化的完成原因常量 — SSOT
+ *
+ * 各 LLM Client 负责将 provider 原生值映射到此枚举。
+ * 消费方（agent loop 等）只引用这些常量，不使用魔法字符串。
+ */
+export const FinishReason = {
+	/** 模型正常结束输出 */
+	STOP: "stop",
+	/** 输出因 max_tokens 截断 */
+	LENGTH: "length",
+	/** 模型请求调用工具 */
+	TOOL_CALLS: "tool_calls",
+	/** 内容被 provider 安全过滤器拦截 */
+	CONTENT_FILTER: "content_filter",
+} as const;
+export type FinishReason = (typeof FinishReason)[keyof typeof FinishReason];
+
 // ── StreamEvent ──
 
 export type StreamEvent =
