@@ -1,0 +1,8 @@
+---
+name: hn-daily-summary
+cron: "0 8 * * *"
+enabled: true
+workflow: workflows/tasks/hn-daily-summary.ts
+---
+
+每天早上 8 点总结 Hacker News 热门文章，生成简报。
