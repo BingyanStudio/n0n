@@ -1,35 +1,27 @@
 # 011 — config.ts 中 getModelId/getProviderType/isAnthropicProvider 未被使用
 
-**严重度**: 🟢 低（死代码）
+**初评严重度**: 🟢 低（死代码）
+**二次审查**: 🟢 **维持 — 直接删除**
 **文件**: `packages/llm/src/config.ts`
 
-## 问题描述
+## 初评描述
 
-`config.ts` 末尾定义了三个辅助函数：
+三个辅助函数全局搜索无消费方，是旧架构残留。
 
-```ts
-export function getModelId(config: LLMConfig): string {
-    return config.providerConfig.model;
-}
+## 二次审查：确认可以安全删除
 
-export function getProviderType(config: LLMConfig): string {
-    return config.providerConfig.provider;
-}
+### 1. 验证结果
 
-export function isAnthropicProvider(providerType: string): boolean {
-    return providerType === "anthropic";
-}
-```
+- `getModelId` — 被 `LLMClient.modelId` 属性替代
+- `getProviderType` — 被 `createLLMClient` 工厂内部的 switch 替代
+- `isAnthropicProvider` — 被各 Client 内部的直接比较替代
 
-全局搜索发现这三个函数未在任何地方被导入或调用。在新架构中：
-- `modelId` 通过 `LLMClient.modelId` 属性暴露
-- provider 类型由工厂函数 `createLLMClient` 内部 switch 处理
-- `isAnthropicProvider` 的判定已内化到各 Client 内部
+三者均无消费方。
 
-## 违背原则
+### 2. 删除是无风险操作
 
-**死代码**：这些函数是旧架构的残留。虽然注释说"内部使用"，但实际已没有消费方。
+这些函数没有被导出到 `index.ts`（检查确认），即使被导出，tree-shaking 也会在构建时消除。但显式删除更好——避免后续开发者误以为这些是可用的 API。
 
-## 建议
+## 结论
 
-删除这三个函数，保持 `config.ts` 只做类型定义和常量声明。如果将来需要，可以重新添加。
+**建议删除**。无风险，约 2 分钟。保持 `config.ts` 职责清晰：类型定义 + 常量声明。

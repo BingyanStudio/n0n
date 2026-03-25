@@ -1,29 +1,36 @@
 # 007 — user_image 降级为纯文本，丢失图像数据
 
-**严重度**: 🟢 低（功能退化）
+**初评严重度**: 🟢 低（功能退化）
+**二次审查**: 🟢 **维持 — 功能缺失，低优先级**
 **文件**: `packages/shared/src/format-prompt.ts`
 
-## 问题描述
+## 初评描述
 
-`formatPrompt` 将 `user_image` 消息转换为纯文本：
+`formatPrompt` 将 `user_image` 消息转换为纯文本 `[Image: path]`，丢弃了结构化的图像数据。
 
-```ts
-case "user_image":
-    result.push({
-        role: "user",
-        content: `[Image: ${msg.imagePath}] ${msg.text}`,
-    });
-    break;
-```
+## 二次审查
 
-`UserImageMessage` 中携带了 `imagePath`、`focusX`、`focusY`、`scale` 等结构化数据，但这些全部被丢弃，退化为一个文本占位符 `[Image: path]`。
+### 1. 问题确实存在
 
-## 违背原则
+`UserImageMessage` 包含 `imagePath`、`focusX`、`focusY`、`scale` 等字段，全部被静默降级为文本占位符。如果用户发送图片，LLM 看到的只是路径字符串。
 
-**关注点分离不足**：图片消息的处理不应在 format-prompt 层静默降级。如果当前不支持图像，应该明确标记或由 Client 层决定如何处理（OpenAI 支持 image_url，Anthropic 支持 base64 image）。
+### 2. 但这是一个功能需求，不是架构问题
 
-## 建议
+初评将其归类为「关注点分离不足」有些牵强。真正的问题是：**图像支持尚未实现**。这不是一个架构设计错误，而是一个待开发的功能。
 
-1. 在 `PromptMessage` 类型中增加 image 支持（或使用 content parts 数组）
-2. 由各 Client 决定如何发送图像（base64 编码/URL），不支持图像的 Client 才做降级处理
-3. 如果当前确实不支持图像，至少在降级时加入一条 warning 日志
+### 3. 当前处理是安全的降级
+
+在图像支持实现之前，降级为文本是合理的——至少 LLM 知道用户提到了一张图片（路径信息），不会完全丢失上下文。比静默忽略要好。
+
+### 4. 实现图像支持的正确路径
+
+当需要时：
+1. `PromptMessage` 增加 content parts 支持（`{ type: "image_url", ... }`）
+2. `formatPrompt` 将 `user_image` 转换为带图像 URL/base64 的 content part
+3. 各 Client 的格式转换函数处理图像 content part
+
+这是一个完整的功能开发，不是一个 bugfix。
+
+## 结论
+
+**暂不行动**。当前降级行为是安全的。可以考虑添加一条 debug 级别日志，提示图像数据被降级。图像支持作为独立功能需求追踪。

@@ -1,36 +1,38 @@
 # 002 — StreamRequest.promptMessages 旁路破坏了 LLMClient 抽象层
 
-**严重度**: 🟡 中（违背关注点分离）
+**初评严重度**: 🟡 中（违背关注点分离）
+**二次审查**: 🟡 **维持 — 技术债务，但当前是合理的务实妥协**
 **文件**: `packages/types/src/client.ts`, `packages/tools/src/editor-loop.ts`, `packages/llm/src/openai-client.ts`, `packages/llm/src/anthropic-client.ts`
 
-## 问题描述
+## 初评描述
 
-`StreamRequest` 接口中有一个 `@internal` 标记的 `promptMessages` 字段：
+`StreamRequest.promptMessages` 允许调用方绕过 `formatPrompt`，直接传入已格式化消息。editor-loop 是唯一的消费方。初评认为这破坏了 LLMClient 的单一调用契约。
 
-```ts
-export interface StreamRequest {
-    messages: DomainMessage[];
-    /** @internal 仅供 editor-loop 等内部模块使用 */
-    promptMessages?: PromptMessage[];
-    tools?: ToolDefinition[];
-    toolChoice?: "auto" | "none" | "required";
-}
-```
+## 二次审查：务实妥协，暂不重构
 
-当 `promptMessages` 被设置时，两个 Client 都跳过 `formatPrompt`：
+### 1. editor-loop 的场景确实不走 DomainMessage
 
-```ts
-const promptMessages = request.promptMessages ?? formatPrompt(request.messages, this.modelId);
-```
+editor-loop 是一个**封闭的、自包含的 LLM 循环**：它自己构造 system prompt、管理工具调用历史、拼接 tool result。这些消息从未经过 DomainMessage 领域层——它们天然就是 PromptMessage 格式。
 
-## 违背原则
+如果强制 editor-loop 走 DomainMessage → formatPrompt 路径，需要：
+- 为 editor-loop 的内部工具定义新的 DomainMessage 类型（`editor_tool_result` 等）
+- 在 formatPrompt 中增加 editor-loop 专用的消息处理分支
+- 人为增加了一层抽象，而 editor-loop 是唯一的消费方
 
-1. **关注点分离违背**：`LLMClient` 的核心职责之一是 DomainMessage → PromptMessage 转换。`promptMessages` 旁路让调用方直接传入已格式化消息，使得 Client 接口承担了两种不同的调用契约。
+这就是典型的**抽象反转**——为了满足架构纯洁性，让简单场景（直接拼 PromptMessage）绕一个大弯。
 
-2. **抽象泄漏**：`PromptMessage` 是 Client 内部格式，但通过 `StreamRequest.promptMessages` 暴露给了上层（editor-loop）。这意味着 editor-loop 必须自己构造 PromptMessage，绕开了 DomainMessage 领域层。
+### 2. `@internal` 标记是正确的防护
 
-3. **plan 偏离**：plan 中 `LLMClient.stream()` 的职责明确为"接受 DomainMessage[]，内部完成提示词组织"，而 `promptMessages` 破坏了这个契约。
+当前的设计用 `@internal` + JSDoc 注释明确了这个字段的使用范围。外部调用方（agent loop）从不使用它，只走 `messages: DomainMessage[]` 路径。两种调用模式虽然共存于同一接口，但使用场景清晰分离。
 
-## 建议
+### 3. 长期可以考虑的改进
 
-editor-loop 应该构造 DomainMessage[] 而非直接构造 PromptMessage[]，或者为 editor-loop 定义一个独立的 `streamRaw()` 方法，明确分离两种调用模式。
+如果将来出现第三个需要 `promptMessages` 的调用方，那时再考虑：
+- 将 `LLMClient` 拆为 `stream(StreamRequest)` + `streamRaw(RawStreamRequest)` 两个方法
+- 或者让 editor-loop 使用独立的 `EditorLLMClient` wrapper
+
+但目前只有一个消费方，过早抽象没有收益。
+
+## 结论
+
+**暂不行动**。当前设计是一个有明确标记的务实妥协。`@internal` 注释足以防止误用。等到有新的消费方出现时再考虑拆分接口。
