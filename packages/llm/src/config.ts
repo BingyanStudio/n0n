@@ -99,27 +99,3 @@ export interface LLMConfig {
 	maxOutputTokens?: number;
 }
 
-// ── 辅助函数（内部使用） ──
-
-/**
- * 从 LLMConfig 中提取 model ID
- */
-export function getModelId(config: LLMConfig): string {
-	return config.providerConfig.model;
-}
-
-/**
- * 从 LLMConfig 中提取 provider 类型
- */
-export function getProviderType(config: LLMConfig): string {
-	return config.providerConfig.provider;
-}
-
-/**
- * 判断 provider 是否属于 Anthropic 系 — SSOT 判定函数
- *
- * 各 Client 内部的缓存断点注入、thinking 配置等依赖此判定。
- */
-export function isAnthropicProvider(providerType: string): boolean {
-	return providerType === "anthropic";
-}
