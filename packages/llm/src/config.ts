@@ -58,12 +58,13 @@ export interface OpenAICompatibleProviderConfig {
 	 * 代理后端的实际 provider 类型。
 	 *
 	 * 当通过 litellm 等代理访问 Anthropic/Google 模型时，
-	 * OpenAI 兼容协议不会传递 provider-specific 字段。
-	 * 设置此字段后，可在请求层自动适配对应 provider 的行为。
+	 * OpenAI 兼容协议不会传递 provider-specific 字段
+	 * （如 Anthropic 的 cache_control）。设置此字段后，
+	 * 会在请求层自动注入对应 provider 的缓存控制标记。
 	 *
-	 * 注意：cache_control 注入现已对所有 openai-compatible provider 统一启用，
-	 * 不再依赖此字段。对不支持该字段的 provider 是 no-op，
-	 * 对支持 Anthropic 风格 cache_control 的 provider（如 ppio.com）可启用提示缓存。
+	 * 值：
+	 * - "anthropic"：注入 message-level cache_control: { type: "ephemeral" }
+	 * - undefined / 其他：不注入额外字段
 	 */
 	backendProvider?: "anthropic" | "google" | "openai";
 }
