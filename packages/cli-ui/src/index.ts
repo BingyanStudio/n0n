@@ -10,7 +10,10 @@ export {
 	cursorUp,
 	isTTY,
 	label,
+	stripAnsi,
 	style,
+	terminalColumns,
+	visibleWidth,
 	write,
 	writeln,
 } from "./ansi.ts";
