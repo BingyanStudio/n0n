@@ -23,6 +23,10 @@ export interface FeishuSession {
 
 // ── 会话存储 ──
 
+// TODO: sessions Map 只增不减，无 TTL 清理。长期运行后内存持续增长。
+// 同时每个 session 的 history 随对话轮次膨胀，需要：
+// 1. session 过期自动清理（如 24h 无活动）
+// 2. history 滑动窗口或摘要压缩
 const sessions = new Map<string, FeishuSession>();
 
 export function buildSessionKey(ctx: FeishuMessageContext): string {
