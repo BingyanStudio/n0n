@@ -6,7 +6,7 @@
  * 其余目录为 per-user 隔离。
  */
 
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ensureDirs } from "@n0n/shared";
 import type { WorkflowPaths } from "@n0n/workflow";
@@ -16,6 +16,30 @@ const FEISHU_BASE = resolve(
 		resolve(process.cwd(), ".runtime", "feishu"),
 );
 const SHARED_DIR = resolve(FEISHU_BASE, "shared");
+
+/**
+ * 查找项目根目录（包含 tsconfig.json 的最近祖先）。
+ * 优先使用源文件位置推算（编译时确定），回退到 cwd 和 FEISHU_BASE 向上查找。
+ */
+function findProjectRoot(): string {
+	// 1. 基于源文件位置：apps/feishu/src/ → 项目根
+	const fromSource = resolve(import.meta.dir, "..", "..", "..");
+	if (existsSync(resolve(fromSource, "tsconfig.json"))) return fromSource;
+
+	// 2. 基于 cwd
+	if (existsSync(resolve(process.cwd(), "tsconfig.json"))) return process.cwd();
+
+	// 3. 从 FEISHU_BASE 向上查找
+	let dir = FEISHU_BASE;
+	const root = resolve(dir, "/");
+	while (dir !== root) {
+		if (existsSync(resolve(dir, "tsconfig.json"))) return dir;
+		dir = resolve(dir, "..");
+	}
+
+	// 最后回退到 cwd
+	return process.cwd();
+}
 
 /**
  * 为指定飞书用户解析工作区路径（纯函数，不修改全局配置）。
@@ -38,6 +62,21 @@ export function resolveFeishuPaths(senderOpenId: string): WorkflowPaths {
 	};
 
 	ensureDirs(paths);
+
+	// 确保用户 workspace 有 tsconfig.json，使 bun 能解析 @n0n/* 等路径映射
+	const tsconfigPath = resolve(workspace, "tsconfig.json");
+	if (!existsSync(tsconfigPath)) {
+		const projectRoot = findProjectRoot();
+		const rootTsconfig = resolve(projectRoot, "tsconfig.json");
+		if (existsSync(rootTsconfig)) {
+			const tsconfig = JSON.stringify(
+				{ extends: rootTsconfig },
+				null,
+				"\t",
+			);
+			writeFileSync(tsconfigPath, tsconfig);
+		}
+	}
 	return paths;
 }
 

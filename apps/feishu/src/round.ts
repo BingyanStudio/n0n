@@ -10,7 +10,12 @@
 
 import { agentLoop } from "@n0n/core";
 import { loadSchedules } from "@n0n/scheduler";
-import { formatAgentsMdPrompt, loadAgentsMd } from "@n0n/shared";
+import {
+	discoverSkills,
+	formatAgentsMdPrompt,
+	formatSkillSummaries,
+	loadAgentsMd,
+} from "@n0n/shared";
 import {
 	discoverWorkflows,
 	type InteractiveResult,
@@ -30,28 +35,6 @@ const USER_INPUT_HINT = [
 
 // ── 辅助 ──
 
-function isWorkflowCreateIntent(text: string): boolean {
-	const v = text.toLowerCase();
-	return (
-		v.includes("workflow") ||
-		v.includes("工作流") ||
-		v.includes("创建") ||
-		v.includes("新建") ||
-		v.includes("create")
-	);
-}
-
-function buildFeishuCapabilityContext(): string {
-	return [
-		"## Feishu Source Context",
-		"This task is triggered from Feishu message.",
-		"If you are creating a workflow that needs user push notifications, use the skill:",
-		"- workflows/skills/feishu-bot",
-		"You can send text/image/file via scripts/lib.ts from that skill.",
-		"Reply to the triggering user/chat using the Feishu runtime context from system messages.",
-	].join("\n");
-}
-
 // ── 主流程 ──
 
 export async function runFeishuRound(
@@ -66,10 +49,11 @@ export async function runFeishuRound(
 	renderer.userMessage(userInput);
 
 	// 2. 收集上下文
-	const [existing, schedules, agentsMd] = await Promise.all([
+	const [existing, schedules, agentsMd, skills] = await Promise.all([
 		discoverWorkflows(false, session.paths),
 		loadSchedules(session.paths),
 		loadAgentsMd(session.paths.workspace),
+		discoverSkills(session.paths.skills),
 	]);
 
 	const contextParts: string[] = [];
@@ -96,16 +80,16 @@ export async function runFeishuRound(
 				.join("\n")}`,
 		);
 	}
-
-	const capabilities = isWorkflowCreateIntent(userInput)
-		? buildFeishuCapabilityContext()
-		: null;
+	if (skills.length > 0) {
+		contextParts.push(
+			`## Available Skills (shared, read-only)\n${formatSkillSummaries(skills)}`,
+		);
+	}
 
 	session.history.push({
 		type: "user_input",
 		content: userInput,
 		context: contextParts.length > 0 ? contextParts.join("\n\n") : null,
-		capabilities,
 		hint: USER_INPUT_HINT,
 	});
 

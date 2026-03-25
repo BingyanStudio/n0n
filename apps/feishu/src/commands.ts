@@ -242,7 +242,7 @@ export async function handleCommand(
 			}
 			await sendText(bot, ctx, "工作流", `⏳ 正在执行: ${cmd.name}...`);
 			try {
-				const result = await runWorkflow(wf.path, cmd.argsRaw ?? undefined);
+				const result = await runWorkflow(wf.path, cmd.argsRaw ?? undefined, session.paths.workspace);
 				await sendText(
 					bot,
 					ctx,

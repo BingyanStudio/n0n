@@ -100,18 +100,27 @@ export async function setScheduleEnabled(
 
 // ── 触发循环 ──
 
+export interface SchedulerCallbacks {
+	onTaskComplete?: (entry: ScheduleEntry, result: unknown) => void | Promise<void>;
+	onTaskError?: (entry: ScheduleEntry, error: unknown) => void | Promise<void>;
+}
+
 export interface SchedulerHandle {
 	stop(): void;
 }
 
 export async function startScheduler(
 	paths: SchedulerPaths,
+	callbacks?: SchedulerCallbacks,
 ): Promise<SchedulerHandle> {
 	let running = true;
 
 	console.log(
 		`[scheduler] Started. Watching ${paths.schedules}/*.mdc every 60s.`,
 	);
+
+	/** 正在执行的任务名集合，防止同一任务在执行期间被重复触发 */
+	const executing = new Set<string>();
 
 	const tick = async () => {
 		if (!running) return;
@@ -121,6 +130,10 @@ export async function startScheduler(
 
 		for (const entry of entries) {
 			if (!entry.enabled) continue;
+			if (executing.has(entry.name)) {
+				console.log(`[scheduler] Skipping ${entry.name}: still running from previous trigger`);
+				continue;
+			}
 
 			try {
 				const fields = parseCron(entry.cron);
@@ -131,30 +144,40 @@ export async function startScheduler(
 				if (entry.workflow) {
 					// workflow 路径基于 workspace 解析
 					const workflowPath = resolve(paths.workspace, entry.workflow);
-					runWorkflow(workflowPath).then(
-						(result) => {
+					executing.add(entry.name);
+					runWorkflow(workflowPath, undefined, paths.workspace)
+						.then(async (result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
 								typeof result === "string" ? result.slice(0, 200) : result,
 							);
-						},
-						(err) => {
-							console.error(`[scheduler] ❌ ${entry.name}:`, err);
-						},
-					);
+							await callbacks?.onTaskComplete?.(entry, result);
+						})
+						.catch(async (err) => {
+							console.error(`[scheduler] ❌ Workflow failed: ${entry.name}:`, err);
+							await callbacks?.onTaskError?.(entry, err);
+						})
+						.finally(() => {
+							executing.delete(entry.name);
+						});
 				} else {
 					// 传播 workspace 配置给 delegateTask
-					delegateTask(entry.prompt, { paths }).then(
-						(result) => {
+					executing.add(entry.name);
+					delegateTask(entry.prompt, { paths })
+						.then(async (result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
 								result.report ?? result.result,
 							);
-						},
-						(err) => {
-							console.error(`[scheduler] ❌ ${entry.name}:`, err);
-						},
-					);
+							await callbacks?.onTaskComplete?.(entry, result);
+						})
+						.catch(async (err) => {
+							console.error(`[scheduler] ❌ Delegate task failed: ${entry.name}:`, err);
+							await callbacks?.onTaskError?.(entry, err);
+						})
+						.finally(() => {
+							executing.delete(entry.name);
+						});
 				}
 			} catch (err) {
 				console.error(`[scheduler] Error: ${entry.name}:`, err);

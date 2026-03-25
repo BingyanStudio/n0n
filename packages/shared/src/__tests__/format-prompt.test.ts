@@ -187,13 +187,12 @@ describe("formatPrompt", () => {
 		}
 	});
 
-	test("user_input 消息拼接 context/capabilities/hint", () => {
+	test("user_input 消息拼接 context/hint", () => {
 		const msgs: DomainMessage[] = [
 			{
 				type: "user_input",
 				content: "Fix the bug",
 				context: "Project context here",
-				capabilities: "You can edit files",
 				hint: "Start by reading the code",
 			},
 		];
@@ -202,7 +201,6 @@ describe("formatPrompt", () => {
 		expect(result[0].role).toBe("user");
 		if (result[0].role === "user") {
 			expect(result[0].content).toContain("Project context here");
-			expect(result[0].content).toContain("You can edit files");
 			expect(result[0].content).toContain("Fix the bug");
 			expect(result[0].content).toContain("Start by reading the code");
 		}

@@ -17,6 +17,7 @@ import { createRuntimeContext, initRuntime } from "@n0n/core";
 import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
 import {
 	loadSchedules,
+	type SchedulerCallbacks,
 	type SchedulerHandle,
 	startScheduler,
 } from "@n0n/scheduler";
@@ -33,6 +34,7 @@ import {
 	shouldProcessMessage,
 } from "./session.ts";
 import { ensureUserInfo } from "./user-info.ts";
+import { basename } from "node:path";
 
 function requireEnv(key: string): string {
 	const val = process.env[key];
@@ -57,8 +59,43 @@ export async function startFeishuService(): Promise<void> {
 	});
 	initRuntime(runtime);
 
+	// ── Scheduler 回调：将定时任务结果/错误推送给用户 ──
+	function buildSchedulerCallbacks(workspace: string): SchedulerCallbacks {
+		const userOpenId = basename(workspace);
+		const recipient = { receiveIdType: "open_id" as const, receiveId: userOpenId };
+		const notifyCtx = {
+			chatId: null,
+			chatType: null,
+			senderOpenId: userOpenId,
+			senderUserId: null,
+			senderUnionId: null,
+			tenantKey: null,
+			messageId: null,
+			recipient,
+		};
+		return {
+			onTaskComplete: async (entry, result) => {
+				const text = typeof result === "string" ? result.slice(0, 500) : JSON.stringify(result).slice(0, 500);
+				const card = buildTextCard(`✅ 定时任务完成: ${entry.name}`, text, "green");
+				await bot.createCardMessage(notifyCtx, card).catch((err) => {
+					console.error(`[feishu] Failed to notify task completion:`, err);
+				});
+			},
+			onTaskError: async (entry, error) => {
+				const card = buildTextCard(`❌ 定时任务失败: ${entry.name}`, String(error).slice(0, 500), "red");
+				await bot.createCardMessage(notifyCtx, card).catch((err) => {
+					console.error(`[feishu] Failed to notify task error:`, err);
+				});
+			},
+		};
+	}
+
+	async function startUserScheduler(workspace: string, paths: import("@n0n/workflow").WorkflowPaths): Promise<SchedulerHandle> {
+		return startScheduler(paths, buildSchedulerCallbacks(workspace));
+	}
+
 	// 扫描所有已有用户目录，为有 schedule 的用户启动 scheduler
-	const schedulerHandles: SchedulerHandle[] = [];
+	const schedulerMap = new Map<string, SchedulerHandle>();
 	const allUserPaths = discoverAllUserPaths();
 	for (const userPaths of allUserPaths) {
 		const schedules = await loadSchedules(userPaths);
@@ -66,16 +103,16 @@ export async function startFeishuService(): Promise<void> {
 			console.log(
 				`[feishu] Starting scheduler for ${userPaths.workspace} (${schedules.length} schedules)`,
 			);
-			const handle = await startScheduler(userPaths);
-			schedulerHandles.push(handle);
+			const handle = await startUserScheduler(userPaths.workspace, userPaths);
+			schedulerMap.set(userPaths.workspace, handle);
 		}
 	}
-	if (schedulerHandles.length === 0) {
+	if (schedulerMap.size === 0) {
 		console.log("[feishu] No user schedules found at startup.");
 	}
 
 	process.on("SIGINT", () => {
-		for (const h of schedulerHandles) h.stop();
+		for (const h of schedulerMap.values()) h.stop();
 	});
 
 	const dispatcher = new lark.EventDispatcher({
@@ -92,7 +129,14 @@ export async function startFeishuService(): Promise<void> {
 			}
 
 			const text = FeishuBot.readText(data);
-			if (!text) return;
+			if (!text) {
+				// 非文本消息（图片、文件等）暂不支持，发送提示
+				if (ctx.senderOpenId) {
+					const card = buildTextCard("暂不支持", "目前仅支持文本消息，图片、文件等类型暂不支持。", "grey");
+					await bot.createCardMessage(ctx, card);
+				}
+				return;
+			}
 
 			if (!ctx.senderOpenId) {
 				console.warn("[feishu] message with empty senderOpenId, skipping");
@@ -160,9 +204,20 @@ export async function startFeishuService(): Promise<void> {
 					);
 					await bot.createCardMessage(ctx, card);
 				})
-				.finally(() => {
+				.finally(async () => {
 					if (session.currentTask?.abortController === abortController) {
 						session.currentTask = null;
+					}
+					// 动态检查是否需要为该用户启动 scheduler
+					if (!schedulerMap.has(workspacePaths.workspace)) {
+						const schedules = await loadSchedules(workspacePaths);
+						if (schedules.length > 0) {
+							console.log(
+								`[feishu] Starting scheduler for new user ${ctx.senderOpenId} (${schedules.length} schedules)`,
+							);
+							const handle = await startUserScheduler(workspacePaths.workspace, workspacePaths);
+							schedulerMap.set(workspacePaths.workspace, handle);
+						}
 					}
 				});
 		},
