@@ -286,6 +286,29 @@ export function formatPrompt(
 				});
 				break;
 			}
+
+			case "generic_tool_call": {
+				const toolCalls: ToolCallPart[] = msg.toolCalls.map((tc) => ({
+					id: tc.id,
+					tool: tc.tool,
+					args: tc.args,
+				}));
+				result.push({
+					role: "assistant",
+					content: msg.content ?? "",
+					toolCalls,
+				});
+				break;
+			}
+
+			case "generic_tool_result":
+				result.push({
+					role: "tool",
+					toolCallId: msg.callId,
+					toolName: msg.toolName,
+					content: msg.content,
+				});
+				break;
 		}
 	}
 
