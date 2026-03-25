@@ -30,28 +30,6 @@ const USER_INPUT_HINT = [
 
 // ── 辅助 ──
 
-function isWorkflowCreateIntent(text: string): boolean {
-	const v = text.toLowerCase();
-	return (
-		v.includes("workflow") ||
-		v.includes("工作流") ||
-		v.includes("创建") ||
-		v.includes("新建") ||
-		v.includes("create")
-	);
-}
-
-function buildFeishuCapabilityContext(): string {
-	return [
-		"## Feishu Source Context",
-		"This task is triggered from Feishu message.",
-		"If you are creating a workflow that needs user push notifications, use the skill:",
-		"- workflows/skills/feishu-bot",
-		"You can send text/image/file via scripts/lib.ts from that skill.",
-		"Reply to the triggering user/chat using the Feishu runtime context from system messages.",
-	].join("\n");
-}
-
 // ── 主流程 ──
 
 export async function runFeishuRound(
@@ -97,15 +75,10 @@ export async function runFeishuRound(
 		);
 	}
 
-	const capabilities = isWorkflowCreateIntent(userInput)
-		? buildFeishuCapabilityContext()
-		: null;
-
 	session.history.push({
 		type: "user_input",
 		content: userInput,
 		context: contextParts.length > 0 ? contextParts.join("\n\n") : null,
-		capabilities,
 		hint: USER_INPUT_HINT,
 	});
 
