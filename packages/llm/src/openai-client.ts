@@ -265,6 +265,61 @@ export class OpenAIClient implements LLMClient {
 		let lastUsage: TokenUsage | null = null;
 		let lastFinishReason: string | null = null;
 
+		// 内部函数：处理单个 data: 行，消除主循环与 flush 间的重复（#009）
+		const processDataLine = function* (payload: string): Generator<StreamEvent> {
+			if (!payload || payload === "[DONE]") return;
+
+			let chunk: unknown;
+			try {
+				chunk = JSON.parse(payload);
+			} catch {
+				return;
+			}
+
+			if (!isSSEChunk(chunk)) return;
+
+			// usage 统计（部分 provider 在最后一个 chunk 发送 usage）
+			if (chunk.usage) {
+				const u = chunk.usage;
+				lastUsage = {
+					inputTokens: u.prompt_tokens ?? 0,
+					outputTokens: u.completion_tokens ?? 0,
+					totalTokens: u.total_tokens ?? 0,
+					cacheReadTokens:
+						u.prompt_tokens_details?.cached_tokens ??
+						u.prompt_cache_hit_tokens ??
+						0,
+					cacheWriteTokens: u.prompt_cache_miss_tokens ?? 0,
+				};
+			}
+
+			const delta = chunk.choices?.[0]?.delta;
+			if (delta) {
+				if (delta.reasoning_content) {
+					yield { type: "thinking", text: delta.reasoning_content };
+				}
+				if (delta.content) {
+					yield { type: "content", text: delta.content };
+				}
+				if (delta.tool_calls) {
+					for (const tc of delta.tool_calls) {
+						yield {
+							type: "tool_call_delta",
+							index: tc.index,
+							id: tc.id,
+							name: tc.function?.name,
+							arguments: tc.function?.arguments ?? "",
+						};
+					}
+				}
+			}
+
+			const finish = chunk.choices?.[0]?.finish_reason;
+			if (finish) {
+				lastFinishReason = finish;
+			}
+		};
+
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
@@ -292,60 +347,7 @@ export class OpenAIClient implements LLMClient {
 							return;
 						}
 
-						let chunk: unknown;
-						try {
-							chunk = JSON.parse(payload);
-						} catch {
-							continue;
-						}
-
-						if (!isSSEChunk(chunk)) continue;
-
-						// usage 统计（部分 provider 在最后一个 chunk 发送 usage）
-						if (chunk.usage) {
-							const u = chunk.usage;
-							lastUsage = {
-								inputTokens: u.prompt_tokens ?? 0,
-								outputTokens: u.completion_tokens ?? 0,
-								totalTokens: u.total_tokens ?? 0,
-								cacheReadTokens:
-									u.prompt_tokens_details?.cached_tokens ??
-									u.prompt_cache_hit_tokens ??
-									0,
-								cacheWriteTokens: u.prompt_cache_miss_tokens ?? 0,
-							};
-						}
-
-						const delta = chunk.choices?.[0]?.delta;
-						if (!delta) continue;
-
-						if (delta.reasoning_content) {
-							yield {
-								type: "thinking",
-								text: delta.reasoning_content,
-							};
-						}
-
-						if (delta.content) {
-							yield { type: "content", text: delta.content };
-						}
-
-						if (delta.tool_calls) {
-							for (const tc of delta.tool_calls) {
-								yield {
-									type: "tool_call_delta",
-									index: tc.index,
-									id: tc.id,
-									name: tc.function?.name,
-									arguments: tc.function?.arguments ?? "",
-								};
-							}
-						}
-
-						const finish = chunk.choices?.[0]?.finish_reason;
-						if (finish) {
-							lastFinishReason = finish;
-						}
+						yield* processDataLine(payload);
 					}
 					boundary = buffer.indexOf("\n\n");
 				}
@@ -357,50 +359,7 @@ export class OpenAIClient implements LLMClient {
 					if (!line.startsWith("data: ")) continue;
 					const payload = line.slice(6);
 					if (payload === "[DONE]") break;
-					let chunk: unknown;
-					try {
-						chunk = JSON.parse(payload);
-					} catch {
-						continue;
-					}
-					if (!isSSEChunk(chunk)) continue;
-					if (chunk.usage) {
-						const u = chunk.usage;
-						lastUsage = {
-							inputTokens: u.prompt_tokens ?? 0,
-							outputTokens: u.completion_tokens ?? 0,
-							totalTokens: u.total_tokens ?? 0,
-							cacheReadTokens:
-								u.prompt_tokens_details?.cached_tokens ??
-								u.prompt_cache_hit_tokens ??
-								0,
-							cacheWriteTokens: u.prompt_cache_miss_tokens ?? 0,
-						};
-					}
-					const delta = chunk.choices?.[0]?.delta;
-					if (delta) {
-						if (delta.reasoning_content) {
-							yield { type: "thinking", text: delta.reasoning_content };
-						}
-						if (delta.content) {
-							yield { type: "content", text: delta.content };
-						}
-						if (delta.tool_calls) {
-							for (const tc of delta.tool_calls) {
-								yield {
-									type: "tool_call_delta",
-									index: tc.index,
-									id: tc.id,
-									name: tc.function?.name,
-									arguments: tc.function?.arguments ?? "",
-								};
-							}
-						}
-					}
-					const finish = chunk.choices?.[0]?.finish_reason;
-					if (finish) {
-						lastFinishReason = finish;
-					}
+					yield* processDataLine(payload);
 				}
 			}
 
