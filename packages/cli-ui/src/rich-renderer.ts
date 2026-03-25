@@ -12,7 +12,7 @@ import type {
 	ToolResult,
 } from "@n0n/types";
 import { parse as parsePartialJSON } from "partial-json";
-import { label, style, write, writeln } from "./ansi.ts";
+import { isTTY, label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
 
 // ── token 数值人类友好格式化 ──
@@ -36,7 +36,8 @@ function formatUsageSummary(usage: RoundTokenUsage): string {
 		if (usage.cacheReadTokens > 0) {
 			// 计算 cache hit 占总输入的百分比
 			// 总输入 = inputTokens(新计算) + cacheReadTokens(缓存命中) + cacheWriteTokens(缓存写入)
-			const totalInput = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+			const totalInput =
+				usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
 			const hitPct =
 				totalInput > 0
 					? Math.round((usage.cacheReadTokens / totalInput) * 100)
@@ -134,7 +135,9 @@ export class RichRenderer implements Renderer {
 
 		const roundInfo = `round ${round}/${maxRounds} (${msgCount} msgs)`;
 		if (lastUsage) {
-			writeln(style.gray(`  ${roundInfo} · ${formatUsageSummary(lastUsage)}`));
+			writeln(
+				style.gray(`  ${roundInfo} · ${formatUsageSummary(lastUsage)}`),
+			);
 		} else {
 			writeln(style.gray(`  ${roundInfo}`));
 		}
@@ -164,24 +167,28 @@ export class RichRenderer implements Renderer {
 		this.isThinking = false;
 		// 折叠流式工具调用参数区域 → 替换为解析后的结构化显示
 		if (this.streamingToolCalls.size > 0) {
-			this.streamRegion.clear();
+			// TTY：streamRegion 已有实时渲染的内容，clear 后重写最终版本
+			// 非 TTY：streamRegion 未输出任何内容，直接写最终版本即可
+			if (isTTY) {
+				this.streamRegion.clear();
+			}
 			for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
 				(a, b) => a[0] - b[0],
 			)) {
 				const parsed = tryParseArgs(tc.args);
 				if (parsed) {
 					for (const line of renderToolArgs(tc.name, parsed)) {
-						this.streamRegion.writeln(line);
+						writeln(line);
 					}
 				} else {
-					this.streamRegion.writeln(
+					writeln(
 						`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray(tc.args.slice(0, 80))}`,
 					);
 				}
 			}
 			this.skipToolCallStarts = this.streamingToolCalls.size;
 			this.streamingToolCalls.clear();
-			// 结构化参数已提交到终端，重置行计数防止后续 clear() 误删已提交行
+			// 重置 streamRegion 行计数，防止后续 clear() 误删已提交行
 			this.streamRegion.reset();
 		}
 	}
@@ -191,7 +198,9 @@ export class RichRenderer implements Renderer {
 			writeln(content);
 		}
 		writeln(
-			style.gray(`(text response, ${content.length} chars, idle=${idleCount})`),
+			style.gray(
+				`(text response, ${content.length} chars, idle=${idleCount})`,
+			),
 		);
 	}
 
@@ -246,7 +255,10 @@ export class RichRenderer implements Renderer {
 		if (name) entry.name = name;
 		entry.args += chunk;
 
-		// 重绘整个流式区域：尝试解析 JSON，成功则结构化显示，否则显示原始
+		// 非 TTY：只静默累积，不输出（等 contentEnd 一次性渲染最终结果）
+		if (!isTTY) return;
+
+		// TTY：重绘整个流式区域（LiveRegion clear+rewrite 实现原地刷新）
 		this.streamRegion.clear();
 		for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
 			(a, b) => a[0] - b[0],
