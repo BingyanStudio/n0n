@@ -9,6 +9,15 @@ package-lock.json
 .temp/
 workflows/
 .runtime/
+!.runtime/feishu/
+!.runtime/feishu/shared/
+!.runtime/feishu/shared/skills/
+!.runtime/feishu/shared/skills/feishu-bot/
+!.runtime/feishu/shared/skills/feishu-bot/**
+!.runtime/feishu/shared/skills/ppio-web-search/
+!.runtime/feishu/shared/skills/ppio-web-search/**
+!.runtime/feishu/shared/skills/set-cronjob/
+!.runtime/feishu/shared/skills/set-cronjob/**
 workflows/memory
 dist/ 
 .DS_Store
