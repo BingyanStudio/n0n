@@ -131,7 +131,7 @@ export async function startScheduler(
 				if (entry.workflow) {
 					// workflow 路径基于 workspace 解析
 					const workflowPath = resolve(paths.workspace, entry.workflow);
-					runWorkflow(workflowPath).then(
+					runWorkflow(workflowPath, undefined, paths.workspace).then(
 						(result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
