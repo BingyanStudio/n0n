@@ -113,6 +113,9 @@ export async function startScheduler(
 		`[scheduler] Started. Watching ${paths.schedules}/*.mdc every 60s.`,
 	);
 
+	/** 正在执行的任务名集合，防止同一任务在执行期间被重复触发 */
+	const executing = new Set<string>();
+
 	const tick = async () => {
 		if (!running) return;
 
@@ -121,6 +124,10 @@ export async function startScheduler(
 
 		for (const entry of entries) {
 			if (!entry.enabled) continue;
+			if (executing.has(entry.name)) {
+				console.log(`[scheduler] Skipping ${entry.name}: still running from previous trigger`);
+				continue;
+			}
 
 			try {
 				const fields = parseCron(entry.cron);
@@ -131,30 +138,36 @@ export async function startScheduler(
 				if (entry.workflow) {
 					// workflow 路径基于 workspace 解析
 					const workflowPath = resolve(paths.workspace, entry.workflow);
-					runWorkflow(workflowPath, undefined, paths.workspace).then(
-						(result) => {
+					executing.add(entry.name);
+					runWorkflow(workflowPath, undefined, paths.workspace)
+						.then((result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
 								typeof result === "string" ? result.slice(0, 200) : result,
 							);
-						},
-						(err) => {
-							console.error(`[scheduler] ❌ ${entry.name}:`, err);
-						},
-					);
+						})
+						.catch((err) => {
+							console.error(`[scheduler] ❌ Workflow failed: ${entry.name}:`, err);
+						})
+						.finally(() => {
+							executing.delete(entry.name);
+						});
 				} else {
 					// 传播 workspace 配置给 delegateTask
-					delegateTask(entry.prompt, { paths }).then(
-						(result) => {
+					executing.add(entry.name);
+					delegateTask(entry.prompt, { paths })
+						.then((result) => {
 							console.log(
 								`[scheduler] ✅ ${entry.name}:`,
 								result.report ?? result.result,
 							);
-						},
-						(err) => {
-							console.error(`[scheduler] ❌ ${entry.name}:`, err);
-						},
-					);
+						})
+						.catch((err) => {
+							console.error(`[scheduler] ❌ Delegate task failed: ${entry.name}:`, err);
+						})
+						.finally(() => {
+							executing.delete(entry.name);
+						});
 				}
 			} catch (err) {
 				console.error(`[scheduler] Error: ${entry.name}:`, err);
