@@ -10,7 +10,12 @@
 
 import { agentLoop } from "@n0n/core";
 import { loadSchedules } from "@n0n/scheduler";
-import { formatAgentsMdPrompt, loadAgentsMd } from "@n0n/shared";
+import {
+	discoverSkills,
+	formatAgentsMdPrompt,
+	formatSkillSummaries,
+	loadAgentsMd,
+} from "@n0n/shared";
 import {
 	discoverWorkflows,
 	type InteractiveResult,
@@ -44,10 +49,11 @@ export async function runFeishuRound(
 	renderer.userMessage(userInput);
 
 	// 2. 收集上下文
-	const [existing, schedules, agentsMd] = await Promise.all([
+	const [existing, schedules, agentsMd, skills] = await Promise.all([
 		discoverWorkflows(false, session.paths),
 		loadSchedules(session.paths),
 		loadAgentsMd(session.paths.workspace),
+		discoverSkills(session.paths.skills),
 	]);
 
 	const contextParts: string[] = [];
@@ -72,6 +78,11 @@ export async function runFeishuRound(
 						`- ${s.name}: ${s.cron} → ${s.workflow ?? "(delegateTask)"} [${s.enabled ? "enabled" : "disabled"}]`,
 				)
 				.join("\n")}`,
+		);
+	}
+	if (skills.length > 0) {
+		contextParts.push(
+			`## Available Skills (shared, read-only)\n${formatSkillSummaries(skills)}`,
 		);
 	}
 
