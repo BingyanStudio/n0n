@@ -33,3 +33,7 @@ const sessions = new Map<string, FeishuSession>();
 2. **History 膨胀**：每次 LLM 调用都发送完整 history，随着 history 增长，token 消耗急剧增加，API 费用上升
 3. **Context 溢出**：当 history 超过模型 context window 时，LLM 调用会失败或截断
 4. **无 session TTL**：用户离开后 session 永远不会被释放
+
+## 人类评估
+
+这个是小问题，暂时不用关心，不过可以添加todo注释说明。

@@ -39,3 +39,7 @@ delegateTask(entry.prompt, { paths }).then(...)
 2. **重复执行**：长耗时 workflow 可能被重复触发
 3. **结果不可达**：scheduler 触发的任务完成后无法通知用户（只有 console.log）
 4. **无失败重试**：失败的任务只有 console.error，不会重试或通知
+
+## 人类评估
+
+确实需要修复。不过 scheduler 中间步骤并不对用户展示，计划任务仅仅需要产出结果。至于错误应该提示而不应该静默处理。

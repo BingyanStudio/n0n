@@ -41,3 +41,9 @@ private enqueue(task: () => Promise<void>): void {
 | `apps/feishu/src/conversation.ts` L191-193 | `enqueue` 静默吞错误 |
 | `apps/feishu/src/conversation.ts` L116-133 | `initStreamingCard` 无重试 |
 | `apps/feishu/src/conversation.ts` L136-148 | `flushCard` 在 cardEntityId=null 时静默跳过 |
+
+## 人类评估
+
+这属于代码鲁棒性问题，大部分情况下正常，可以添加todo注释，暂时不修复
+
+// TODO

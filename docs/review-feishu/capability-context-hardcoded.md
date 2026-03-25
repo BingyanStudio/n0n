@@ -37,3 +37,9 @@ function isWorkflowCreateIntent(text: string): boolean {
 1. **路径不一致**：Agent 按 `workflows/skills/feishu-bot` 寻找 skill 会找不到
 2. **不可扩展**：新增 skill 需要手动修改硬编码
 3. **误触发**：非 workflow 相关的"创建"请求也会注入不相关的 capability context，浪费 token 并可能误导 Agent
+
+## 人类评估
+
+我不知道为什么会有这个特判，它是没有必要的，相关逻辑应该自然写到系统提示词中。
+
+应该将这部分处理完全删除。

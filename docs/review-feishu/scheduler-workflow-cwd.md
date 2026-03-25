@@ -49,3 +49,7 @@ const userInfo = JSON.parse(await Bun.file("workflows/memory/user-info.json").te
 | `packages/workflow/src/workflow/runtime.ts` L74-88 | `runWorkflow` 不设置 cwd |
 | `packages/scheduler/src/scheduler.ts` L133-134 | Scheduler 调用 `runWorkflow` |
 | `apps/feishu/src/commands.ts` L238-245 | `/workflows run` 命令也调用 `runWorkflow`，同样没有 cwd 隔离 |
+
+## 人类评估
+
+严重问题，需要修复
