@@ -49,6 +49,11 @@ export function clearToEnd(): void {
 	out.write("\x1b[0K");
 }
 
+/** 清除从光标到屏幕末尾（含当前行） */
+export function clearDown(): void {
+	out.write("\x1b[J");
+}
+
 /** 隐藏光标 */
 export function hideCursor(): void {
 	out.write("\x1b[?25l");
