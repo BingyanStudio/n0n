@@ -58,7 +58,7 @@ export async function startFeishuService(): Promise<void> {
 	initRuntime(runtime);
 
 	// 扫描所有已有用户目录，为有 schedule 的用户启动 scheduler
-	const schedulerHandles: SchedulerHandle[] = [];
+	const schedulerMap = new Map<string, SchedulerHandle>();
 	const allUserPaths = discoverAllUserPaths();
 	for (const userPaths of allUserPaths) {
 		const schedules = await loadSchedules(userPaths);
@@ -67,15 +67,15 @@ export async function startFeishuService(): Promise<void> {
 				`[feishu] Starting scheduler for ${userPaths.workspace} (${schedules.length} schedules)`,
 			);
 			const handle = await startScheduler(userPaths);
-			schedulerHandles.push(handle);
+			schedulerMap.set(userPaths.workspace, handle);
 		}
 	}
-	if (schedulerHandles.length === 0) {
+	if (schedulerMap.size === 0) {
 		console.log("[feishu] No user schedules found at startup.");
 	}
 
 	process.on("SIGINT", () => {
-		for (const h of schedulerHandles) h.stop();
+		for (const h of schedulerMap.values()) h.stop();
 	});
 
 	const dispatcher = new lark.EventDispatcher({
@@ -167,9 +167,20 @@ export async function startFeishuService(): Promise<void> {
 					);
 					await bot.createCardMessage(ctx, card);
 				})
-				.finally(() => {
+				.finally(async () => {
 					if (session.currentTask?.abortController === abortController) {
 						session.currentTask = null;
+					}
+					// 动态检查是否需要为该用户启动 scheduler
+					if (!schedulerMap.has(workspacePaths.workspace)) {
+						const schedules = await loadSchedules(workspacePaths);
+						if (schedules.length > 0) {
+							console.log(
+								`[feishu] Starting scheduler for new user ${ctx.senderOpenId} (${schedules.length} schedules)`,
+							);
+							const handle = await startScheduler(workspacePaths);
+							schedulerMap.set(workspacePaths.workspace, handle);
+						}
 					}
 				});
 		},
