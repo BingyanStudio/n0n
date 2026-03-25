@@ -321,6 +321,33 @@ export class AnthropicClient implements LLMClient {
 		let toolCallIndex = 0;
 		let inputUsage: TokenUsage | null = null;
 
+		// 内部函数：将 Anthropic stop_reason 映射为归一化的 done 事件（#009）
+		const mapMessageDelta = function* (event: MessageDelta): Generator<StreamEvent> {
+			const stopReason = event.delta.stop_reason ?? "stop";
+			const outputTokens = event.usage?.output_tokens ?? 0;
+			const usage: TokenUsage | null = inputUsage
+				? {
+						...inputUsage,
+						outputTokens:
+							inputUsage.outputTokens + outputTokens,
+						totalTokens:
+							inputUsage.inputTokens + inputUsage.outputTokens + outputTokens,
+					}
+				: null;
+			yield {
+				type: "done",
+				finishReason:
+					stopReason === "end_turn"
+						? "stop"
+						: stopReason === "max_tokens"
+							? "length"
+							: stopReason === "tool_use"
+								? "tool_calls"
+								: stopReason,
+				usage,
+			};
+		};
+
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
@@ -422,29 +449,7 @@ export class AnthropicClient implements LLMClient {
 						}
 
 						case "message_delta": {
-							const stopReason = event.delta.stop_reason ?? "stop";
-							const outputTokens = event.usage?.output_tokens ?? 0;
-							const usage: TokenUsage | null = inputUsage
-								? {
-										...inputUsage,
-										outputTokens:
-											inputUsage.outputTokens + outputTokens,
-										totalTokens:
-											inputUsage.inputTokens + inputUsage.outputTokens + outputTokens,
-									}
-								: null;
-							yield {
-								type: "done",
-								finishReason:
-									stopReason === "end_turn"
-										? "stop"
-										: stopReason === "max_tokens"
-											? "length"
-											: stopReason === "tool_use"
-												? "tool_calls"
-												: stopReason,
-								usage,
-							};
+							yield* mapMessageDelta(event);
 							break;
 						}
 
@@ -474,27 +479,7 @@ export class AnthropicClient implements LLMClient {
 					try {
 						const event = JSON.parse(eventData) as AnthropicSSEEvent;
 						if (event.type === "message_delta") {
-							const stopReason = event.delta.stop_reason ?? "stop";
-							const outputTokens = event.usage?.output_tokens ?? 0;
-							const usage: TokenUsage | null = inputUsage
-								? {
-										...inputUsage,
-										outputTokens: inputUsage.outputTokens + outputTokens,
-										totalTokens: inputUsage.inputTokens + inputUsage.outputTokens + outputTokens,
-									}
-								: null;
-							yield {
-								type: "done",
-								finishReason:
-									stopReason === "end_turn"
-										? "stop"
-										: stopReason === "max_tokens"
-											? "length"
-											: stopReason === "tool_use"
-												? "tool_calls"
-												: stopReason,
-								usage,
-							};
+							yield* mapMessageDelta(event);
 						}
 					} catch {
 						// ignore parse errors in residual buffer
