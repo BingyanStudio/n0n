@@ -10,36 +10,47 @@
  */
 
 import type { Interface as ReadlineInterface } from "node:readline";
-import { isTTY, style } from "@n0n/cli-ui";
 
 /** 粘贴检测阈值（毫秒）— 两行间隔低于此值视为粘贴 */
 const PASTE_THRESHOLD_MS = 50;
 
-/** 续行提示符 */
-const CONTINUATION_PROMPT = isTTY ? style.gray("... ") : "";
+export interface MultilineInputOptions {
+	/** 续行提示符（如 "... "），默认为空字符串 */
+	continuationPrompt?: string;
+}
 
 /**
  * 读取用户多行输入
  *
  * @param rl - readline 实例
  * @param promptLabel - 首行提示符（如 " USER "）
- * @param closed - 是否已关闭的引用
- * @returns 用户输入的完整文本（多行用 \n 连接）
+ * @param options - 可选配置
+ * @returns 用户输入的完整文本（多行用 \n 连接），readline 关闭时返回 null
  */
 export function readMultilineInput(
 	rl: ReadlineInterface,
 	promptLabel: string,
-	closed: { value: boolean },
-): Promise<string> {
-	return new Promise<string>((resolve) => {
-		if (closed.value) return resolve("exit");
+	options?: MultilineInputOptions,
+): Promise<string | null> {
+	const continuationPrompt = options?.continuationPrompt ?? "";
 
+	return new Promise<string | null>((resolve) => {
 		const lines: string[] = [];
 		let lastLineTime = 0;
 
-		function submit() {
+		function cleanup() {
 			rl.removeListener("line", onLine);
+			rl.removeListener("close", onClose);
+		}
+
+		function submit() {
+			cleanup();
 			resolve(lines.join("\n"));
+		}
+
+		function onClose() {
+			cleanup();
+			resolve(lines.length > 0 ? lines.join("\n") : null);
 		}
 
 		function onLine(line: string) {
@@ -59,7 +70,7 @@ export function readMultilineInput(
 			lines.push(line);
 
 			// 显示续行提示符，等待下一行
-			rl.setPrompt(CONTINUATION_PROMPT);
+			rl.setPrompt(continuationPrompt);
 			rl.prompt();
 		}
 
@@ -67,5 +78,6 @@ export function readMultilineInput(
 		rl.setPrompt(promptLabel);
 		rl.prompt();
 		rl.on("line", onLine);
+		rl.once("close", onClose);
 	});
 }

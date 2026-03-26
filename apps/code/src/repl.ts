@@ -131,18 +131,22 @@ export async function startCodeRepl(
 		output: process.stderr,
 		terminal: isTTY,
 	});
-	const closedRef = { value: false };
+	let closed = false;
 	rl.on("close", () => {
-		closedRef.value = true;
+		closed = true;
 	});
 
-	const prompt = (q: string): Promise<string> =>
-		readMultilineInput(rl, q, closedRef);
+	const continuationPrompt = isTTY ? style.gray("... ") : "";
+	const prompt = async (q: string): Promise<string> => {
+		const result = await readMultilineInput(rl, q, { continuationPrompt });
+		return result ?? "exit";
+	};
 	const confirmFn = (question: string): Promise<string> =>
 		new Promise((resolve) => {
-			if (closedRef.value) return resolve("n");
+			if (closed) return resolve("n");
 			rl.question(question, resolve);
 		});
+
 	// ── Ctrl+C 中断控制 ──
 	let abortController = new AbortController();
 	let agentRunning = false;
