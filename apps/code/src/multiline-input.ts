@@ -1,11 +1,12 @@
 /**
  * 多行输入收集器
  *
- * 支持两种多行输入场景：
- * 1. **粘贴检测**：行间隔极短（< PASTE_THRESHOLD_MS）时自动累积，粘贴结束后自动提交
- * 2. **手动多行**：首行非空时进入收集模式，输入空行（连按两次回车）提交
+ * 统一使用「空行提交」的交互模式：
+ * - 用户输入内容后，按下空行（再次回车）提交
+ * - 粘贴多行内容时，粘贴中的空行不会触发提交（通过行间隔检测区分粘贴与手动输入）
+ * - 粘贴结束后用户可继续编辑或追加内容，最后按空行提交
  *
- * 单行快速输入体验不变：输入一行后短暂等待，无后续行则立即提交。
+ * 行间隔 < PASTE_THRESHOLD_MS 视为粘贴行为，期间所有内容（含空行）正常累积。
  */
 
 import type { Interface as ReadlineInterface } from "node:readline";
@@ -35,55 +36,29 @@ export function readMultilineInput(
 
 		const lines: string[] = [];
 		let lastLineTime = 0;
-		let timer: ReturnType<typeof setTimeout> | null = null;
 
 		function submit() {
-			cleanup();
-			resolve(lines.join("\n"));
-		}
-
-		function cleanup() {
-			if (timer) {
-				clearTimeout(timer);
-				timer = null;
-			}
 			rl.removeListener("line", onLine);
+			resolve(lines.join("\n"));
 		}
 
 		function onLine(line: string) {
 			const now = Date.now();
-			if (timer) {
-				clearTimeout(timer);
-				timer = null;
-			}
-
 			const isPaste =
 				lastLineTime > 0 && now - lastLineTime < PASTE_THRESHOLD_MS;
 			lastLineTime = now;
 
-			// 空行逻辑：
-			// - 如果是粘贴中的空行，正常累积
-			// - 如果是手动输入的空行且已有内容，提交
-			// - 如果首行就是空行，提交空内容（由调用方处理）
+			// 空行处理：
+			// - 粘贴中的空行 → 正常累积（粘贴内容可能包含空行）
+			// - 手动输入的空行 → 提交已收集的内容
 			if (line === "" && !isPaste) {
-				if (lines.length === 0) {
-					submit();
-					return;
-				}
 				submit();
 				return;
 			}
 
 			lines.push(line);
 
-			// 设置短延时：如果没有后续行到达，自动提交
-			// 粘贴场景：后续行会在阈值内到达并重置 timer
-			// 单行场景：等待 PASTE_THRESHOLD_MS 后自动提交
-			timer = setTimeout(() => {
-				submit();
-			}, PASTE_THRESHOLD_MS);
-
-			// 切换为续行提示符，等待下一行输入
+			// 显示续行提示符，等待下一行
 			rl.setPrompt(CONTINUATION_PROMPT);
 			rl.prompt();
 		}
