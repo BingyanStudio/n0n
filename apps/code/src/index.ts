@@ -39,11 +39,23 @@ const testLLM = async () => {
 	try {
 		const config = buildLLMConfigFromEnv("LLM");
 		const client = createLLMClient(config);
-		// 使用流式调用测试连通性 — 发送最小请求验证 API key 和网络
-		for await (const event of client.stream({
-			messages: [{ type: "user_text", content: "hi" }],
-		})) {
-			if (event.type === "done" || event.type === "error") break;
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 15_000);
+		try {
+			// 流式调用 — 收到首个有效事件即判定连接正常，立即中断节省 token
+			for await (const event of client.stream(
+				{ messages: [{ type: "user_text", content: "hi" }] },
+				controller.signal,
+			)) {
+				if (event.type === "error") {
+					return { ok: false as const, error: event.error };
+				}
+				// 任何非 error 事件 → 连接正常，中断流
+				controller.abort();
+				break;
+			}
+		} finally {
+			clearTimeout(timeout);
 		}
 		return { ok: true as const };
 	} catch (err) {
