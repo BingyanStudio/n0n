@@ -18,7 +18,8 @@ const THROTTLE_MS = 300;
 const SHORT = 160;
 const LONG = 600;
 
-function compact(text: string, limit = SHORT): string {
+function compact(text: string | undefined | null, limit = SHORT): string {
+	if (text == null) return "(empty)";
 	const s = text.replace(/\s+/g, " ").trim();
 	if (!s) return "(empty)";
 	return s.length > limit ? `${s.slice(0, limit)}…` : s;
@@ -59,12 +60,12 @@ function fmtToolCall(tc: ToolCallRecord): { summary: string; detail: string } {
 			summary = `▸ **reminder**  ${compact(tc.args.content, 60)}`;
 			break;
 		case "edit":
-			summary = `▸ **edit**  ${compact(tc.args.path, 80)}`;
+			summary = `▸ **edit**  ${compact(tc.args.path, 80)}  ${compact(tc.args.intent, 60)}`;
 			break;
 		default: {
-			// exhaustive check: 所有已注册工具都已处理
-			const _exhaustive: never = tc;
-			summary = `▸ **${(_exhaustive as ToolCallRecord).tool}**`;
+			// 未知工具类型 — 安全回退（parseToolCalls 使用 as 断言，运行时可能出现未匹配类型）
+			const unknown = tc as ToolCallRecord;
+			summary = `▸ **${unknown.tool}**`;
 		}
 	}
 
@@ -97,10 +98,20 @@ function fmtResult(r: ToolResult): string {
 			return r.success
 				? r.call.args.path
 				: `${r.call.args.path}: ${r.error ?? "failed"}`;
-		case "edit":
-			return r.success
-				? r.call.args.path
-				: `${r.call.args.path}: ${r.error ?? "failed"}`;
+		case "edit": {
+			const path = r.call.args.path;
+			const duration = `${(r.durationMs / 1000).toFixed(1)}s`;
+			const rounds = `${r.rounds}r`;
+			if (!r.success) {
+				return `${path} ${duration} ${rounds} ${r.error ?? "failed"}`;
+			}
+			const { added, removed } = r.diff;
+			const parts: string[] = [];
+			if (added > 0) parts.push(`+${added}`);
+			if (removed > 0) parts.push(`-${removed}`);
+			const lineStats = parts.length > 0 ? parts.join(" ") : "(no changes)";
+			return `${path} ${duration} ${rounds} ${lineStats} ✓`;
+		}
 		case "reminder":
 			return `delay=${r.call.args.delay ?? 0}`;
 		case "submit":
@@ -190,7 +201,11 @@ export class FeishuRenderer implements Renderer {
 		this.conv.appendLine({ kind: "tool", text: summary, detail });
 	}
 
-	toolCallArgChunk(): void {}
+	toolCallArgChunk(
+		_index: number,
+		_name: string | undefined,
+		_chunk: string,
+	): void {}
 
 	toolResultChunk(_tool: string, chunk: string): void {
 		this.toolOutBuf += chunk;
