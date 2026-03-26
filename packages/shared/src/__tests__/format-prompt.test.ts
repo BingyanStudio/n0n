@@ -22,9 +22,9 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("system");
-		if (result[0].role === "system") {
-			expect(result[0].content).toContain("helpful assistant");
+		expect(result[0]!.role).toBe("system");
+		if (result[0]!.role === "system") {
+			expect(result[0]!.content).toContain("helpful assistant");
 		}
 	});
 
@@ -34,7 +34,7 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("user");
+		expect(result[0]!.role).toBe("user");
 	});
 
 	test("assistant_text 消息映射为 role: assistant", () => {
@@ -48,11 +48,11 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("assistant");
-		if (result[0].role === "assistant") {
-			expect(result[0].content).toBe("I'll help you.");
-			expect(result[0].reasoning).toBe("thinking...");
-			expect(result[0].reasoningSignature).toBe("sig_abc");
+		expect(result[0]!.role).toBe("assistant");
+		if (result[0]!.role === "assistant") {
+			expect(result[0]!.content).toBe("I'll help you.");
+			expect(result[0]!.reasoning).toBe("thinking...");
+			expect(result[0]!.reasoningSignature).toBe("sig_abc");
 		}
 	});
 
@@ -74,10 +74,10 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("assistant");
-		if (result[0].role === "assistant") {
-			expect(result[0].toolCalls).toHaveLength(1);
-			expect(result[0].toolCalls![0].tool).toBe("exec");
+		expect(result[0]!.role).toBe("assistant");
+		if (result[0]!.role === "assistant") {
+			expect(result[0]!.toolCalls).toHaveLength(1);
+			expect(result[0]!.toolCalls![0]!.tool).toBe("exec");
 		}
 	});
 
@@ -89,12 +89,12 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(2);
-		expect(result[0].role).toBe("system");
-		if (result[0].role === "system") {
-			expect(result[0].content).toContain("Rule 1");
-			expect(result[0].content).toContain("Rule 2");
+		expect(result[0]!.role).toBe("system");
+		if (result[0]!.role === "system") {
+			expect(result[0]!.content).toContain("Rule 1");
+			expect(result[0]!.content).toContain("Rule 2");
 		}
-		expect(result[1].role).toBe("user");
+		expect(result[1]!.role).toBe("user");
 	});
 
 	test("idle_nudge 消息映射为 user warning", () => {
@@ -103,10 +103,10 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("user");
-		if (result[0].role === "user") {
-			expect(result[0].content).toContain("2/5");
-			expect(result[0].content).toContain("tools");
+		expect(result[0]!.role).toBe("user");
+		if (result[0]!.role === "user") {
+			expect(result[0]!.content).toContain("2/5");
+			expect(result[0]!.content).toContain("tools");
 		}
 	});
 
@@ -120,10 +120,10 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("user");
-		if (result[0].role === "user") {
-			expect(result[0].content).toContain("Check progress");
-			expect(result[0].content).toContain("3 rounds ago");
+		expect(result[0]!.role).toBe("user");
+		if (result[0]!.role === "user") {
+			expect(result[0]!.content).toContain("Check progress");
+			expect(result[0]!.content).toContain("3 rounds ago");
 		}
 	});
 
@@ -138,10 +138,10 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("user");
-		if (result[0].role === "user") {
-			expect(result[0].content).toContain("Missing field");
-			expect(result[0].content).toContain("1/4");
+		expect(result[0]!.role).toBe("user");
+		if (result[0]!.role === "user") {
+			expect(result[0]!.content).toContain("Missing field");
+			expect(result[0]!.content).toContain("1/4");
 		}
 	});
 
@@ -161,12 +161,12 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("tool");
-		if (result[0].role === "tool") {
-			expect(result[0].toolName).toBe("exec");
-			expect(result[0].content).toContain("Invalid tool arguments");
-			expect(result[0].content).toContain("Expected schema");
-			expect(result[0].content).toContain('"script"');
+		expect(result[0]!.role).toBe("tool");
+		if (result[0]!.role === "tool") {
+			expect(result[0]!.toolName).toBe("exec");
+			expect(result[0]!.content).toContain("Invalid tool arguments");
+			expect(result[0]!.content).toContain("Expected schema");
+			expect(result[0]!.content).toContain('"script"');
 		}
 	});
 
@@ -181,9 +181,9 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		if (result[0].role === "tool") {
-			expect(result[0].content).toContain("Invalid tool arguments");
-			expect(result[0].content).not.toContain("Expected schema");
+		if (result[0]!.role === "tool") {
+			expect(result[0]!.content).toContain("Invalid tool arguments");
+			expect(result[0]!.content).not.toContain("Expected schema");
 		}
 	});
 
@@ -198,11 +198,11 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("user");
-		if (result[0].role === "user") {
-			expect(result[0].content).toContain("Project context here");
-			expect(result[0].content).toContain("Fix the bug");
-			expect(result[0].content).toContain("Start by reading the code");
+		expect(result[0]!.role).toBe("user");
+		if (result[0]!.role === "user") {
+			expect(result[0]!.content).toContain("Project context here");
+			expect(result[0]!.content).toContain("Fix the bug");
+			expect(result[0]!.content).toContain("Start by reading the code");
 		}
 	});
 
@@ -219,10 +219,10 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("user");
-		if (result[0].role === "user") {
-			expect(result[0].content).toContain("/tmp/img.png");
-			expect(result[0].content).toContain("What is this?");
+		expect(result[0]!.role).toBe("user");
+		if (result[0]!.role === "user") {
+			expect(result[0]!.content).toContain("/tmp/img.png");
+			expect(result[0]!.content).toContain("What is this?");
 		}
 	});
 
@@ -244,11 +244,11 @@ describe("formatPrompt", () => {
 		];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
-		expect(result[0].role).toBe("tool");
-		if (result[0].role === "tool") {
-			expect(result[0].toolCallId).toBe("tc_1");
-			expect(result[0].content).toContain("hello");
-			expect(result[0].content).toContain("exit: 0");
+		expect(result[0]!.role).toBe("tool");
+		if (result[0]!.role === "tool") {
+			expect(result[0]!.toolCallId).toBe("tc_1");
+			expect(result[0]!.content).toContain("hello");
+			expect(result[0]!.content).toContain("exit: 0");
 		}
 	});
 });

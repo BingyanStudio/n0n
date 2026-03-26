@@ -133,7 +133,6 @@ export async function runHeadless(
 			type: "user_input",
 			content: instruction,
 			context: await gatherContext(paths.workspace),
-			capabilities: null,
 			hint: buildHeadlessHint(),
 		},
 	];

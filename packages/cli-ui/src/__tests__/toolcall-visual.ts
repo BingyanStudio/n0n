@@ -41,6 +41,7 @@ async function scenario1() {
 	await sleep(100);
 
 	renderer.toolCallEnd({
+			type: "tool_result",
 		tool: "exec",
 		call: { id: "call_1", tool: "exec", args: { script: "ls -la", runtime: "sh" } },
 		exitCode: 0,
@@ -85,6 +86,7 @@ async function scenario2() {
 	await sleep(100);
 
 	renderer.toolCallEnd({
+			type: "tool_result",
 		tool: "exec",
 		call: { id: "call_2", tool: "exec", args: { script: "echo hello", runtime: "sh" } },
 		exitCode: 0,
@@ -130,6 +132,7 @@ async function scenario3() {
 	await sleep(100);
 
 	renderer.toolCallEnd({
+			type: "tool_result",
 		tool: "exec",
 		call: { id: "call_3", tool: "exec", args: { script: "ls" } },
 		exitCode: 0,
@@ -141,9 +144,11 @@ async function scenario3() {
 	await sleep(200);
 
 	renderer.toolCallEnd({
+			type: "tool_result",
 		tool: "write",
 		call: { id: "call_4", tool: "write", args: { path: "test.txt", content: "hello world" } },
 		success: true,
+			error: null,
 	});
 }
 
@@ -165,7 +170,7 @@ async function scenario4() {
 		'}',
 	];
 	for (let i = 0; i < argChunks.length; i++) {
-		renderer.toolCallArgChunk(0, i === 0 ? "edit" : undefined, argChunks[i]);
+		renderer.toolCallArgChunk(0, i === 0 ? "edit" : undefined, argChunks[i]!);
 		await sleep(120);
 	}
 
@@ -176,7 +181,7 @@ async function scenario4() {
 	renderer.toolCallStart({
 		id: "call_5",
 		tool: "edit",
-		args: { path: "src/index.ts", intent: "修复类型错误", instructions: "将 string 改为 number" },
+		args: { path: "src/index.ts", intent: "修复类型错误" },
 	});
 	await sleep(100);
 
@@ -187,12 +192,15 @@ async function scenario4() {
 	await sleep(300);
 
 	renderer.toolCallEnd({
+			type: "tool_result",
 		tool: "edit",
-		call: { id: "call_5", tool: "edit", args: { path: "src/index.ts", intent: "修复类型错误", instructions: "将 string 改为 number" } },
+		call: { id: "call_5", tool: "edit", args: { path: "src/index.ts", intent: "修复类型错误" } },
 		success: true,
 		diff: { added: 3, removed: 2, chunks: [] },
 		durationMs: 1500,
 		rounds: 1,
+			error: null,
+			feedback: null,
 	});
 }
 

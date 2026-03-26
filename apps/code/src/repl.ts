@@ -108,7 +108,6 @@ async function makeUserInput(
 		type: "user_input",
 		content,
 		context: await gatherContext(workspace),
-		capabilities: null,
 		hint: USER_INPUT_HINT,
 	};
 }

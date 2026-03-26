@@ -48,7 +48,6 @@ function makeQuickRound(i: number): DomainMessage[] {
 			type: "user_input",
 			content: `你好，这是第${i}轮对话。我想聊聊最近的工作进展和一些技术问题，比如 TypeScript 的类型体操。`,
 			context: null,
-			capabilities: null,
 			hint: null,
 		},
 		{
@@ -93,7 +92,6 @@ function makeHeavyToolRound(i: number): DomainMessage[] {
 			type: "user_input",
 			content: `帮我分析一下 src/module-${i}.ts 的代码结构，找出潜在的性能问题和可优化的地方。`,
 			context: null,
-			capabilities: null,
 			hint: null,
 		},
 		{

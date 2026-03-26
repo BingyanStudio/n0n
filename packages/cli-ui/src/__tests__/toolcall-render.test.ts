@@ -80,6 +80,7 @@ describe("RichRenderer tool call streaming", () => {
 
 		// 工具执行完成
 		renderer.toolCallEnd({
+			type: "tool_result",
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "ls -la", runtime: "sh" } },
 			exitCode: 0,
@@ -124,6 +125,7 @@ describe("RichRenderer tool call streaming", () => {
 		});
 
 		renderer.toolCallEnd({
+			type: "tool_result",
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "echo hello" } },
 			exitCode: 0,
@@ -171,6 +173,7 @@ describe("RichRenderer tool call streaming", () => {
 
 		// 两个 toolCallEnd
 		renderer.toolCallEnd({
+			type: "tool_result",
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
 			exitCode: 0,
@@ -180,9 +183,11 @@ describe("RichRenderer tool call streaming", () => {
 		});
 
 		renderer.toolCallEnd({
+			type: "tool_result",
 			tool: "write",
 			call: { id: "call_2", tool: "write", args: { path: "test.txt", content: "hello" } },
 			success: true,
+			error: null,
 		});
 
 		const result = captureStop();
@@ -241,6 +246,7 @@ describe("RichRenderer tool call streaming", () => {
 			args: { script: "ls" },
 		});
 		renderer.toolCallEnd({
+			type: "tool_result",
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
 			exitCode: 0,
@@ -259,9 +265,11 @@ describe("RichRenderer tool call streaming", () => {
 			args: { path: "out.txt", content: "data" },
 		});
 		renderer.toolCallEnd({
+			type: "tool_result",
 			tool: "write",
 			call: { id: "call_2", tool: "write", args: { path: "out.txt", content: "data" } },
 			success: true,
+			error: null,
 		});
 
 		const result = captureStop();
@@ -288,16 +296,19 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolCallStart({
 			id: "call_1",
 			tool: "edit",
-			args: { path: "src/index.ts", intent: "fix bug", instructions: "change x to y" },
+			args: { path: "src/index.ts", intent: "fix bug" },
 		});
 
 		renderer.toolCallEnd({
+			type: "tool_result",
 			tool: "edit",
-			call: { id: "call_1", tool: "edit", args: { path: "src/index.ts", intent: "fix bug", instructions: "change x to y" } },
+			call: { id: "call_1", tool: "edit", args: { path: "src/index.ts", intent: "fix bug" } },
 			success: true,
 			diff: { added: 5, removed: 3, chunks: [] },
 			durationMs: 2000,
 			rounds: 2,
+			error: null,
+			feedback: null,
 		});
 
 		const result = captureStop();

@@ -194,7 +194,6 @@ export function buildView(
 		type: "user_input",
 		content: stimulus,
 		context: null,
-		capabilities: null,
 		hint: null,
 	});
 
