@@ -10,8 +10,16 @@
  * - conversation.ts — 飞书消息生命周期管理
  * - cards/ — 卡片构建模板
  * - bot.ts — 飞书 API 客户端
+ *
+ * 启动流程：
+ * 1. bootstrap — 检测 .env / 必填配置 / LLM 连通性，展示配置摘要
+ * 2. 初始化飞书 WebSocket 长连接
+ * 3. 分发消息事件
  */
 
+import { existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, resolve } from "node:path";
 import * as lark from "@larksuiteoapi/node-sdk";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
 import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
@@ -21,10 +29,12 @@ import {
 	type SchedulerHandle,
 	startScheduler,
 } from "@n0n/scheduler";
+import { bootstrap } from "@n0n/shared";
 import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
 import { handleCommand, parseCommand, parseMenuCommand } from "./commands.ts";
+import { feishuEnvSpec } from "./env-spec.ts";
 import { discoverAllUserPaths, resolveFeishuPaths } from "./paths.ts";
 import feishuPromptText from "./prompts/feishu.md" with { type: "text" };
 import { runFeishuRound } from "./round.ts";
@@ -33,18 +43,13 @@ import {
 	getOrCreateSession,
 	shouldProcessMessage,
 } from "./session.ts";
+import { ServerSetupRenderer } from "./setup-renderer.ts";
 import { ensureUserInfo } from "./user-info.ts";
-import { basename } from "node:path";
-
-function requireEnv(key: string): string {
-	const val = process.env[key];
-	if (!val) throw new Error(`Missing required env: ${key}`);
-	return val;
-}
 
 export async function startFeishuService(): Promise<void> {
-	const appId = requireEnv("FEISHU_APP_ID");
-	const appSecret = requireEnv("FEISHU_APP_SECRET");
+	// bootstrap 已确保必填变量存在，此处直接读取
+	const appId = process.env.FEISHU_APP_ID ?? "";
+	const appSecret = process.env.FEISHU_APP_SECRET ?? "";
 	const encryptKey = process.env.FEISHU_ENCRYPT_KEY;
 	const domain = process.env.FEISHU_DOMAIN === "lark" ? "lark" : "feishu";
 
@@ -52,7 +57,10 @@ export async function startFeishuService(): Promise<void> {
 	const systemPrompt = feishuPromptText;
 
 	const llmConfig = buildLLMConfigFromEnv("LLM");
-	const editorLlmConfig = buildLLMConfigFromEnv("EDITOR_LLM", llmConfig.providerConfig);
+	const editorLlmConfig = buildLLMConfigFromEnv(
+		"EDITOR_LLM",
+		llmConfig.providerConfig,
+	);
 	const runtime = createRuntimeContext({
 		client: createLLMClient(llmConfig),
 		editorClient: createLLMClient(editorLlmConfig),
@@ -62,7 +70,10 @@ export async function startFeishuService(): Promise<void> {
 	// ── Scheduler 回调：将定时任务结果/错误推送给用户 ──
 	function buildSchedulerCallbacks(workspace: string): SchedulerCallbacks {
 		const userOpenId = basename(workspace);
-		const recipient = { receiveIdType: "open_id" as const, receiveId: userOpenId };
+		const recipient = {
+			receiveIdType: "open_id" as const,
+			receiveId: userOpenId,
+		};
 		const notifyCtx = {
 			chatId: null,
 			chatType: null,
@@ -75,14 +86,25 @@ export async function startFeishuService(): Promise<void> {
 		};
 		return {
 			onTaskComplete: async (entry, result) => {
-				const text = typeof result === "string" ? result.slice(0, 500) : JSON.stringify(result).slice(0, 500);
-				const card = buildTextCard(`✅ 定时任务完成: ${entry.name}`, text, "green");
+				const text =
+					typeof result === "string"
+						? result.slice(0, 500)
+						: JSON.stringify(result).slice(0, 500);
+				const card = buildTextCard(
+					`✅ 定时任务完成: ${entry.name}`,
+					text,
+					"green",
+				);
 				await bot.createCardMessage(notifyCtx, card).catch((err) => {
 					console.error(`[feishu] Failed to notify task completion:`, err);
 				});
 			},
 			onTaskError: async (entry, error) => {
-				const card = buildTextCard(`❌ 定时任务失败: ${entry.name}`, String(error).slice(0, 500), "red");
+				const card = buildTextCard(
+					`❌ 定时任务失败: ${entry.name}`,
+					String(error).slice(0, 500),
+					"red",
+				);
 				await bot.createCardMessage(notifyCtx, card).catch((err) => {
 					console.error(`[feishu] Failed to notify task error:`, err);
 				});
@@ -90,7 +112,10 @@ export async function startFeishuService(): Promise<void> {
 		};
 	}
 
-	async function startUserScheduler(workspace: string, paths: import("@n0n/workflow").WorkflowPaths): Promise<SchedulerHandle> {
+	async function startUserScheduler(
+		workspace: string,
+		paths: import("@n0n/workflow").WorkflowPaths,
+	): Promise<SchedulerHandle> {
 		return startScheduler(paths, buildSchedulerCallbacks(workspace));
 	}
 
@@ -132,7 +157,11 @@ export async function startFeishuService(): Promise<void> {
 			if (!text) {
 				// 非文本消息（图片、文件等）暂不支持，发送提示
 				if (ctx.senderOpenId) {
-					const card = buildTextCard("暂不支持", "目前仅支持文本消息，图片、文件等类型暂不支持。", "grey");
+					const card = buildTextCard(
+						"暂不支持",
+						"目前仅支持文本消息，图片、文件等类型暂不支持。",
+						"grey",
+					);
 					await bot.createCardMessage(ctx, card);
 				}
 				return;
@@ -215,7 +244,10 @@ export async function startFeishuService(): Promise<void> {
 							console.log(
 								`[feishu] Starting scheduler for new user ${ctx.senderOpenId} (${schedules.length} schedules)`,
 							);
-							const handle = await startUserScheduler(workspacePaths.workspace, workspacePaths);
+							const handle = await startUserScheduler(
+								workspacePaths.workspace,
+								workspacePaths,
+							);
 							schedulerMap.set(workspacePaths.workspace, handle);
 						}
 					}
@@ -280,6 +312,66 @@ export async function startFeishuService(): Promise<void> {
 }
 
 if (import.meta.main) {
+	// ── Bootstrap ──
+	// 配置文件存放在全局目录 ~/.n0n/，与 code agent 共享
+	const globalConfigDir = resolve(homedir(), ".n0n");
+	if (!existsSync(globalConfigDir)) {
+		mkdirSync(globalConfigDir, { recursive: true });
+	}
+
+	const setupUI = new ServerSetupRenderer();
+
+	/** LLM 连通性测试回调 — 注入到 bootstrap，避免 shared 直接依赖 llm */
+	const testLLM = async () => {
+		try {
+			const config = buildLLMConfigFromEnv("LLM");
+			const client = createLLMClient(config);
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), 15_000);
+			try {
+				for await (const event of client.stream(
+					{ messages: [{ type: "user_text", content: "hi" }] },
+					controller.signal,
+				)) {
+					if (event.type === "error") {
+						return { ok: false as const, error: event.error };
+					}
+					controller.abort();
+					break;
+				}
+			} finally {
+				clearTimeout(timeout);
+			}
+			return { ok: true as const };
+		} catch (err) {
+			if (err instanceof Error) {
+				if (err.message.includes("401") || err.message.includes("403")) {
+					return { ok: false as const, error: "认证失败，请检查 API Key" };
+				}
+				if (err.name === "TimeoutError" || err.message.includes("timeout")) {
+					return {
+						ok: false as const,
+						error: "连接超时（15s），请检查网络或 API 地址",
+					};
+				}
+				return { ok: false as const, error: err.message.slice(0, 200) };
+			}
+			return { ok: false as const, error: `连接失败: ${String(err)}` };
+		}
+	};
+
+	const result = await bootstrap(
+		feishuEnvSpec,
+		setupUI,
+		globalConfigDir,
+		testLLM,
+	);
+	setupUI.dispose();
+
+	if (!result.ok) {
+		process.exit(1);
+	}
+
 	startFeishuService().catch((err) => {
 		console.error("[feishu] fatal error:", err);
 		process.exit(1);
