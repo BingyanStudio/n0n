@@ -28,6 +28,7 @@ import {
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
+import { readMultilineInput } from "./multiline-input.ts";
 
 /** Code agent 的用户输入行为引导 — 无 chat 类型，专注工具调用和代码交付 */
 const USER_INPUT_HINT = [
@@ -135,11 +136,11 @@ export async function startCodeRepl(
 		closed = true;
 	});
 
-	const prompt = (q: string): Promise<string> =>
-		new Promise((resolve) => {
-			if (closed) return resolve("exit");
-			rl.question(q, resolve);
-		});
+	const continuationPrompt = isTTY ? style.gray("... ") : "";
+	const prompt = async (q: string): Promise<string> => {
+		const result = await readMultilineInput(rl, q, { continuationPrompt });
+		return result ?? "exit";
+	};
 	const confirmFn = (question: string): Promise<string> =>
 		new Promise((resolve) => {
 			if (closed) return resolve("n");
@@ -209,6 +210,12 @@ export async function startCodeRepl(
 	}
 
 	while (userInput.trim().toLowerCase() !== "exit") {
+		// 空输入跳过，重新 prompt
+		if (userInput.trim() === "") {
+			userInput = await prompt(`${label.user()} `);
+			continue;
+		}
+
 		// ── `log` 命令：导出对话历史 ──
 		if (userInput.trim().toLowerCase() === "log") {
 			try {
