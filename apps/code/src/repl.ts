@@ -28,6 +28,7 @@ import {
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
+import { readMultilineInput } from "./multiline-input.ts";
 
 /** Code agent 的用户输入行为引导 — 无 chat 类型，专注工具调用和代码交付 */
 const USER_INPUT_HINT = [
@@ -130,22 +131,18 @@ export async function startCodeRepl(
 		output: process.stderr,
 		terminal: isTTY,
 	});
-	let closed = false;
+	const closedRef = { value: false };
 	rl.on("close", () => {
-		closed = true;
+		closedRef.value = true;
 	});
 
 	const prompt = (q: string): Promise<string> =>
-		new Promise((resolve) => {
-			if (closed) return resolve("exit");
-			rl.question(q, resolve);
-		});
+		readMultilineInput(rl, q, closedRef);
 	const confirmFn = (question: string): Promise<string> =>
 		new Promise((resolve) => {
-			if (closed) return resolve("n");
+			if (closedRef.value) return resolve("n");
 			rl.question(question, resolve);
 		});
-
 	// ── Ctrl+C 中断控制 ──
 	let abortController = new AbortController();
 	let agentRunning = false;
@@ -209,6 +206,12 @@ export async function startCodeRepl(
 	}
 
 	while (userInput.trim().toLowerCase() !== "exit") {
+		// 空输入跳过，重新 prompt
+		if (userInput.trim() === "") {
+			userInput = await prompt(`${label.user()} `);
+			continue;
+		}
+
 		// ── `log` 命令：导出对话历史 ──
 		if (userInput.trim().toLowerCase() === "log") {
 			try {

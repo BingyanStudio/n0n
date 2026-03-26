@@ -105,6 +105,7 @@ writeln(
 writeln(
 	style.gray('描述你的编码任务，AI 将直接修改项目代码。输入 "exit" 退出。'),
 );
+writeln(style.gray("支持粘贴多行内容，输入空行提交。"));
 writeln();
 
 await startCodeRepl(paths, { initialInput, resumeFile, saveEveryLoop });
