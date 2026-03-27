@@ -224,6 +224,10 @@ cat > .env << 'EOF'
 LLM_BASE_URL=https://api.example.com
 LLM_API_KEY=your-api-key-here
 LLM_MODEL=deepseek/deepseek-v3.2
+LLM_ENABLE_THINKING=true
+LLM_PROVIDER=openai-compatible
+PROVIDER=openai-compatible
+EDITOR_LLM_BACKEND_PROVIDER=openai-compatible
 EOF
 
 # 启动交互式 REPL
@@ -267,6 +271,19 @@ bun start "每天早上总结 Hacker News 热门"
 | `WORKFLOWS_DIR` | `workflows` |
 | `SKILLS_DIR` | `workflows/skills` |
 | `MEMORY_DIR` | `workflows/memory` |
+
+### 示例
+```env                                                             
+FEISHU_APP_ID=cli_xxx
+FEISHU_APP_SECRET=xxx
+LLM_BASE_URL=https://api.example.com/
+LLM_API_KEY=sk_xxx
+LLM_MODEL=deepseek/deepseek-v3.2
+LLM_ENABLE_THINKING=true
+LLM_PROVIDER=openai-compatible
+PROVIDER=openai-compatible
+EDITOR_LLM_BACKEND_PROVIDER=openai-compatible
+```
 
 ---
 
