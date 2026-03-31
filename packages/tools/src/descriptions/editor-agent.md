@@ -55,20 +55,49 @@ Check each deduction rule. Each triggered rule subtracts from the score. The fin
 
 ### Step 3: Format the feedback
 
+Feedback has three layers, each serving a distinct purpose:
+
+1. **Score** → quick signal (good / needs improvement / problematic / unexecutable)
+2. **Deduction tags** → structured attribution (machine-parseable, trackable)
+3. **Rewrite suggestion** → behavioral guidance (shows the caller exactly how to improve)
+
+Format:
+
 ```
-[score/4] One-line verdict. {deductions applied, if any}
-Details: specific, actionable suggestion for improvement (or acknowledgment if score = 4).
+[score/4] One-line verdict. {deduction-tag-1, deduction-tag-2, ...}
+Rewrite: "original phrasing" → "improved phrasing"
 ```
 
+- When score = 4, omit the deduction tags and Rewrite line.
+- When score < 4, the `Rewrite` line is **mandatory** — show a concrete before/after of how the intent should have been phrased to avoid the deductions. Do not give vague advice; give a specific rewritten intent.
+
 Examples:
-- `[2/4] Used line numbers for a location easily described by name. {−1 line-number, −1 trivially-describable}
-  Details: instead of "change line 15", say "change the timeout constant in the config object".`
-- `[3/4] Clear intent, minor ambiguity in target. {−1 ambiguous-target}
-  Details: specify "handleRequest" vs "handleError" to avoid guessing.`
-- `[0/4] Cannot execute — references nonexistent function. {−2 unexecutable, −1 ambiguous-target, −1 missing-change}
-  Details: verify the file path and function name before retrying.`
-- `[4/4] Precise semantic locator + complete target code. No deductions.
-  Details: no improvement needed.`
+
+```
+[4/4] Precise semantic locator + complete replacement code. No deductions.
+```
+
+```
+[3/4] Clear intent, minor ambiguity in target. {−1 ambiguous-target}
+Rewrite: "Add a retry loop around the fetch call in handle" → "Add a retry loop (max 3 attempts) around the fetch call in handleRequest"
+```
+
+```
+[2/4] Used line numbers for a location easily described by name. {−1 line-number, −1 trivially-describable}
+Rewrite: "Change the value on line 15 to 10000" → "Change the TIMEOUT constant from 5000 to 10000"
+```
+
+```
+[1/4] Bundles unrelated changes and uses fragile line references. {−1 line-number, −1 trivially-describable, −1 multi-concern}
+Rewrite: split into two calls —
+  1. "Rename the `userId` parameter to `accountId` in the `createOrder` function"
+  2. "Change the DEFAULT_RETRY constant from 3 to 5"
+```
+
+```
+[0/4] References nonexistent function, impossible to execute. {−2 unexecutable, −1 ambiguous-target, −1 missing-change}
+Rewrite: "Refactor processData to use streaming" → verify the function exists; the file contains `transformPayload` and `parseInput` — did you mean one of those?
+```
 
 ### When to submit WITHOUT editing (score ≤ 1)
 
