@@ -75,14 +75,14 @@ const EDITOR_TOOLS: ToolDefinition[] = [
 	{
 		name: "submit",
 		description:
-			"Submit when edits are complete, OR immediately when the intent is ambiguous/vague/impossible to execute. You MUST always provide scored feedback using the [score/4] format.",
+			"Submit when edits are complete, OR immediately when the intent is ambiguous/vague/impossible to execute. You MUST always provide deduction-based scored feedback using the [score/4] format.",
 		parameters: {
 			type: "object",
 			properties: {
 				feedback: {
 					type: "string",
 					description:
-						"Scored feedback: '[score/4] Verdict. Details: ...' where score is 1-4. Score 1 = poor/unexecutable (submit without editing), 2 = marginal (had to guess), 3 = good (minor interpretation), 4 = excellent (rare, no ambiguity).",
+						"Deduction-based feedback: '[score/4] Verdict. {deductions} Details: ...' — start at 4, subtract: −1 if intent uses line numbers, −1 if those lines are trivially describable by name, −1 ambiguous target, −1 missing change spec, −2 unexecutable, −1 multi-concern. Minimum 0.",
 				},
 			},
 			required: ["feedback"],
