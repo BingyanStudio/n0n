@@ -136,6 +136,10 @@ interface ExecTruncated extends ExecResultBase {
 	stdoutLength: number;
 	/** 原始 stderr 总字符数 */
 	stderrLength: number;
+	/** 原始输出总行数（stdout + stderr） */
+	totalLines: number;
+	/** 截断展示内容起始行号（从第几行开始展示） */
+	tailStartLine: number;
 }
 
 /** exec 超时，进程转入后台继续执行 */

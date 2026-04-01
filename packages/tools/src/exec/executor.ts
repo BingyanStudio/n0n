@@ -18,6 +18,17 @@ import type {
 import { findBlockedCommand, handleBlockedCommand } from "./security.ts";
 
 const IS_WINDOWS = process.platform === "win32";
+
+/** 生成简短的截断输出文件名，自动避让已有文件 */
+function makeShortOutputPath(tempDir: string): string {
+	const rand = Math.random().toString(36).slice(2, 8);
+	const name = `exec_output_${rand}.txt`;
+	const full = join(tempDir, name);
+	// 极小概率冲突时重试
+	if (existsSync(full)) return makeShortOutputPath(tempDir);
+	return full;
+}
+
 const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";
 
 /** runtime → 临时文件扩展名 */
@@ -61,9 +72,9 @@ function buildSpawnCmd(runtime: string, tmpFile: string): string[] {
 }
 
 /** 超过此阈值（stdout+stderr 合计预估 token 数）触发截断写文件 */
-const TRUNCATION_THRESHOLD_TOKENS = 2_000;
+const TRUNCATION_THRESHOLD_TOKENS = 4_000;
 /** 截断后展示的末尾 token 数 */
-const TAIL_TOKENS = 500;
+const TAIL_TOKENS = 1_000;
 
 /**
  * 流式执行脚本。
@@ -263,9 +274,8 @@ export async function* execToolStream(
 
 		if (totalTokens > TRUNCATION_THRESHOLD_TOKENS) {
 			// ── 截断路径：完整输出写入文件 ──
-			const outputFile = join(tempDir, `exec_output_${call.id}.txt`);
+			const outputFile = makeShortOutputPath(tempDir);
 			const fileContent = [
-				"--- stdout ---",
 				stdout,
 				"--- stderr ---",
 				stderr,
@@ -273,17 +283,24 @@ export async function* execToolStream(
 			].join("\n");
 			await Bun.write(outputFile, fileContent);
 
+			const stdoutTail = tailByTokens(stdout, TAIL_TOKENS);
+			const totalLines = stdout.split("\n").length + stderr.split("\n").length;
+			const tailLines = stdoutTail.split("\n").length;
+			const tailStartLine = totalLines - tailLines + 1;
+
 			yield {
 				type: "tool_result",
 				tool: "exec" as const,
 				call,
 				status: "truncated",
 				exitCode,
-				stdoutTail: tailByTokens(stdout, TAIL_TOKENS),
+				stdoutTail,
 				stderrTail: tailByTokens(stderr, TAIL_TOKENS),
 				outputFile,
 				stdoutLength: stdout.length,
 				stderrLength: stderr.length,
+				totalLines,
+				tailStartLine,
 				durationMs,
 			} satisfies ExecToolResult;
 		} else {

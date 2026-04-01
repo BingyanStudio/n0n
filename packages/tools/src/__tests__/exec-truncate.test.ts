@@ -49,7 +49,7 @@ describe("exec 输出截断", () => {
 		if (result.status === "truncated") {
 			// stdoutTail 应包含末尾内容
 			expect(result.stdoutTail).toContain("line_500");
-			expect(result.stdoutTail.length).toBeLessThanOrEqual(2100); // ~TAIL_LENGTH + 小余量
+			expect(result.stdoutTail.length).toBeLessThanOrEqual(4200); // ~TAIL_TOKENS(1000) 对应的字符数 + 余量
 
 			// outputFile 应存在
 			expect(existsSync(result.outputFile)).toBe(true);
@@ -73,13 +73,13 @@ describe("exec 输出截断", () => {
 	});
 
 	test("恰好在阈值内 — 应返回 status: completed", async () => {
-		// 生成刚好不超过阈值的输出（~100 行 × 30 字符 ≈ 3000）
-		const script = `for i in $(seq 1 100); do echo "short_line_$i_padding"; done`;
+		// 生成不超过阈值的输出（~300 行 × 25 字符 ≈ 7500 chars ≈ 2500 tokens < 4000）
+		const script = 'for i in $(seq 1 300); do echo "short_line_${i}_padding"; done';
 		const result = await collectResult(script);
 
 		expect(result.status).toBe("completed");
 		if (result.status === "completed") {
-			expect(result.stdout).toContain("short_line_100");
+			expect(result.stdout).toContain("short_line_300");
 		}
 	});
 });
