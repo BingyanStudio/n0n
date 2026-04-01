@@ -7,6 +7,7 @@
  * 所有阶段转换由 loop.ts 指令驱动，不维护推断状态。
  */
 
+import { estimateTokens } from "@n0n/shared";
 import type {
 	Renderer,
 	RoundTokenUsage,
@@ -296,7 +297,9 @@ export class RichRenderer implements Renderer {
 			writeln(content);
 		}
 		writeln(
-			style.gray(`(text response, ${content.length} chars, idle=${idleCount})`),
+			style.gray(
+				`(text response, ${content.length} chars ~${estimateTokens(content)} tok, idle=${idleCount})`,
+			),
 		);
 	}
 
@@ -351,7 +354,8 @@ export class RichRenderer implements Renderer {
 								? style.green(`exit=${result.exitCode}`)
 								: style.red(`exit=${result.exitCode}`);
 						const outLen = result.stdout.length + result.stderr.length;
-						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)}`;
+						const estTk = estimateTokens(result.stdout + result.stderr);
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)} ${style.dim(`~${estTk} tok`)}`;
 					}
 				}
 				break;
@@ -382,7 +386,9 @@ export class RichRenderer implements Renderer {
 				return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${lineStats} ${style.green("✓")}`;
 			}
 			case "reminder": {
-				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${result.call.args.content.length} chars`)}`;
+				const chars = result.call.args.content.length;
+				const estTk = estimateTokens(result.call.args.content);
+				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${chars} chars`)} ${style.dim(`~${estTk} tok`)}`;
 			}
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;

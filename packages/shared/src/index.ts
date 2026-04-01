@@ -52,6 +52,7 @@ export {
 	type TagStyle,
 	wrapTagFor,
 } from "./tags.ts";
+export { estimateTokens, headByTokens, tailByTokens } from "./tokens.ts";
 // Workspace
 export type { BaseWorkspacePaths } from "./workspace.ts";
 export {
