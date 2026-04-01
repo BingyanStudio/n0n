@@ -7,7 +7,7 @@
  * 3. 高频重绘的帧率
  */
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, test } from "bun:test";
 
 const origWrite = process.stderr.write;
 const origCols = process.stderr.columns;
@@ -63,11 +63,11 @@ function analyzeEvents(events: WriteEvent[]) {
 	let totalCursorUp = 0;
 
 	for (const event of events) {
-		let match: RegExpExecArray | null;
 		CSI_RE.lastIndex = 0;
-		while ((match = CSI_RE.exec(event.data)) !== null) {
-			const params = match[1];
-			const cmd = match[2];
+		let match = CSI_RE.exec(event.data);
+		while (match !== null) {
+			const params = match[1]!;
+			const cmd = match[2]!;
 			if (cmd === "A") {
 				totalCursorUp += Number.parseInt(params, 10) || 1;
 				clearCount++;
@@ -75,6 +75,7 @@ function analyzeEvents(events: WriteEvent[]) {
 			if (cmd === "J") {
 				// clearDown
 			}
+			match = CSI_RE.exec(event.data);
 		}
 	}
 
@@ -139,12 +140,12 @@ describe("渲染诊断", () => {
 		let firstContentIdx = -1;
 		for (let i = 0; i < contentEndEvents.length; i++) {
 			if (
-				contentEndEvents[i].data.includes("\x1b[") &&
-				contentEndEvents[i].data.includes("A")
+				contentEndEvents[i]?.data.includes("\x1b[") &&
+				contentEndEvents[i]?.data.includes("A")
 			) {
 				clearIdx = i;
 			}
-			if (firstContentIdx === -1 && contentEndEvents[i].data.includes("▸")) {
+			if (firstContentIdx === -1 && contentEndEvents[i]?.data.includes("▸")) {
 				firstContentIdx = i;
 			}
 		}
@@ -180,6 +181,7 @@ describe("渲染诊断", () => {
 		// 统计流式阶段的行数（从上一次 cursorUp 的参数推断）
 		let lastCursorUp = 0;
 		for (const event of events) {
+			// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence matching
 			const match = event.data.match(/\x1b\[(\d+)A/);
 			if (match) lastCursorUp = Number(match[1]);
 		}
@@ -193,7 +195,7 @@ describe("渲染诊断", () => {
 		// 统计最终输出的行数
 		let finalLineCount = 0;
 		for (let i = preEnd; i < events.length; i++) {
-			const newlines = (events[i].data.match(/\n/g) || []).length;
+			const newlines = (events[i]?.data.match(/\n/g) || []).length;
 			finalLineCount += newlines;
 		}
 

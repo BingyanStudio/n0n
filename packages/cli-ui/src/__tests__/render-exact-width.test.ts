@@ -93,7 +93,7 @@ describe("精确宽度边界", () => {
 		const lines1 = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("=== contentEnd 后屏幕 ===");
 		for (let i = 0; i < lines1.length; i++) {
-			const l = lines1[i];
+			const l = lines1[i]!;
 			console.log(
 				`  [${i}] len=${l.length} "${l.slice(0, 60)}${l.length > 60 ? "..." : ""}"`,
 			);
@@ -119,7 +119,7 @@ describe("精确宽度边界", () => {
 		// 需要 (81-4)/2 = 38.5 → 38个中文 = 76列 + 4前缀 = 80 → 不够
 		// 39个中文 = 78列 + 4前缀 = 82 → 超2列 → wrap
 		// 38个中文 + 1个ASCII = 77列 + 4前缀 = 81 → 超1列 → wrap
-		const cjkValue = "中".repeat(38) + "A"; // 38*2 + 1 = 77 + 4前缀 = 81
+		const cjkValue = `${"中".repeat(38)}A`; // 38*2 + 1 = 77 + 4前缀 = 81
 		const json = `{"data":"${cjkValue}"}`;
 
 		renderer.toolCallArgStart(0, "exec");
@@ -129,7 +129,7 @@ describe("精确宽度边界", () => {
 		const lines1 = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("=== CJK 边界 contentEnd 后 ===");
 		for (let i = 0; i < lines1.length; i++) {
-			const l = lines1[i];
+			const l = lines1[i]!;
 			console.log(
 				`  [${i}] len=${l.length} "${l.slice(0, 50)}${l.length > 50 ? "..." : ""}"`,
 			);

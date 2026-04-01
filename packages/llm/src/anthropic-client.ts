@@ -270,7 +270,7 @@ function toAnthropicFormat(
 		systemParts.length === 0
 			? undefined
 			: systemParts.length === 1 && !systemParts[0]?.cache_control
-				? systemParts[0]!.text
+				? systemParts[0]?.text
 				: systemParts;
 
 	return { system, messages };
@@ -430,11 +430,11 @@ export class AnthropicClient implements LLMClient {
 					buffer = buffer.slice(boundary + 2);
 
 					// Parse SSE event
-					let eventType = "";
+					let _eventType = "";
 					let eventData = "";
 					for (const line of raw.split("\n")) {
 						if (line.startsWith("event: ")) {
-							eventType = line.slice(7);
+							_eventType = line.slice(7);
 						} else if (line.startsWith("data: ")) {
 							eventData = line.slice(6);
 						}

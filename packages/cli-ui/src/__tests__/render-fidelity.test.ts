@@ -175,8 +175,8 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 	});
 
 	test("随机 chunk 分割 fuzz（多种子）— 最终画面一致", async () => {
-		const vt0 = setupVT(80);
-		const { RichRenderer: R0 } = await import("../rich-renderer.ts");
+		const _vt0 = setupVT(80);
+		await import("../rich-renderer.ts");
 		teardown();
 
 		// 用不同种子跑同一场景，收集最终画面

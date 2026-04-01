@@ -171,7 +171,7 @@ describe("滚动导致旧行残留", () => {
 		console.log(`contentEnd 后: scrollback=${afterEnd.length}行`);
 
 		// 查看整体画面（viewport + scrollback）
-		const allLines = vt.getVisibleLines().map((l) => stripAnsi(l));
+		const _allLines = vt.getVisibleLines().map((l) => stripAnsi(l));
 		const viewportLines = vt.getViewportLines().map((l) => stripAnsi(l));
 
 		// 如果有滚出的非空行 = 旧行残留

@@ -9,7 +9,7 @@
  *   4. tool call 参数逐字到达：JSON 从不完整到完整的解析过程
  */
 
-import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { RichRenderer } from "../rich-renderer.ts";
 
 // 捕获所有 stderr 输出用于断言
@@ -18,7 +18,6 @@ const originalWrite = process.stderr.write;
 
 function captureStart() {
 	output = "";
-	// @ts-expect-error
 	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") {
 			output += chunk;
@@ -44,7 +43,7 @@ function stripAnsi(s: string): string {
 	return s.replace(ANSI_RE, "").replace(ANSI_RE2, "");
 }
 
-function sleep(ms: number) {
+function _sleep(ms: number) {
 	return new Promise((r) => setTimeout(r, ms));
 }
 

@@ -80,7 +80,7 @@ describe("终端边界行为", () => {
 
 		// 现在 clear 看 cursorUp 移动了多少行
 		const writes: string[] = [];
-		const realWrite = process.stderr.write;
+		const _realWrite = process.stderr.write;
 		process.stderr.write = (chunk: string | Uint8Array) => {
 			if (typeof chunk === "string") {
 				writes.push(chunk);
@@ -91,6 +91,7 @@ describe("终端边界行为", () => {
 
 		region.clear();
 
+		// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence matching
 		const cursorUpMatch = writes.join("").match(/\x1b\[(\d+)A/);
 		const upN = cursorUpMatch ? Number(cursorUpMatch[1]) : 0;
 		console.log(`cursorUp(${upN})`);

@@ -74,12 +74,12 @@ export class VirtualTerminal {
 				// CSI 序列: \x1b[ ... 终止字符
 				const csiStart = i + 2;
 				let csiEnd = csiStart;
-				while (csiEnd < data.length && !/[A-Za-z~@]/.test(data[csiEnd])) {
+				while (csiEnd < data.length && !/[A-Za-z~@]/.test(data[csiEnd]!)) {
 					csiEnd++;
 				}
 				if (csiEnd < data.length) {
 					const params = data.slice(csiStart, csiEnd);
-					const cmd = data[csiEnd];
+					const cmd = data[csiEnd]!;
 					this.handleCSI(params, cmd);
 					i = csiEnd + 1;
 				} else {
@@ -93,7 +93,7 @@ export class VirtualTerminal {
 				i++;
 			} else {
 				// 普通可见字符
-				this.putChar(data[i]);
+				this.putChar(data[i]!);
 				i++;
 			}
 		}
@@ -141,7 +141,7 @@ export class VirtualTerminal {
 		}
 
 		this.ensureRow(this.cursorRow);
-		const row = this.buffer[this.cursorRow];
+		const row = this.buffer[this.cursorRow]!;
 
 		if (w === 2) {
 			// 全角字符：占两格
@@ -178,7 +178,7 @@ export class VirtualTerminal {
 			// 先清除当前行光标之后的部分
 			this.ensureRow(this.cursorRow);
 			for (let c = this.cursorCol; c < this.cols; c++) {
-				this.buffer[this.cursorRow][c] = emptyCell();
+				this.buffer[this.cursorRow]![c] = emptyCell();
 			}
 			// 清除光标下方所有行
 			for (let r = this.cursorRow + 1; r < this.buffer.length; r++) {
@@ -190,7 +190,7 @@ export class VirtualTerminal {
 	/** Erase in Line: 0=光标到行尾, 1=行首到光标, 2=整行 */
 	private eraseLine(mode: number): void {
 		this.ensureRow(this.cursorRow);
-		const row = this.buffer[this.cursorRow];
+		const row = this.buffer[this.cursorRow]!;
 		if (mode === 2) {
 			for (let c = 0; c < this.cols; c++) row[c] = emptyCell();
 		} else if (mode === 0) {
@@ -203,8 +203,8 @@ export class VirtualTerminal {
 	/** 获取某行的可见文本（去除尾部空格） */
 	getLine(row: number): string {
 		if (row >= this.buffer.length) return "";
-		return this.buffer[row]
-			.filter((c) => !c.isWideRight)
+		// biome-ignore lint/style/noNonNullAssertion: bounds checked above
+		return this.buffer[row]!.filter((c) => !c.isWideRight)
 			.map((c) => c.char)
 			.join("")
 			.replace(/\s+$/, "");

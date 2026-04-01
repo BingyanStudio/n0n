@@ -119,9 +119,11 @@ function countOccurrences(text: string, pattern: string): number {
 	if (pattern.length === 0) return 0;
 	let count = 0;
 	let pos = 0;
-	while ((pos = text.indexOf(pattern, pos)) !== -1) {
+	pos = text.indexOf(pattern, pos);
+	while (pos !== -1) {
 		count++;
 		pos += pattern.length;
+		pos = text.indexOf(pattern, pos);
 	}
 	return count;
 }

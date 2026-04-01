@@ -5,7 +5,7 @@
  * 确保 clear() 能完全清除所有已写入的内容。
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 // 捕获 stderr 输出和 ANSI 控制序列
 let output: string[];
@@ -51,6 +51,7 @@ function teardownMock() {
 // 提取 cursorUp 的行数
 function extractCursorUp(captured: string[]): number {
 	for (const s of captured) {
+		// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence matching requires control chars
 		const match = s.match(/\x1b\[(\d+)A/);
 		if (match) return Number(match[1]);
 	}
