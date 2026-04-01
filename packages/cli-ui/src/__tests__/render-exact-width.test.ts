@@ -152,7 +152,6 @@ describe("精确宽度边界", () => {
 			type: "completed",
 			summary:
 				"已完成 PR #61 的清理：\n1. 关闭 PR #61，附带说明关闭原因（核心功能已被 PR #75/#76 覆盖，分支严重过时）\n2. 删除远程分支 `fix/live-region-improvements`\n3. 清理本地分支引用（`git branch -D` + `git remote prune origin`）",
-			files_changed: [],
 		});
 
 		// 逐字符流式发送（最恶劣的情况）
