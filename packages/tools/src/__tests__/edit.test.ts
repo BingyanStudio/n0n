@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { applyOps, computeDiff } from "../edit.ts";
+import { applyOps, computeDiff } from "../edit/edit.ts";
 
 // ── applyOps 测试 ──
 

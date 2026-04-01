@@ -19,9 +19,7 @@ import type {
 	ToolDefinition,
 } from "@n0n/types";
 import { StreamAccumulator } from "@n0n/types";
-import editorAgentPrompt from "./descriptions/editor-agent.md" with {
-	type: "text",
-};
+import editorAgentPrompt from "./editor-agent.md" with { type: "text" };
 
 // ── Editor LLM 内部工具定义（ToolDefinition 格式） ──
 

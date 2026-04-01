@@ -26,7 +26,7 @@ import type {
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
-import editDescription from "./descriptions/edit.md" with { type: "text" };
+import editDescription from "./edit.md" with { type: "text" };
 import { applySingleOp, editorLoop } from "./editor-loop.ts";
 
 export { EditArgsSchema } from "@n0n/types";
