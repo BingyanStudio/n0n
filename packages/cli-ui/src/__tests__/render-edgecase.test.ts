@@ -28,7 +28,7 @@ function setupVT(cols: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-		process.stderr.write = (chunk: string | Uint8Array) => {
+	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
 	};
@@ -81,7 +81,7 @@ describe("终端边界行为", () => {
 		// 现在 clear 看 cursorUp 移动了多少行
 		const writes: string[] = [];
 		const realWrite = process.stderr.write;
-				process.stderr.write = (chunk: string | Uint8Array) => {
+		process.stderr.write = (chunk: string | Uint8Array) => {
 			if (typeof chunk === "string") {
 				writes.push(chunk);
 				vt.feed(chunk);

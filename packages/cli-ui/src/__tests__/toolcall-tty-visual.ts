@@ -36,7 +36,7 @@ async function scenarioA() {
 
 	for (const [name, arg] of chunks) {
 		if (name) renderer.toolCallArgStart(0, name);
-			renderer.toolCallArgChunk(0, arg);
+		renderer.toolCallArgChunk(0, arg);
 		await sleep(200);
 	}
 
@@ -71,7 +71,7 @@ async function scenarioB() {
 
 	// 先发 path
 	renderer.toolCallArgStart(0, "write");
-		renderer.toolCallArgChunk(0, '{"path":"output.txt","content":"');
+	renderer.toolCallArgChunk(0, '{"path":"output.txt","content":"');
 	await sleep(300);
 
 	// 逐行追加 content（每行一个 chunk）
@@ -118,7 +118,7 @@ async function scenarioC() {
 	await sleep(200);
 
 	renderer.toolCallArgStart(0, "exec");
-		renderer.toolCallArgChunk(0, '{"script":"echo round1"}');
+	renderer.toolCallArgChunk(0, '{"script":"echo round1"}');
 	await sleep(300);
 
 	renderer.streamEnd();
@@ -153,7 +153,7 @@ async function scenarioC() {
 	];
 	for (const [name, arg] of chunks) {
 		if (name) renderer.toolCallArgStart(0, name);
-			renderer.toolCallArgChunk(0, arg);
+		renderer.toolCallArgChunk(0, arg);
 		await sleep(200);
 	}
 

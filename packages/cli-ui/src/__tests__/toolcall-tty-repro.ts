@@ -53,7 +53,7 @@ renderer.roundStart(1, 10, 3);
 log.push("roundStart done\n");
 
 renderer.toolCallArgStart(0, "write");
-		renderer.toolCallArgChunk(0, '{"path":"output.txt","content":"');
+renderer.toolCallArgChunk(0, '{"path":"output.txt","content":"');
 log.push(`after path+content-start, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`);
 
 for (let i = 1; i <= 20; i++) {
@@ -89,7 +89,7 @@ const chunks: [string | undefined, string][] = [
 for (let i = 0; i < chunks.length; i++) {
 	const [name, arg] = chunks[i]!;
 	if (name) renderer2.toolCallArgStart(0, name);
-			renderer2.toolCallArgChunk(0, arg);
+	renderer2.toolCallArgChunk(0, arg);
 	const lc = (renderer2 as any).streamRegion.lineCount;
 	log.push(`after chunk-${i} "${(name ?? "") + arg}", streamRegion lineCount=${lc}\n`);
 }

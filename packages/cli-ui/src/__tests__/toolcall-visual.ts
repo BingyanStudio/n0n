@@ -26,7 +26,7 @@ async function scenario1() {
 	const chunks = ['{"sc', 'ript":', '"ls -la"', ',"runtime":', '"sh"}'];
 	for (const chunk of chunks) {
 		if (chunk === chunks[0]) renderer.toolCallArgStart(0, "exec");
-			renderer.toolCallArgChunk(0, chunk);
+		renderer.toolCallArgChunk(0, chunk);
 		await sleep(150);
 	}
 
@@ -72,7 +72,7 @@ async function scenario2() {
 	const chunks = ['{"script":', '"echo hello"', ',"runtime":"sh"}'];
 	for (const chunk of chunks) {
 		if (chunk === chunks[0]) renderer.toolCallArgStart(0, "exec");
-			renderer.toolCallArgChunk(0, chunk);
+		renderer.toolCallArgChunk(0, chunk);
 		await sleep(150);
 	}
 
@@ -107,10 +107,10 @@ async function scenario3() {
 
 	// 两个工具调用交替流式输出
 	renderer.toolCallArgStart(0, "exec");
-		renderer.toolCallArgChunk(0, '{"scr');
+	renderer.toolCallArgChunk(0, '{"scr');
 	await sleep(100);
 	renderer.toolCallArgStart(1, "write");
-		renderer.toolCallArgChunk(1, '{"pa');
+	renderer.toolCallArgChunk(1, '{"pa');
 	await sleep(100);
 	renderer.toolCallArgChunk(0, 'ipt":"ls"}');
 	await sleep(100);
@@ -175,7 +175,7 @@ async function scenario4() {
 	];
 	for (let i = 0; i < argChunks.length; i++) {
 		if (i === 0) renderer.toolCallArgStart(0, "edit");
-			renderer.toolCallArgChunk(0, argChunks[i]!);
+		renderer.toolCallArgChunk(0, argChunks[i]!);
 		await sleep(120);
 	}
 

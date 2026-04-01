@@ -232,9 +232,9 @@ describe("流式渲染逐帧检查", () => {
 
 		const baseLines = vt.getVisibleLines().length;
 
+		renderer.toolCallArgStart(0, "exec");
 		for (const chunk of chunks) {
-			renderer.toolCallArgStart(0, "exec");
-		renderer.toolCallArgChunk(0, chunk);
+			renderer.toolCallArgChunk(0, chunk);
 		}
 		renderer.streamEnd();
 

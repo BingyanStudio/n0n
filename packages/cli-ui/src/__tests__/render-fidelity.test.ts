@@ -27,7 +27,7 @@ function setupVT(cols: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-		process.stderr.write = (chunk: string | Uint8Array) => {
+	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
 	};
@@ -83,9 +83,9 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		// 流式 tool call
 		const json = '{"script":"echo hello","runtime":"cmd"}';
 		const chunks = randomChunks(json, 42);
+		renderer.toolCallArgStart(0, "exec");
 		for (const chunk of chunks) {
-			renderer.toolCallArgStart(0, "exec");
-		renderer.toolCallArgChunk(0, chunk);
+			renderer.toolCallArgChunk(0, chunk);
 		}
 		renderer.streamEnd();
 
@@ -136,9 +136,9 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		const json =
 			'{"type":"completed","summary":"已完成 PR #61 的清理：1. 关闭 PR #61，附带说明关闭原因（核心功能已被 PR #75/#76 覆盖，分支严重过时）2. 删除远程分支","files_changed":[]}';
 		const chunks = randomChunks(json, 123);
+		renderer.toolCallArgStart(0, "submit");
 		for (const chunk of chunks) {
-			renderer.toolCallArgStart(0, "submit");
-		renderer.toolCallArgChunk(0, chunk);
+			renderer.toolCallArgChunk(0, chunk);
 		}
 		renderer.streamEnd();
 
@@ -259,9 +259,9 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 		const json = '{"summary":"关闭并清理远程分支和本地引用完成所有操作"}';
 		const chunks = randomChunks(json, 77);
+		renderer.toolCallArgStart(0, "submit");
 		for (const chunk of chunks) {
-			renderer.toolCallArgStart(0, "submit");
-		renderer.toolCallArgChunk(0, chunk);
+			renderer.toolCallArgChunk(0, chunk);
 		}
 		renderer.streamEnd();
 

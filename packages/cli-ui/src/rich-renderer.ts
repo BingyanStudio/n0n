@@ -156,8 +156,6 @@ export class RichRenderer implements Renderer {
 		{ name: string; args: string }
 	>();
 
-	/** 已由 toolCallArgEnd 渲染过最终形式的工具 index 集合 */
-	private graduatedToolIndices = new Set<number>();
 	/** 本轮是否有流式工具参数（有则 toolExecStart 不重复渲染） */
 	private hadStreamingArgs = false;
 
@@ -214,26 +212,12 @@ export class RichRenderer implements Renderer {
 
 		// TTY：重绘整个流式区域（LiveRegion clear+rewrite 实现原地刷新）
 		this.streamRegion.clear();
-		for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
-			(a, b) => a[0] - b[0],
-		)) {
-			const parsed = tryParseArgs(tc.args);
-			if (parsed && Object.keys(parsed).length > 0) {
-				for (const line of renderToolArgsStreaming(tc.name, parsed)) {
-					this.streamRegion.writeln(line);
-				}
-			} else {
-				this.streamRegion.writeln(
-					`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray("(streaming…)")}`,
-				);
-			}
-		}
+		this.redrawStreamingRegion();
 	}
 
 	toolCallArgEnd(index: number, tc: ToolCallRecord): void {
 		// 从 streaming 区域毕业 → 输出最终结构化渲染
 		this.streamingToolCalls.delete(index);
-		this.graduatedToolIndices.add(index);
 
 		if (isTTY) {
 			this.streamRegion.clear();
@@ -245,20 +229,7 @@ export class RichRenderer implements Renderer {
 		// 重绘剩余 streaming 的工具
 		if (isTTY && this.streamingToolCalls.size > 0) {
 			this.streamRegion.reset();
-			for (const [, stc] of [...this.streamingToolCalls.entries()].sort(
-				(a, b) => a[0] - b[0],
-			)) {
-				const parsed = tryParseArgs(stc.args);
-				if (parsed && Object.keys(parsed).length > 0) {
-					for (const line of renderToolArgsStreaming(stc.name, parsed)) {
-						this.streamRegion.writeln(line);
-					}
-				} else {
-					this.streamRegion.writeln(
-						`${style.dim("▸")} ${style.cyan(stc.name)} ${style.gray("(streaming…)")}`,
-					);
-				}
-			}
+			this.redrawStreamingRegion();
 		} else {
 			this.streamRegion.reset();
 		}
@@ -346,7 +317,6 @@ export class RichRenderer implements Renderer {
 	aborted(): void {
 		this.hadStreamingArgs = false;
 		this.streamingToolCalls.clear();
-		this.graduatedToolIndices.clear();
 		this.streamRegion.reset();
 		this.toolRegion.reset();
 		writeln();
@@ -398,6 +368,24 @@ export class RichRenderer implements Renderer {
 			}
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;
+			}
+		}
+	}
+
+	/** 将当前所有 streaming 工具调用重绘到 streamRegion */
+	private redrawStreamingRegion(): void {
+		for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
+			(a, b) => a[0] - b[0],
+		)) {
+			const parsed = tryParseArgs(tc.args);
+			if (parsed && Object.keys(parsed).length > 0) {
+				for (const line of renderToolArgsStreaming(tc.name, parsed)) {
+					this.streamRegion.writeln(line);
+				}
+			} else {
+				this.streamRegion.writeln(
+					`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray("(streaming…)")}`,
+				);
 			}
 		}
 	}

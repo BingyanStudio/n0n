@@ -25,7 +25,7 @@ function setupVT(cols: number, viewportHeight: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-		process.stderr.write = (chunk: string | Uint8Array) => {
+	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
 	};

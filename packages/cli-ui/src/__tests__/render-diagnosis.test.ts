@@ -30,7 +30,7 @@ function setupCapture(cols: number): WriteEvent[] {
 		writable: true,
 		configurable: true,
 	});
-		process.stderr.write = (chunk: string | Uint8Array) => {
+	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") {
 			events.push({ data: chunk, timestamp: performance.now() });
 		}
