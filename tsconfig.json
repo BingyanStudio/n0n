@@ -47,15 +47,11 @@
 			"@n0n/cli-ui": [
 				"./packages/cli-ui/src/index.ts"
 			],
-			"@n0n/tui": [
-				"./packages/tui/src/index.ts"
-			]
 		},
 		"jsx": "react-jsx",
 		"jsxImportSource": "react"
 	},
 	"include": [
-		"packages/tui/src/**/*.tsx",
 		"packages/*/src/**/*.ts",
 		"apps/*/src/**/*.ts",
 		"apps/*/src/**/*.d.ts",
