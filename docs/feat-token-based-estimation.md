@@ -37,9 +37,9 @@
 
 | 位置 | 当前展示 | 改为 |
 |------|----------|------|
-| `rich-renderer.ts` exec completed | `89 chars` | `89 chars` + dim `~25 tk` |
-| `rich-renderer.ts` text response | `120 chars` | `120 chars` + dim `~30 tk` |
-| `rich-renderer.ts` reminder | `45 chars` | `45 chars` + dim `~12 tk` |
+| `rich-renderer.ts` exec completed | `89 chars` | `89 chars` + dim `~25 tok` |
+| `rich-renderer.ts` text response | `120 chars` | `120 chars` + dim `~30 tok` |
+| `rich-renderer.ts` reminder | `45 chars` | `45 chars` + dim `~12 tok` |
 | `feishu/renderer.ts` | 无长度展示 | 可选添加 |
 
 **给模型看的 format-prompt.ts**：不展示 token 数（模型不需要知道自己消耗了多少 token），保留字符数即可。
@@ -130,7 +130,7 @@ interface ExecTruncated extends ExecResultBase {
 // CLI 渲染器中动态计算 token
 const outLen = result.stdoutLength + result.stderrLength;
 const estTokens = estimateTokens(result.stdoutTail + result.stderrTail);
-return `... ${outLen} chars ${style.dim(`~${estTokens} tk`)}`;
+return `... ${outLen} chars ${style.dim(`~${estTokens} tok`)}`;
 ```
 
 ## 收益

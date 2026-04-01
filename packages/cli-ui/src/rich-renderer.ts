@@ -298,7 +298,7 @@ export class RichRenderer implements Renderer {
 		}
 		writeln(
 			style.gray(
-				`(text response, ${content.length} chars ~${estimateTokens(content)} tk, idle=${idleCount})`,
+				`(text response, ${content.length} chars ~${estimateTokens(content)} tok, idle=${idleCount})`,
 			),
 		);
 	}
@@ -355,7 +355,7 @@ export class RichRenderer implements Renderer {
 								: style.red(`exit=${result.exitCode}`);
 						const outLen = result.stdout.length + result.stderr.length;
 						const estTk = estimateTokens(result.stdout + result.stderr);
-						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)} ${style.dim(`~${estTk} tk`)}`;
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)} ${style.dim(`~${estTk} tok`)}`;
 					}
 				}
 				break;
@@ -388,7 +388,7 @@ export class RichRenderer implements Renderer {
 			case "reminder": {
 				const chars = result.call.args.content.length;
 				const estTk = estimateTokens(result.call.args.content);
-				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${chars} chars`)} ${style.dim(`~${estTk} tk`)}`;
+				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${chars} chars`)} ${style.dim(`~${estTk} tok`)}`;
 			}
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;
