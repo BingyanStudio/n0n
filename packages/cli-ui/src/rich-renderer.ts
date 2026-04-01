@@ -294,6 +294,36 @@ export class RichRenderer implements Renderer {
 		if (name) entry.name = name;
 		entry.args += chunk;
 
+		// 检查是否有已完成的 tool call 可以"毕业"出 streaming 区域
+		// 判断标准：JSON 完整（以 } 结尾且能完整解析）
+		for (const [idx, tc] of this.streamingToolCalls.entries()) {
+			const trimmed = tc.args.trim();
+			if (!trimmed.endsWith("}") && !trimmed.endsWith("]")) continue;
+			try {
+				JSON.parse(tc.args);
+			} catch {
+				continue;
+			}
+			// JSON 完整 — 从 streaming 区域毕业
+			// 先 clear 当前 streamRegion，输出该 tool call 的最终渲染，
+			// 然后从 streamingToolCalls 中移除它
+			if (isTTY) {
+				this.streamRegion.clear();
+				// 先输出所有已毕业的（到全局），再重绘剩余 streaming 的
+				const parsed = tryParseArgs(tc.args);
+				if (parsed) {
+					for (const line of renderToolArgs(tc.name, parsed)) {
+						writeln(line);
+					}
+				}
+				this.streamRegion.reset();
+			}
+			this.streamingToolCalls.delete(idx);
+			this.skipToolCallStarts++;
+			// 一次只毕业一个，避免复杂的多工具同时毕业
+			break;
+		}
+
 		// 非 TTY：只静默累积，不输出（等 contentEnd 一次性渲染最终结果）
 		if (!isTTY) return;
 
