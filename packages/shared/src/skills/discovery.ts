@@ -14,6 +14,9 @@
  *   │   └── assets/           # 可选：模板、资源
  *   └── another-skill/
  *       └── SKILL.md
+ *
+ * 集成策略：不在一开始推送所有技能，而是在咨询阶段（delegateTask）
+ * 由专家根据任务主动挑选合适的 skills 推送给执行 agent。
  */
 
 import { existsSync } from "node:fs";
