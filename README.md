@@ -295,9 +295,7 @@ EDITOR_LLM_BACKEND_PROVIDER=openai-compatible
 | 语言 | TypeScript (strict mode) |
 | Monorepo | [Turborepo](https://turbo.build) |
 | Lint | [Biome](https://biomejs.dev) |
-| LLM SDK | [Vercel AI SDK](https://sdk.vercel.ai) |
 | Schema | [Zod](https://zod.dev) |
-| TUI | React + [Ink](https://github.com/vadimdemedes/ink) |
 
 ---
 
@@ -305,8 +303,9 @@ EDITOR_LLM_BACKEND_PROVIDER=openai-compatible
 
 | 文档 | 内容 |
 |------|------|
-| [domain-message.md](docs/domain-message.md) | DomainMessage 设计模式 |
-| [draft.md](docs/draft.md) | 原始设计思路 |
+| [AGENTS.md](AGENTS.md) | 开发规范与协作原则 |
+| [prompt-design-principles.md](docs/prompt-design-principles.md) | 提示词设计原则 |
+| [docs/reference/](docs/reference/) | 第三方 API 参考（飞书、Skills） |
 
 ---
 
