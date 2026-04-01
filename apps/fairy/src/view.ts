@@ -17,6 +17,7 @@
  * 6. [stimulus] 当前刺激                       ← 尾部
  */
 
+import { estimateTokens as estimateTokenCount } from "@n0n/shared";
 import type { DomainMessage } from "@n0n/types";
 import fairyPromptText from "./prompts/fairy.md" with { type: "text" };
 import type { FairyPaths } from "./state.ts";
@@ -41,28 +42,30 @@ const COMPRESS_TRIGGER = Math.round(CONTEXT_WINDOW * 0.8);
 const SNAPSHOT_STEP = 20;
 
 /**
- * 粗略的 token 估算：1 token ≈ 3 chars（中英混合场景）。
- * 不需要精确——只用于判断是否触发压缩。
+ * token 预估：使用 tokenx 对消息内容做预估。
+ * 用于判断是否触发压缩，不需要 100% 精确。
  */
-function estimateTokens(messages: DomainMessage[]): number {
-	let chars = 0;
+function estimateMessageTokens(messages: DomainMessage[]): number {
+	let total = 0;
 	for (const msg of messages) {
 		if ("content" in msg && typeof msg.content === "string") {
-			chars += msg.content.length;
+			total += estimateTokenCount(msg.content);
 		}
 		if (msg.type === "assistant_tool_call") {
 			for (const tc of msg.toolCalls) {
-				chars += JSON.stringify(tc.args).length;
+				total += estimateTokenCount(JSON.stringify(tc.args));
 			}
 		}
 		if (msg.type === "tool_result") {
-			if ("stdout" in msg) chars += msg.stdout?.length ?? 0;
-			if ("stderr" in msg) chars += msg.stderr?.length ?? 0;
+			if ("stdout" in msg)
+				total += estimateTokenCount(String(msg.stdout ?? ""));
+			if ("stderr" in msg)
+				total += estimateTokenCount(String(msg.stderr ?? ""));
 			if ("error" in msg && typeof msg.error === "string")
-				chars += msg.error.length;
+				total += estimateTokenCount(msg.error);
 		}
 	}
-	return Math.round(chars / 3);
+	return total;
 }
 
 // ── 轮次分割 ──
@@ -145,7 +148,7 @@ export function buildView(
 	messages.push({ type: "system", content: buildSystemPrompt(identity) });
 
 	// 2. 判断是否需要压缩
-	const historyTokens = estimateTokens(history);
+	const historyTokens = estimateMessageTokens(history);
 
 	if (historyTokens < COMPRESS_TRIGGER) {
 		// 未触发压缩：直接使用全部原始历史

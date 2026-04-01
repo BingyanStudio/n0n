@@ -8,6 +8,7 @@
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { estimateTokens, tailByTokens } from "@n0n/shared";
 import type {
 	ExecToolCall,
 	ExecToolResult,
@@ -59,12 +60,10 @@ function buildSpawnCmd(runtime: string, tmpFile: string): string[] {
 	}
 }
 
-/** 超过此阈值（stdout+stderr 合计）触发截断写文件 */
-const TRUNCATION_THRESHOLD = 8_000;
-/** 截断后展示的末尾字符数 */
-const TAIL_LENGTH = 2_000;
-/** 取字符串末尾 N 个字符 */
-const tail = (s: string, n: number) => (s.length > n ? s.slice(-n) : s);
+/** 超过此阈值（stdout+stderr 合计预估 token 数）触发截断写文件 */
+const TRUNCATION_THRESHOLD_TOKENS = 2_000;
+/** 截断后展示的末尾 token 数 */
+const TAIL_TOKENS = 500;
 
 /**
  * 流式执行脚本。
@@ -247,8 +246,8 @@ export async function* execToolStream(
 				status: "timed_out",
 				pid,
 				logFile,
-				stdoutSoFar: tail(stdoutSoFar, TAIL_LENGTH),
-				stderrSoFar: tail(stderrSoFar, TAIL_LENGTH),
+				stdoutSoFar: tailByTokens(stdoutSoFar, TAIL_TOKENS),
+				stderrSoFar: tailByTokens(stderrSoFar, TAIL_TOKENS),
 				durationMs,
 			} satisfies ExecToolResult;
 			return; // 不进入 finally 删除临时文件（后台协程负责）
@@ -260,14 +259,11 @@ export async function* execToolStream(
 		const stdout = stdoutChunks.join("");
 		const stderr = stderrChunks.join("");
 
-		const totalLen = stdout.length + stderr.length;
+		const totalTokens = estimateTokens(stdout + stderr);
 
-		if (totalLen > TRUNCATION_THRESHOLD) {
+		if (totalTokens > TRUNCATION_THRESHOLD_TOKENS) {
 			// ── 截断路径：完整输出写入文件 ──
-			const outputFile = join(
-				tempDir,
-				`exec_output_${call.id}.txt`,
-			);
+			const outputFile = join(tempDir, `exec_output_${call.id}.txt`);
 			const fileContent = [
 				"--- stdout ---",
 				stdout,
@@ -283,8 +279,8 @@ export async function* execToolStream(
 				call,
 				status: "truncated",
 				exitCode,
-				stdoutTail: tail(stdout, TAIL_LENGTH),
-				stderrTail: tail(stderr, TAIL_LENGTH),
+				stdoutTail: tailByTokens(stdout, TAIL_TOKENS),
+				stderrTail: tailByTokens(stderr, TAIL_TOKENS),
 				outputFile,
 				stdoutLength: stdout.length,
 				stderrLength: stderr.length,

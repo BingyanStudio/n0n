@@ -8,8 +8,8 @@
  * - 短输出仍返回 status: "completed"
  */
 
-import { existsSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import type { ExecToolCall } from "@n0n/types";
 import { ExecArgsSchema, execToolStream } from "../exec/index.ts";
 
