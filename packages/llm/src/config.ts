@@ -98,4 +98,3 @@ export interface LLMConfig {
 	/** 最大输出 token 数。Anthropic 默认 8192（stream）/ 4096（complete）。 */
 	maxOutputTokens?: number;
 }
-

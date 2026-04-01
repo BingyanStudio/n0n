@@ -25,7 +25,11 @@ async function collectExecResult(script: string, runtime?: string) {
 		blockedCommands: [],
 		defaultExecTimeout: 120,
 	})) {
-		if (event.type === "tool_result" && event.tool === "exec" && !event.timedOut) {
+		if (
+			event.type === "tool_result" &&
+			event.tool === "exec" &&
+			!event.timedOut
+		) {
 			stdout = event.stdout;
 			stderr = event.stderr;
 			exitCode = event.exitCode;

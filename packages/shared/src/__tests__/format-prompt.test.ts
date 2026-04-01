@@ -29,9 +29,7 @@ describe("formatPrompt", () => {
 	});
 
 	test("user_text 消息映射为 role: user", () => {
-		const msgs: DomainMessage[] = [
-			{ type: "user_text", content: "Hello" },
-		];
+		const msgs: DomainMessage[] = [{ type: "user_text", content: "Hello" }];
 		const result = formatPrompt(msgs, MODEL);
 		expect(result).toHaveLength(1);
 		expect(result[0]!.role).toBe("user");

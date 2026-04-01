@@ -37,7 +37,10 @@ const { workspace, remainingArgs } = parseWorkspaceArg(
 const paths = resolveFairyPaths(workspace);
 ensureFairyFiles(paths);
 const llmConfig = buildLLMConfigFromEnv("LLM");
-const editorLlmConfig = buildLLMConfigFromEnv("EDITOR_LLM", llmConfig.providerConfig);
+const editorLlmConfig = buildLLMConfigFromEnv(
+	"EDITOR_LLM",
+	llmConfig.providerConfig,
+);
 const runtime = createRuntimeContext({
 	client: createLLMClient(llmConfig),
 	editorClient: createLLMClient(editorLlmConfig),

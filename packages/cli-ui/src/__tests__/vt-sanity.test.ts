@@ -1,7 +1,7 @@
 /**
  * VirtualTerminal 自身的正确性测试
  */
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("VirtualTerminal 基础", () => {

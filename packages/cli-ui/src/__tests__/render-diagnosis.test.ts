@@ -7,7 +7,7 @@
  * 3. 高频重绘的帧率
  */
 
-import { describe, test, expect, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 const origWrite = process.stderr.write;
 const origCols = process.stderr.columns;
@@ -59,7 +59,7 @@ const CSI_RE = /\x1b\[([0-9;]*?)([A-Za-z])/g;
 /** 分析事件流中的 ANSI 指令 */
 function analyzeEvents(events: WriteEvent[]) {
 	let clearCount = 0;
-	let rewriteCount = 0;
+	const rewriteCount = 0;
 	let totalCursorUp = 0;
 
 	for (const event of events) {
@@ -106,7 +106,9 @@ describe("渲染诊断", () => {
 		// 每个字符都触发 streamRegion.clear() + rewrite
 		// 这意味着 23 个字符 → 22 次 clear（第一次没有旧内容）
 		// 在真实终端中，22 次高频的"擦除整个区域→重画"就是闪烁！
-		console.log(`\n⚠️ ${json.length} 个字符产生了 ${stats.clearCount} 次 clear+rewrite 循环`);
+		console.log(
+			`\n⚠️ ${json.length} 个字符产生了 ${stats.clearCount} 次 clear+rewrite 循环`,
+		);
 		console.log(`   真实终端中每次 clear 都会短暂显示空白 → 可见闪烁`);
 	});
 
@@ -136,7 +138,10 @@ describe("渲染诊断", () => {
 		let clearIdx = -1;
 		let firstContentIdx = -1;
 		for (let i = 0; i < contentEndEvents.length; i++) {
-			if (contentEndEvents[i].data.includes("\x1b[") && contentEndEvents[i].data.includes("A")) {
+			if (
+				contentEndEvents[i].data.includes("\x1b[") &&
+				contentEndEvents[i].data.includes("A")
+			) {
 				clearIdx = i;
 			}
 			if (firstContentIdx === -1 && contentEndEvents[i].data.includes("▸")) {
@@ -162,7 +167,10 @@ describe("渲染诊断", () => {
 		renderer.roundStart(1, 10, 3);
 
 		// 多行值 — 流式阶段只显示尾部6行，最终显示全部
-		const longValue = Array.from({ length: 15 }, (_, i) => `line ${i + 1}`).join("\\n");
+		const longValue = Array.from(
+			{ length: 15 },
+			(_, i) => `line ${i + 1}`,
+		).join("\\n");
 		const json = `{"output":"${longValue}"}`;
 
 		// 流式阶段

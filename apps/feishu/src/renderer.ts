@@ -208,7 +208,8 @@ export class FeishuRenderer implements Renderer {
 	toolExecEnd(result: ToolResult): void {
 		this.stopTimer();
 		const summary = fmtResult(result);
-		const isErr = result.tool === "exec" && (result.timedOut || result.exitCode !== 0);
+		const isErr =
+			result.tool === "exec" && (result.timedOut || result.exitCode !== 0);
 		this.conv.appendLine({
 			kind: isErr ? "err" : "tool",
 			text: `◂ **${result.tool}** → ${summary}`,

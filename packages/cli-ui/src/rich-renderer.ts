@@ -13,9 +13,9 @@ import type {
 	ToolCallRecord,
 	ToolResult,
 } from "@n0n/types";
+import { parse as parsePartialJSON } from "partial-json";
 import { isTTY, label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
-import { parse as parsePartialJSON } from "partial-json";
 
 // ── token 数值人类友好格式化 ──
 

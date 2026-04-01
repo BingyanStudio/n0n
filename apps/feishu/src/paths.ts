@@ -69,11 +69,7 @@ export function resolveFeishuPaths(senderOpenId: string): WorkflowPaths {
 		const projectRoot = findProjectRoot();
 		const rootTsconfig = resolve(projectRoot, "tsconfig.json");
 		if (existsSync(rootTsconfig)) {
-			const tsconfig = JSON.stringify(
-				{ extends: rootTsconfig },
-				null,
-				"\t",
-			);
+			const tsconfig = JSON.stringify({ extends: rootTsconfig }, null, "\t");
 			writeFileSync(tsconfigPath, tsconfig);
 		}
 	}

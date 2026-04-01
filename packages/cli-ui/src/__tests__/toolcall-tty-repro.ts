@@ -3,14 +3,21 @@
  */
 
 const wasTTY = process.stderr.isTTY;
-Object.defineProperty(process.stderr, "isTTY", { value: true, writable: true, configurable: true });
+Object.defineProperty(process.stderr, "isTTY", {
+	value: true,
+	writable: true,
+	configurable: true,
+});
 
 const { LiveRegion } = await import("../live-region.ts");
 const { RichRenderer } = await import("../rich-renderer.ts");
 
 // 恢复 TTY
 if (wasTTY !== undefined) {
-	Object.defineProperty(process.stderr, "isTTY", { value: wasTTY, configurable: true });
+	Object.defineProperty(process.stderr, "isTTY", {
+		value: wasTTY,
+		configurable: true,
+	});
 }
 
 // ── Monkey-patch LiveRegion 追踪 lineCount ──
@@ -24,7 +31,9 @@ LiveRegion.prototype.clear = function () {
 	const lc = (this as any).lineCount;
 	log.push(`    [LiveRegion.clear] lineCount=${lc} before clear`);
 	origClear.call(this);
-	log.push(`    [LiveRegion.clear] lineCount=${(this as any).lineCount} after clear`);
+	log.push(
+		`    [LiveRegion.clear] lineCount=${(this as any).lineCount} after clear`,
+	);
 };
 
 LiveRegion.prototype.writeln = function (text = "") {
@@ -40,7 +49,7 @@ LiveRegion.prototype.reset = function () {
 
 // ── 静默 stderr（不实际输出） ──
 const origStderrWrite = process.stderr.write.bind(process.stderr);
-process.stderr.write = function () { return true; } as any;
+process.stderr.write = (() => true) as any;
 
 // ══════════════════════════════════════════════════════════
 // 场景 B：超 maxLines
@@ -54,20 +63,28 @@ log.push("roundStart done\n");
 
 renderer.toolCallArgStart(0, "write");
 renderer.toolCallArgChunk(0, '{"path":"output.txt","content":"');
-log.push(`after path+content-start, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`);
+log.push(
+	`after path+content-start, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`,
+);
 
 for (let i = 1; i <= 20; i++) {
 	const sep = i === 1 ? "" : "\\n";
 	renderer.toolCallArgChunk(0, `${sep}line ${i}`);
 	const lc = (renderer as any).streamRegion.lineCount;
-	log.push(`after line-${String(i).padStart(2)}, streamRegion lineCount=${lc}\n`);
+	log.push(
+		`after line-${String(i).padStart(2)}, streamRegion lineCount=${lc}\n`,
+	);
 }
 
 renderer.toolCallArgChunk(0, '"}');
-log.push(`after close, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`);
+log.push(
+	`after close, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`,
+);
 
 renderer.streamEnd();
-log.push(`after contentEnd, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`);
+log.push(
+	`after contentEnd, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`,
+);
 
 // ── 场景 A：多参数 ──
 log.push("\n═══ 场景A：多参数细粒度 chunk ═══\n");
@@ -83,7 +100,7 @@ const chunks: [string | undefined, string][] = [
 	[undefined, ',"content'],
 	[undefined, '":"hello'],
 	[undefined, ' world"'],
-	[undefined, '}'],
+	[undefined, "}"],
 ];
 
 for (let i = 0; i < chunks.length; i++) {
@@ -91,11 +108,15 @@ for (let i = 0; i < chunks.length; i++) {
 	if (name) renderer2.toolCallArgStart(0, name);
 	renderer2.toolCallArgChunk(0, arg);
 	const lc = (renderer2 as any).streamRegion.lineCount;
-	log.push(`after chunk-${i} "${(name ?? "") + arg}", streamRegion lineCount=${lc}\n`);
+	log.push(
+		`after chunk-${i} "${(name ?? "") + arg}", streamRegion lineCount=${lc}\n`,
+	);
 }
 
 renderer2.streamEnd();
-log.push(`after contentEnd, streamRegion lineCount=${(renderer2 as any).streamRegion.lineCount}\n`);
+log.push(
+	`after contentEnd, streamRegion lineCount=${(renderer2 as any).streamRegion.lineCount}\n`,
+);
 
 // 恢复
 process.stderr.write = origStderrWrite;

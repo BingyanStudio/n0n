@@ -75,7 +75,12 @@ export const stateUpdaters = {
 		...state,
 		messages: [
 			...state.messages,
-			{ id: generateId(), type: "user" as const, content, timestamp: Date.now() },
+			{
+				id: generateId(),
+				type: "user" as const,
+				content,
+				timestamp: Date.now(),
+			},
 		],
 	}),
 
@@ -107,7 +112,12 @@ export const stateUpdaters = {
 			...state,
 			messages: [
 				...state.messages,
-				{ id: generateId(), type: "thinking", content: state.thinkingContent, timestamp: Date.now() },
+				{
+					id: generateId(),
+					type: "thinking",
+					content: state.thinkingContent,
+					timestamp: Date.now(),
+				},
 			],
 			thinkingContent: "",
 		};
@@ -124,7 +134,12 @@ export const stateUpdaters = {
 			...state,
 			messages: [
 				...state.messages,
-				{ id: generateId(), type: "content", content: state.contentBuffer, timestamp: Date.now() },
+				{
+					id: generateId(),
+					type: "content",
+					content: state.contentBuffer,
+					timestamp: Date.now(),
+				},
 			],
 			contentBuffer: "",
 		};
@@ -222,13 +237,15 @@ export const stateUpdaters = {
 			if (call.tool === result.tool && call.status === "running") {
 				const isSuccess =
 					result.tool === "exec"
-						? (!result.timedOut && result.exitCode === 0)
+						? !result.timedOut && result.exitCode === 0
 						: result.tool === "submit" || result.tool === "reminder"
 							? true
 							: result.success;
 				return {
 					...call,
-					status: (isSuccess ? "completed" : "failed") as "completed" | "failed",
+					status: (isSuccess ? "completed" : "failed") as
+						| "completed"
+						| "failed",
 					result,
 					durationMs: Date.now() - call.startTime,
 				};
@@ -254,7 +271,10 @@ export const stateUpdaters = {
 		submitError: { attempt, maxAttempts, error },
 	}),
 
-	agentTerminated: (state: TuiRendererState, reason: string): TuiRendererState => ({
+	agentTerminated: (
+		state: TuiRendererState,
+		reason: string,
+	): TuiRendererState => ({
 		...state,
 		finalStatus: "terminated",
 		terminationReason: reason,

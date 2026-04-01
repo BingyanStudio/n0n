@@ -7,6 +7,8 @@
  * 使用 LLMClient.stream() 进行流式调用，支持多 provider。
  */
 
+import type { PendingReminder, ToolsConfig } from "@n0n/tools";
+import { makeToolkit } from "@n0n/tools";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
@@ -15,8 +17,6 @@ import type {
 	ToolResult,
 } from "@n0n/types";
 import { FinishReason, StreamAccumulator } from "@n0n/types";
-import type { PendingReminder, ToolsConfig } from "@n0n/tools";
-import { makeToolkit } from "@n0n/tools";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 import { getRuntime } from "../runtime.ts";

@@ -9,7 +9,7 @@
  * 这些测试通过对比"两种 wrap 模型"来找出差异。
  */
 
-import { describe, test, expect, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 const origWrite = process.stderr.write;
@@ -94,17 +94,15 @@ describe("终端边界行为", () => {
 		const cursorUpMatch = writes.join("").match(/\x1b\[(\d+)A/);
 		const upN = cursorUpMatch ? Number(cursorUpMatch[1]) : 0;
 		console.log(`cursorUp(${upN})`);
-		console.log(`After clear - cursor: row=${vt.cursorRow}, col=${vt.cursorCol}`);
+		console.log(
+			`After clear - cursor: row=${vt.cursorRow}, col=${vt.cursorCol}`,
+		);
 
 		// 关键检查：clear 后光标应在 row 0
 		// 如果 countDisplayLines 算的是 1（ceil(80/80)=1），cursorUp(1)
 		// 但如果真实终端80字符自动换行了，实际占了2行，cursorUp(1)就不够
-		console.log(
-			`\n⚠️  如果 upN=1 但实际占2行 → clear 不完全 → 残留！`,
-		);
-		console.log(
-			`   这就是"恰好填满终端宽度"的经典 off-by-one 问题`,
-		);
+		console.log(`\n⚠️  如果 upN=1 但实际占2行 → clear 不完全 → 残留！`);
+		console.log(`   这就是"恰好填满终端宽度"的经典 off-by-one 问题`);
 
 		// 在我们的虚拟终端中，80字符在80列终端中不会wrap（刚好填满）
 		// 但真实终端中，写完第80个字符后光标位置是行末还是下一行开头？

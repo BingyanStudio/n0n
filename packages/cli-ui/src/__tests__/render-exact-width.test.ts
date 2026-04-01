@@ -22,7 +22,7 @@
  * 这个测试通过构造恰好等于 cols 的行来检测。
  */
 
-import { describe, test, expect, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 const origWrite = process.stderr.write;
@@ -94,7 +94,9 @@ describe("精确宽度边界", () => {
 		console.log("=== contentEnd 后屏幕 ===");
 		for (let i = 0; i < lines1.length; i++) {
 			const l = lines1[i];
-			console.log(`  [${i}] len=${l.length} "${l.slice(0, 60)}${l.length > 60 ? "..." : ""}"`);
+			console.log(
+				`  [${i}] len=${l.length} "${l.slice(0, 60)}${l.length > 60 ? "..." : ""}"`,
+			);
 		}
 
 		// 检查值行的可见长度
@@ -117,7 +119,7 @@ describe("精确宽度边界", () => {
 		// 需要 (81-4)/2 = 38.5 → 38个中文 = 76列 + 4前缀 = 80 → 不够
 		// 39个中文 = 78列 + 4前缀 = 82 → 超2列 → wrap
 		// 38个中文 + 1个ASCII = 77列 + 4前缀 = 81 → 超1列 → wrap
-		const cjkValue = "中".repeat(38) + "A";  // 38*2 + 1 = 77 + 4前缀 = 81
+		const cjkValue = "中".repeat(38) + "A"; // 38*2 + 1 = 77 + 4前缀 = 81
 		const json = `{"data":"${cjkValue}"}`;
 
 		renderer.toolCallArgStart(0, "exec");
@@ -128,7 +130,9 @@ describe("精确宽度边界", () => {
 		console.log("=== CJK 边界 contentEnd 后 ===");
 		for (let i = 0; i < lines1.length; i++) {
 			const l = lines1[i];
-			console.log(`  [${i}] len=${l.length} "${l.slice(0, 50)}${l.length > 50 ? "..." : ""}"`);
+			console.log(
+				`  [${i}] len=${l.length} "${l.slice(0, 50)}${l.length > 50 ? "..." : ""}"`,
+			);
 		}
 
 		// 这行应该被 wrap 成 2 行
@@ -177,7 +181,9 @@ describe("精确宽度边界", () => {
 		}
 
 		// 验证没有重复头
-		const headers = finalLines.filter((l) => l.trimStart().startsWith("▸ submit"));
+		const headers = finalLines.filter((l) =>
+			l.trimStart().startsWith("▸ submit"),
+		);
 		console.log(`\n▸ submit 头数量: ${headers.length}`);
 		expect(headers.length).toBe(1);
 
@@ -186,7 +192,9 @@ describe("精确宽度边界", () => {
 		expect(streaming.length).toBe(0);
 
 		// 验证有结束行
-		const resultLine = finalLines.filter((l) => l.trimStart().startsWith("◂ submit"));
+		const resultLine = finalLines.filter((l) =>
+			l.trimStart().startsWith("◂ submit"),
+		);
 		console.log(`◂ submit 结果行数: ${resultLine.length}`);
 		expect(resultLine.length).toBe(1);
 	});

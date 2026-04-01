@@ -101,7 +101,10 @@ export async function setScheduleEnabled(
 // ── 触发循环 ──
 
 export interface SchedulerCallbacks {
-	onTaskComplete?: (entry: ScheduleEntry, result: unknown) => void | Promise<void>;
+	onTaskComplete?: (
+		entry: ScheduleEntry,
+		result: unknown,
+	) => void | Promise<void>;
 	onTaskError?: (entry: ScheduleEntry, error: unknown) => void | Promise<void>;
 }
 
@@ -131,7 +134,9 @@ export async function startScheduler(
 		for (const entry of entries) {
 			if (!entry.enabled) continue;
 			if (executing.has(entry.name)) {
-				console.log(`[scheduler] Skipping ${entry.name}: still running from previous trigger`);
+				console.log(
+					`[scheduler] Skipping ${entry.name}: still running from previous trigger`,
+				);
 				continue;
 			}
 
@@ -154,7 +159,10 @@ export async function startScheduler(
 							await callbacks?.onTaskComplete?.(entry, result);
 						})
 						.catch(async (err) => {
-							console.error(`[scheduler] ❌ Workflow failed: ${entry.name}:`, err);
+							console.error(
+								`[scheduler] ❌ Workflow failed: ${entry.name}:`,
+								err,
+							);
 							await callbacks?.onTaskError?.(entry, err);
 						})
 						.finally(() => {
@@ -172,7 +180,10 @@ export async function startScheduler(
 							await callbacks?.onTaskComplete?.(entry, result);
 						})
 						.catch(async (err) => {
-							console.error(`[scheduler] ❌ Delegate task failed: ${entry.name}:`, err);
+							console.error(
+								`[scheduler] ❌ Delegate task failed: ${entry.name}:`,
+								err,
+							);
 							await callbacks?.onTaskError?.(entry, err);
 						})
 						.finally(() => {

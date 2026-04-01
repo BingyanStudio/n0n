@@ -42,10 +42,14 @@ async function scenario1() {
 	await sleep(100);
 
 	renderer.toolExecEnd({
-			type: "tool_result",
+		type: "tool_result",
 		tool: "exec",
 		timedOut: false,
-		call: { id: "call_1", tool: "exec", args: { script: "ls -la", runtime: "sh" } },
+		call: {
+			id: "call_1",
+			tool: "exec",
+			args: { script: "ls -la", runtime: "sh" },
+		},
 		exitCode: 0,
 		stdout: "total 0\ndrwxr-xr-x  2 user staff  64 Jan  1 00:00 .",
 		stderr: "",
@@ -90,10 +94,14 @@ async function scenario2() {
 	await sleep(100);
 
 	renderer.toolExecEnd({
-			type: "tool_result",
+		type: "tool_result",
 		tool: "exec",
 		timedOut: false,
-		call: { id: "call_2", tool: "exec", args: { script: "echo hello", runtime: "sh" } },
+		call: {
+			id: "call_2",
+			tool: "exec",
+			args: { script: "echo hello", runtime: "sh" },
+		},
 		exitCode: 0,
 		stdout: "hello\n",
 		stderr: "",
@@ -139,7 +147,7 @@ async function scenario3() {
 	await sleep(100);
 
 	renderer.toolExecEnd({
-			type: "tool_result",
+		type: "tool_result",
 		tool: "exec",
 		timedOut: false,
 		call: { id: "call_3", tool: "exec", args: { script: "ls" } },
@@ -152,11 +160,15 @@ async function scenario3() {
 	await sleep(200);
 
 	renderer.toolExecEnd({
-			type: "tool_result",
+		type: "tool_result",
 		tool: "write",
-		call: { id: "call_4", tool: "write", args: { path: "test.txt", content: "hello world" } },
+		call: {
+			id: "call_4",
+			tool: "write",
+			args: { path: "test.txt", content: "hello world" },
+		},
 		success: true,
-			error: null,
+		error: null,
 	});
 }
 
@@ -175,7 +187,7 @@ async function scenario4() {
 		'"修复类型错误"',
 		',"instructions":',
 		'"将 string 改为 number"',
-		'}',
+		"}",
 	];
 	for (let i = 0; i < argChunks.length; i++) {
 		if (i === 0) renderer.toolCallArgStart(0, "edit");
@@ -201,15 +213,19 @@ async function scenario4() {
 	await sleep(300);
 
 	renderer.toolExecEnd({
-			type: "tool_result",
+		type: "tool_result",
 		tool: "edit",
-		call: { id: "call_5", tool: "edit", args: { path: "src/index.ts", intent: "修复类型错误" } },
+		call: {
+			id: "call_5",
+			tool: "edit",
+			args: { path: "src/index.ts", intent: "修复类型错误" },
+		},
 		success: true,
 		diff: { added: 3, removed: 2, chunks: [] },
 		durationMs: 1500,
 		rounds: 1,
-			error: null,
-			feedback: null,
+		error: null,
+		feedback: null,
 	});
 }
 

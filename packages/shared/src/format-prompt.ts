@@ -144,10 +144,7 @@ function mergeConsecutiveSystem(messages: PromptMessage[]): PromptMessage[] {
 	const merged: PromptMessage[] = [];
 	for (const msg of messages) {
 		const prev = merged[merged.length - 1];
-		if (
-			msg.role === "system" &&
-			prev?.role === "system"
-		) {
+		if (msg.role === "system" && prev?.role === "system") {
 			merged[merged.length - 1] = {
 				role: "system",
 				content: `${prev.content}\n\n${msg.content}`,

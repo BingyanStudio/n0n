@@ -120,7 +120,11 @@ function buildBaseRegistry(
 					tool: "edit" as const,
 					args: EditArgsSchema.parse(tc.args),
 				};
-				return editToolStream(call, resolvedWorkspace, toolsConfig.editorClient);
+				return editToolStream(
+					call,
+					resolvedWorkspace,
+					toolsConfig.editorClient,
+				);
 			},
 		},
 		reminder: {

@@ -24,7 +24,7 @@ import type {
 } from "@n0n/types";
 import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
-import { LLMError, isAbortError } from "./errors.ts";
+import { isAbortError, LLMError } from "./errors.ts";
 
 // ── OpenAI API Types ──
 
@@ -183,7 +183,7 @@ export class OpenAIClient implements LLMClient {
 
 		const pc = config.providerConfig;
 		const base =
-			("baseUrl" in pc && pc.baseUrl) ? pc.baseUrl : "https://api.openai.com";
+			"baseUrl" in pc && pc.baseUrl ? pc.baseUrl : "https://api.openai.com";
 		// 处理 baseUrl 可能已包含 /v1 或完整路径的情况
 		if (base.includes("/chat/completions")) {
 			this.apiUrl = base;
@@ -246,7 +246,10 @@ export class OpenAIClient implements LLMClient {
 			});
 		} catch (err) {
 			if (isAbortError(err)) return;
-			yield { type: "error", error: err instanceof Error ? err.message : String(err) };
+			yield {
+				type: "error",
+				error: err instanceof Error ? err.message : String(err),
+			};
 			return;
 		}
 
@@ -265,7 +268,9 @@ export class OpenAIClient implements LLMClient {
 		let lastFinishReason: string | null = null;
 
 		// 内部函数：处理单个 data: 行，消除主循环与 flush 间的重复（#009）
-		const processDataLine = function* (payload: string): Generator<StreamEvent> {
+		const processDataLine = function* (
+			payload: string,
+		): Generator<StreamEvent> {
 			if (!payload || payload === "[DONE]") return;
 
 			let chunk: unknown;
@@ -346,7 +351,11 @@ export class OpenAIClient implements LLMClient {
 
 						if (payload === "[DONE]") {
 							if (lastFinishReason) {
-								yield { type: "done", finishReason: lastFinishReason, usage: lastUsage };
+								yield {
+									type: "done",
+									finishReason: lastFinishReason,
+									usage: lastUsage,
+								};
 							}
 							return;
 						}
@@ -369,7 +378,11 @@ export class OpenAIClient implements LLMClient {
 
 			// If stream ended without [DONE], emit deferred done event
 			if (lastFinishReason) {
-				yield { type: "done", finishReason: lastFinishReason, usage: lastUsage };
+				yield {
+					type: "done",
+					finishReason: lastFinishReason,
+					usage: lastUsage,
+				};
 			}
 		} catch (err) {
 			if (!isAbortError(err)) {
@@ -440,13 +453,11 @@ export class OpenAIClient implements LLMClient {
 						message?: { content?: string | null };
 					}>;
 				};
-				const text =
-					json?.choices?.[0]?.message?.content ?? "";
+				const text = json?.choices?.[0]?.message?.content ?? "";
 				return { text };
 			} catch (err) {
 				if (err instanceof LLMError) throw err;
-				lastError =
-					err instanceof Error ? err : new Error(String(err));
+				lastError = err instanceof Error ? err : new Error(String(err));
 			}
 		}
 

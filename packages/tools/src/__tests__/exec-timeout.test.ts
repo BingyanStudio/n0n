@@ -50,11 +50,7 @@ async function collectWithHardTimeout(
 
 describe("exec timeout 行为验证", () => {
 	test("正常脚本在 timeout 内完成 — 应返回正常结果", async () => {
-		const outcome = await collectWithHardTimeout(
-			"echo hello",
-			10,
-			5000,
-		);
+		const outcome = await collectWithHardTimeout("echo hello", 10, 5000);
 		expect(outcome.status).toBe("completed");
 		if (outcome.status === "completed" && !outcome.result.timedOut) {
 			expect(outcome.result.exitCode).toBe(0);
@@ -63,11 +59,7 @@ describe("exec timeout 行为验证", () => {
 	});
 
 	test("阻塞脚本超过 timeout — 应返回 timedOut 结果而非卡死", async () => {
-		const outcome = await collectWithHardTimeout(
-			"sleep 30",
-			2,
-			8000,
-		);
+		const outcome = await collectWithHardTimeout("sleep 30", 2, 8000);
 
 		// 修复后应正确返回，不再卡死
 		expect(outcome.status).toBe("completed");
@@ -77,23 +69,23 @@ describe("exec timeout 行为验证", () => {
 				expect(outcome.result.pid).toBeGreaterThan(0);
 				expect(outcome.result.logFile).toContain("exec_bg_");
 				// 超时后 kill 后台进程以清理
-				try { process.kill(outcome.result.pid, "SIGKILL"); } catch {}
+				try {
+					process.kill(outcome.result.pid, "SIGKILL");
+				} catch {}
 			}
 		}
 	}, 15000);
 
 	test("shell fork 子进程场景 — 应返回 timedOut 结果而非卡死", async () => {
-		const outcome = await collectWithHardTimeout(
-			"sleep 30 &\nwait",
-			2,
-			8000,
-		);
+		const outcome = await collectWithHardTimeout("sleep 30 &\nwait", 2, 8000);
 
 		expect(outcome.status).toBe("completed");
 		if (outcome.status === "completed") {
 			expect(outcome.result.timedOut).toBe(true);
 			if (outcome.result.timedOut) {
-				try { process.kill(outcome.result.pid, "SIGKILL"); } catch {}
+				try {
+					process.kill(outcome.result.pid, "SIGKILL");
+				} catch {}
 			}
 		}
 	}, 15000);
@@ -109,10 +101,15 @@ describe("exec timeout 行为验证", () => {
 		if (outcome.status === "completed") {
 			expect(outcome.result.timedOut).toBe(true);
 			if (outcome.result.timedOut) {
-				const lines = outcome.result.stdoutSoFar.trim().split("\n").filter(Boolean);
+				const lines = outcome.result.stdoutSoFar
+					.trim()
+					.split("\n")
+					.filter(Boolean);
 				expect(lines.length).toBeGreaterThanOrEqual(2);
 				expect(lines.length).toBeLessThanOrEqual(5);
-				try { process.kill(outcome.result.pid, "SIGKILL"); } catch {}
+				try {
+					process.kill(outcome.result.pid, "SIGKILL");
+				} catch {}
 			}
 		}
 	}, 15000);

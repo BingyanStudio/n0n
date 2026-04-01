@@ -213,7 +213,11 @@ export class VirtualTerminal {
 	/** 获取当前 viewport 中的可见行 */
 	getViewportLines(): string[] {
 		const lines: string[] = [];
-		for (let r = this.scrollTop; r < this.scrollTop + this.viewportHeight; r++) {
+		for (
+			let r = this.scrollTop;
+			r < this.scrollTop + this.viewportHeight;
+			r++
+		) {
 			lines.push(this.getLine(r));
 		}
 		return lines;
@@ -247,7 +251,8 @@ export class VirtualTerminal {
 		const lines = this.getVisibleLines();
 		return lines
 			.map((l, i) => {
-				const cursor = i === this.cursorRow ? `←cursor(col=${this.cursorCol})` : "";
+				const cursor =
+					i === this.cursorRow ? `←cursor(col=${this.cursorCol})` : "";
 				return `${String(i).padStart(3)}│${l}${cursor}`;
 			})
 			.join("\n");
