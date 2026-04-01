@@ -13,6 +13,10 @@
  * - Prompt caching：单路径，通过 cache_control 注入（SSOT: cache.ts）
  * - Thinking：构造请求时注入 thinking 参数
  * - system 消息拆离（Anthropic 格式要求 system 在消息体外）
+ *
+ * 协议选择经验：代理网关通常同时提供 OpenAI 和 Anthropic 端点。
+ * OpenAI-compatible 是"最低公约数"，高级特性（thinking_delta、prompt caching）必然丢失。
+ * 当网关支持 Anthropic Messages API 时应优先使用本 client。
  */
 
 import { formatPrompt } from "@n0n/shared";

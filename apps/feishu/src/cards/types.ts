@@ -1,7 +1,7 @@
 /**
  * 飞书卡片类型定义 — 严格遵循 Card JSON 2.0 结构
  *
- * 参考文档：docs/feishu/卡片 JSON 2.0 结构.md
+ * 参考：docs/reference/feishu/卡片 JSON 2.0 结构.md
  * 注意：v2.0 对不支持的属性会报错，类型必须精确。
  */
 

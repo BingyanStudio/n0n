@@ -155,7 +155,8 @@ export async function startFeishuService(): Promise<void> {
 
 			const text = FeishuBot.readText(data);
 			if (!text) {
-				// 非文本消息（图片、文件等）暂不支持，发送提示
+				// TODO readText 返回空字符串不一定是非文本消息（也可能是空白文本、JSON解析失败等），
+				// 应改为通过 message_type 字段判断，而非依赖 readText 返回值
 				if (ctx.senderOpenId) {
 					const card = buildTextCard(
 						"暂不支持",

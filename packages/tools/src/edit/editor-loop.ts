@@ -1,8 +1,13 @@
 /**
  * Editor Loop — Editor LLM 专用循环
  *
- * 驱动 Editor LLM 通过 str_replace/view_file/submit 完成编辑任务。
- * 完全封装，不依赖 @n0n/core。
+ * 意图驱动编辑（Shadow Edit）：主模型只描述"改什么"（intent），
+ * 由 Editor LLM 负责精确定位和执行 str_replace。
+ *
+ * 为什么不让主模型直接 search/replace：
+ * 1. 旧内容重复 — 模型读取文件→search 抄写旧内容→注意力被旧代码吸引（3次重复）
+ * 2. 外在认知负荷 — 任何 DSL（行号/hash/锚点）都要求模型做内部表征→DSL 语法翻译
+ * 3. 与 LLM 架构不匹配 — Transformer 注意力是 content-based addressing，坐标寻址非原生
  *
  * 流程：
  * 1. 发送 [system, user(source + intent)]
