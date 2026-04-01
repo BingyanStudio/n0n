@@ -70,23 +70,28 @@ export function estimateTokens(text: string): number {
     return estimateTokenCount(text);
 }
 
-/** 从字符串末尾截取约 n 个 token 的内容 */
+/** 从字符串末尾截取约 maxTokens 个 token 的内容（二分法定位） */
 export function tailByTokens(text: string, maxTokens: number): string {
-    // 粗略估算每 token 平均 4 字符，取 1.5 倍余量
-    const estimatedChars = maxTokens * 6;
-    const candidate = text.length > estimatedChars
-        ? text.slice(-estimatedChars) : text;
-    // 如果仍超出，逐步缩小
-    // （tokenx 很快，可以迭代几次）
-    return candidate;
+    if (estimateTokens(text) <= maxTokens) return text;
+    let lo = 0, hi = text.length;
+    while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (estimateTokens(text.slice(mid)) > maxTokens) lo = mid + 1;
+        else hi = mid;
+    }
+    return text.slice(lo);
 }
 
-/** 从字符串开头截取约 n 个 token 的内容 */
+/** 从字符串开头截取约 maxTokens 个 token 的内容（二分法定位） */
 export function headByTokens(text: string, maxTokens: number): string {
-    const estimatedChars = maxTokens * 6;
-    const candidate = text.length > estimatedChars
-        ? text.slice(0, estimatedChars) : text;
-    return candidate;
+    if (estimateTokens(text) <= maxTokens) return text;
+    let lo = 0, hi = text.length;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1;
+        if (estimateTokens(text.slice(0, mid)) > maxTokens) hi = mid - 1;
+        else lo = mid;
+    }
+    return text.slice(0, lo);
 }
 
 /** 格式化 token 数展示 */
