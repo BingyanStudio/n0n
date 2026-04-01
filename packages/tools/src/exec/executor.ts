@@ -2,8 +2,17 @@
  * exec 命令执行器
  *
  * 将模型提供的 script 写入临时文件，用指定 runtime 执行。
- * 超时机制使用 Promise.race 确定性中断流读取循环，
- * 超时后进程转入后台继续执行，输出写入 .temp/ 日志文件。
+ *
+ * 超时架构（为什么用 Promise.race 而不是 setTimeout + kill）：
+ * 旧方案 setTimeout → proc.kill() 依赖一个脆弱假设：kill 信号能让 stdout/stderr
+ * 流关闭从而唤醒读取循环。实际上常不成立：
+ * - shell 脚本 fork 的子进程不受 kill 影响，继续持有管道
+ * - 某些进程捕获/忽略 SIGTERM
+ * - 子进程继承管道 fd，即使父进程退出流也不关闭
+ * 结果：流读取的 await 永远不 resolve，agent 主循环卡死。
+ *
+ * 当前方案：Promise.race 让超时 Promise 与流读取 Promise 竞争，确定性中断。
+ * 超时后进程转入后台继续执行，已捕获输出 + 后续输出写入 .temp/ 日志文件。
  */
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
