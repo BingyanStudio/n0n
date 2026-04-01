@@ -13,7 +13,7 @@ toolName: exec
 <timeout_notice>
 Process exceeded timeout, moved to background.
 PID: 65432
-Log file: .temp/exec_bg_65432_1775062634766.log
+Log file: .temp/exec_bg_65432.log
 Read the log file later to check process status.
 </timeout_notice>
 <stdout>

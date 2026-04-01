@@ -8,7 +8,7 @@ toolName: exec
 
 --- content ---
 <exec_meta>
-[sh] [cwd: .] [exit: 0] [320ms] [output truncated → .temp/exec_output_tc_3_1775063000000.txt]
+[sh] [cwd: .] [exit: 0] [320ms] [output truncated → .temp/exec_output_tc_3.txt]
 </exec_meta>
 <stdout>
 ... (last 67 of 28450 chars)
@@ -17,7 +17,7 @@ toolName: exec
 ./src/types/domain.ts
 </stdout>
 <output_hint>
-Full output (28450 chars) written to: .temp/exec_output_tc_3_1775063000000.txt
+Full output (28450 chars) written to: .temp/exec_output_tc_3.txt
 Use exec to read specific parts: cat, grep, sed, head, tail, or bun script.
 </output_hint>
 ```

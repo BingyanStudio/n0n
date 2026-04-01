@@ -203,7 +203,7 @@ export async function* execToolStream(
 			// ── 超时路径：写日志，后台继续收集 ──
 			const durationMs = Date.now() - start;
 			const pid = proc.pid;
-			const logFile = join(tempDir, `exec_bg_${pid}_${Date.now()}.log`);
+			const logFile = join(tempDir, `exec_bg_${pid}.log`);
 			const stdoutSoFar = stdoutChunks.join("");
 			const stderrSoFar = stderrChunks.join("");
 
@@ -266,7 +266,7 @@ export async function* execToolStream(
 			// ── 截断路径：完整输出写入文件 ──
 			const outputFile = join(
 				tempDir,
-				`exec_output_${call.id}_${Date.now()}.txt`,
+				`exec_output_${call.id}.txt`,
 			);
 			const fileContent = [
 				"--- stdout ---",
