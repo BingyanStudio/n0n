@@ -33,7 +33,7 @@
 
 ### 第二类：仅展示 — 额外显示 token 预估
 
-这些地方仅用于人/开发者查看，在原有字符数后追加 token 预估，token 部分使用更淡的样式（dim/gray），保留原始字符数供精确参考。
+**给人看的渲染器**：在原有字符数后追加 token 预估，token 部分使用更淡的样式（dim/gray）。
 
 | 位置 | 当前展示 | 改为 |
 |------|----------|------|
@@ -41,7 +41,12 @@
 | `rich-renderer.ts` text response | `120 chars` | `120 chars` + dim `~30 tk` |
 | `rich-renderer.ts` reminder | `45 chars` | `45 chars` + dim `~12 tk` |
 | `feishu/renderer.ts` | 无长度展示 | 可选添加 |
-| `format-prompt.ts` truncated 提示 | `last 141 of 28450 chars` | `last 141 of 28450 chars (~7100 tk)` |
+
+**给模型看的 format-prompt.ts**：不展示 token 数（模型不需要知道自己消耗了多少 token），保留字符数即可。
+
+| 位置 | 当前展示 | 保持 |
+|------|----------|------|
+| `format-prompt.ts` truncated 提示 | `last 141 of 28450 chars` | 不变 |
 
 ### 第三类：真实数据可用 — 保持不变
 
