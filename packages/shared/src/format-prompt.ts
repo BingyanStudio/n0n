@@ -63,7 +63,7 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 				parts.push(
 					wrapTag(
 						"stdout",
-						`... (last ${msg.stdoutTail.length} of ${msg.stdoutLength} chars)\n${msg.stdoutTail}`,
+						`... (last ${msg.totalLines - msg.tailStartLine + 1} of ${msg.totalLines} lines)\n${msg.stdoutTail}`,
 						model,
 					),
 				);
@@ -71,13 +71,14 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 				parts.push(
 					wrapTag(
 						"stderr",
-						`... (last ${msg.stderrTail.length} of ${msg.stderrLength} chars)\n${msg.stderrTail}`,
+						`... (truncated)\n${msg.stderrTail}`,
 						model,
 					),
 				);
 			const hint = [
-				`Full output (${msg.stdoutLength + msg.stderrLength} chars) written to: ${msg.outputFile}`,
-				`Use exec to read specific parts: cat, grep, sed, head, tail, or bun script.`,
+				`Full output (${msg.totalLines} lines) written to: ${msg.outputFile}`,
+				`Use exec to read specific parts: grep, sed, head, tail, or bun script.`,
+				`Do NOT re-cat the full file — it will be truncated again.`,
 			].join("\n");
 			parts.push(wrapTag("output_hint", hint, model));
 			return parts.join("\n");
