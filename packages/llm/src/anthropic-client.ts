@@ -58,6 +58,8 @@ interface AnthropicTool {
 	name: string;
 	description: string;
 	input_schema: Record<string, unknown>;
+	/** 启用细粒度工具流式传输 — 跳过服务端 JSON 缓冲验证，直接流式发送参数 */
+	eager_input_streaming?: boolean;
 }
 
 interface AnthropicRequest {
@@ -243,6 +245,10 @@ function toAnthropicTools(tools: ToolDefinition[]): AnthropicTool[] {
 		name: t.name,
 		description: t.description,
 		input_schema: t.parameters,
+		// Anthropic 默认会缓冲工具参数 JSON 直到验证完整后才发送 SSE 事件，
+		// 导致长参数（如 write 的 content）出现 10s+ 的等待后一次性涌出。
+		// 启用 eager_input_streaming 跳过服务端缓冲，实现真正的逐 token 流式传输。
+		eager_input_streaming: true,
 	}));
 }
 
