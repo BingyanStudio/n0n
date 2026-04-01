@@ -28,11 +28,11 @@ apps/code/                ← code agent，import from @n0n/cli-ui
 
 ## 用户交互机制：submit userResponse
 
-当 agent 提交 `need_info` 类型的 submit 时，用户的回答**注入到 SubmitToolResult.userResponse 字段**，
+当 agent 提交 `ask_user` 或 `request_assist` 类型的 submit 时，用户的回答**注入到 SubmitToolResult.userResponse 字段**，
 而非作为独立的 user 消息。模型在同一个 tool result 上下文中看到答案：
 
 ```
-assistant: submit({ type: "need_info", message: "目标分支？" })
+assistant: submit({ type: "ask_user", question: "目标分支？", options: [...] })
 tool_result: Submitted successfully. <user_response>main</user_response>
 ```
 
@@ -45,16 +45,17 @@ const CodeResultSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("completed"),
     summary: z.string(),
-    files_changed: z.array(z.string()),
+    next_step: z.string().optional(),
   }),
   z.object({
-    type: z.literal("need_info"),
-    message: z.string(),
+    type: z.literal("ask_user"),
+    question: z.string(),
+    options: z.array(z.object({ choice: z.string(), affect: z.string() })),
   }),
   z.object({
-    type: z.literal("error"),
-    error: z.string(),
-    attempts: z.array(z.string()),
+    type: z.literal("request_assist"),
+    content: z.string(),
+    checklist: z.array(z.object({ label: z.string(), detail: z.string().optional() })),
   }),
 ]);
 ```
