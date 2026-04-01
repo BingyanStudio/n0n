@@ -6,6 +6,7 @@
  */
 
 import pc from "picocolors";
+import stringWidth from "string-width";
 
 const out = process.stderr;
 
@@ -85,9 +86,9 @@ export function stripAnsi(s: string): string {
 	return s.replace(ANSI_RE, "");
 }
 
-/** 计算字符串的可见宽度（去除 ANSI 转义序列后的字符数） */
+/** 计算字符串的可见终端列宽（自动去除 ANSI，正确处理 CJK/全角/emoji） */
 export function visibleWidth(s: string): number {
-	return stripAnsi(s).length;
+	return stringWidth(s);
 }
 
 /** 获取终端列宽 */
