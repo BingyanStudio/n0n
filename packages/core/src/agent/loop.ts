@@ -84,6 +84,7 @@ export async function agentLoop<T = unknown>(
 		const acc = new StreamAccumulator();
 		// ── 上游状态：驱动指令式事件，Renderer 不需要推断 ──
 		let isInThinking = false;
+		let hasContent = false;
 		const seenToolIndices = new Set<number>();
 		const completedToolIndices = new Set<number>();
 
@@ -111,11 +112,16 @@ export async function agentLoop<T = unknown>(
 						renderer.thinkingEnd();
 					}
 					renderer.contentChunk(event.text);
+					hasContent = true;
 					break;
 				case "tool_call_delta": {
 					if (isInThinking) {
 						isInThinking = false;
 						renderer.thinkingEnd();
+					}
+					if (hasContent) {
+						hasContent = false;
+						renderer.contentEnd();
 					}
 					// 首次遇到该 index → 发出 argStart 指令
 					if (!seenToolIndices.has(event.index)) {
@@ -153,6 +159,7 @@ export async function agentLoop<T = unknown>(
 					};
 			}
 		}
+		if (hasContent) renderer.contentEnd();
 		if (isInThinking) renderer.thinkingEnd();
 		renderer.streamEnd();
 

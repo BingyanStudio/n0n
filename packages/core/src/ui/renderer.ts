@@ -29,6 +29,7 @@ export class PlainRenderer implements Renderer {
 	thinkingChunk(_token: string): void {}
 	thinkingEnd(): void {}
 	contentChunk(_token: string): void {}
+	contentEnd(): void {}
 
 	toolCallArgStart(_index: number, _name: string): void {}
 	toolCallArgChunk(_index: number, _chunk: string): void {}

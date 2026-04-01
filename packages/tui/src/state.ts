@@ -118,6 +118,18 @@ export const stateUpdaters = {
 		contentBuffer: state.contentBuffer + token,
 	}),
 
+	contentEnd: (state: TuiRendererState): TuiRendererState => {
+		if (!state.contentBuffer) return state;
+		return {
+			...state,
+			messages: [
+				...state.messages,
+				{ id: generateId(), type: "content", content: state.contentBuffer, timestamp: Date.now() },
+			],
+			contentBuffer: "",
+		};
+	},
+
 	toolCallArgStart: (
 		state: TuiRendererState,
 		index: number,

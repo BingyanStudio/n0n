@@ -113,6 +113,8 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.contentChunk("我来执行");
 		renderer.contentChunk("一下命令");
 
+		renderer.contentEnd();
+
 		// 然后输出 tool call
 		renderer.toolCallArgStart(0, "exec");
 		renderer.toolCallArgChunk(0, '{"script":"echo hello"}');

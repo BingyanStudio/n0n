@@ -202,6 +202,7 @@ describe("终端边界行为", () => {
 		renderer.contentChunk("我来");
 		renderer.contentChunk("执行");
 		renderer.contentChunk("命令");
+		renderer.contentEnd();
 
 		// 然后切换到 tool call
 		renderer.toolCallArgStart(0, "exec");

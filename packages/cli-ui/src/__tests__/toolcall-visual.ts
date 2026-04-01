@@ -67,6 +67,7 @@ async function scenario2() {
 	}
 
 	await sleep(200);
+	renderer.contentEnd();
 
 	// 然后输出 tool call
 	const chunks = ['{"script":', '"echo hello"', ',"runtime":"sh"}'];
