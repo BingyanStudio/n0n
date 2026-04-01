@@ -33,15 +33,15 @@
 
 ### 第二类：仅展示 — 额外显示 token 预估
 
-这些地方仅用于人/开发者查看，改为展示更有意义的 token 预估。
+这些地方仅用于人/开发者查看，在原有字符数后追加 token 预估，token 部分使用更淡的样式（dim/gray），保留原始字符数供精确参考。
 
 | 位置 | 当前展示 | 改为 |
 |------|----------|------|
-| `rich-renderer.ts` exec completed | `89 chars` | `~25 tokens` |
-| `rich-renderer.ts` text response | `120 chars` | `~30 tokens` |
-| `rich-renderer.ts` reminder | `45 chars` | `~12 tokens` |
+| `rich-renderer.ts` exec completed | `89 chars` | `89 chars` + dim `~25 tk` |
+| `rich-renderer.ts` text response | `120 chars` | `120 chars` + dim `~30 tk` |
+| `rich-renderer.ts` reminder | `45 chars` | `45 chars` + dim `~12 tk` |
 | `feishu/renderer.ts` | 无长度展示 | 可选添加 |
-| `format-prompt.ts` truncated 提示 | `last 141 of 28450 chars` | `last ~35 of ~7100 tokens` |
+| `format-prompt.ts` truncated 提示 | `last 141 of 28450 chars` | `last 141 of 28450 chars (~7100 tk)` |
 
 ### 第三类：真实数据可用 — 保持不变
 
