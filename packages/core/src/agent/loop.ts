@@ -82,6 +82,11 @@ export async function agentLoop<T = unknown>(
 		renderer.roundStart(iteration + 1, maxIter, messages.length, lastUsage);
 
 		const acc = new StreamAccumulator();
+		// ── 上游状态：驱动指令式事件，Renderer 不需要推断 ──
+		let isInThinking = false;
+		const seenToolIndices = new Set<number>();
+		const completedToolIndices = new Set<number>();
+
 		for await (const event of client.stream(
 			{
 				messages,
@@ -97,16 +102,49 @@ export async function agentLoop<T = unknown>(
 			acc.push(event);
 			switch (event.type) {
 				case "thinking":
-					renderer.thinkingToken(event.text);
+					isInThinking = true;
+					renderer.thinkingChunk(event.text);
 					break;
 				case "content":
-					renderer.contentToken(event.text);
+					if (isInThinking) {
+						isInThinking = false;
+						renderer.thinkingEnd();
+					}
+					renderer.contentChunk(event.text);
 					break;
-				case "tool_call_delta":
-					renderer.toolCallArgChunk(event.index, event.name, event.arguments);
+				case "tool_call_delta": {
+					if (isInThinking) {
+						isInThinking = false;
+						renderer.thinkingEnd();
+					}
+					// 首次遇到该 index → 发出 argStart 指令
+					if (!seenToolIndices.has(event.index)) {
+						seenToolIndices.add(event.index);
+						renderer.toolCallArgStart(event.index, event.name ?? "?");
+					}
+					renderer.toolCallArgChunk(event.index, event.arguments);
+					// JSON 完整性检测 → 发出 argEnd 指令
+					if (!completedToolIndices.has(event.index)) {
+						const tcAcc = acc.toolCalls.get(event.index);
+						if (tcAcc) {
+							try {
+								JSON.parse(tcAcc.input);
+								completedToolIndices.add(event.index);
+								const parsed = parseToolCalls([tcAcc]);
+								const parsedTc = parsed[0];
+								if (parsedTc && isValidToolCall(parsedTc)) {
+									renderer.toolCallArgEnd(event.index, parsedTc);
+								}
+							} catch {
+								// JSON 尚未完整，继续累积
+							}
+						}
+					}
 					break;
+				}
 				case "error":
-					renderer.contentEnd();
+					if (isInThinking) renderer.thinkingEnd();
+					renderer.streamEnd();
 					renderer.agentTerminated(`LLM error: ${event.error}`);
 					return {
 						result: null,
@@ -115,7 +153,8 @@ export async function agentLoop<T = unknown>(
 					};
 			}
 		}
-		renderer.contentEnd();
+		if (isInThinking) renderer.thinkingEnd();
+		renderer.streamEnd();
 
 		// 记录本轮 usage，下一轮 roundStart 时显示
 		lastUsage = acc.usage;
@@ -241,7 +280,7 @@ export async function agentLoop<T = unknown>(
 				renderer.aborted();
 				return { result: null, report: null, history: messages };
 			}
-			renderer.toolCallStart(tc);
+			renderer.toolExecStart(tc);
 			let result: ToolResult | undefined;
 			let argError = false;
 			for await (const event of executeToolStream(
@@ -251,7 +290,7 @@ export async function agentLoop<T = unknown>(
 				toolkit.getEntry,
 			)) {
 				if (event.type === "tool_output_chunk") {
-					renderer.toolResultChunk(event.tool, event.chunk);
+					renderer.toolExecChunk(event.tool, event.chunk);
 				} else if (event.type === "tool_arg_error") {
 					messages.push(event);
 					argError = true;
@@ -263,7 +302,7 @@ export async function agentLoop<T = unknown>(
 			if (!result) {
 				throw new Error(`Tool ${tc.tool} stream ended without a result`);
 			}
-			renderer.toolCallEnd(result);
+			renderer.toolExecEnd(result);
 			messages.push(result);
 
 			if (result.tool === "submit") {

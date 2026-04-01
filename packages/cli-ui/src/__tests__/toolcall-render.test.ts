@@ -62,24 +62,25 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.roundStart(1, 10, 3);
 
 		// 模型直接输出 tool_call_delta，没有 content token
-		renderer.toolCallArgChunk(0, "exec", '{"sc');
-		renderer.toolCallArgChunk(0, undefined, 'ript":');
-		renderer.toolCallArgChunk(0, undefined, '"ls -la"');
-		renderer.toolCallArgChunk(0, undefined, ',"runtime":');
-		renderer.toolCallArgChunk(0, undefined, '"sh"}');
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, '{"sc');
+		renderer.toolCallArgChunk(0, 'ript":');
+		renderer.toolCallArgChunk(0, '"ls -la"');
+		renderer.toolCallArgChunk(0, ',"runtime":');
+		renderer.toolCallArgChunk(0, '"sh"}');
 
 		// 流结束
-		renderer.contentEnd();
+		renderer.streamEnd();
 
 		// agentLoop 解析完成后调用 toolCallStart
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "exec",
 			args: { script: "ls -la", runtime: "sh" },
 		});
 
 		// 工具执行完成
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "ls -la", runtime: "sh" } },
@@ -109,22 +110,23 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.roundStart(1, 10, 3);
 
 		// 先输出一些 content
-		renderer.contentToken("我来执行");
-		renderer.contentToken("一下命令");
+		renderer.contentChunk("我来执行");
+		renderer.contentChunk("一下命令");
 
 		// 然后输出 tool call
-		renderer.toolCallArgChunk(0, "exec", '{"script":"echo hello"}');
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, '{"script":"echo hello"}');
 
 		// 流结束
-		renderer.contentEnd();
+		renderer.streamEnd();
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "exec",
 			args: { script: "echo hello" },
 		});
 
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "echo hello" } },
@@ -151,28 +153,30 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.roundStart(1, 10, 3);
 
 		// 两个工具调用交替流式输出
-		renderer.toolCallArgChunk(0, "exec", '{"script":"ls"}');
-		renderer.toolCallArgChunk(1, "write", '{"path":"test.txt"');
-		renderer.toolCallArgChunk(1, undefined, ',"content":"hello"}');
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, '{"script":"ls"}');
+		renderer.toolCallArgStart(1, "write");
+		renderer.toolCallArgChunk(1, '{"path":"test.txt"');
+		renderer.toolCallArgChunk(1, ',"content":"hello"}');
 
 		// 流结束
-		renderer.contentEnd();
+		renderer.streamEnd();
 
 		// 两个 toolCallStart
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "exec",
 			args: { script: "ls" },
 		});
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_2",
 			tool: "write",
 			args: { path: "test.txt", content: "hello" },
 		});
 
 		// 两个 toolCallEnd
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
@@ -182,7 +186,7 @@ describe("RichRenderer tool call streaming", () => {
 			durationMs: 50,
 		});
 
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "write",
 			call: { id: "call_2", tool: "write", args: { path: "test.txt", content: "hello" } },
@@ -210,16 +214,17 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.roundStart(1, 10, 3);
 
 		// 逐字到达，JSON 逐步从不完整到完整
-		renderer.toolCallArgChunk(0, "exec", "{");
-		renderer.toolCallArgChunk(0, undefined, '"');
-		renderer.toolCallArgChunk(0, undefined, "scr");
-		renderer.toolCallArgChunk(0, undefined, 'ipt');
-		renderer.toolCallArgChunk(0, undefined, '":');
-		renderer.toolCallArgChunk(0, undefined, '"echo ');
-		renderer.toolCallArgChunk(0, undefined, 'hello"');
-		renderer.toolCallArgChunk(0, undefined, '}');
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, "{");
+		renderer.toolCallArgChunk(0, '"');
+		renderer.toolCallArgChunk(0, "scr");
+		renderer.toolCallArgChunk(0, 'ipt');
+		renderer.toolCallArgChunk(0, '":');
+		renderer.toolCallArgChunk(0, '"echo ');
+		renderer.toolCallArgChunk(0, 'hello"');
+		renderer.toolCallArgChunk(0, '}');
 
-		renderer.contentEnd();
+		renderer.streamEnd();
 
 		const result = captureStop();
 		const clean = stripAnsi(result);
@@ -238,14 +243,15 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.roundStart(1, 10, 3);
 
 		// 第一轮：tool call
-		renderer.toolCallArgChunk(0, "exec", '{"script":"ls"}');
-		renderer.contentEnd();
-		renderer.toolCallStart({
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, '{"script":"ls"}');
+		renderer.streamEnd();
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "exec",
 			args: { script: "ls" },
 		});
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
@@ -257,14 +263,15 @@ describe("RichRenderer tool call streaming", () => {
 
 		// 第二轮
 		renderer.roundStart(2, 10, 5);
-		renderer.toolCallArgChunk(0, "write", '{"path":"out.txt","content":"data"}');
-		renderer.contentEnd();
-		renderer.toolCallStart({
+		renderer.toolCallArgStart(0, "write");
+		renderer.toolCallArgChunk(0, '{"path":"out.txt","content":"data"}');
+		renderer.streamEnd();
+		renderer.toolExecStart({
 			id: "call_2",
 			tool: "write",
 			args: { path: "out.txt", content: "data" },
 		});
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "write",
 			call: { id: "call_2", tool: "write", args: { path: "out.txt", content: "data" } },
@@ -289,17 +296,18 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.roundStart(1, 10, 3);
 
 		// edit 工具流式参数
-		renderer.toolCallArgChunk(0, "edit", '{"path":"src/index.ts","intent":"fix bug","instructions":"change x to y"}');
-		renderer.contentEnd();
+		renderer.toolCallArgStart(0, "edit");
+		renderer.toolCallArgChunk(0, '{"path":"src/index.ts","intent":"fix bug","instructions":"change x to y"}');
+		renderer.streamEnd();
 
 		// edit 的 toolCallStart 有特殊渲染（只显示 path + intent）
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "edit",
 			args: { path: "src/index.ts", intent: "fix bug" },
 		});
 
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "edit",
 			call: { id: "call_1", tool: "edit", args: { path: "src/index.ts", intent: "fix bug" } },

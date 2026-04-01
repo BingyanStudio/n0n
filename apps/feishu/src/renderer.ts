@@ -1,5 +1,5 @@
 /**
- * FeishuRenderer — 飞书流式渲染器
+ * FeishuRenderer — 飞书流式渲染器（指令式事件模型）
  *
  * 将 agentLoop 事件映射为按轮次分块的过程卡片。
  * 信息层级：
@@ -34,17 +34,10 @@ function json(value: unknown): string {
 }
 
 /**
- * 提取工具调用的标题摘要和展开详情
- *
- * 标题：工具名 + 最关键的参数（用户一眼能看到在做什么）
- * 详情：完整参数列表（展开后查看）
- */
-/**
  * 提取工具调用的标题摘要和展开详情。
  * 接受 ToolCallRecord 判别联合，通过 tc.tool 窄化后类型安全地访问参数。
  */
 function fmtToolCall(tc: ToolCallRecord): { summary: string; detail: string } {
-	// 按工具类型提取关键参数作为标题（类型安全）
 	let summary: string;
 	switch (tc.tool) {
 		case "exec":
@@ -63,13 +56,11 @@ function fmtToolCall(tc: ToolCallRecord): { summary: string; detail: string } {
 			summary = `▸ **edit**  ${compact(tc.args.path, 80)}  ${compact(tc.args.intent, 60)}`;
 			break;
 		default: {
-			// 未知工具类型 — 安全回退（parseToolCalls 使用 as 断言，运行时可能出现未匹配类型）
 			const unknown = tc as ToolCallRecord;
 			summary = `▸ **${unknown.tool}**`;
 		}
 	}
 
-	// 完整参数作为展开详情（泛型遍历）
 	const lines: string[] = [];
 	for (const [key, value] of Object.entries(tc.args)) {
 		const strVal = typeof value === "string" ? value : json(value);
@@ -147,12 +138,14 @@ export class FeishuRenderer implements Renderer {
 		this.conv.startRound(`Round ${round}  ·  ${msgCount} msgs`);
 	}
 
-	thinkingToken(token: string): void {
+	// ── LLM 流式输出 ──
+
+	thinkingChunk(token: string): void {
 		this.thinkBuf += token;
 		this.scheduleFlush();
 	}
 
-	contentToken(token: string): void {
+	thinkingEnd(): void {
 		if (this.thinkBuf) {
 			this.conv.appendLine({
 				kind: "thinking",
@@ -161,12 +154,20 @@ export class FeishuRenderer implements Renderer {
 			});
 			this.thinkBuf = "";
 		}
+	}
+
+	contentChunk(token: string): void {
 		this.contentBuf += token;
 		this.scheduleFlush();
 	}
 
-	contentEnd(): void {
+	toolCallArgStart(_index: number, _name: string): void {}
+	toolCallArgChunk(_index: number, _chunk: string): void {}
+	toolCallArgEnd(_index: number, _tc: ToolCallRecord): void {}
+
+	streamEnd(): void {
 		this.stopTimer();
+		// thinkingEnd 已由上游在 streamEnd 前触发，但作为安全网再检查一次
 		if (this.thinkBuf) {
 			this.conv.appendLine({
 				kind: "thinking",
@@ -185,34 +186,21 @@ export class FeishuRenderer implements Renderer {
 		this.conv.setActivity("");
 	}
 
-	textResponse(content: string, idleCount: number): void {
-		if (content) {
-			this.conv.appendLine({ kind: "content", text: compact(content) });
-		}
-		if (idleCount > 0) {
-			this.conv.appendLine({ kind: "meta", text: `idle=${idleCount}` });
-		}
-	}
+	// ── 工具执行 ──
 
-	toolCallStart(tc: ToolCallRecord): void {
+	toolExecStart(tc: ToolCallRecord): void {
 		this.curTool = tc.tool;
 		this.toolOutBuf = "";
 		const { summary, detail } = fmtToolCall(tc);
 		this.conv.appendLine({ kind: "tool", text: summary, detail });
 	}
 
-	toolCallArgChunk(
-		_index: number,
-		_name: string | undefined,
-		_chunk: string,
-	): void {}
-
-	toolResultChunk(_tool: string, chunk: string): void {
+	toolExecChunk(_tool: string, chunk: string): void {
 		this.toolOutBuf += chunk;
 		this.scheduleFlush();
 	}
 
-	toolCallEnd(result: ToolResult): void {
+	toolExecEnd(result: ToolResult): void {
 		this.stopTimer();
 		const summary = fmtResult(result);
 		const isErr = result.tool === "exec" && result.exitCode !== 0;
@@ -223,6 +211,17 @@ export class FeishuRenderer implements Renderer {
 		this.conv.setActivity("");
 		this.toolOutBuf = "";
 		this.curTool = "";
+	}
+
+	// ── 特殊事件 ──
+
+	textResponse(content: string, idleCount: number): void {
+		if (content) {
+			this.conv.appendLine({ kind: "content", text: compact(content) });
+		}
+		if (idleCount > 0) {
+			this.conv.appendLine({ kind: "meta", text: `idle=${idleCount}` });
+		}
 	}
 
 	submitAccepted(): void {
@@ -250,6 +249,8 @@ export class FeishuRenderer implements Renderer {
 		this.conv.appendLine({ kind: "meta", text: "⚡ 已中断输出" });
 	}
 
+	// ── 内部 ──
+
 	private scheduleFlush(): void {
 		if (this.timer) return;
 		const elapsed = Date.now() - this.lastFlush;
@@ -270,7 +271,6 @@ export class FeishuRenderer implements Renderer {
 	private flushBuffers(): void {
 		this.lastFlush = Date.now();
 		if (this.thinkBuf) {
-			// 思考文本灰色显示，与已提交的 thinking 日志行样式一致
 			this.conv.setActivity(
 				`<font color='grey'>${compact(this.thinkBuf, 200)}</font>`,
 			);

@@ -24,8 +24,7 @@ function setupVT(cols: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-	// @ts-expect-error mock
-	process.stderr.write = (chunk: string | Uint8Array) => {
+		process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
 	};
@@ -86,7 +85,8 @@ describe("流式渲染逐帧检查", () => {
 		const issues: string[] = [];
 
 		for (let ci = 0; ci < chunks.length; ci++) {
-			renderer.toolCallArgChunk(0, ci === 0 ? "exec" : undefined, chunks[ci]);
+			if (ci === 0) renderer.toolCallArgStart(0, "exec");
+			renderer.toolCallArgChunk(0, chunks[ci]!);
 
 			const allLines = vt.getVisibleLines();
 			const cleanLines = allLines.map((l) => stripAnsi(l));
@@ -145,7 +145,8 @@ describe("流式渲染逐帧检查", () => {
 		const issues: string[] = [];
 
 		for (let ci = 0; ci < chunks.length; ci++) {
-			renderer.toolCallArgChunk(0, ci === 0 ? "submit" : undefined, chunks[ci]);
+			if (ci === 0) renderer.toolCallArgStart(0, "submit");
+			renderer.toolCallArgChunk(0, chunks[ci]!);
 
 			const allLines = vt.getVisibleLines();
 			const streamLines = allLines.slice(baseLines).map((l) => stripAnsi(l));
@@ -182,11 +183,8 @@ describe("流式渲染逐帧检查", () => {
 			const issues: string[] = [];
 
 			for (let ci = 0; ci < chunks.length; ci++) {
-				renderer.toolCallArgChunk(
-					0,
-					ci === 0 ? "exec" : undefined,
-					chunks[ci],
-				);
+				if (ci === 0) renderer.toolCallArgStart(0, "exec");
+				renderer.toolCallArgChunk(0, chunks[ci]!);
 
 				const streamLines = vt
 					.getVisibleLines()
@@ -235,9 +233,10 @@ describe("流式渲染逐帧检查", () => {
 		const baseLines = vt.getVisibleLines().length;
 
 		for (const chunk of chunks) {
-			renderer.toolCallArgChunk(0, "exec", chunk);
+			renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, chunk);
 		}
-		renderer.contentEnd();
+		renderer.streamEnd();
 
 		// contentEnd 后屏幕应干净
 		const lines = vt.getVisibleLines().map((l) => stripAnsi(l));

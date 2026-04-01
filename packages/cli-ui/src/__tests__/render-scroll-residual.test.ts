@@ -25,8 +25,7 @@ function setupVT(cols: number, viewportHeight: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-	// @ts-expect-error mock
-	process.stderr.write = (chunk: string | Uint8Array) => {
+		process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
 	};
@@ -140,18 +139,19 @@ describe("滚动导致旧行残留", () => {
 
 		// 流式发送（分两次，模拟渲染行数增长超出 viewport）
 		const mid = Math.floor(json.length / 2);
-		renderer.toolCallArgChunk(0, "exec", json.slice(0, mid));
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, json.slice(0, mid));
 
 		const afterFirst = vt.getScrollbackLines().filter(l => l.length > 0);
 		console.log(`第一次 chunk 后: scrollback=${afterFirst.length}行, scrollTop=${vt.scrollTop}`);
 
-		renderer.toolCallArgChunk(0, undefined, json.slice(mid));
+		renderer.toolCallArgChunk(0, json.slice(mid));
 
 		const afterSecond = vt.getScrollbackLines().filter(l => l.length > 0);
 		console.log(`第二次 chunk 后: scrollback=${afterSecond.length}行, scrollTop=${vt.scrollTop}`);
 
 		// contentEnd 触发 streamRegion.clear()
-		renderer.contentEnd();
+		renderer.streamEnd();
 
 		const afterEnd = vt.getScrollbackLines().filter(l => l.length > 0);
 		console.log(`contentEnd 后: scrollback=${afterEnd.length}行`);
@@ -193,10 +193,11 @@ describe("滚动导致旧行残留", () => {
 
 		// 第一个 tool call: exec 有长输出
 		const json1 = '{"script":"find . -name *.ts -exec wc -l {} +","runtime":"cmd"}';
-		renderer.toolCallArgChunk(0, "exec", json1);
-		renderer.contentEnd();
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, json1);
+		renderer.streamEnd();
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "exec",
 			args: JSON.parse(json1),
@@ -204,10 +205,11 @@ describe("滚动导致旧行残留", () => {
 
 		// 模拟工具执行输出 15 行
 		for (let i = 0; i < 15; i++) {
-			renderer.toolResultChunk("exec", `  ${100 + i} ./src/file${i}.ts\n`);
+			renderer.toolExecChunk("exec", `  ${100 + i} ./src/file${i}.ts\n`);
 		}
 
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
+			type: "tool_result" as const,
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: JSON.parse(json1) },
 			stdout: "...",
@@ -223,20 +225,22 @@ describe("滚动导致旧行残留", () => {
 		renderer.roundStart(2, 10, 6);
 
 		const json2 = '{"script":"cat README.md","runtime":"cmd"}';
-		renderer.toolCallArgChunk(0, "exec", json2);
-		renderer.contentEnd();
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, json2);
+		renderer.streamEnd();
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_2",
 			tool: "exec",
 			args: JSON.parse(json2),
 		});
 
 		for (let i = 0; i < 10; i++) {
-			renderer.toolResultChunk("exec", `readme line ${i}\n`);
+			renderer.toolExecChunk("exec", `readme line ${i}\n`);
 		}
 
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
+			type: "tool_result" as const,
 			tool: "exec",
 			call: { id: "call_2", tool: "exec", args: JSON.parse(json2) },
 			stdout: "...",
