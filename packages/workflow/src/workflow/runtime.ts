@@ -8,7 +8,7 @@
  * 避免 process.chdir 的进程级竞态条件。
  */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Glob } from "bun";

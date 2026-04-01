@@ -139,7 +139,10 @@ export interface LLMClient {
 	 * 2. 协议格式化（PromptMessage → API 消息格式）
 	 * 3. SSE 解析 → StreamEvent 映射
 	 */
-	stream(request: StreamRequest, signal?: AbortSignal): AsyncGenerator<StreamEvent>;
+	stream(
+		request: StreamRequest,
+		signal?: AbortSignal,
+	): AsyncGenerator<StreamEvent>;
 
 	/**
 	 * 非流式调用 — RAG 等简单场景使用

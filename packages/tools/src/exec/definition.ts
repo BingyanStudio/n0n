@@ -1,78 +1,19 @@
 /**
- * exec 工具 — 脚本执行
+ * exec 工具定义 — LLM 工具描述生成
  *
- * 模型提供 script（脚本内容）和 runtime（执行运行时），
- * 工具将脚本写入临时文件后用指定运行时执行。
- * 所有平台行为一致，彻底消除 shell 引号转义问题。
- *
- * runtime 按用途分组，同组内有优先级：
- * - Shell 类：cmd(Win) / sh(Unix), bash, pwsh
- * - JS/TS 类：bun > node > deno
- * - Python 类：python > python3 > uv
- * - 默认：平台 shell（Windows: cmd, 其他: sh）
- *
- * 工具描述由 makeExecToolDefinition() 动态生成，
- * 基于 env.ts 探测结果，只展示当前系统可用的 runtime。
+ * 根据环境快照动态生成 exec 工具的 ToolDefinition，
+ * 描述中只包含当前系统可用的 runtime 及其示例。
  */
 
-import { existsSync, mkdirSync, unlinkSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
-import type { ToolDefinition } from "@n0n/types";
 import { wrapTagFor } from "@n0n/shared";
-import type {
-	ExecToolCall,
-	ExecToolResult,
-	ToolOutputChunk,
-	ToolStreamEvent,
-} from "@n0n/types";
-import type { EnvSnapshot } from "./env.ts";
-import { getAvailableByGroup } from "./env.ts";
+import type { ToolDefinition } from "@n0n/types";
+import type { EnvSnapshot } from "../env.ts";
+import { getAvailableByGroup } from "../env.ts";
 
 export { ExecArgsSchema } from "@n0n/types";
 
 const IS_WINDOWS = process.platform === "win32";
 const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";
-
-/** runtime → 临时文件扩展名 */
-const RUNTIME_EXT: Record<string, string> = {
-	sh: ".sh",
-	bash: ".sh",
-	cmd: ".cmd",
-	pwsh: ".ps1",
-	bun: ".ts",
-	node: ".mjs",
-	deno: ".ts",
-	python: ".py",
-	python3: ".py",
-	uv: ".py",
-};
-
-/** runtime → 执行命令构造器 */
-function buildSpawnCmd(runtime: string, tmpFile: string): string[] {
-	switch (runtime) {
-		case "cmd":
-			return ["cmd", "/c", tmpFile];
-		case "sh":
-		case "bash":
-			return [runtime, tmpFile];
-		case "pwsh":
-			return ["pwsh", "-NoProfile", "-File", tmpFile];
-		case "bun":
-			return ["bun", "run", tmpFile];
-		case "node":
-			return ["node", tmpFile];
-		case "deno":
-			return ["deno", "run", "--allow-all", tmpFile];
-		case "python":
-		case "python3":
-			return [runtime, tmpFile];
-		case "uv":
-			return ["uv", "run", "python", tmpFile];
-		default:
-			// 未知 runtime 当作可执行文件名处理
-			return [runtime, tmpFile];
-	}
-}
 
 /** 各 runtime 的示例片段，按 runtime name 索引 */
 const SHELL_EXAMPLES: Record<string, string[]> = {
@@ -94,6 +35,7 @@ const SHELL_EXAMPLES: Record<string, string[]> = {
 		"  `Get-ChildItem src -Recurse -Filter *.ts | Measure-Object | Select-Object -Expand Count`",
 	],
 };
+
 const JS_EXAMPLES: Record<string, string[]> = {
 	bun: [
 		"- `bun` (TypeScript/JS, recommended): preprocess data, parse JSON, transform files",
@@ -157,6 +99,7 @@ const JS_EXAMPLES: Record<string, string[]> = {
 		"  ```",
 	],
 };
+
 const PYTHON_EXAMPLES: Record<string, string[]> = {
 	python: [
 		"- `python`: data analysis, scripting",
@@ -216,7 +159,7 @@ const EXAMPLES_BY_GROUP: Record<string, Record<string, string[]>> = {
 	js: JS_EXAMPLES,
 	python: PYTHON_EXAMPLES,
 };
-/** 根据环境快照构建 exec 工具描述 */
+
 /** 构建单个 runtime 组的描述块 */
 function buildGroupBlock(
 	label: string,
@@ -254,7 +197,6 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 		if (block) parts.push(block);
 	}
 
-	// Best practices
 	const preferredJs = getAvailableByGroup(env, "js")[0];
 	const jsHint = preferredJs
 		? `Use \`${preferredJs.name}\` runtime for complex logic`
@@ -274,12 +216,11 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 
 /**
  * 根据环境快照动态生成 exec 工具的 LLM 定义。
- * 描述中只包含当前系统可用的 runtime 及其示例，使用 XML tag 结构化。
- *
- * @param env 环境快照（来自 detectEnv）
- * @param model LLM 模型名称（用于选择 tag 风格）
  */
-export function makeExecToolDefinition(env: EnvSnapshot, model = ""): ToolDefinition {
+export function makeExecToolDefinition(
+	env: EnvSnapshot,
+	model = "",
+): ToolDefinition {
 	const available = env.runtimes.filter((r) => r.available);
 	const runtimeList = available.map((r) => r.name).join(", ");
 
@@ -312,247 +253,4 @@ export function makeExecToolDefinition(env: EnvSnapshot, model = ""): ToolDefini
 			additionalProperties: false,
 		},
 	};
-}
-function extractCommandNames(script: string): string[] {
-	const parts = script.split(/\r?\n|&&|\|\||;|\||&/);
-	return parts
-		.map((part) => {
-			const tokens = part.trim().split(/\s+/);
-			const firstNonAssign = tokens.find(
-				(t) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(t),
-			);
-			return firstNonAssign ?? "";
-		})
-		.filter((name) => name.length > 0);
-}
-
-function findBlockedCommand(
-	script: string,
-	blockedCommands: string[],
-): string | null {
-	const blocked = blockedCommands;
-	if (blocked.length === 0) return null;
-	const blockedNormalized = IS_WINDOWS
-		? blocked.map((b) => b.toLowerCase())
-		: blocked;
-	const names = extractCommandNames(script);
-	for (const name of names) {
-		const basename = name.split(/[\\/]/).at(-1) ?? name;
-		const basenameNormalized = IS_WINDOWS ? basename.toLowerCase() : basename;
-		if (blockedNormalized.includes(basenameNormalized)) return basename;
-	}
-	return null;
-}
-
-async function handleBlockedCommand(
-	call: ExecToolCall,
-	_cwd: string,
-	blockedCmd: string,
-	confirmFn?: (question: string) => Promise<string>,
-): Promise<ExecToolResult | null> {
-	const runtime = call.args.runtime ?? DEFAULT_RUNTIME;
-	if (confirmFn) {
-		const safeScript = [...call.args.script]
-			.map((ch) => {
-				const code = ch.charCodeAt(0);
-				if (code > 31 && code !== 127) return ch;
-				if (ch === "\n") return "↵";
-				if (ch === "\t") return "→";
-				return `[^${String.fromCharCode(code + 64)}]`;
-			})
-			.join("");
-		const answer = await confirmFn(
-			`\n⚠  Script requires review: '${blockedCmd}' is in BLOCKED_COMMANDS\n` +
-				`   Runtime: ${runtime}\n` +
-				`   Script: ${safeScript}\n` +
-				`   Allow execution? [y/N] `,
-		);
-		const normalized = answer.trim().toLowerCase();
-		if (normalized !== "y" && normalized !== "yes") {
-			return {
-				type: "tool_result",
-				tool: "exec" as const,
-				call,
-				exitCode: 1,
-				stdout: "",
-				stderr: `Command '${blockedCmd}' was rejected by the user.`,
-				durationMs: 0,
-			} satisfies ExecToolResult;
-		}
-		return null;
-	}
-	return {
-		type: "tool_result",
-		tool: "exec" as const,
-		call,
-		exitCode: 1,
-		stdout: "",
-		stderr: `Command blocked: '${blockedCmd}' is in the BLOCKED_COMMANDS list and requires manual review before execution.`,
-		durationMs: 0,
-	} satisfies ExecToolResult;
-}
-export async function* execToolStream(
-	call: ExecToolCall,
-	confirmFn: ((question: string) => Promise<string>) | undefined,
-	toolsConfig: {
-		workspace: string;
-		tempDir: string;
-		blockedCommands: string[];
-		defaultExecTimeout: number;
-	},
-): AsyncGenerator<ToolStreamEvent> {
-	const runtime = call.args.runtime ?? DEFAULT_RUNTIME;
-	const workspace = toolsConfig.workspace;
-	const cwd = call.args.cwd
-		? isAbsolute(call.args.cwd)
-			? call.args.cwd
-			: resolve(workspace, call.args.cwd)
-		: workspace;
-	const timeoutMs =
-		(call.args.timeout ?? toolsConfig.defaultExecTimeout) * 1000;
-	const start = Date.now();
-
-	// Security check — scan script content for blocked commands
-	const blockedCmd = findBlockedCommand(
-		call.args.script,
-		toolsConfig.blockedCommands,
-	);
-	if (blockedCmd !== null) {
-		const blocked = await handleBlockedCommand(
-			call,
-			cwd,
-			blockedCmd,
-			confirmFn,
-		);
-		if (blocked) {
-			yield blocked;
-			return;
-		}
-	}
-
-	// Write script to temp file, execute with specified runtime
-	const ext = RUNTIME_EXT[runtime] ?? "";
-	const tempDir = resolve(toolsConfig.tempDir);
-	if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-	const tmpFile = join(
-		tempDir,
-		`_n0n_exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`,
-	);
-
-	try {
-		// cmd runtime: prefix with @ to suppress echo
-		const scriptContent =
-			runtime === "cmd" ? `@${call.args.script}\n` : call.args.script;
-		await Bun.write(tmpFile, scriptContent);
-
-		const spawnCmd = buildSpawnCmd(runtime, tmpFile);
-		const proc = Bun.spawn(spawnCmd, {
-			cwd,
-			stdout: "pipe",
-			stderr: "pipe",
-			env: { ...process.env },
-		});
-
-		const timer = setTimeout(() => {
-			proc.kill();
-		}, timeoutMs);
-
-		const stdoutChunks: string[] = [];
-		const stderrChunks: string[] = [];
-		const decoder = new TextDecoder();
-
-		const pending: ToolOutputChunk[] = [];
-		let streamsDone = 0;
-		let notify: (() => void) | null = null;
-
-		const pumpStream = async (
-			stream: ReadableStream<Uint8Array>,
-			bucket: string[],
-		) => {
-			const reader = stream.getReader();
-			try {
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-					const text = decoder.decode(value, { stream: true });
-					bucket.push(text);
-					pending.push({
-						type: "tool_output_chunk",
-						callId: call.id,
-						tool: "exec",
-						chunk: text,
-					});
-					notify?.();
-				}
-			} finally {
-				reader.releaseLock();
-				streamsDone++;
-				notify?.();
-			}
-		};
-
-		if (!proc.stdout || !proc.stderr) {
-			throw new Error("Failed to capture process streams (stdout/stderr)");
-		}
-		pumpStream(proc.stdout, stdoutChunks);
-		pumpStream(proc.stderr, stderrChunks);
-
-		while (streamsDone < 2 || pending.length > 0) {
-			if (pending.length === 0) {
-				await new Promise<void>((r) => {
-					notify = r;
-				});
-				notify = null;
-			}
-			while (pending.length > 0) {
-				const chunk = pending.shift();
-				if (chunk) yield chunk;
-			}
-		}
-
-		const exitCode = await proc.exited;
-		clearTimeout(timer);
-
-		const durationMs = Date.now() - start;
-		const stdout = stdoutChunks.join("");
-		const stderr = stderrChunks.join("");
-
-		const maxLen = 30_000;
-		const truncate = (s: string) =>
-			s.length > maxLen
-				? `${s.slice(0, maxLen)}\n... [truncated, ${s.length} chars total]`
-				: s;
-
-		const hasOutput = stdout.trim() || stderr.trim();
-		const hint =
-			!hasOutput && exitCode === 0
-				? "(no output — script may not have top-level executable code, or async operations may not have been awaited.)"
-				: "";
-
-		yield {
-			type: "tool_result",
-			tool: "exec" as const,
-			call,
-			exitCode,
-			stdout: hint || truncate(stdout),
-			stderr: truncate(stderr),
-			durationMs,
-		} satisfies ExecToolResult;
-	} catch (err) {
-		yield {
-			type: "tool_result",
-			tool: "exec" as const,
-			call,
-			exitCode: 1,
-			stdout: "",
-			stderr: err instanceof Error ? err.message : String(err),
-			durationMs: Date.now() - start,
-		} satisfies ExecToolResult;
-	} finally {
-		try {
-			unlinkSync(tmpFile);
-		} catch {
-			// ignore cleanup errors
-		}
-	}
 }

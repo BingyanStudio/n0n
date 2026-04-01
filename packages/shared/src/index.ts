@@ -15,6 +15,18 @@ export {
 	generateEnvTemplate,
 	LLM_ENV_GROUP,
 } from "./bootstrap/index.ts";
+// Conversation Log
+export type {
+	ConversationLog,
+	ConversationMetadata,
+} from "./conversation-log/index.ts";
+export {
+	generateLogFileName,
+	loadConversation,
+	saveConversation,
+} from "./conversation-log/index.ts";
+// Format Prompt
+export { formatPrompt } from "./format-prompt.ts";
 // Frontmatter
 export type { RawFrontmatter, TypedFrontmatter } from "./frontmatter.ts";
 export {
@@ -47,14 +59,3 @@ export {
 	parseWorkspaceArg,
 	resolveBasePaths,
 } from "./workspace.ts";
-
-// Format Prompt
-export { formatPrompt } from "./format-prompt.ts";
-
-// Conversation Log
-export type { ConversationLog, ConversationMetadata } from "./conversation-log/index.ts";
-export {
-	saveConversation,
-	loadConversation,
-	generateLogFileName,
-} from "./conversation-log/index.ts";

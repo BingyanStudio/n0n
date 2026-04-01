@@ -10,8 +10,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { StreamAccumulator } from "../client.ts";
 import type { StreamEvent } from "../client.ts";
+import { StreamAccumulator } from "../client.ts";
 
 describe("StreamAccumulator", () => {
 	test("累积 content 事件", () => {
@@ -68,11 +68,11 @@ describe("StreamAccumulator", () => {
 
 		const msg = acc.toMessage();
 		expect(msg.toolCalls).toHaveLength(2);
-		expect(msg.toolCalls[0]!.toolCallId).toBe("call_1");
-		expect(msg.toolCalls[0]!.toolName).toBe("exec");
-		expect(msg.toolCalls[0]!.input).toBe('{"script":"ls"}');
-		expect(msg.toolCalls[1]!.toolCallId).toBe("call_2");
-		expect(msg.toolCalls[1]!.toolName).toBe("write");
+		expect(msg.toolCalls[0]?.toolCallId).toBe("call_1");
+		expect(msg.toolCalls[0]?.toolName).toBe("exec");
+		expect(msg.toolCalls[0]?.input).toBe('{"script":"ls"}');
+		expect(msg.toolCalls[1]?.toolCallId).toBe("call_2");
+		expect(msg.toolCalls[1]?.toolName).toBe("write");
 	});
 
 	test("done 事件记录 finishReason 和 usage", () => {
@@ -92,8 +92,8 @@ describe("StreamAccumulator", () => {
 
 		expect(acc.finishReason).toBe("stop");
 		expect(acc.usage).not.toBeNull();
-		expect(acc.usage!.inputTokens).toBe(100);
-		expect(acc.usage!.outputTokens).toBe(50);
+		expect(acc.usage?.inputTokens).toBe(100);
+		expect(acc.usage?.outputTokens).toBe(50);
 	});
 
 	test("空内容 toMessage 返回 null content", () => {
@@ -154,8 +154,8 @@ describe("StreamAccumulator", () => {
 		expect(msg.reasoningSignature).toBe("sig_xyz");
 		expect(msg.content).toBe("Let me check");
 		expect(msg.toolCalls).toHaveLength(1);
-		expect(msg.toolCalls[0]!.toolName).toBe("exec");
-		expect(msg.toolCalls[0]!.input).toBe('{"script":"ls -la"}');
+		expect(msg.toolCalls[0]?.toolName).toBe("exec");
+		expect(msg.toolCalls[0]?.input).toBe('{"script":"ls -la"}');
 		expect(acc.finishReason).toBe("tool_calls");
 	});
 });

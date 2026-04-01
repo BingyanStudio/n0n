@@ -56,8 +56,8 @@ describe("selectCacheBreakpoints", () => {
 	test("长会话 + reminder: 确保 prev user 被选中", () => {
 		const msgs = [S, U, A, T, A, T, A, T, A, T, A, T, U];
 		const bp = selectCacheBreakpoints(msgs);
-		expect(bp).toContain(0);  // system
-		expect(bp).toContain(1);  // 倒数第二个 user（prev user）
+		expect(bp).toContain(0); // system
+		expect(bp).toContain(1); // 倒数第二个 user（prev user）
 		expect(bp).toContain(12); // 最后一个 user (reminder)
 		expect(bp).toContain(11); // 最后一个 tool
 		expect(bp.length).toBe(4);

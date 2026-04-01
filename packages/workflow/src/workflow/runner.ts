@@ -35,7 +35,10 @@ try {
 	const args = argsJson ? JSON.parse(argsJson) : undefined;
 	const result = await entryFn(args);
 
-	await Bun.write(resultFile, JSON.stringify({ ok: true, value: result ?? null }));
+	await Bun.write(
+		resultFile,
+		JSON.stringify({ ok: true, value: result ?? null }),
+	);
 } catch (err) {
 	await Bun.write(
 		resultFile,

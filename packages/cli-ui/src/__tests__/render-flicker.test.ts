@@ -5,7 +5,7 @@
  * 验证 streamRegion 的 clear 是否完全清除了上一帧的内容。
  */
 
-import { describe, test, expect, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 const origWrite = process.stderr.write;
@@ -24,7 +24,7 @@ function setupVT(cols: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-		process.stderr.write = (chunk: string | Uint8Array) => {
+	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
 	};
@@ -96,7 +96,10 @@ describe("流式渲染逐帧检查", () => {
 			// 检查：stream 区域中不应包含上一帧有、但这一帧不应该有的"幽灵行"
 			// 如果这一帧的行数少于上一帧，说明 clear 应该清掉了多余行
 			// 但如果多余行还在，就是残留
-			if (streamLines.length > 0 && prevStreamLines.length > streamLines.length) {
+			if (
+				streamLines.length > 0 &&
+				prevStreamLines.length > streamLines.length
+			) {
 				// 行数缩减了 — 检查下方是否有残留
 				for (let r = baseLines + streamLines.length; r < allLines.length; r++) {
 					const ghostLine = stripAnsi(vt.getLine(r));
@@ -110,9 +113,7 @@ describe("流式渲染逐帧检查", () => {
 			}
 
 			// 检查：不应有重复的 "▸ exec" 头
-			const headers = streamLines.filter((l) =>
-				l.trimStart().startsWith("▸"),
-			);
+			const headers = streamLines.filter((l) => l.trimStart().startsWith("▸"));
 			if (headers.length > 1) {
 				issues.push(
 					`chunk[${ci}]: 发现 ${headers.length} 个工具头: ${JSON.stringify(headers)}`,
@@ -195,9 +196,7 @@ describe("流式渲染逐帧检查", () => {
 					l.trimStart().startsWith("▸"),
 				);
 				if (headers.length > 1) {
-					issues.push(
-						`seed=${seed} chunk[${ci}]: ${headers.length} headers`,
-					);
+					issues.push(`seed=${seed} chunk[${ci}]: ${headers.length} headers`);
 				}
 			}
 

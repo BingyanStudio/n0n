@@ -12,7 +12,11 @@
  *   这样 LLM 能获得每个字段的类型约束，而非只看到一段描述文本。
  */
 
-import type { SubmitToolCall, SubmitToolResult, ToolDefinition } from "@n0n/types";
+import type {
+	SubmitToolCall,
+	SubmitToolResult,
+	ToolDefinition,
+} from "@n0n/types";
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 

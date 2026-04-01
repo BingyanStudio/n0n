@@ -10,7 +10,7 @@
 import { RichRenderer } from "../rich-renderer.ts";
 
 function sleep(ms: number) {
-	return new Promise(r => setTimeout(r, ms));
+	return new Promise((r) => setTimeout(r, ms));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -25,13 +25,13 @@ async function scenarioA() {
 	await sleep(300);
 
 	const chunks: [string | undefined, string][] = [
-		["write", '{"'],                      // streaming...
-		[undefined, 'path":"'],               // streaming...
-		[undefined, 'src/app.ts"'],           // path 解析出来 → 行数跳变
-		[undefined, ',"content'],             // 同上
-		[undefined, '":"hello'],              // content 出现 → 行数跳变
-		[undefined, ' world"'],               // 值完整
-		[undefined, '}'],                     // 完整 JSON
+		["write", '{"'], // streaming...
+		[undefined, 'path":"'], // streaming...
+		[undefined, 'src/app.ts"'], // path 解析出来 → 行数跳变
+		[undefined, ',"content'], // 同上
+		[undefined, '":"hello'], // content 出现 → 行数跳变
+		[undefined, ' world"'], // 值完整
+		[undefined, "}"], // 完整 JSON
 	];
 
 	for (const [name, arg] of chunks) {
@@ -53,7 +53,11 @@ async function scenarioA() {
 	renderer.toolExecEnd({
 		type: "tool_result" as const,
 		tool: "write",
-		call: { id: "call_1", tool: "write", args: { path: "src/app.ts", content: "hello world" } },
+		call: {
+			id: "call_1",
+			tool: "write",
+			args: { path: "src/app.ts", content: "hello world" },
+		},
 		success: true,
 	} as any);
 }
@@ -90,7 +94,10 @@ async function scenarioB() {
 	renderer.toolExecStart({
 		id: "call_1",
 		tool: "write",
-		args: { path: "output.txt", content: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n") },
+		args: {
+			path: "output.txt",
+			content: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n"),
+		},
 	});
 
 	renderer.toolExecEnd({
@@ -99,7 +106,12 @@ async function scenarioB() {
 		call: {
 			id: "call_1",
 			tool: "write",
-			args: { path: "output.txt", content: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n") },
+			args: {
+				path: "output.txt",
+				content: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join(
+					"\n",
+				),
+			},
 		},
 		success: true,
 	} as any);
@@ -149,7 +161,7 @@ async function scenarioC() {
 		[undefined, 'test.txt"'],
 		[undefined, ',"content":"'],
 		[undefined, 'line1\\nline2\\nline3"'],
-		[undefined, '}'],
+		[undefined, "}"],
 	];
 	for (const [name, arg] of chunks) {
 		if (name) renderer.toolCallArgStart(0, name);
@@ -167,7 +179,11 @@ async function scenarioC() {
 	renderer.toolExecEnd({
 		type: "tool_result" as const,
 		tool: "write",
-		call: { id: "call_2", tool: "write", args: { path: "test.txt", content: "line1\nline2\nline3" } },
+		call: {
+			id: "call_2",
+			tool: "write",
+			args: { path: "test.txt", content: "line1\nline2\nline3" },
+		},
 		success: true,
 	} as any);
 }

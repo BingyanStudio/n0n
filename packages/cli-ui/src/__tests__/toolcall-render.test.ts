@@ -9,8 +9,8 @@
  *   4. tool call 参数逐字到达：JSON 从不完整到完整的解析过程
  */
 
+import { beforeEach, describe, expect, test } from "bun:test";
 import { RichRenderer } from "../rich-renderer.ts";
-import { describe, test, expect, beforeEach, mock, spyOn } from "bun:test";
 
 // 捕获所有 stderr 输出用于断言
 let output: string;
@@ -18,8 +18,7 @@ const originalWrite = process.stderr.write;
 
 function captureStart() {
 	output = "";
-	// @ts-ignore
-	process.stderr.write = function (chunk: string | Uint8Array) {
+	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") {
 			output += chunk;
 		} else {
@@ -44,7 +43,7 @@ function stripAnsi(s: string): string {
 	return s.replace(ANSI_RE, "").replace(ANSI_RE2, "");
 }
 
-function sleep(ms: number) {
+function _sleep(ms: number) {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
@@ -83,7 +82,12 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
-			call: { id: "call_1", tool: "exec", args: { script: "ls -la", runtime: "sh" } },
+			status: "completed" as const,
+			call: {
+				id: "call_1",
+				tool: "exec",
+				args: { script: "ls -la", runtime: "sh" },
+			},
 			exitCode: 0,
 			stdout: "total 0\ndrwxr-xr-x  2 user staff  64 Jan  1 00:00 .",
 			stderr: "",
@@ -131,6 +135,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
+			status: "completed" as const,
 			call: { id: "call_1", tool: "exec", args: { script: "echo hello" } },
 			exitCode: 0,
 			stdout: "hello",
@@ -181,6 +186,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
+			status: "completed" as const,
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
 			exitCode: 0,
 			stdout: "file1.txt",
@@ -191,7 +197,11 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "write",
-			call: { id: "call_2", tool: "write", args: { path: "test.txt", content: "hello" } },
+			call: {
+				id: "call_2",
+				tool: "write",
+				args: { path: "test.txt", content: "hello" },
+			},
 			success: true,
 			error: null,
 		});
@@ -220,11 +230,11 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolCallArgChunk(0, "{");
 		renderer.toolCallArgChunk(0, '"');
 		renderer.toolCallArgChunk(0, "scr");
-		renderer.toolCallArgChunk(0, 'ipt');
+		renderer.toolCallArgChunk(0, "ipt");
 		renderer.toolCallArgChunk(0, '":');
 		renderer.toolCallArgChunk(0, '"echo ');
 		renderer.toolCallArgChunk(0, 'hello"');
-		renderer.toolCallArgChunk(0, '}');
+		renderer.toolCallArgChunk(0, "}");
 
 		renderer.streamEnd();
 
@@ -256,6 +266,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
+			status: "completed" as const,
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
 			exitCode: 0,
 			stdout: "file1.txt",
@@ -276,7 +287,11 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "write",
-			call: { id: "call_2", tool: "write", args: { path: "out.txt", content: "data" } },
+			call: {
+				id: "call_2",
+				tool: "write",
+				args: { path: "out.txt", content: "data" },
+			},
 			success: true,
 			error: null,
 		});
@@ -299,7 +314,10 @@ describe("RichRenderer tool call streaming", () => {
 
 		// edit 工具流式参数
 		renderer.toolCallArgStart(0, "edit");
-		renderer.toolCallArgChunk(0, '{"path":"src/index.ts","intent":"fix bug","instructions":"change x to y"}');
+		renderer.toolCallArgChunk(
+			0,
+			'{"path":"src/index.ts","intent":"fix bug","instructions":"change x to y"}',
+		);
 		renderer.streamEnd();
 
 		// edit 的 toolCallStart 有特殊渲染（只显示 path + intent）
@@ -312,7 +330,11 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "edit",
-			call: { id: "call_1", tool: "edit", args: { path: "src/index.ts", intent: "fix bug" } },
+			call: {
+				id: "call_1",
+				tool: "edit",
+				args: { path: "src/index.ts", intent: "fix bug" },
+			},
 			success: true,
 			diff: { added: 5, removed: 3, chunks: [] },
 			durationMs: 2000,

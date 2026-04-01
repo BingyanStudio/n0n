@@ -2,13 +2,13 @@
  * 工具调用解析与执行 — agentLoop 的工具层
  */
 
-import type { AssistantToolCallPart } from "@n0n/types";
 import {
 	type PendingReminder,
 	REGISTERED_TOOLS,
 	type ToolEntry,
 } from "@n0n/tools";
 import type {
+	AssistantToolCallPart,
 	ExecToolCall,
 	ToolArgErrorMessage,
 	ToolCallRecord,
@@ -70,6 +70,7 @@ export async function* executeToolStream(
 				tool: "exec" as const,
 				args: { script: "" },
 			} as ExecToolCall,
+			status: "completed" as const,
 			exitCode: 1,
 			stdout: "",
 			stderr: `Unknown tool: ${tc.tool}`,

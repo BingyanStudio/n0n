@@ -7,7 +7,7 @@
  * 目标：复现生产环境中的闪烁/残留问题。
  */
 
-import { describe, test, expect, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 // 保存原始值用于恢复
@@ -97,6 +97,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		renderer.toolExecEnd({
 			type: "tool_result" as const,
 			tool: "exec",
+			status: "completed" as const,
 			call: {
 				id: "call_1",
 				tool: "exec",
@@ -117,11 +118,15 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		}
 
 		// 应有结果行
-		const hasResult = cleanLines.some((l) => l.includes("exec") && l.includes("exit=0"));
+		const hasResult = cleanLines.some(
+			(l) => l.includes("exec") && l.includes("exit=0"),
+		);
 		expect(hasResult).toBe(true);
 
 		// 不应有重复的 "▸ exec" 行
-		const toolHeaders = cleanLines.filter((l) => l.trimStart().startsWith("▸ exec"));
+		const toolHeaders = cleanLines.filter((l) =>
+			l.trimStart().startsWith("▸ exec"),
+		);
 		expect(toolHeaders.length).toBe(1);
 	});
 
@@ -163,13 +168,15 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		}
 
 		// 不应有重复的工具头
-		const toolHeaders = cleanLines.filter((l) => l.trimStart().startsWith("▸ submit"));
+		const toolHeaders = cleanLines.filter((l) =>
+			l.trimStart().startsWith("▸ submit"),
+		);
 		expect(toolHeaders.length).toBe(1);
 	});
 
 	test("随机 chunk 分割 fuzz（多种子）— 最终画面一致", async () => {
-		const vt0 = setupVT(80);
-		const { RichRenderer: R0 } = await import("../rich-renderer.ts");
+		const _vt0 = setupVT(80);
+		await import("../rich-renderer.ts");
 		teardown();
 
 		// 用不同种子跑同一场景，收集最终画面
@@ -187,7 +194,11 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 			for (const chunk of chunks) {
 				renderer.toolCallArgChunk(0, chunk);
 			}
-			renderer.toolCallArgEnd(0, { id: "call_1", tool: "exec", args: JSON.parse(json) } as any);
+			renderer.toolCallArgEnd(0, {
+				id: "call_1",
+				tool: "exec",
+				args: JSON.parse(json),
+			} as any);
 			renderer.streamEnd();
 			renderer.toolExecStart({
 				id: "call_1",
@@ -197,6 +208,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 			renderer.toolExecEnd({
 				type: "tool_result" as const,
 				tool: "exec",
+				status: "completed" as const,
 				call: {
 					id: "call_1",
 					tool: "exec",

@@ -39,11 +39,57 @@ function adaptTags(text: string, model: string): string {
 // ── tool result 格式化 ──
 
 function formatExecResult(msg: ExecToolResult, model: string): string {
-	const meta = `[${msg.call.args.runtime ?? "unknown"}] [cwd: ${msg.call.args.cwd ?? "."}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`;
-	const parts = [wrapTag("exec_meta", meta, model)];
-	if (msg.stdout) parts.push(wrapTag("stdout", msg.stdout, model));
-	if (msg.stderr) parts.push(wrapTag("stderr", msg.stderr, model));
-	return parts.join("\n");
+	switch (msg.status) {
+		case "timed_out": {
+			const meta = `[${msg.call.args.runtime ?? "unknown"}] [cwd: ${msg.call.args.cwd ?? "."}] [timed out after ${msg.durationMs}ms]`;
+			const parts = [wrapTag("exec_meta", meta, model)];
+			const notice = [
+				`Process exceeded timeout, moved to background.`,
+				`PID: ${msg.pid}`,
+				`Log file: ${msg.logFile}`,
+				`Read the log file later to check process status.`,
+			].join("\n");
+			parts.push(wrapTag("timeout_notice", notice, model));
+			if (msg.stdoutSoFar)
+				parts.push(wrapTag("stdout", msg.stdoutSoFar, model));
+			if (msg.stderrSoFar)
+				parts.push(wrapTag("stderr", msg.stderrSoFar, model));
+			return parts.join("\n");
+		}
+		case "truncated": {
+			const meta = `[${msg.call.args.runtime ?? "unknown"}] [cwd: ${msg.call.args.cwd ?? "."}] [exit: ${msg.exitCode}] [${msg.durationMs}ms] [output truncated → ${msg.outputFile}]`;
+			const parts = [wrapTag("exec_meta", meta, model)];
+			if (msg.stdoutTail)
+				parts.push(
+					wrapTag(
+						"stdout",
+						`... (last ${msg.stdoutTail.length} of ${msg.stdoutLength} chars)\n${msg.stdoutTail}`,
+						model,
+					),
+				);
+			if (msg.stderrTail)
+				parts.push(
+					wrapTag(
+						"stderr",
+						`... (last ${msg.stderrTail.length} of ${msg.stderrLength} chars)\n${msg.stderrTail}`,
+						model,
+					),
+				);
+			const hint = [
+				`Full output (${msg.stdoutLength + msg.stderrLength} chars) written to: ${msg.outputFile}`,
+				`Use exec to read specific parts: cat, grep, sed, head, tail, or bun script.`,
+			].join("\n");
+			parts.push(wrapTag("output_hint", hint, model));
+			return parts.join("\n");
+		}
+		case "completed": {
+			const meta = `[${msg.call.args.runtime ?? "unknown"}] [cwd: ${msg.call.args.cwd ?? "."}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`;
+			const parts = [wrapTag("exec_meta", meta, model)];
+			if (msg.stdout) parts.push(wrapTag("stdout", msg.stdout, model));
+			if (msg.stderr) parts.push(wrapTag("stderr", msg.stderr, model));
+			return parts.join("\n");
+		}
+	}
 }
 
 function formatWriteResult(msg: WriteToolResult, model: string): string {
@@ -130,10 +176,7 @@ function mergeConsecutiveSystem(messages: PromptMessage[]): PromptMessage[] {
 	const merged: PromptMessage[] = [];
 	for (const msg of messages) {
 		const prev = merged[merged.length - 1];
-		if (
-			msg.role === "system" &&
-			prev?.role === "system"
-		) {
+		if (msg.role === "system" && prev?.role === "system") {
 			merged[merged.length - 1] = {
 				role: "system",
 				content: `${prev.content}\n\n${msg.content}`,

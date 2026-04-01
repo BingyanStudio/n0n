@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { ExecToolCall } from "@n0n/types";
-import { ExecArgsSchema, execToolStream } from "../exec.ts";
+import { ExecArgsSchema, execToolStream } from "../exec/index.ts";
 
 /** 收集 exec 流式输出的最终结果 */
 async function collectExecResult(script: string, runtime?: string) {
@@ -25,7 +25,11 @@ async function collectExecResult(script: string, runtime?: string) {
 		blockedCommands: [],
 		defaultExecTimeout: 120,
 	})) {
-		if (event.type === "tool_result" && event.tool === "exec") {
+		if (
+			event.type === "tool_result" &&
+			event.tool === "exec" &&
+			event.status === "completed"
+		) {
 			stdout = event.stdout;
 			stderr = event.stderr;
 			exitCode = event.exitCode;

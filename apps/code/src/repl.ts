@@ -18,7 +18,6 @@
 import { createInterface } from "node:readline";
 import { isTTY, label, style, writeln } from "@n0n/cli-ui";
 import { agentLoop, PlainRenderer } from "@n0n/core";
-import { CodeRenderer } from "./code-renderer.ts";
 import {
 	type BaseWorkspacePaths,
 	formatAgentsMdPrompt,
@@ -27,9 +26,10 @@ import {
 	saveConversation,
 } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
+import { CodeRenderer } from "./code-renderer.ts";
+import { readMultilineInput } from "./multiline-input.ts";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
-import { readMultilineInput } from "./multiline-input.ts";
 
 /** Code agent 的用户输入行为引导 — 无 chat 类型，专注工具调用和代码交付 */
 const USER_INPUT_HINT = [
@@ -226,9 +226,7 @@ export async function startCodeRepl(
 					paths.workspace,
 					paths.workspace,
 				);
-				writeln(
-					`${style.green("✓")} 对话已保存到 ${style.cyan(filePath)}`,
-				);
+				writeln(`${style.green("✓")} 对话已保存到 ${style.cyan(filePath)}`);
 			} catch (err) {
 				const message =
 					err instanceof Error ? err.message : String(err ?? "未知错误");

@@ -283,7 +283,10 @@ export async function* editToolStream(
 		};
 
 		let lastRound = -1;
-		const onEvent = (round: number, _event: import("@n0n/types").StreamEvent) => {
+		const onEvent = (
+			round: number,
+			_event: import("@n0n/types").StreamEvent,
+		) => {
 			if (round !== lastRound) {
 				push(`[round ${round + 1}]\n`);
 				lastRound = round;

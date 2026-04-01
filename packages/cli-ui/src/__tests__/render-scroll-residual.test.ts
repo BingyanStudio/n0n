@@ -6,7 +6,7 @@
  * 无法擦除已滚出的旧行 → 旧行残留在 scrollback 中。
  */
 
-import { describe, test, expect, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 const origWrite = process.stderr.write;
@@ -82,15 +82,19 @@ describe("滚动导致旧行残留", () => {
 
 		// scrollback 中的旧行仍然存在！
 		const scrollback = vt.getScrollbackLines();
-		console.log(`Scrollback still has: ${scrollback.filter(l => l.length > 0).length} non-empty lines`);
+		console.log(
+			`Scrollback still has: ${scrollback.filter((l) => l.length > 0).length} non-empty lines`,
+		);
 		for (const l of scrollback) {
 			if (l.length > 0) console.log(`  残留: "${l}"`);
 		}
 
 		// 这就是旧行残留！
-		const residualCount = scrollback.filter(l => l.length > 0).length;
+		const residualCount = scrollback.filter((l) => l.length > 0).length;
 		expect(residualCount).toBeGreaterThan(0);
-		console.log(`\n✅ 复现成功：${residualCount} 行旧内容无法被 cursorUp+clearDown 擦除`);
+		console.log(
+			`\n✅ 复现成功：${residualCount} 行旧内容无法被 cursorUp+clearDown 擦除`,
+		);
 	});
 
 	test("LiveRegion 在小 viewport 中的 clear 残留", async () => {
@@ -103,20 +107,26 @@ describe("滚动导致旧行残留", () => {
 			region.writeln(`streaming line ${i}: some content here`);
 		}
 
-		console.log(`写入 20 行后: scrollTop=${vt.scrollTop}, cursorRow=${vt.cursorRow}`);
-		const scrollbackBefore = vt.getScrollbackLines().filter(l => l.length > 0);
+		console.log(
+			`写入 20 行后: scrollTop=${vt.scrollTop}, cursorRow=${vt.cursorRow}`,
+		);
+		const scrollbackBefore = vt
+			.getScrollbackLines()
+			.filter((l) => l.length > 0);
 		console.log(`scrollback 中有 ${scrollbackBefore.length} 行`);
 
 		// clear 尝试 cursorUp(20) + clearDown
 		region.clear();
 
-		const scrollbackAfter = vt.getScrollbackLines().filter(l => l.length > 0);
+		const scrollbackAfter = vt.getScrollbackLines().filter((l) => l.length > 0);
 		console.log(`clear 后 scrollback 中仍有 ${scrollbackAfter.length} 行`);
 
 		if (scrollbackAfter.length > 0) {
 			console.log("残留行:");
 			for (const l of scrollbackAfter) console.log(`  "${l}"`);
-			console.log(`\n✅ 复现成功：LiveRegion.clear() 无法清除已滚出 viewport 的 ${scrollbackAfter.length} 行`);
+			console.log(
+				`\n✅ 复现成功：LiveRegion.clear() 无法清除已滚出 viewport 的 ${scrollbackAfter.length} 行`,
+			);
 		}
 
 		expect(scrollbackAfter.length).toBeGreaterThan(0);
@@ -142,35 +152,41 @@ describe("滚动导致旧行残留", () => {
 		renderer.toolCallArgStart(0, "exec");
 		renderer.toolCallArgChunk(0, json.slice(0, mid));
 
-		const afterFirst = vt.getScrollbackLines().filter(l => l.length > 0);
-		console.log(`第一次 chunk 后: scrollback=${afterFirst.length}行, scrollTop=${vt.scrollTop}`);
+		const afterFirst = vt.getScrollbackLines().filter((l) => l.length > 0);
+		console.log(
+			`第一次 chunk 后: scrollback=${afterFirst.length}行, scrollTop=${vt.scrollTop}`,
+		);
 
 		renderer.toolCallArgChunk(0, json.slice(mid));
 
-		const afterSecond = vt.getScrollbackLines().filter(l => l.length > 0);
-		console.log(`第二次 chunk 后: scrollback=${afterSecond.length}行, scrollTop=${vt.scrollTop}`);
+		const afterSecond = vt.getScrollbackLines().filter((l) => l.length > 0);
+		console.log(
+			`第二次 chunk 后: scrollback=${afterSecond.length}行, scrollTop=${vt.scrollTop}`,
+		);
 
 		// contentEnd 触发 streamRegion.clear()
 		renderer.streamEnd();
 
-		const afterEnd = vt.getScrollbackLines().filter(l => l.length > 0);
+		const afterEnd = vt.getScrollbackLines().filter((l) => l.length > 0);
 		console.log(`contentEnd 后: scrollback=${afterEnd.length}行`);
 
 		// 查看整体画面（viewport + scrollback）
-		const allLines = vt.getVisibleLines().map(l => stripAnsi(l));
-		const viewportLines = vt.getViewportLines().map(l => stripAnsi(l));
+		const _allLines = vt.getVisibleLines().map((l) => stripAnsi(l));
+		const viewportLines = vt.getViewportLines().map((l) => stripAnsi(l));
 
 		// 如果有滚出的非空行 = 旧行残留
 		if (afterEnd.length > 0) {
 			console.log("\n=== 残留在 scrollback 中的旧行 ===");
-			for (const l of afterEnd.map(l => stripAnsi(l))) {
+			for (const l of afterEnd.map((l) => stripAnsi(l))) {
 				if (l.length > 0) console.log(`  ❌ "${l}"`);
 			}
 			console.log("\n=== 当前 viewport ===");
 			for (const l of viewportLines) {
 				if (l.trim().length > 0) console.log(`  "${l}"`);
 			}
-			console.log(`\n✅ 复现成功：RichRenderer 流式内容超出 viewport 后，${afterEnd.length} 行残留无法擦除`);
+			console.log(
+				`\n✅ 复现成功：RichRenderer 流式内容超出 viewport 后，${afterEnd.length} 行残留无法擦除`,
+			);
 		}
 
 		// 这个测试优先记录是否复现；未复现时输出诊断信息
@@ -178,7 +194,9 @@ describe("滚动导致旧行残留", () => {
 			expect(afterEnd.length).toBeGreaterThan(0);
 		} else {
 			console.log("未出现 scrollback 残留：当前渲染内容可能未溢出 viewport");
-			console.log(`诊断: afterFirst=${afterFirst.length}, afterSecond=${afterSecond.length}, scrollTop=${vt.scrollTop}`);
+			console.log(
+				`诊断: afterFirst=${afterFirst.length}, afterSecond=${afterSecond.length}, scrollTop=${vt.scrollTop}`,
+			);
 			expect(afterSecond.length).toBeGreaterThanOrEqual(0);
 		}
 	});
@@ -192,7 +210,8 @@ describe("滚动导致旧行残留", () => {
 		renderer.roundStart(1, 10, 3); // ~2 行
 
 		// 第一个 tool call: exec 有长输出
-		const json1 = '{"script":"find . -name *.ts -exec wc -l {} +","runtime":"cmd"}';
+		const json1 =
+			'{"script":"find . -name *.ts -exec wc -l {} +","runtime":"cmd"}';
 		renderer.toolCallArgStart(0, "exec");
 		renderer.toolCallArgChunk(0, json1);
 		renderer.streamEnd();
@@ -214,12 +233,17 @@ describe("滚动导致旧行残留", () => {
 			call: { id: "call_1", tool: "exec", args: JSON.parse(json1) },
 			stdout: "...",
 			stderr: "",
+			status: "completed" as const,
 			exitCode: 0,
 			durationMs: 200,
 		});
 
-		const scrollbackAfterTool1 = vt.getScrollbackLines().filter(l => l.length > 0);
-		console.log(`第1个 tool 后: scrollback=${scrollbackAfterTool1.length}行, scrollTop=${vt.scrollTop}`);
+		const scrollbackAfterTool1 = vt
+			.getScrollbackLines()
+			.filter((l) => l.length > 0);
+		console.log(
+			`第1个 tool 后: scrollback=${scrollbackAfterTool1.length}行, scrollTop=${vt.scrollTop}`,
+		);
 
 		// 第二个 tool call: 又有输出
 		renderer.roundStart(2, 10, 6);
@@ -245,19 +269,24 @@ describe("滚动导致旧行残留", () => {
 			call: { id: "call_2", tool: "exec", args: JSON.parse(json2) },
 			stdout: "...",
 			stderr: "",
+			status: "completed" as const,
 			exitCode: 0,
 			durationMs: 100,
 		});
 
-		const scrollbackFinal = vt.getScrollbackLines().filter(l => l.length > 0);
-		const totalLines = vt.getVisibleLines().filter(l => l.length > 0).length;
+		const scrollbackFinal = vt.getScrollbackLines().filter((l) => l.length > 0);
+		const totalLines = vt.getVisibleLines().filter((l) => l.length > 0).length;
 
-		console.log(`\n两个 tool 后: 总行数=${totalLines}, scrollback=${scrollbackFinal.length}行, scrollTop=${vt.scrollTop}`);
+		console.log(
+			`\n两个 tool 后: 总行数=${totalLines}, scrollback=${scrollbackFinal.length}行, scrollTop=${vt.scrollTop}`,
+		);
 		console.log(`viewport 容量: ${vt.viewportHeight} 行`);
 		console.log(`超出: ${totalLines - vt.viewportHeight} 行`);
 
 		if (scrollbackFinal.length > 0) {
-			console.log(`\n这些行已经滚出 viewport，如果有任何 clear 操作尝试清除它们，将会失败。`);
+			console.log(
+				`\n这些行已经滚出 viewport，如果有任何 clear 操作尝试清除它们，将会失败。`,
+			);
 		}
 	});
 });

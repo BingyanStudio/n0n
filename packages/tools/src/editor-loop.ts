@@ -119,9 +119,11 @@ function countOccurrences(text: string, pattern: string): number {
 	if (pattern.length === 0) return 0;
 	let count = 0;
 	let pos = 0;
-	while ((pos = text.indexOf(pattern, pos)) !== -1) {
+	pos = text.indexOf(pattern, pos);
+	while (pos !== -1) {
 		count++;
 		pos += pattern.length;
+		pos = text.indexOf(pattern, pos);
 	}
 	return count;
 }
@@ -349,7 +351,12 @@ export async function editorLoop(
 						break;
 					}
 
-					const result = applySingleOp(current, oldStr, newStr, expectedMatches);
+					const result = applySingleOp(
+						current,
+						oldStr,
+						newStr,
+						expectedMatches,
+					);
 					if (result.ok) {
 						current = result.content;
 						editCount++;
@@ -365,11 +372,17 @@ export async function editorLoop(
 						const newLines = newStr.split("\n").length;
 						const addedLines = Math.max(0, newLines - oldLines);
 						const removedLines = Math.max(0, oldLines - newLines);
-						const lineStats = [
-							removedLines > 0 ? `-${removedLines}` : null,
-							addedLines > 0 ? `+${addedLines}` : null,
-						].filter(Boolean).join(" ") || "±0";
-						onToolResult?.(round, `str_replace → edit #${editCount} (${lineStats} lines)`);
+						const lineStats =
+							[
+								removedLines > 0 ? `-${removedLines}` : null,
+								addedLines > 0 ? `+${addedLines}` : null,
+							]
+								.filter(Boolean)
+								.join(" ") || "±0";
+						onToolResult?.(
+							round,
+							`str_replace → edit #${editCount} (${lineStats} lines)`,
+						);
 					} else {
 						messages.push(
 							toolResult(
@@ -436,7 +449,10 @@ export async function editorLoop(
 					if (startLine !== undefined || endLine !== undefined) {
 						const s = Math.max(1, startLine ?? 1);
 						const e = Math.min(lines.length, endLine ?? lines.length);
-						onToolResult?.(round, `view_file → L${s}-${e} (${e - s + 1} lines)`);
+						onToolResult?.(
+							round,
+							`view_file → L${s}-${e} (${e - s + 1} lines)`,
+						);
 					} else {
 						onToolResult?.(round, `view_file → ok (${lines.length} lines)`);
 					}

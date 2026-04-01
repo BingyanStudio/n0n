@@ -17,9 +17,9 @@
 
 import { formatPrompt } from "@n0n/shared";
 import {
-	FinishReason,
 	type CompleteRequest,
 	type CompleteResponse,
+	FinishReason,
 	type LLMClient,
 	type PromptMessage,
 	type StreamEvent,
@@ -30,7 +30,7 @@ import {
 import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
 import { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
-import { LLMError, isAbortError } from "./errors.ts";
+import { isAbortError, LLMError } from "./errors.ts";
 
 // ── Anthropic 默认常量 ──
 
@@ -46,7 +46,12 @@ const THINKING_OUTPUT_BUFFER = 4096;
 type AnthropicContent =
 	| { type: "text"; text: string }
 	| { type: "thinking"; thinking: string; signature?: string }
-	| { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+	| {
+			type: "tool_use";
+			id: string;
+			name: string;
+			input: Record<string, unknown>;
+	  }
 	| { type: "tool_result"; tool_use_id: string; content: string };
 
 interface AnthropicMessage {
@@ -65,7 +70,13 @@ interface AnthropicTool {
 interface AnthropicRequest {
 	model: string;
 	max_tokens: number;
-	system?: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+	system?:
+		| string
+		| Array<{
+				type: "text";
+				text: string;
+				cache_control?: { type: "ephemeral" };
+		  }>;
 	messages: AnthropicMessage[];
 	tools?: AnthropicTool[];
 	tool_choice?: { type: "auto" | "none" | "any" };
@@ -82,7 +93,12 @@ interface ContentBlockStart {
 	content_block:
 		| { type: "text"; text: string }
 		| { type: "thinking"; thinking: string }
-		| { type: "tool_use"; id: string; name: string; input: Record<string, unknown> };
+		| {
+				type: "tool_use";
+				id: string;
+				name: string;
+				input: Record<string, unknown>;
+		  };
 }
 
 interface ContentBlockDelta {
@@ -130,7 +146,14 @@ type AnthropicSSEEvent =
 // ── PromptMessage → Anthropic Message 转换 ──
 
 interface AnthropicConversionResult {
-	system: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> | undefined;
+	system:
+		| string
+		| Array<{
+				type: "text";
+				text: string;
+				cache_control?: { type: "ephemeral" };
+		  }>
+		| undefined;
 	messages: AnthropicMessage[];
 }
 
@@ -138,7 +161,11 @@ function toAnthropicFormat(
 	promptMessages: PromptMessage[],
 	enableCache: boolean,
 ): AnthropicConversionResult {
-	const systemParts: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> = [];
+	const systemParts: Array<{
+		type: "text";
+		text: string;
+		cache_control?: { type: "ephemeral" };
+	}> = [];
 	const messages: AnthropicMessage[] = [];
 
 	for (const msg of promptMessages) {
@@ -202,14 +229,19 @@ function toAnthropicFormat(
 		// System 部分：最后一个 system block 加 cache
 		let cacheCount = 0;
 		if (systemParts.length > 0) {
-			systemParts[systemParts.length - 1]!.cache_control = { type: "ephemeral" };
+			systemParts[systemParts.length - 1]!.cache_control = {
+				type: "ephemeral",
+			};
 			cacheCount++;
 		}
 
 		// Messages 部分：使用 selectCacheBreakpoints 选择断点
 		// Anthropic 限制最多 4 个 cache_control，减去 system 已用的配额
 		const maxMessageBreakpoints = 4 - cacheCount;
-		const breakpoints = selectCacheBreakpoints(messages).slice(0, maxMessageBreakpoints);
+		const breakpoints = selectCacheBreakpoints(messages).slice(
+			0,
+			maxMessageBreakpoints,
+		);
 		for (const idx of breakpoints) {
 			const msg = messages[idx];
 			if (!msg) continue;
@@ -218,7 +250,11 @@ function toAnthropicFormat(
 				messages[idx] = {
 					role: msg.role,
 					content: [
-						{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } } as unknown as AnthropicContent,
+						{
+							type: "text",
+							text: msg.content,
+							cache_control: { type: "ephemeral" },
+						} as unknown as AnthropicContent,
 					],
 				};
 			} else if (Array.isArray(msg.content) && msg.content.length > 0) {
@@ -234,7 +270,7 @@ function toAnthropicFormat(
 		systemParts.length === 0
 			? undefined
 			: systemParts.length === 1 && !systemParts[0]?.cache_control
-				? systemParts[0]!.text
+				? systemParts[0]?.text
 				: systemParts;
 
 	return { system, messages };
@@ -265,7 +301,7 @@ export class AnthropicClient implements LLMClient {
 
 		const pc = config.providerConfig;
 		const base =
-			("baseUrl" in pc && pc.baseUrl) ? pc.baseUrl : "https://api.anthropic.com";
+			"baseUrl" in pc && pc.baseUrl ? pc.baseUrl : "https://api.anthropic.com";
 		// 处理 baseUrl 可能已包含 /v1 的情况（如代理 URL）
 		const cleanBase = base.replace(/\/v1\/?$/, "").replace(/\/$/, "");
 		this.apiUrl = `${cleanBase}/v1/messages`;
@@ -278,7 +314,8 @@ export class AnthropicClient implements LLMClient {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const { system, messages } = toAnthropicFormat(promptMessages, true);
 
-		const defaultMaxTokens = this.config.maxOutputTokens ?? DEFAULT_STREAM_MAX_TOKENS;
+		const defaultMaxTokens =
+			this.config.maxOutputTokens ?? DEFAULT_STREAM_MAX_TOKENS;
 		const body: AnthropicRequest = {
 			model: this.modelId,
 			max_tokens: defaultMaxTokens,
@@ -297,7 +334,10 @@ export class AnthropicClient implements LLMClient {
 			const budget =
 				this.config.thinkingBudgetTokens ?? DEFAULT_THINKING_BUDGET_TOKENS;
 			body.thinking = { type: "enabled", budget_tokens: budget };
-			body.max_tokens = Math.max(defaultMaxTokens, budget + THINKING_OUTPUT_BUFFER);
+			body.max_tokens = Math.max(
+				defaultMaxTokens,
+				budget + THINKING_OUTPUT_BUFFER,
+			);
 			// Anthropic requires temperature=1 when thinking is enabled
 			body.temperature = 1;
 		}
@@ -316,7 +356,10 @@ export class AnthropicClient implements LLMClient {
 			});
 		} catch (err) {
 			if (isAbortError(err)) return;
-			yield { type: "error", error: err instanceof Error ? err.message : String(err) };
+			yield {
+				type: "error",
+				error: err instanceof Error ? err.message : String(err),
+			};
 			return;
 		}
 
@@ -327,24 +370,31 @@ export class AnthropicClient implements LLMClient {
 		}
 
 		if (!res.body) {
-			yield { type: "error", error: "Anthropic streaming response has no body" };
+			yield {
+				type: "error",
+				error: "Anthropic streaming response has no body",
+			};
 			return;
 		}
 
 		// Track tool_use blocks by SSE index → sequential tool call index
-		const toolBlocks = new Map<number, { id: string; name: string; idx: number }>();
+		const toolBlocks = new Map<
+			number,
+			{ id: string; name: string; idx: number }
+		>();
 		let toolCallIndex = 0;
 		let inputUsage: TokenUsage | null = null;
 
 		// 内部函数：将 Anthropic stop_reason 映射为归一化的 done 事件（#009）
-		const mapMessageDelta = function* (event: MessageDelta): Generator<StreamEvent> {
+		const mapMessageDelta = function* (
+			event: MessageDelta,
+		): Generator<StreamEvent> {
 			const stopReason = event.delta.stop_reason ?? "stop";
 			const outputTokens = event.usage?.output_tokens ?? 0;
 			const usage: TokenUsage | null = inputUsage
 				? {
 						...inputUsage,
-						outputTokens:
-							inputUsage.outputTokens + outputTokens,
+						outputTokens: inputUsage.outputTokens + outputTokens,
 						totalTokens:
 							inputUsage.inputTokens + inputUsage.outputTokens + outputTokens,
 					}
@@ -380,11 +430,11 @@ export class AnthropicClient implements LLMClient {
 					buffer = buffer.slice(boundary + 2);
 
 					// Parse SSE event
-					let eventType = "";
+					let _eventType = "";
 					let eventData = "";
 					for (const line of raw.split("\n")) {
 						if (line.startsWith("event: ")) {
-							eventType = line.slice(7);
+							_eventType = line.slice(7);
 						} else if (line.startsWith("data: ")) {
 							eventData = line.slice(6);
 						}
@@ -458,7 +508,10 @@ export class AnthropicClient implements LLMClient {
 									arguments: delta.partial_json,
 								};
 							} else if (delta.type === "signature_delta") {
-								yield { type: "thinking_signature", signature: delta.signature };
+								yield {
+									type: "thinking_signature",
+									signature: delta.signature,
+								};
 							}
 							break;
 						}

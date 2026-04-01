@@ -7,7 +7,11 @@
  * - agent 必须用 <reflection> 标签输出反思结论
  */
 
-import type { ReminderToolCall, ReminderToolResult, ToolDefinition } from "@n0n/types";
+import type {
+	ReminderToolCall,
+	ReminderToolResult,
+	ToolDefinition,
+} from "@n0n/types";
 
 export { ReminderArgsSchema } from "@n0n/types";
 

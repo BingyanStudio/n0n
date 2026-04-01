@@ -8,10 +8,10 @@
  * 其中 timestamp 为紧凑格式（如 20250320-181500）。
  */
 
-import { writeFileSync, readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { DomainMessage } from "@n0n/types";
-import type { ConversationLog, ConversationMetadata } from "./types.ts";
+import type { ConversationLog } from "./types.ts";
 
 /**
  * 生成紧凑时间戳字符串，用于文件名

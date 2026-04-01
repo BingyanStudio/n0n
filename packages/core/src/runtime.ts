@@ -71,7 +71,8 @@ export function createRuntimeContext(options: RuntimeOptions): RuntimeContext {
 			defaultExecTimeout: options.agent?.defaultExecTimeout ?? 120,
 		},
 		security: {
-			blockedCommands: options.security?.blockedCommands ?? parseBlockedCommands(),
+			blockedCommands:
+				options.security?.blockedCommands ?? parseBlockedCommands(),
 		},
 	};
 }

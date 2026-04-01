@@ -36,7 +36,7 @@ import {
 	ExecArgsSchema,
 	execToolStream,
 	makeExecToolDefinition,
-} from "./exec.ts";
+} from "./exec/index.ts";
 import {
 	type PendingReminder,
 	REMINDER_TOOL_DEFINITION,
@@ -120,7 +120,11 @@ function buildBaseRegistry(
 					tool: "edit" as const,
 					args: EditArgsSchema.parse(tc.args),
 				};
-				return editToolStream(call, resolvedWorkspace, toolsConfig.editorClient);
+				return editToolStream(
+					call,
+					resolvedWorkspace,
+					toolsConfig.editorClient,
+				);
 			},
 		},
 		reminder: {

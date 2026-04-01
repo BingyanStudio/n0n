@@ -84,7 +84,15 @@ function fmtToolCall(tc: ToolCallRecord): { summary: string; detail: string } {
 function fmtResult(r: ToolResult): string {
 	switch (r.tool) {
 		case "exec":
-			return `exit=${r.exitCode}  ${(r.durationMs / 1000).toFixed(1)}s`;
+			switch (r.status) {
+				case "timed_out":
+					return `timeout → bg PID=${r.pid}  ${(r.durationMs / 1000).toFixed(1)}s`;
+				case "truncated":
+					return `exit=${r.exitCode} truncated  ${(r.durationMs / 1000).toFixed(1)}s`;
+				case "completed":
+					return `exit=${r.exitCode}  ${(r.durationMs / 1000).toFixed(1)}s`;
+			}
+			break;
 		case "write":
 			return r.success
 				? r.call.args.path
@@ -205,7 +213,9 @@ export class FeishuRenderer implements Renderer {
 	toolExecEnd(result: ToolResult): void {
 		this.stopTimer();
 		const summary = fmtResult(result);
-		const isErr = result.tool === "exec" && result.exitCode !== 0;
+		const isErr =
+			result.tool === "exec" &&
+			(result.status !== "completed" || result.exitCode !== 0);
 		this.conv.appendLine({
 			kind: isErr ? "err" : "tool",
 			text: `◂ **${result.tool}** → ${summary}`,

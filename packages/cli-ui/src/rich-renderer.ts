@@ -13,9 +13,9 @@ import type {
 	ToolCallRecord,
 	ToolResult,
 } from "@n0n/types";
+import { parse as parsePartialJSON } from "partial-json";
 import { isTTY, label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
-import { parse as parsePartialJSON } from "partial-json";
 
 // ── token 数值人类友好格式化 ──
 
@@ -335,12 +335,26 @@ export class RichRenderer implements Renderer {
 				const duration = style.gray(
 					`${(result.durationMs / 1000).toFixed(1)}s`,
 				);
-				const exit =
-					result.exitCode === 0
-						? style.green(`exit=${result.exitCode}`)
-						: style.red(`exit=${result.exitCode}`);
-				const outLen = result.stdout.length + result.stderr.length;
-				return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)}`;
+				switch (result.status) {
+					case "timed_out":
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${style.yellow(`timeout → bg PID=${result.pid}`)}`;
+					case "truncated": {
+						const exit =
+							result.exitCode === 0
+								? style.green(`exit=${result.exitCode}`)
+								: style.red(`exit=${result.exitCode}`);
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.yellow(`truncated → ${result.outputFile}`)}`;
+					}
+					case "completed": {
+						const exit =
+							result.exitCode === 0
+								? style.green(`exit=${result.exitCode}`)
+								: style.red(`exit=${result.exitCode}`);
+						const outLen = result.stdout.length + result.stderr.length;
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)}`;
+					}
+				}
+				break;
 			}
 			case "write": {
 				if (!result.success) {
