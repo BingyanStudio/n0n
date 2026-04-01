@@ -214,6 +214,7 @@ describe("滚动导致旧行残留", () => {
 			call: { id: "call_1", tool: "exec", args: JSON.parse(json1) },
 			stdout: "...",
 			stderr: "",
+			timedOut: false,
 			exitCode: 0,
 			durationMs: 200,
 		});
@@ -245,6 +246,7 @@ describe("滚动导致旧行残留", () => {
 			call: { id: "call_2", tool: "exec", args: JSON.parse(json2) },
 			stdout: "...",
 			stderr: "",
+			timedOut: false,
 			exitCode: 0,
 			durationMs: 100,
 		});

@@ -121,6 +121,7 @@ function makeToolRound(i: number): DomainMessage[] {
 		{
 			type: "tool_result",
 			tool: "exec",
+			timedOut: false,
 			call: {
 				id: `e-${i}`,
 				tool: "exec",

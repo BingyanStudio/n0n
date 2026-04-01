@@ -231,6 +231,7 @@ describe("formatPrompt", () => {
 			{
 				type: "tool_result",
 				tool: "exec",
+				timedOut: false,
 				call: {
 					id: "tc_1",
 					tool: "exec",

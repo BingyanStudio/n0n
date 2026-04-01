@@ -175,6 +175,7 @@ describe("终端边界行为", () => {
 		renderer.toolExecEnd({
 			type: "tool_result" as const,
 			tool: "exec",
+			timedOut: false,
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
 			stdout: "file1.ts\n文件2.ts\n目录/子文件.ts\n",
 			stderr: "",

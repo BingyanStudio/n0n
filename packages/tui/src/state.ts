@@ -222,7 +222,7 @@ export const stateUpdaters = {
 			if (call.tool === result.tool && call.status === "running") {
 				const isSuccess =
 					result.tool === "exec"
-						? result.exitCode === 0
+						? (!result.timedOut && result.exitCode === 0)
 						: result.tool === "submit" || result.tool === "reminder"
 							? true
 							: result.success;

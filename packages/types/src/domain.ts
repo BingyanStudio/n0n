@@ -107,14 +107,34 @@ interface ToolResultBase {
 	type: "tool_result";
 }
 
-export type ExecToolResult = ToolResultBase & {
-	tool: ExecToolCall["tool"]; // "exec"
+/** exec 正常完成 */
+interface ExecCompleted extends ToolResultBase {
+	tool: ExecToolCall["tool"];
 	call: ExecToolCall;
+	timedOut: false;
 	exitCode: number;
 	stdout: string;
 	stderr: string;
 	durationMs: number;
-};
+}
+
+/** exec 超时，进程转入后台继续执行 */
+interface ExecTimedOut extends ToolResultBase {
+	tool: ExecToolCall["tool"];
+	call: ExecToolCall;
+	timedOut: true;
+	/** 后台进程 PID */
+	pid: number;
+	/** 后台日志文件路径 */
+	logFile: string;
+	/** 超时前已捕获的 stdout */
+	stdoutSoFar: string;
+	/** 超时前已捕获的 stderr */
+	stderrSoFar: string;
+	durationMs: number;
+}
+
+export type ExecToolResult = ExecCompleted | ExecTimedOut;
 
 export type WriteToolResult = ToolResultBase & {
 	tool: WriteToolCall["tool"]; // "write"

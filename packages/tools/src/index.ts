@@ -36,7 +36,7 @@ import {
 	ExecArgsSchema,
 	execToolStream,
 	makeExecToolDefinition,
-} from "./exec.ts";
+} from "./exec/index.ts";
 import {
 	type PendingReminder,
 	REMINDER_TOOL_DEFINITION,

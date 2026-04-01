@@ -39,6 +39,20 @@ function adaptTags(text: string, model: string): string {
 // ── tool result 格式化 ──
 
 function formatExecResult(msg: ExecToolResult, model: string): string {
+	if (msg.timedOut) {
+		const meta = `[${msg.call.args.runtime ?? "unknown"}] [cwd: ${msg.call.args.cwd ?? "."}] [timed out after ${msg.durationMs}ms]`;
+		const parts = [wrapTag("exec_meta", meta, model)];
+		const notice = [
+			`Process exceeded timeout, moved to background.`,
+			`PID: ${msg.pid}`,
+			`Log file: ${msg.logFile}`,
+			`Read the log file later to check process status.`,
+		].join("\n");
+		parts.push(wrapTag("timeout_notice", notice, model));
+		if (msg.stdoutSoFar) parts.push(wrapTag("stdout", msg.stdoutSoFar, model));
+		if (msg.stderrSoFar) parts.push(wrapTag("stderr", msg.stderrSoFar, model));
+		return parts.join("\n");
+	}
 	const meta = `[${msg.call.args.runtime ?? "unknown"}] [cwd: ${msg.call.args.cwd ?? "."}] [exit: ${msg.exitCode}] [${msg.durationMs}ms]`;
 	const parts = [wrapTag("exec_meta", meta, model)];
 	if (msg.stdout) parts.push(wrapTag("stdout", msg.stdout, model));

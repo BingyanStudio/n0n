@@ -335,6 +335,9 @@ export class RichRenderer implements Renderer {
 				const duration = style.gray(
 					`${(result.durationMs / 1000).toFixed(1)}s`,
 				);
+				if (result.timedOut) {
+					return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${style.yellow(`timeout → bg PID=${result.pid}`)}`;
+				}
 				const exit =
 					result.exitCode === 0
 						? style.green(`exit=${result.exitCode}`)
