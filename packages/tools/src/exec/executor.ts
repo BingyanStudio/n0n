@@ -18,6 +18,17 @@ import type {
 import { findBlockedCommand, handleBlockedCommand } from "./security.ts";
 
 const IS_WINDOWS = process.platform === "win32";
+
+/** 生成简短的截断输出文件名，自动避让已有文件 */
+function makeShortOutputPath(tempDir: string): string {
+	const rand = Math.random().toString(36).slice(2, 8);
+	const name = `exec_output_${rand}.txt`;
+	const full = join(tempDir, name);
+	// 极小概率冲突时重试
+	if (existsSync(full)) return makeShortOutputPath(tempDir);
+	return full;
+}
+
 const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";
 
 /** runtime → 临时文件扩展名 */
@@ -263,7 +274,7 @@ export async function* execToolStream(
 
 		if (totalTokens > TRUNCATION_THRESHOLD_TOKENS) {
 			// ── 截断路径：完整输出写入文件 ──
-			const outputFile = join(tempDir, `exec_output_${call.id}.txt`);
+			const outputFile = makeShortOutputPath(tempDir);
 			const fileContent = [
 				stdout,
 				"--- stderr ---",
