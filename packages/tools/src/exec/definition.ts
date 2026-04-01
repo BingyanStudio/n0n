@@ -3,6 +3,7 @@
  *
  * 根据环境快照动态生成 exec 工具的 ToolDefinition，
  * 描述中只包含当前系统可用的 runtime 及其示例。
+ * 示例文本从 .md 文件导入，便于管理和编辑。
  */
 
 import { wrapTagFor } from "@n0n/shared";
@@ -10,154 +11,43 @@ import type { ToolDefinition } from "@n0n/types";
 import type { EnvSnapshot } from "../env.ts";
 import { getAvailableByGroup } from "../env.ts";
 
+// ── runtime 示例（从 .md 文件导入） ──
+
+import bashExample from "./examples/bash.md" with { type: "text" };
+import bunExample from "./examples/bun.md" with { type: "text" };
+import cmdExample from "./examples/cmd.md" with { type: "text" };
+import denoExample from "./examples/deno.md" with { type: "text" };
+import nodeExample from "./examples/node.md" with { type: "text" };
+import pwshExample from "./examples/pwsh.md" with { type: "text" };
+import pythonExample from "./examples/python.md" with { type: "text" };
+import python3Example from "./examples/python3.md" with { type: "text" };
+import shExample from "./examples/sh.md" with { type: "text" };
+import uvExample from "./examples/uv.md" with { type: "text" };
+
 export { ExecArgsSchema } from "@n0n/types";
 
 const IS_WINDOWS = process.platform === "win32";
 const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";
 
-/** 各 runtime 的示例片段，按 runtime name 索引 */
-const SHELL_EXAMPLES: Record<string, string[]> = {
-	cmd: [
-		"- `cmd` (Windows default): CLI commands, pipes, file operations",
-		"  `dir /b src && type package.json | findstr version`",
-		"  NOTE: Use `type` (not `cat`), `findstr` (not `grep`), `dir` (not `ls`)",
-	],
-	sh: [
-		"- `sh` (Unix default): CLI commands, pipes, file operations",
-		'  `ls -la src && grep "version" package.json`',
-	],
-	bash: [
-		"- `bash`: advanced shell scripting (arrays, process substitution)",
-		'  `for f in src/*.ts; do echo "$(wc -l < "$f") $f"; done | sort -rn | head -5`',
-	],
-	pwsh: [
-		"- `pwsh` (PowerShell): cross-platform, object-oriented pipeline",
-		"  `Get-ChildItem src -Recurse -Filter *.ts | Measure-Object | Select-Object -Expand Count`",
-	],
+/** runtime name → 示例文本 */
+const EXAMPLES: Record<string, string> = {
+	cmd: cmdExample,
+	sh: shExample,
+	bash: bashExample,
+	pwsh: pwshExample,
+	bun: bunExample,
+	node: nodeExample,
+	deno: denoExample,
+	python: pythonExample,
+	python3: python3Example,
+	uv: uvExample,
 };
 
-const JS_EXAMPLES: Record<string, string[]> = {
-	bun: [
-		"- `bun` (TypeScript/JS, recommended): preprocess data, parse JSON, transform files",
-		"  ```",
-		'  import { readdir } from "node:fs/promises";',
-		'  const files = await readdir("./src", { recursive: true });',
-		'  const tsFiles = files.filter(f => f.endsWith(".ts"));',
-		"  console.log('Found ' + tsFiles.length + ' TS files');",
-		"  for (const f of tsFiles.slice(0, 10)) console.log(' - ' + f);",
-		"  ```",
-		"  **Advanced — one script replaces many shell round-trips:**",
-		"  ```",
-		"  import { readdir, readFile, stat } from 'node:fs/promises';",
-		"  import { join, extname } from 'node:path';",
-		"  async function tree(dir: string, prefix = ''): Promise<string[]> {",
-		"    const entries = await readdir(dir, { withFileTypes: true });",
-		"    const lines: string[] = [];",
-		"    for (const e of entries) {",
-		"      if (e.name.startsWith('.') || e.name === 'node_modules') continue;",
-		"      const full = join(dir, e.name);",
-		"      if (e.isDirectory()) {",
-		"        lines.push(prefix + '📁 ' + e.name + '/');",
-		"        lines.push(...await tree(full, prefix + '  '));",
-		"      } else {",
-		"        const s = await stat(full);",
-		"        const lc = extname(e.name).match(/\\.(ts|js|py|md)$/) ? (await readFile(full,'utf8')).split('\\n').length : null;",
-		"        lines.push(prefix + '📄 ' + e.name + ' (' + s.size + 'B' + (lc !== null ? ', '+lc+' lines' : '') + ')');",
-		"      }",
-		"    }",
-		"    return lines;",
-		"  }",
-		"  console.log((await tree('src')).join('\\n'));",
-		"  ```",
-		"  **With libraries — install then use immediately:**",
-		"  `bun add ts-morph` → then in the next exec call:",
-		"  ```",
-		"  import { Project } from 'ts-morph';",
-		"  const p = new Project({ tsConfigFilePath: 'tsconfig.json' });",
-		"  for (const sf of p.getSourceFiles()) {",
-		"    const fns = sf.getFunctions().map(f => f.getName());",
-		"    const cls = sf.getClasses().map(c => c.getName());",
-		"    const imps = sf.getImportDeclarations().length;",
-		"    if (fns.length || cls.length)",
-		"      console.log(sf.getFilePath(), { functions: fns, classes: cls, imports: imps });",
-		"  }",
-		"  ```",
-	],
-	node: [
-		"- `node` (Node.js, .mjs): JS runtime, similar to bun",
-		"  ```",
-		'  import { readdir } from "node:fs/promises";',
-		'  const files = await readdir("./src", { recursive: true });',
-		"  console.log(files.length + ' files found');",
-		"  ```",
-	],
-	deno: [
-		"- `deno` (TypeScript, --allow-all): secure-by-default runtime",
-		"  ```",
-		'  const entries = [...Deno.readDirSync("./src")];',
-		"  console.log(entries.length + ' entries');",
-		"  ```",
-	],
-};
-
-const PYTHON_EXAMPLES: Record<string, string[]> = {
-	python: [
-		"- `python`: data analysis, scripting",
-		"  ```",
-		"  import json",
-		'  data = json.load(open("package.json"))',
-		'  deps = data.get("dependencies", {})',
-		'  print(f"Dependencies ({len(deps)}):")',
-		'  for k, v in sorted(deps.items()): print(f"  {k}: {v}")',
-		"  ```",
-		"  **Advanced — recursive project analysis in one call:**",
-		"  ```",
-		"  import os, json",
-		"  stats = {'files': 0, 'lines': 0, 'by_ext': {}}",
-		"  for root, dirs, files in os.walk('src'):",
-		"      dirs[:] = [d for d in dirs if d not in ('node_modules', '.git', '__pycache__')]",
-		"      for f in files:",
-		"          ext = os.path.splitext(f)[1]",
-		"          stats['files'] += 1",
-		"          stats['by_ext'][ext] = stats['by_ext'].get(ext, 0) + 1",
-		"          try:",
-		"              with open(os.path.join(root, f), encoding='utf-8', errors='replace') as fh:",
-		"                  stats['lines'] += len(fh.readlines())",
-		"          except (OSError, UnicodeDecodeError) as e:",
-		"              print(f'Warning: skipping {os.path.join(root, f)}: {e}', flush=True)",
-		"  print(json.dumps(stats, indent=2))",
-		"  ```",
-		"  **With libraries — `pip install libcst` then analyze Python AST:**",
-		"  ```",
-		"  import libcst as cst, os, json",
-		"  results = []",
-		"  for root, _, files in os.walk('src'):",
-		"      for f in [f for f in files if f.endswith('.py')]:",
-		"          path = os.path.join(root, f)",
-		"          with open(path, encoding='utf-8') as fh:",
-		"              mod = cst.parse_module(fh.read())",
-		"          classes = [n.name.value for n in mod.body if isinstance(n, cst.ClassDef)]",
-		"          funcs = [n.name.value for n in mod.body if isinstance(n, cst.FunctionDef)]",
-		"          if classes or funcs: results.append({'file': path, 'classes': classes, 'functions': funcs})",
-		"  print(json.dumps(results, indent=2))",
-		"  ```",
-	],
-	python3: [
-		"- `python3`: same as python (use on systems where `python` is v2)",
-	],
-	uv: [
-		"- `uv` (via `uv run python`): managed Python, no global install needed",
-		"  ```",
-		"  import sys",
-		"  print(f'Python {sys.version}')",
-		"  ```",
-	],
-};
-
-const EXAMPLES_BY_GROUP: Record<string, Record<string, string[]>> = {
-	shell: SHELL_EXAMPLES,
-	js: JS_EXAMPLES,
-	python: PYTHON_EXAMPLES,
+/** runtime 分组 */
+const _EXAMPLES_BY_GROUP: Record<string, string[]> = {
+	shell: ["cmd", "sh", "bash", "pwsh"],
+	js: ["bun", "node", "deno"],
+	python: ["python", "python3", "uv"],
 };
 
 /** 构建单个 runtime 组的描述块 */
@@ -171,11 +61,10 @@ function buildGroupBlock(
 	if (available.length === 0) return null;
 
 	const header = `${label} (${available.map((r) => `${r.name}${r.version ? ` ${r.version}` : ""}`).join(", ")})`;
-	const examplesMap = EXAMPLES_BY_GROUP[key] ?? {};
 	const body: string[] = [];
 	for (const rt of available) {
-		const ex = examplesMap[rt.name];
-		if (ex) body.push(...ex);
+		const ex = EXAMPLES[rt.name];
+		if (ex) body.push(ex.trimEnd());
 	}
 	return wrapTagFor(key, `${header}\n${body.join("\n")}`, model);
 }

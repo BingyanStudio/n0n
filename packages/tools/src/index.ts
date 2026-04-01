@@ -30,7 +30,7 @@ import {
 	EDIT_TOOL_DEFINITION,
 	EditArgsSchema,
 	editToolStream,
-} from "./edit.ts";
+} from "./edit/index.ts";
 import { detectEnv } from "./env.ts";
 import {
 	ExecArgsSchema,
