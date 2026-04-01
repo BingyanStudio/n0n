@@ -110,23 +110,27 @@ cd packages/shared && bun add tokenx
 
 ### 3. 类型影响
 
-ExecTruncated 中的 `stdoutLength` / `stderrLength` 字段：
-- 当前是字符数，语义是"原始输出有多大"
-- 改为 token 预估数更有实际意义
-- 字段名改为 `stdoutTokens` / `stderrTokens`
+ExecTruncated 中的 `stdoutLength` / `stderrLength` 字段**保持不变**：
+- 字段存储原始字符数，这是客观事实数据，符合 domain-message 只存原始数据的原则
+- token 预估是派生数据，由展示层（CLI renderer）动态调用 `estimateTokens()` 计算
+- format-prompt.ts 给模型看时直接使用字符数，无需 token 信息
 
 ```typescript
+// 类型不变
 interface ExecTruncated extends ExecResultBase {
     status: "truncated";
     exitCode: number;
     stdoutTail: string;
     stderrTail: string;
     outputFile: string;
-    /** 原始 stdout 预估 token 数 */
-    stdoutTokens: number;
-    /** 原始 stderr 预估 token 数 */
-    stderrTokens: number;
+    stdoutLength: number;   // 保持字符数
+    stderrLength: number;   // 保持字符数
 }
+
+// CLI 渲染器中动态计算 token
+const outLen = result.stdoutLength + result.stderrLength;
+const estTokens = estimateTokens(result.stdoutTail + result.stderrTail);
+return `... ${outLen} chars ${style.dim(`~${estTokens} tk`)}`;
 ```
 
 ## 收益
