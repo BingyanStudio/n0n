@@ -33,17 +33,21 @@ function charWidth(ch: string): number {
 export class VirtualTerminal {
 	readonly cols: number;
 	readonly rows: number;
+	readonly viewportHeight: number;
 	/** 屏幕缓冲区 [row][col] */
 	private buffer: Cell[][];
 	/** 光标位置 */
 	cursorRow = 0;
 	cursorCol = 0;
+	/** 已滚出可视区域顶部的行数 */
+	scrollTop = 0;
 	/** 所有写入的原始数据（用于调试） */
 	rawLog: string[] = [];
 
-	constructor(cols = 80, rows = 200) {
+	constructor(cols = 80, rows = 200, viewportHeight?: number) {
 		this.cols = cols;
 		this.rows = rows;
+		this.viewportHeight = viewportHeight ?? rows;
 		this.buffer = [];
 		for (let r = 0; r < rows; r++) {
 			this.buffer.push(this.newRow());
@@ -100,7 +104,7 @@ export class VirtualTerminal {
 		const n = params ? Number.parseInt(params, 10) || 0 : 0;
 		switch (cmd) {
 			case "A": // Cursor Up
-				this.cursorRow = Math.max(0, this.cursorRow - (n || 1));
+				this.cursorRow = Math.max(this.scrollTop, this.cursorRow - (n || 1));
 				break;
 			case "B": // Cursor Down
 				this.cursorRow = Math.min(this.rows - 1, this.cursorRow + (n || 1));
@@ -161,6 +165,10 @@ export class VirtualTerminal {
 		this.cursorCol = 0;
 		this.cursorRow++;
 		this.ensureRow(this.cursorRow);
+		// 当光标超出可视区域底部时，滚动
+		while (this.cursorRow >= this.scrollTop + this.viewportHeight) {
+			this.scrollTop++;
+		}
 	}
 
 	/** Erase in Display: 0=从光标到末尾, 1=从开头到光标, 2=全屏 */
@@ -200,6 +208,24 @@ export class VirtualTerminal {
 			.map((c) => c.char)
 			.join("")
 			.replace(/\s+$/, "");
+	}
+
+	/** 获取当前 viewport 中的可见行 */
+	getViewportLines(): string[] {
+		const lines: string[] = [];
+		for (let r = this.scrollTop; r < this.scrollTop + this.viewportHeight; r++) {
+			lines.push(this.getLine(r));
+		}
+		return lines;
+	}
+
+	/** 获取已滚出可视区域的行（scrollback buffer） */
+	getScrollbackLines(): string[] {
+		const lines: string[] = [];
+		for (let r = 0; r < this.scrollTop; r++) {
+			lines.push(this.getLine(r));
+		}
+		return lines;
 	}
 
 	/** 获取屏幕上所有非空行 */
