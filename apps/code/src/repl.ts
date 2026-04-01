@@ -6,7 +6,7 @@
  *
  * 与 cli REPL 的区别：
  * - System prompt 为 code.md（代码 agent 而非 workflow builder）
- * - Submit schema 为 CodeResultSchema（completed/need_info）
+ * - Submit schema 为 CodeResultSchema（completed/ask_user/request_assist）
  * - Context 注入项目结构和 git 状态，而非 workflow 列表
  *
  * 对话持久化：
@@ -34,9 +34,9 @@ import { type CodeResult, CodeResultSchema } from "./schema.ts";
 /** Code agent 的用户输入行为引导 — 无 chat 类型，专注工具调用和代码交付 */
 const USER_INPUT_HINT = [
 	"First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.",
-	"If genuinely stuck or ambiguous, submit `need_info` with specific options for the user.",
+	"If genuinely stuck or ambiguous, submit `ask_user` with specific options for the user.",
 	"Otherwise, reason out what the engineer wrote — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
-].join("\n");
+];
 
 /** REPL 启动选项 */
 export interface CodeReplOptions {
@@ -300,7 +300,7 @@ export async function startCodeRepl(
 		}
 
 		switch (ir.type) {
-			case "need_info": {
+			case "ask_user": {
 				writeln(`${style.yellow("?")} ${ir.question}`);
 				for (const [i, opt] of ir.options.entries()) {
 					writeln(`  ${style.cyan(`${i + 1})`)} ${opt.choice}`);
@@ -311,10 +311,23 @@ export async function startCodeRepl(
 				injectUserResponse(history, userInput);
 				continue;
 			}
+			case "request_assist": {
+				writeln(`${style.yellow("🔧")} 请求协助: ${ir.content}`);
+				for (const [i, item] of ir.checklist.entries()) {
+					writeln(`  ${style.cyan(`${i + 1})`)} ${item.label}`);
+					if (item.detail) {
+						writeln(`     ${style.gray(item.detail)}`);
+					}
+				}
+				writeln();
+				userInput = await prompt(`${label.user()} `);
+				injectUserResponse(history, userInput);
+				continue;
+			}
 			case "completed": {
 				writeln(`${style.green("✓")} 完成: ${ir.summary}`);
-				if (ir.files_changed.length > 0) {
-					writeln(style.gray(`  变更文件: ${ir.files_changed.join(", ")}`));
+				if (ir.next_step) {
+					writeln(style.gray(`  后续: ${ir.next_step}`));
 				}
 				if (agentResult.report) {
 					writeln(style.gray(`  ${agentResult.report}`));
