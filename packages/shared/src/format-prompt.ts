@@ -140,7 +140,7 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 			const delay = msg.call.args.delay ?? 7;
 			return wrapTag(
 				"result",
-				`Reminder set. Commitment: ${delay} rounds. A <reminder> will be injected when it expires.`,
+				`Reminder set. Commitment: ${delay} rounds for next step. A <reminder> will be injected when it expires.`,
 				model,
 			);
 		}

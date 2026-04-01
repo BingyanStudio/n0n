@@ -21,7 +21,7 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 		"Set a memo/reminder for yourself (overwrites any previous — only one active at a time).",
 		"The content will appear as `<reminder>` tag in a future user message after the specified delay (rounds).",
 		"",
-		"**delay is a commitment** — you are promising to complete the current phase within N rounds.",
+		"**delay is a commitment** — you are promising to complete the **next step** within N rounds.",
 		"If the reminder fires (delay expires), it means your commitment was not met.",
 		"You MUST then output a `<reflection>` block analyzing why, before setting the next reminder.",
 		"",
@@ -29,7 +29,14 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 		"  1. The overall Objective",
 		"  2. Key Results (checklist of what remains)",
 		"  3. Current progress and next step",
+		"  4. delay = rounds to complete the next step (NOT the entire task)",
 		"",
+		"Example:",
+		"  O: Refactor submit schema",
+		"  KR: 1.✅ Read code  2.[ ] Update schema  3.[ ] Update references  4.[ ] Test",
+		"  Current: KR1 done, next: KR2, ~2 rounds → delay: 2",
+		"",
+		"After completing each step, set a new reminder for the next step.",
 		"Prefer conservative estimates — overdelivering early is better than breaking a commitment.",
 	].join("\n"),
 	parameters: {
@@ -38,12 +45,12 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 			content: {
 				type: "string",
 				description:
-					"Reminder content: include OKR summary, progress status, and next steps",
+					"Reminder content: include OKR summary, progress status, and next step",
 			},
 			delay: {
 				type: "number",
 				description:
-					"Number of rounds you commit to for the current phase (default: 7). This is a promise, not a guess.",
+					"Number of rounds to complete the **next step** — not the entire task (default: 7). This is a promise, not a guess.",
 			},
 		},
 		required: ["content"],
