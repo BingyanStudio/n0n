@@ -2,7 +2,7 @@
  * Headless 模式 — 单次执行后退出，用于 Harbor 评测等非交互场景
  *
  * 接收一条 instruction，驱动 agentLoop 执行到 completed 或超时，
- * 不等待用户输入，need_info 自动回复 "proceed with your best judgment"。
+ * 不等待用户输入，ask_user/request_assist 自动回复 "proceed with your best judgment"。
  *
  * 输出 JSON 结果到 stdout，日志输出到 stderr。
  */
@@ -59,7 +59,7 @@ function buildWorkspaceContext(workspace: string): string {
 function buildHeadlessHint(): string {
 	return [
 		"You are running in HEADLESS mode — there is no human to interact with.",
-		"You MUST complete the task autonomously. Do NOT submit `need_info`.",
+		"You MUST complete the task autonomously. Do NOT submit `ask_user` or `request_assist`.",
 		"If uncertain, make your best judgment and proceed.",
 		"First, use `exec` to understand the codebase, then implement the fix, then verify.",
 		"Submit `completed` when done.",
@@ -182,16 +182,16 @@ export async function runHeadless(
 				};
 			}
 
-			if (ir.type === "need_info") {
+			if (ir.type === "ask_user" || ir.type === "request_assist") {
 				needInfoCount++;
 				if (needInfoCount >= MAX_NEED_INFO_RETRIES) {
 					return {
 						success: false,
 						result: ir,
-						report: "Agent requested info too many times in headless mode",
+						report: "Agent requested assistance too many times in headless mode",
 						rounds,
 						durationMs: Date.now() - startTime,
-						error: `Agent asked ${needInfoCount} questions in headless mode`,
+						error: `Agent requested help ${needInfoCount} times in headless mode`,
 					};
 				}
 				// 自动回复，让 agent 继续
