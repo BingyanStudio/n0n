@@ -75,8 +75,14 @@ export function writeln(text = ""): void {
 	out.write(`${text}\n`);
 }
 
-/** 检测是否为 TTY（支持 ANSI） */
-export const isTTY: boolean = out.isTTY ?? false;
+/**
+ * 检测是否为 TTY（支持 ANSI 光标控制）
+ *
+ * Bun 1.x 在 Windows 上未实现 process.stderr.isTTY（始终 undefined），
+ * 但终端实际支持 ANSI。使用 picocolors 的颜色支持检测作为可靠代理：
+ * 如果颜色可用，说明 stderr 连接到支持 ANSI 的终端，光标控制也可用。
+ */
+export const isTTY: boolean = out.isTTY ?? pc.isColorSupported;
 
 /** 去除 ANSI 转义序列 */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape stripping requires control chars
