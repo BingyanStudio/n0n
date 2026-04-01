@@ -5,7 +5,7 @@
  * 所有阶段转换由 loop.ts 驱动，Renderer 不需要维护内部状态来猜测当前处于什么阶段。
  *
  * 事件分三个阶段：
- * 1. LLM 流式输出：thinkingChunk → thinkingEnd → contentChunk → toolCallArg* → streamEnd
+ * 1. LLM 流式输出：thinkingChunk → thinkingEnd → contentChunk → contentEnd → toolCallArg* → streamEnd
  * 2. 工具执行：toolExecStart → toolExecChunk → toolExecEnd
  * 3. 特殊事件：submitAccepted / submitRejected / agentTerminated / aborted
  */
@@ -48,6 +48,9 @@ export interface Renderer {
 
 	/** content token chunk */
 	contentChunk(token: string): void;
+
+	/** content 阶段结束（仅在有 content 输出时由上游触发） */
+	contentEnd(): void;
 
 	/** 某个工具调用的参数流开始（上游首次遇到该 index 时触发） */
 	toolCallArgStart(index: number, name: string): void;

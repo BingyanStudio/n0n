@@ -62,6 +62,10 @@ export class TuiRenderer implements Renderer {
 		this.updateState((s) => stateUpdaters.contentChunk(s, token));
 	}
 
+	contentEnd(): void {
+		this.updateState((s) => stateUpdaters.contentEnd(s));
+	}
+
 	toolCallArgStart(index: number, name: string): void {
 		this.updateState((s) => stateUpdaters.toolCallArgStart(s, index, name));
 	}

@@ -197,6 +197,10 @@ export class RichRenderer implements Renderer {
 		write(token);
 	}
 
+	contentEnd(): void {
+		writeln();
+	}
+
 	toolCallArgStart(index: number, name: string): void {
 		this.hadStreamingArgs = true;
 		this.streamingToolCalls.set(index, { name, args: "" });

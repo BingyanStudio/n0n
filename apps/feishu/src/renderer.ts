@@ -161,6 +161,8 @@ export class FeishuRenderer implements Renderer {
 		this.scheduleFlush();
 	}
 
+	contentEnd(): void {}
+
 	toolCallArgStart(_index: number, _name: string): void {}
 	toolCallArgChunk(_index: number, _chunk: string): void {}
 	toolCallArgEnd(_index: number, _tc: ToolCallRecord): void {}
