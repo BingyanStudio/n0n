@@ -16,8 +16,9 @@
  */
 
 import { createInterface } from "node:readline";
-import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
+import { isTTY, label, style, writeln } from "@n0n/cli-ui";
 import { agentLoop, PlainRenderer } from "@n0n/core";
+import { CodeRenderer } from "./code-renderer.ts";
 import {
 	type BaseWorkspacePaths,
 	formatAgentsMdPrompt,
@@ -123,7 +124,9 @@ export async function startCodeRepl(
 	if (agentsMd) {
 		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
 	}
-	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
+	const renderer = isTTY
+		? new CodeRenderer(paths.workspace)
+		: new PlainRenderer();
 
 	const rl = createInterface({
 		input: process.stdin,
