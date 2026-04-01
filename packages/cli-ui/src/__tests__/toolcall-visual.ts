@@ -25,22 +25,23 @@ async function scenario1() {
 	// 模型直接输出 tool_call_delta，没有 content token
 	const chunks = ['{"sc', 'ript":', '"ls -la"', ',"runtime":', '"sh"}'];
 	for (const chunk of chunks) {
-		renderer.toolCallArgChunk(0, chunk === chunks[0] ? "exec" : undefined, chunk);
+		if (chunk === chunks[0]) renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, chunk);
 		await sleep(150);
 	}
 
 	await sleep(300);
-	renderer.contentEnd();
+	renderer.streamEnd();
 	await sleep(200);
 
-	renderer.toolCallStart({
+	renderer.toolExecStart({
 		id: "call_1",
 		tool: "exec",
 		args: { script: "ls -la", runtime: "sh" },
 	});
 	await sleep(100);
 
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
 			type: "tool_result",
 		tool: "exec",
 		call: { id: "call_1", tool: "exec", args: { script: "ls -la", runtime: "sh" } },
@@ -61,31 +62,33 @@ async function scenario2() {
 	// 先输出 content
 	const words = ["我来", "帮你", "执行", "一下", "命令"];
 	for (const w of words) {
-		renderer.contentToken(w);
+		renderer.contentChunk(w);
 		await sleep(100);
 	}
 
 	await sleep(200);
+	renderer.contentEnd();
 
 	// 然后输出 tool call
 	const chunks = ['{"script":', '"echo hello"', ',"runtime":"sh"}'];
 	for (const chunk of chunks) {
-		renderer.toolCallArgChunk(0, chunk === chunks[0] ? "exec" : undefined, chunk);
+		if (chunk === chunks[0]) renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, chunk);
 		await sleep(150);
 	}
 
 	await sleep(300);
-	renderer.contentEnd();
+	renderer.streamEnd();
 	await sleep(200);
 
-	renderer.toolCallStart({
+	renderer.toolExecStart({
 		id: "call_2",
 		tool: "exec",
 		args: { script: "echo hello", runtime: "sh" },
 	});
 	await sleep(100);
 
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
 			type: "tool_result",
 		tool: "exec",
 		call: { id: "call_2", tool: "exec", args: { script: "echo hello", runtime: "sh" } },
@@ -104,34 +107,36 @@ async function scenario3() {
 	await sleep(200);
 
 	// 两个工具调用交替流式输出
-	renderer.toolCallArgChunk(0, "exec", '{"scr');
+	renderer.toolCallArgStart(0, "exec");
+	renderer.toolCallArgChunk(0, '{"scr');
 	await sleep(100);
-	renderer.toolCallArgChunk(1, "write", '{"pa');
+	renderer.toolCallArgStart(1, "write");
+	renderer.toolCallArgChunk(1, '{"pa');
 	await sleep(100);
-	renderer.toolCallArgChunk(0, undefined, 'ipt":"ls"}');
+	renderer.toolCallArgChunk(0, 'ipt":"ls"}');
 	await sleep(100);
-	renderer.toolCallArgChunk(1, undefined, 'th":"test.txt","co');
+	renderer.toolCallArgChunk(1, 'th":"test.txt","co');
 	await sleep(100);
-	renderer.toolCallArgChunk(1, undefined, 'ntent":"hello world"}');
+	renderer.toolCallArgChunk(1, 'ntent":"hello world"}');
 	await sleep(300);
 
-	renderer.contentEnd();
+	renderer.streamEnd();
 	await sleep(200);
 
-	renderer.toolCallStart({
+	renderer.toolExecStart({
 		id: "call_3",
 		tool: "exec",
 		args: { script: "ls" },
 	});
 
-	renderer.toolCallStart({
+	renderer.toolExecStart({
 		id: "call_4",
 		tool: "write",
 		args: { path: "test.txt", content: "hello world" },
 	});
 	await sleep(100);
 
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
 			type: "tool_result",
 		tool: "exec",
 		call: { id: "call_3", tool: "exec", args: { script: "ls" } },
@@ -143,7 +148,7 @@ async function scenario3() {
 
 	await sleep(200);
 
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
 			type: "tool_result",
 		tool: "write",
 		call: { id: "call_4", tool: "write", args: { path: "test.txt", content: "hello world" } },
@@ -170,15 +175,16 @@ async function scenario4() {
 		'}',
 	];
 	for (let i = 0; i < argChunks.length; i++) {
-		renderer.toolCallArgChunk(0, i === 0 ? "edit" : undefined, argChunks[i]!);
+		if (i === 0) renderer.toolCallArgStart(0, "edit");
+		renderer.toolCallArgChunk(0, argChunks[i]!);
 		await sleep(120);
 	}
 
 	await sleep(300);
-	renderer.contentEnd();
+	renderer.streamEnd();
 	await sleep(200);
 
-	renderer.toolCallStart({
+	renderer.toolExecStart({
 		id: "call_5",
 		tool: "edit",
 		args: { path: "src/index.ts", intent: "修复类型错误" },
@@ -186,12 +192,12 @@ async function scenario4() {
 	await sleep(100);
 
 	// 模拟 edit 执行过程中的流式输出
-	renderer.toolResultChunk("edit", "Analyzing file...\n");
+	renderer.toolExecChunk("edit", "Analyzing file...\n");
 	await sleep(300);
-	renderer.toolResultChunk("edit", "Applying changes...\n");
+	renderer.toolExecChunk("edit", "Applying changes...\n");
 	await sleep(300);
 
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
 			type: "tool_result",
 		tool: "edit",
 		call: { id: "call_5", tool: "edit", args: { path: "src/index.ts", intent: "修复类型错误" } },

@@ -26,9 +26,15 @@ export class PlainRenderer implements Renderer {
 		);
 	}
 
-	thinkingToken(_token: string): void {}
-	contentToken(_token: string): void {}
+	thinkingChunk(_token: string): void {}
+	thinkingEnd(): void {}
+	contentChunk(_token: string): void {}
 	contentEnd(): void {}
+
+	toolCallArgStart(_index: number, _name: string): void {}
+	toolCallArgChunk(_index: number, _chunk: string): void {}
+	toolCallArgEnd(_index: number, _tc: ToolCallRecord): void {}
+	streamEnd(): void {}
 
 	textResponse(content: string, idleCount: number): void {
 		console.error(
@@ -36,20 +42,14 @@ export class PlainRenderer implements Renderer {
 		);
 	}
 
-	toolCallStart(tc: ToolCallRecord): void {
+	toolExecStart(tc: ToolCallRecord): void {
 		const suffix =
 			tc.tool === "exec" ? ` → ${tc.args.script.slice(0, 80)}` : "";
 		console.error(`  [agent] tool: ${tc.tool}${suffix}`);
 	}
 
-	toolCallArgChunk(
-		_index: number,
-		_name: string | undefined,
-		_chunk: string,
-	): void {}
-
-	toolResultChunk(_tool: string, _chunk: string): void {}
-	toolCallEnd(_result: ToolResult): void {}
+	toolExecChunk(_tool: string, _chunk: string): void {}
+	toolExecEnd(_result: ToolResult): void {}
 
 	submitAccepted(): void {
 		console.error("  [agent] submit accepted ✓");

@@ -49,7 +49,7 @@ export const TuiApp: React.FC<TuiAppProps> = ({ state }) => {
 			<StreamingContent
 				thinkingContent={state.thinkingContent}
 				contentBuffer={state.contentBuffer}
-				isThinking={state.isThinking}
+				isThinking={state.thinkingContent.length > 0}
 			/>
 
 			{/* 流式工具调用参数 */}

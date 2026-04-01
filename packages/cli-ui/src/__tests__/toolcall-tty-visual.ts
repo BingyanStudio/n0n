@@ -35,25 +35,26 @@ async function scenarioA() {
 	];
 
 	for (const [name, arg] of chunks) {
-		renderer.toolCallArgChunk(0, name, arg);
+		if (name) renderer.toolCallArgStart(0, name);
+		renderer.toolCallArgChunk(0, arg);
 		await sleep(200);
 	}
 
 	await sleep(500);
-	renderer.contentEnd();
+	renderer.streamEnd();
 	await sleep(300);
 
-	renderer.toolCallStart({
+	renderer.toolExecStart({
 		id: "call_1",
 		tool: "write",
 		args: { path: "src/app.ts", content: "hello world" },
 	});
 
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
+		type: "tool_result" as const,
 		tool: "write",
 		call: { id: "call_1", tool: "write", args: { path: "src/app.ts", content: "hello world" } },
 		success: true,
-		type: "tool_result",
 	} as any);
 }
 
@@ -69,29 +70,31 @@ async function scenarioB() {
 	await sleep(300);
 
 	// 先发 path
-	renderer.toolCallArgChunk(0, "write", '{"path":"output.txt","content":"');
+	renderer.toolCallArgStart(0, "write");
+	renderer.toolCallArgChunk(0, '{"path":"output.txt","content":"');
 	await sleep(300);
 
 	// 逐行追加 content（每行一个 chunk）
 	for (let i = 1; i <= 20; i++) {
 		const sep = i === 1 ? "" : "\\n";
-		renderer.toolCallArgChunk(0, undefined, `${sep}line ${i}`);
+		renderer.toolCallArgChunk(0, `${sep}line ${i}`);
 		await sleep(150);
 	}
 
-	renderer.toolCallArgChunk(0, undefined, '"}');
+	renderer.toolCallArgChunk(0, '"}');
 	await sleep(500);
 
-	renderer.contentEnd();
+	renderer.streamEnd();
 	await sleep(300);
 
-	renderer.toolCallStart({
+	renderer.toolExecStart({
 		id: "call_1",
 		tool: "write",
 		args: { path: "output.txt", content: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n") },
 	});
 
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
+		type: "tool_result" as const,
 		tool: "write",
 		call: {
 			id: "call_1",
@@ -99,7 +102,6 @@ async function scenarioB() {
 			args: { path: "output.txt", content: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n") },
 		},
 		success: true,
-		type: "tool_result",
 	} as any);
 }
 
@@ -115,23 +117,24 @@ async function scenarioC() {
 	renderer.roundStart(1, 10, 3);
 	await sleep(200);
 
-	renderer.toolCallArgChunk(0, "exec", '{"script":"echo round1"}');
+	renderer.toolCallArgStart(0, "exec");
+	renderer.toolCallArgChunk(0, '{"script":"echo round1"}');
 	await sleep(300);
 
-	renderer.contentEnd();
-	renderer.toolCallStart({
+	renderer.streamEnd();
+	renderer.toolExecStart({
 		id: "call_1",
 		tool: "exec",
 		args: { script: "echo round1" },
 	});
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
+		type: "tool_result" as const,
 		tool: "exec",
 		call: { id: "call_1", tool: "exec", args: { script: "echo round1" } },
 		exitCode: 0,
 		stdout: "round1\n",
 		stderr: "",
 		durationMs: 50,
-		type: "tool_result",
 	} as any);
 
 	await sleep(500);
@@ -149,22 +152,23 @@ async function scenarioC() {
 		[undefined, '}'],
 	];
 	for (const [name, arg] of chunks) {
-		renderer.toolCallArgChunk(0, name, arg);
+		if (name) renderer.toolCallArgStart(0, name);
+		renderer.toolCallArgChunk(0, arg);
 		await sleep(200);
 	}
 
 	await sleep(500);
-	renderer.contentEnd();
-	renderer.toolCallStart({
+	renderer.streamEnd();
+	renderer.toolExecStart({
 		id: "call_2",
 		tool: "write",
 		args: { path: "test.txt", content: "line1\nline2\nline3" },
 	});
-	renderer.toolCallEnd({
+	renderer.toolExecEnd({
+		type: "tool_result" as const,
 		tool: "write",
 		call: { id: "call_2", tool: "write", args: { path: "test.txt", content: "line1\nline2\nline3" } },
 		success: true,
-		type: "tool_result",
 	} as any);
 }
 

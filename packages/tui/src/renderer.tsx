@@ -1,5 +1,5 @@
 /**
- * TuiRenderer — Ink-based TUI 渲染器
+ * TuiRenderer — Ink-based TUI 渲染器（指令式事件模型）
  *
  * 实现 Renderer 接口，将事件转换为 React 状态。
  * 使用 Ink 的 render() 函数管理终端输出。
@@ -21,8 +21,6 @@ export class TuiRenderer implements Renderer {
 	private inkInstance: ReturnType<typeof render> | null = null;
 
 	constructor() {
-		// 创建一个简单的状态管理
-		// Ink 的 render() 需要一个 React 组件，我们通过闭包传递 state
 		const StatefulApp = () => {
 			const [localState, setLocalState] = React.useState(this.state);
 			this.setState = setLocalState;
@@ -52,16 +50,36 @@ export class TuiRenderer implements Renderer {
 		);
 	}
 
-	thinkingToken(token: string): void {
-		this.updateState((s) => stateUpdaters.thinkingToken(s, token));
+	thinkingChunk(token: string): void {
+		this.updateState((s) => stateUpdaters.thinkingChunk(s, token));
 	}
 
-	contentToken(token: string): void {
-		this.updateState((s) => stateUpdaters.contentToken(s, token));
+	thinkingEnd(): void {
+		this.updateState((s) => stateUpdaters.thinkingEnd(s));
+	}
+
+	contentChunk(token: string): void {
+		this.updateState((s) => stateUpdaters.contentChunk(s, token));
 	}
 
 	contentEnd(): void {
 		this.updateState((s) => stateUpdaters.contentEnd(s));
+	}
+
+	toolCallArgStart(index: number, name: string): void {
+		this.updateState((s) => stateUpdaters.toolCallArgStart(s, index, name));
+	}
+
+	toolCallArgChunk(index: number, chunk: string): void {
+		this.updateState((s) => stateUpdaters.toolCallArgChunk(s, index, chunk));
+	}
+
+	toolCallArgEnd(index: number, tc: ToolCallRecord): void {
+		this.updateState((s) => stateUpdaters.toolCallArgEnd(s, index, tc));
+	}
+
+	streamEnd(): void {
+		this.updateState((s) => stateUpdaters.streamEnd(s));
 	}
 
 	textResponse(content: string, idleCount: number): void {
@@ -79,26 +97,16 @@ export class TuiRenderer implements Renderer {
 		}));
 	}
 
-	toolCallStart(tc: ToolCallRecord): void {
-		this.updateState((s) => stateUpdaters.toolCallStart(s, tc));
+	toolExecStart(tc: ToolCallRecord): void {
+		this.updateState((s) => stateUpdaters.toolExecStart(s, tc));
 	}
 
-	toolCallArgChunk(
-		index: number,
-		name: string | undefined,
-		chunk: string,
-	): void {
-		this.updateState((s) =>
-			stateUpdaters.toolCallArgChunk(s, index, name, chunk),
-		);
+	toolExecChunk(tool: string, chunk: string): void {
+		this.updateState((s) => stateUpdaters.toolExecChunk(s, tool, chunk));
 	}
 
-	toolResultChunk(tool: string, chunk: string): void {
-		this.updateState((s) => stateUpdaters.toolResultChunk(s, tool, chunk));
-	}
-
-	toolCallEnd(result: ToolResult): void {
-		this.updateState((s) => stateUpdaters.toolCallEnd(s, result));
+	toolExecEnd(result: ToolResult): void {
+		this.updateState((s) => stateUpdaters.toolExecEnd(s, result));
 	}
 
 	submitAccepted(): void {
@@ -119,7 +127,6 @@ export class TuiRenderer implements Renderer {
 		this.updateState((s) => stateUpdaters.aborted(s));
 	}
 
-	/** 清理资源 */
 	dispose(): void {
 		this.inkInstance?.unmount();
 		this.inkInstance = null;

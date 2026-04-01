@@ -27,7 +27,6 @@ function setupVT(cols: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-	// @ts-expect-error mock
 	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
@@ -84,17 +83,19 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		// 流式 tool call
 		const json = '{"script":"echo hello","runtime":"cmd"}';
 		const chunks = randomChunks(json, 42);
+		renderer.toolCallArgStart(0, "exec");
 		for (const chunk of chunks) {
-			renderer.toolCallArgChunk(0, "exec", chunk);
+			renderer.toolCallArgChunk(0, chunk);
 		}
-		renderer.contentEnd();
+		renderer.streamEnd();
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "exec",
 			args: { script: "echo hello", runtime: "cmd" },
 		});
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
+			type: "tool_result" as const,
 			tool: "exec",
 			call: {
 				id: "call_1",
@@ -135,19 +136,22 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		const json =
 			'{"type":"completed","summary":"已完成 PR #61 的清理：1. 关闭 PR #61，附带说明关闭原因（核心功能已被 PR #75/#76 覆盖，分支严重过时）2. 删除远程分支","files_changed":[]}';
 		const chunks = randomChunks(json, 123);
+		renderer.toolCallArgStart(0, "submit");
 		for (const chunk of chunks) {
-			renderer.toolCallArgChunk(0, "submit", chunk);
+			renderer.toolCallArgChunk(0, chunk);
 		}
-		renderer.contentEnd();
+		renderer.streamEnd();
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "submit",
 			args: JSON.parse(json),
 		});
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
+			type: "tool_result" as const,
 			tool: "submit",
 			call: { id: "call_1", tool: "submit", args: JSON.parse(json) },
+			cleanedResult: null,
 		});
 
 		const lines = vt.getVisibleLines();
@@ -179,16 +183,19 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 			renderer.roundStart(1, 10, 3);
 			const chunks = randomChunks(json, seed);
+			renderer.toolCallArgStart(0, "exec");
 			for (const chunk of chunks) {
-				renderer.toolCallArgChunk(0, "exec", chunk);
+				renderer.toolCallArgChunk(0, chunk);
 			}
-			renderer.contentEnd();
-			renderer.toolCallStart({
+			renderer.toolCallArgEnd(0, { id: "call_1", tool: "exec", args: JSON.parse(json) } as any);
+			renderer.streamEnd();
+			renderer.toolExecStart({
 				id: "call_1",
 				tool: "exec",
 				args: JSON.parse(json),
 			});
-			renderer.toolCallEnd({
+			renderer.toolExecEnd({
+				type: "tool_result" as const,
 				tool: "exec",
 				call: {
 					id: "call_1",
@@ -223,11 +230,12 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		// 每次只发 1 个字符
 		const json = '{"script":"echo hi"}';
 		for (let i = 0; i < json.length; i++) {
-			renderer.toolCallArgChunk(0, i === 0 ? "exec" : undefined, json[i]);
+			if (i === 0) renderer.toolCallArgStart(0, "exec");
+			renderer.toolCallArgChunk(0, json[i]!);
 		}
-		renderer.contentEnd();
+		renderer.streamEnd();
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "exec",
 			args: { script: "echo hi" },
@@ -251,19 +259,22 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 		const json = '{"summary":"关闭并清理远程分支和本地引用完成所有操作"}';
 		const chunks = randomChunks(json, 77);
+		renderer.toolCallArgStart(0, "submit");
 		for (const chunk of chunks) {
-			renderer.toolCallArgChunk(0, "submit", chunk);
+			renderer.toolCallArgChunk(0, chunk);
 		}
-		renderer.contentEnd();
+		renderer.streamEnd();
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "submit",
 			args: JSON.parse(json),
 		});
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
+			type: "tool_result" as const,
 			tool: "submit",
 			call: { id: "call_1", tool: "submit", args: JSON.parse(json) },
+			cleanedResult: null,
 		});
 
 		const lines = vt.getVisibleLines();

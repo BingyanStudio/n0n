@@ -28,7 +28,6 @@ function setupVT(cols: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-	// @ts-expect-error mock
 	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
@@ -82,7 +81,6 @@ describe("终端边界行为", () => {
 		// 现在 clear 看 cursorUp 移动了多少行
 		const writes: string[] = [];
 		const realWrite = process.stderr.write;
-		// @ts-expect-error mock
 		process.stderr.write = (chunk: string | Uint8Array) => {
 			if (typeof chunk === "string") {
 				writes.push(chunk);
@@ -130,7 +128,8 @@ describe("终端边界行为", () => {
 		const frameSizes: number[] = [];
 
 		for (let i = 0; i < json.length; i++) {
-			renderer.toolCallArgChunk(0, i === 0 ? "exec" : undefined, json[i]);
+			if (i === 0) renderer.toolCallArgStart(0, "exec");
+			renderer.toolCallArgChunk(0, json[i]!);
 			frameCount++;
 			frameSizes.push(vt.getVisibleLines().length);
 		}
@@ -162,18 +161,19 @@ describe("终端边界行为", () => {
 		const renderer = new RichRenderer();
 
 		renderer.roundStart(1, 10, 3);
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "exec",
 			args: { script: "ls" },
 		});
 
 		// 模拟 exec 工具的流式输出（多行，包含中文）
-		renderer.toolResultChunk("exec", "file1.ts\n");
-		renderer.toolResultChunk("exec", "文件2.ts\n");
-		renderer.toolResultChunk("exec", "目录/子文件.ts\n");
+		renderer.toolExecChunk("exec", "file1.ts\n");
+		renderer.toolExecChunk("exec", "文件2.ts\n");
+		renderer.toolExecChunk("exec", "目录/子文件.ts\n");
 
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
+			type: "tool_result" as const,
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
 			stdout: "file1.ts\n文件2.ts\n目录/子文件.ts\n",
@@ -199,14 +199,16 @@ describe("终端边界行为", () => {
 		renderer.roundStart(1, 10, 3);
 
 		// 模型先输出一些文字
-		renderer.contentToken("我来");
-		renderer.contentToken("执行");
-		renderer.contentToken("命令");
+		renderer.contentChunk("我来");
+		renderer.contentChunk("执行");
+		renderer.contentChunk("命令");
+		renderer.contentEnd();
 
 		// 然后切换到 tool call
-		renderer.toolCallArgChunk(0, "exec", '{"script"');
-		renderer.toolCallArgChunk(0, undefined, ':"ls"}');
-		renderer.contentEnd();
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, '{"script"');
+		renderer.toolCallArgChunk(0, ':"ls"}');
+		renderer.streamEnd();
 
 		const finalLines = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("content + tool 混合最终屏幕:");

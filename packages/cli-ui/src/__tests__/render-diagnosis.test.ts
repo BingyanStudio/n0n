@@ -30,7 +30,6 @@ function setupCapture(cols: number): WriteEvent[] {
 		writable: true,
 		configurable: true,
 	});
-	// @ts-expect-error mock
 	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") {
 			events.push({ data: chunk, timestamp: performance.now() });
@@ -94,7 +93,8 @@ describe("渲染诊断", () => {
 
 		const json = '{"script":"echo hello"}';
 		for (let i = 0; i < json.length; i++) {
-			renderer.toolCallArgChunk(0, i === 0 ? "exec" : undefined, json[i]);
+			if (i === 0) renderer.toolCallArgStart(0, "exec");
+			renderer.toolCallArgChunk(0, json[i]!);
 		}
 
 		const stats = analyzeEvents(events);
@@ -119,12 +119,13 @@ describe("渲染诊断", () => {
 
 		const json = '{"script":"echo hello","runtime":"cmd"}';
 		for (let i = 0; i < json.length; i++) {
-			renderer.toolCallArgChunk(0, i === 0 ? "exec" : undefined, json[i]);
+			if (i === 0) renderer.toolCallArgStart(0, "exec");
+			renderer.toolCallArgChunk(0, json[i]!);
 		}
 
 		// 标记 contentEnd 之前
 		const preContentEnd = events.length;
-		renderer.contentEnd();
+		renderer.streamEnd();
 		const postContentEnd = events.length;
 
 		// 分析 contentEnd 期间的事件
@@ -165,7 +166,8 @@ describe("渲染诊断", () => {
 		const json = `{"output":"${longValue}"}`;
 
 		// 流式阶段
-		renderer.toolCallArgChunk(0, "exec", json);
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, json);
 
 		// 统计流式阶段的行数（从上一次 cursorUp 的参数推断）
 		let lastCursorUp = 0;
@@ -178,7 +180,7 @@ describe("渲染诊断", () => {
 
 		// contentEnd
 		const preEnd = events.length;
-		renderer.contentEnd();
+		renderer.streamEnd();
 
 		// 统计最终输出的行数
 		let finalLineCount = 0;

@@ -1,8 +1,10 @@
 /**
- * RichRenderer — 富终端 UI 渲染器
+ * RichRenderer — 富终端 UI 渲染器（指令式事件模型）
  *
  * 彩色角色标签、流式 thinking/content、结构化工具参数显示、
  * 流式工具输出（exec stdout/stderr 实时）、LiveRegion 行替换。
+ *
+ * 所有阶段转换由 loop.ts 指令驱动，不维护推断状态。
  */
 
 import type {
@@ -11,9 +13,9 @@ import type {
 	ToolCallRecord,
 	ToolResult,
 } from "@n0n/types";
-import { parse as parsePartialJSON } from "partial-json";
 import { isTTY, label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
+import { parse as parsePartialJSON } from "partial-json";
 
 // ── token 数值人类友好格式化 ──
 
@@ -26,16 +28,11 @@ function fmtTokens(n: number): string {
 /** 格式化上一轮 token 用量为紧凑摘要（用于 roundStart 行尾） */
 function formatUsageSummary(usage: RoundTokenUsage): string {
 	const parts: string[] = [];
-
-	// 总 token
 	parts.push(`${fmtTokens(usage.totalTokens)} tok`);
 
-	// cache 状态 — 只在有缓存活动时显示
 	if (usage.cacheReadTokens > 0 || usage.cacheWriteTokens > 0) {
 		const cacheParts: string[] = [];
 		if (usage.cacheReadTokens > 0) {
-			// 计算 cache hit 占总输入的百分比
-			// 总输入 = inputTokens(新计算) + cacheReadTokens(缓存命中) + cacheWriteTokens(缓存写入)
 			const totalInput =
 				usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
 			const hitPct =
@@ -53,7 +50,6 @@ function formatUsageSummary(usage: RoundTokenUsage): string {
 		}
 		parts.push(cacheParts.join(" "));
 	} else if (usage.inputTokens > 0) {
-		// 无缓存活动 — 提示可能需要关注
 		parts.push(style.dim("no cache"));
 	}
 
@@ -62,18 +58,7 @@ function formatUsageSummary(usage: RoundTokenUsage): string {
 
 // ── 工具参数结构化渲染 ──
 
-/** 解析可能不完整的 JSON（LLM 流式输出），返回已解析的字段 */
-function tryParseArgs(s: string): Record<string, unknown> | null {
-	try {
-		const parsed = parsePartialJSON(s);
-		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-			return parsed as Record<string, unknown>;
-		}
-	} catch {}
-	return null;
-}
-
-/** 将工具参数渲染为结构化字段格式 */
+/** 将工具参数渲染为结构化字段格式（最终形式） */
 function renderToolArgs(
 	toolName: string,
 	args: Record<string, unknown>,
@@ -82,11 +67,9 @@ function renderToolArgs(
 	lines.push(`${style.dim("▸")} ${style.cyan(toolName)}`);
 
 	const maxLines = 12;
-	const entries = Object.entries(args);
-	for (const [key, value] of entries) {
+	for (const [key, value] of Object.entries(args)) {
 		const strValue = typeof value === "string" ? value : JSON.stringify(value);
 		lines.push(`  ${style.dim("├")} ${style.gray(key)}`);
-		// 值可能多行，超长时中间折叠（保留头尾，省略中间）
 		const valueLines = strValue.split("\n");
 		if (valueLines.length <= maxLines) {
 			for (const vl of valueLines) {
@@ -112,7 +95,7 @@ function renderToolArgs(
 	return lines;
 }
 
-/** 流式阶段：尾部滚动窗口渲染（只显示工具名 + 每个参数的最后 N 行） */
+/** 流式阶段：尾部滚动窗口渲染 */
 function renderToolArgsStreaming(
 	toolName: string,
 	args: Record<string, unknown>,
@@ -123,8 +106,7 @@ function renderToolArgsStreaming(
 	);
 
 	const maxTailLines = 6;
-	const entries = Object.entries(args);
-	for (const [key, value] of entries) {
+	for (const [key, value] of Object.entries(args)) {
 		const strValue = typeof value === "string" ? value : JSON.stringify(value);
 		lines.push(`  ${style.dim("├")} ${style.gray(key)}`);
 		const valueLines = strValue.split("\n");
@@ -146,20 +128,36 @@ function renderToolArgsStreaming(
 	return lines;
 }
 
-export class RichRenderer implements Renderer {
-	private toolRegion = new LiveRegion();
-	private hasStreamContent = false;
-	private isThinking = false;
-	/** 流式阶段已渲染参数的工具数量（跳过对应数量的 toolCallStart） */
-	private skipToolCallStarts = 0;
+/** 尝试解析可能不完整的 JSON */
+function tryParseArgs(s: string): Record<string, unknown> | null {
+	try {
+		const parsed = parsePartialJSON(s);
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			return parsed as Record<string, unknown>;
+		}
+	} catch {}
+	return null;
+}
 
-	/** 流式工具调用参数累积（index → { name, args }） */
+export class RichRenderer implements Renderer {
+	/** 工具执行阶段的 LiveRegion（实时输出） */
+	private toolRegion = new LiveRegion();
+	/** 流式工具参数的 LiveRegion（TTY 模式下实时刷新） */
+	private streamRegion = new LiveRegion();
+
+	/**
+	 * 流式工具调用参数累积（index → { name, args }）
+	 *
+	 * 由 toolCallArgStart 创建，toolCallArgEnd 移除，streamEnd 清理残留。
+	 * Renderer 不做 JSON 完整性检测——生命周期完全由上游指令驱动。
+	 */
 	private streamingToolCalls = new Map<
 		number,
 		{ name: string; args: string }
 	>();
-	/** 流式工具调用参数的 LiveRegion（流式阶段使用，执行阶段折叠） */
-	private streamRegion = new LiveRegion();
+
+	/** 本轮是否有流式工具参数（有则 toolExecStart 不重复渲染） */
+	private hadStreamingArgs = false;
 
 	userMessage(content: string): void {
 		writeln();
@@ -173,6 +171,7 @@ export class RichRenderer implements Renderer {
 		msgCount: number,
 		lastUsage?: RoundTokenUsage | null,
 	): void {
+		this.hadStreamingArgs = false;
 		writeln();
 		write(label.agent());
 
@@ -184,32 +183,65 @@ export class RichRenderer implements Renderer {
 		}
 	}
 
-	thinkingToken(token: string): void {
+	// ── LLM 流式输出（指令式：无推断状态）──
+
+	thinkingChunk(token: string): void {
 		write(style.gray(token));
-		this.hasStreamContent = true;
-		this.isThinking = true;
 	}
 
-	contentToken(token: string): void {
-		// thinking → content 切换时加换行分隔
-		if (this.isThinking) {
-			writeln();
-			this.isThinking = false;
-		}
+	thinkingEnd(): void {
+		writeln();
+	}
+
+	contentChunk(token: string): void {
 		write(token);
-		this.hasStreamContent = true;
 	}
 
 	contentEnd(): void {
-		if (this.hasStreamContent) {
-			writeln();
-			this.hasStreamContent = false;
+		writeln();
+	}
+
+	toolCallArgStart(index: number, name: string): void {
+		this.hadStreamingArgs = true;
+		this.streamingToolCalls.set(index, { name, args: "" });
+	}
+
+	toolCallArgChunk(index: number, chunk: string): void {
+		const entry = this.streamingToolCalls.get(index);
+		if (!entry) return;
+		entry.args += chunk;
+
+		// 非 TTY：只静默累积（等 toolCallArgEnd 或 streamEnd 输出最终形式）
+		if (!isTTY) return;
+
+		// TTY：重绘整个流式区域（LiveRegion clear+rewrite 实现原地刷新）
+		this.streamRegion.clear();
+		this.redrawStreamingRegion();
+	}
+
+	toolCallArgEnd(index: number, tc: ToolCallRecord): void {
+		// 从 streaming 区域毕业 → 输出最终结构化渲染
+		this.streamingToolCalls.delete(index);
+
+		if (isTTY) {
+			this.streamRegion.clear();
 		}
-		this.isThinking = false;
-		// 折叠流式工具调用参数区域 → 替换为解析后的结构化显示
+		// 渲染该工具的最终形式
+		for (const line of renderToolArgs(tc.tool, tc.args)) {
+			writeln(line);
+		}
+		// 重绘剩余 streaming 的工具
+		if (isTTY && this.streamingToolCalls.size > 0) {
+			this.streamRegion.reset();
+			this.redrawStreamingRegion();
+		} else {
+			this.streamRegion.reset();
+		}
+	}
+
+	streamEnd(): void {
+		// 安全网：处理因截断而未触发 argEnd 的残留工具
 		if (this.streamingToolCalls.size > 0) {
-			// TTY：streamRegion 已有实时渲染的内容，clear 后重写最终版本
-			// 非 TTY：streamRegion 未输出任何内容，直接写最终版本即可
 			if (isTTY) {
 				this.streamRegion.clear();
 			}
@@ -227,12 +259,37 @@ export class RichRenderer implements Renderer {
 					);
 				}
 			}
-			this.skipToolCallStarts = this.streamingToolCalls.size;
 			this.streamingToolCalls.clear();
-			// 重置 streamRegion 行计数，防止后续 clear() 误删已提交行
-			this.streamRegion.reset();
+		}
+		this.streamRegion.reset();
+	}
+
+	// ── 工具执行（语义清晰：不与参数流混淆）──
+
+	toolExecStart(tc: ToolCallRecord): void {
+		this.toolRegion.reset();
+		// 流式模式下参数已由 toolCallArgEnd/streamEnd 渲染，不重复
+		if (this.hadStreamingArgs) return;
+		// 非流式回退：渲染结构化参数
+		for (const line of renderToolArgs(tc.tool, tc.args)) {
+			this.toolRegion.writeln(line);
 		}
 	}
+
+	toolExecChunk(_tool: string, chunk: string): void {
+		for (const line of chunk.split("\n")) {
+			if (line) {
+				this.toolRegion.writeln(`  ${style.dim("│")} ${style.dim(line)}`);
+			}
+		}
+	}
+
+	toolExecEnd(result: ToolResult): void {
+		const summary = this.formatToolResult(result);
+		writeln(summary);
+	}
+
+	// ── 特殊事件 ──
 
 	textResponse(content: string, idleCount: number): void {
 		if (content) {
@@ -241,125 +298,6 @@ export class RichRenderer implements Renderer {
 		writeln(
 			style.gray(`(text response, ${content.length} chars, idle=${idleCount})`),
 		);
-	}
-
-	toolCallStart(tc: ToolCallRecord): void {
-		this.toolRegion.reset();
-		// 如果 streamRegion 已经渲染了结构化参数，不重复渲染
-		// toolCallStart 只在 streamRegion 为空时（非流式回退）渲染
-		if (this.skipToolCallStarts > 0) {
-			this.skipToolCallStarts--;
-			return;
-		}
-
-		// edit: 显示 path 和截断的 intent
-		if (tc.tool === "edit") {
-			const path = tc.args.path ?? "?";
-			const intent = typeof tc.args.intent === "string" ? tc.args.intent : "";
-			const truncatedIntent =
-				intent.length > 60 ? `${intent.slice(0, 60)}...` : intent;
-			this.toolRegion.writeln(
-				`${style.dim("▸")} ${style.cyan("edit")} ${style.gray(path)}`,
-			);
-			this.toolRegion.writeln(`  ${style.dim("│")} ${truncatedIntent}`);
-			this.toolRegion.writeln(
-				`  ${style.dim("├")}${style.dim("─".repeat(30))}`,
-			);
-			return;
-		}
-
-		// 非流式回退：直接渲染结构化参数
-		for (const line of renderToolArgs(tc.tool, tc.args)) {
-			this.toolRegion.writeln(line);
-		}
-	}
-
-	toolCallArgChunk(
-		index: number,
-		name: string | undefined,
-		chunk: string,
-	): void {
-		// 首次 chunk 前确保换行（避免粘在 content 后面）
-		if (this.hasStreamContent) {
-			writeln();
-			this.hasStreamContent = false;
-		}
-
-		// 累积参数
-		let entry = this.streamingToolCalls.get(index);
-		if (!entry) {
-			entry = { name: name ?? "?", args: "" };
-			this.streamingToolCalls.set(index, entry);
-		}
-		if (name) entry.name = name;
-		entry.args += chunk;
-
-		// 检查是否有已完成的 tool call 可以"毕业"出 streaming 区域
-		// 判断标准：JSON 完整（以 } 结尾且能完整解析）
-		for (const [idx, tc] of this.streamingToolCalls.entries()) {
-			const trimmed = tc.args.trim();
-			if (!trimmed.endsWith("}") && !trimmed.endsWith("]")) continue;
-			try {
-				JSON.parse(tc.args);
-			} catch {
-				continue;
-			}
-			// JSON 完整 — 从 streaming 区域毕业
-			// 先 clear 当前 streamRegion，输出该 tool call 的最终渲染，
-			// 然后从 streamingToolCalls 中移除它
-			if (isTTY) {
-				this.streamRegion.clear();
-				// 先输出所有已毕业的（到全局），再重绘剩余 streaming 的
-				const parsed = tryParseArgs(tc.args);
-				if (parsed) {
-					for (const line of renderToolArgs(tc.name, parsed)) {
-						writeln(line);
-					}
-				}
-				this.streamRegion.reset();
-			}
-			this.streamingToolCalls.delete(idx);
-			this.skipToolCallStarts++;
-			// 一次只毕业一个，避免复杂的多工具同时毕业
-			break;
-		}
-
-		// 非 TTY：只静默累积，不输出（等 contentEnd 一次性渲染最终结果）
-		if (!isTTY) return;
-
-		// TTY：重绘整个流式区域（LiveRegion clear+rewrite 实现原地刷新）
-		// 使用尾部滚动渲染，让用户始终看到最新的流式内容
-		this.streamRegion.clear();
-		for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
-			(a, b) => a[0] - b[0],
-		)) {
-			const parsed = tryParseArgs(tc.args);
-			if (parsed && Object.keys(parsed).length > 0) {
-				for (const line of renderToolArgsStreaming(tc.name, parsed)) {
-					this.streamRegion.writeln(line);
-				}
-			} else {
-				this.streamRegion.writeln(
-					`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray("(streaming…)")}`,
-				);
-			}
-		}
-	}
-
-	/** 流式工具输出 chunk（exec stdout/stderr 实时显示） */
-	toolResultChunk(_tool: string, chunk: string): void {
-		// 逐 chunk 追加到 toolRegion
-		for (const line of chunk.split("\n")) {
-			if (line) {
-				this.toolRegion.writeln(`  ${style.dim("│")} ${style.dim(line)}`);
-			}
-		}
-	}
-
-	toolCallEnd(result: ToolResult): void {
-		const summary = this.formatToolResult(result);
-		// 所有工具：保留已显示的结构化参数，追加摘要行
-		writeln(summary);
 	}
 
 	submitAccepted(): void {
@@ -381,16 +319,10 @@ export class RichRenderer implements Renderer {
 	}
 
 	aborted(): void {
-		// 清理流式输出状态
-		if (this.hasStreamContent) {
-			writeln();
-			this.hasStreamContent = false;
-		}
-		this.isThinking = false;
+		this.hadStreamingArgs = false;
 		this.streamingToolCalls.clear();
 		this.streamRegion.reset();
 		this.toolRegion.reset();
-		this.skipToolCallStarts = 0;
 		writeln();
 		writeln(`${style.yellow("⚡")} ${style.gray("已中断输出")}`);
 	}
@@ -440,6 +372,24 @@ export class RichRenderer implements Renderer {
 			}
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;
+			}
+		}
+	}
+
+	/** 将当前所有 streaming 工具调用重绘到 streamRegion */
+	private redrawStreamingRegion(): void {
+		for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
+			(a, b) => a[0] - b[0],
+		)) {
+			const parsed = tryParseArgs(tc.args);
+			if (parsed && Object.keys(parsed).length > 0) {
+				for (const line of renderToolArgsStreaming(tc.name, parsed)) {
+					this.streamRegion.writeln(line);
+				}
+			} else {
+				this.streamRegion.writeln(
+					`${style.dim("▸")} ${style.cyan(tc.name)} ${style.gray("(streaming…)")}`,
+				);
 			}
 		}
 	}

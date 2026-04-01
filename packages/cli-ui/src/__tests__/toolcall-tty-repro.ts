@@ -52,20 +52,21 @@ const renderer = new RichRenderer();
 renderer.roundStart(1, 10, 3);
 log.push("roundStart done\n");
 
-renderer.toolCallArgChunk(0, "write", '{"path":"output.txt","content":"');
+renderer.toolCallArgStart(0, "write");
+renderer.toolCallArgChunk(0, '{"path":"output.txt","content":"');
 log.push(`after path+content-start, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`);
 
 for (let i = 1; i <= 20; i++) {
 	const sep = i === 1 ? "" : "\\n";
-	renderer.toolCallArgChunk(0, undefined, `${sep}line ${i}`);
+	renderer.toolCallArgChunk(0, `${sep}line ${i}`);
 	const lc = (renderer as any).streamRegion.lineCount;
 	log.push(`after line-${String(i).padStart(2)}, streamRegion lineCount=${lc}\n`);
 }
 
-renderer.toolCallArgChunk(0, undefined, '"}');
+renderer.toolCallArgChunk(0, '"}');
 log.push(`after close, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`);
 
-renderer.contentEnd();
+renderer.streamEnd();
 log.push(`after contentEnd, streamRegion lineCount=${(renderer as any).streamRegion.lineCount}\n`);
 
 // ── 场景 A：多参数 ──
@@ -87,12 +88,13 @@ const chunks: [string | undefined, string][] = [
 
 for (let i = 0; i < chunks.length; i++) {
 	const [name, arg] = chunks[i]!;
-	renderer2.toolCallArgChunk(0, name, arg);
+	if (name) renderer2.toolCallArgStart(0, name);
+	renderer2.toolCallArgChunk(0, arg);
 	const lc = (renderer2 as any).streamRegion.lineCount;
 	log.push(`after chunk-${i} "${(name ?? "") + arg}", streamRegion lineCount=${lc}\n`);
 }
 
-renderer2.contentEnd();
+renderer2.streamEnd();
 log.push(`after contentEnd, streamRegion lineCount=${(renderer2 as any).streamRegion.lineCount}\n`);
 
 // 恢复

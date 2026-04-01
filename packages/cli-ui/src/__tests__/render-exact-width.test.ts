@@ -41,7 +41,6 @@ function setupVT(cols: number): VirtualTerminal {
 		writable: true,
 		configurable: true,
 	});
-	// @ts-expect-error mock
 	process.stderr.write = (chunk: string | Uint8Array) => {
 		if (typeof chunk === "string") vt.feed(chunk);
 		return true;
@@ -87,8 +86,9 @@ describe("精确宽度边界", () => {
 		const json = `{"data":"${exactValue}"}`;
 
 		// 先完成一轮流式渲染
-		renderer.toolCallArgChunk(0, "exec", json);
-		renderer.contentEnd();
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, json);
+		renderer.streamEnd();
 
 		const lines1 = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("=== contentEnd 后屏幕 ===");
@@ -120,8 +120,9 @@ describe("精确宽度边界", () => {
 		const cjkValue = "中".repeat(38) + "A";  // 38*2 + 1 = 77 + 4前缀 = 81
 		const json = `{"data":"${cjkValue}"}`;
 
-		renderer.toolCallArgChunk(0, "exec", json);
-		renderer.contentEnd();
+		renderer.toolCallArgStart(0, "exec");
+		renderer.toolCallArgChunk(0, json);
+		renderer.streamEnd();
 
 		const lines1 = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("=== CJK 边界 contentEnd 后 ===");
@@ -152,22 +153,21 @@ describe("精确宽度边界", () => {
 
 		// 逐字符流式发送（最恶劣的情况）
 		for (let i = 0; i < realJson.length; i++) {
-			renderer.toolCallArgChunk(
-				0,
-				i === 0 ? "submit" : undefined,
-				realJson[i],
-			);
+			if (i === 0) renderer.toolCallArgStart(0, "submit");
+			renderer.toolCallArgChunk(0, realJson[i]!);
 		}
-		renderer.contentEnd();
+		renderer.streamEnd();
 
-		renderer.toolCallStart({
+		renderer.toolExecStart({
 			id: "call_1",
 			tool: "submit",
 			args: JSON.parse(realJson),
 		});
-		renderer.toolCallEnd({
+		renderer.toolExecEnd({
+			type: "tool_result" as const,
 			tool: "submit",
 			call: { id: "call_1", tool: "submit", args: JSON.parse(realJson) },
+			cleanedResult: null,
 		});
 
 		const finalLines = vt.getVisibleLines().map((l) => stripAnsi(l));
