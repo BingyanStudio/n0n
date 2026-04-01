@@ -44,7 +44,7 @@ async function scenario1() {
 	renderer.toolExecEnd({
 		type: "tool_result",
 		tool: "exec",
-		timedOut: false,
+		status: "completed" as const,
 		call: {
 			id: "call_1",
 			tool: "exec",
@@ -96,7 +96,7 @@ async function scenario2() {
 	renderer.toolExecEnd({
 		type: "tool_result",
 		tool: "exec",
-		timedOut: false,
+		status: "completed" as const,
 		call: {
 			id: "call_2",
 			tool: "exec",
@@ -149,7 +149,7 @@ async function scenario3() {
 	renderer.toolExecEnd({
 		type: "tool_result",
 		tool: "exec",
-		timedOut: false,
+		status: "completed" as const,
 		call: { id: "call_3", tool: "exec", args: { script: "ls" } },
 		exitCode: 0,
 		stdout: "file1.txt\nfile2.txt",

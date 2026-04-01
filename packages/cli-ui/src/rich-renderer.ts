@@ -335,15 +335,26 @@ export class RichRenderer implements Renderer {
 				const duration = style.gray(
 					`${(result.durationMs / 1000).toFixed(1)}s`,
 				);
-				if (result.timedOut) {
-					return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${style.yellow(`timeout → bg PID=${result.pid}`)}`;
+				switch (result.status) {
+					case "timed_out":
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${style.yellow(`timeout → bg PID=${result.pid}`)}`;
+					case "truncated": {
+						const exit =
+							result.exitCode === 0
+								? style.green(`exit=${result.exitCode}`)
+								: style.red(`exit=${result.exitCode}`);
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.yellow(`truncated → ${result.outputFile}`)}`;
+					}
+					case "completed": {
+						const exit =
+							result.exitCode === 0
+								? style.green(`exit=${result.exitCode}`)
+								: style.red(`exit=${result.exitCode}`);
+						const outLen = result.stdout.length + result.stderr.length;
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)}`;
+					}
 				}
-				const exit =
-					result.exitCode === 0
-						? style.green(`exit=${result.exitCode}`)
-						: style.red(`exit=${result.exitCode}`);
-				const outLen = result.stdout.length + result.stderr.length;
-				return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)}`;
+				break;
 			}
 			case "write": {
 				if (!result.success) {

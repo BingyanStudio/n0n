@@ -70,7 +70,7 @@ export async function* executeToolStream(
 				tool: "exec" as const,
 				args: { script: "" },
 			} as ExecToolCall,
-			timedOut: false as const,
+			status: "completed" as const,
 			exitCode: 1,
 			stdout: "",
 			stderr: `Unknown tool: ${tc.tool}`,

@@ -97,7 +97,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		renderer.toolExecEnd({
 			type: "tool_result" as const,
 			tool: "exec",
-			timedOut: false,
+			status: "completed" as const,
 			call: {
 				id: "call_1",
 				tool: "exec",
@@ -208,7 +208,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 			renderer.toolExecEnd({
 				type: "tool_result" as const,
 				tool: "exec",
-				timedOut: false,
+				status: "completed" as const,
 				call: {
 					id: "call_1",
 					tool: "exec",

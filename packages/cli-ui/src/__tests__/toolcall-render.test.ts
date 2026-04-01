@@ -82,7 +82,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
-			timedOut: false,
+			status: "completed" as const,
 			call: {
 				id: "call_1",
 				tool: "exec",
@@ -135,7 +135,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
-			timedOut: false,
+			status: "completed" as const,
 			call: { id: "call_1", tool: "exec", args: { script: "echo hello" } },
 			exitCode: 0,
 			stdout: "hello",
@@ -186,7 +186,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
-			timedOut: false,
+			status: "completed" as const,
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
 			exitCode: 0,
 			stdout: "file1.txt",
@@ -266,7 +266,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecEnd({
 			type: "tool_result",
 			tool: "exec",
-			timedOut: false,
+			status: "completed" as const,
 			call: { id: "call_1", tool: "exec", args: { script: "ls" } },
 			exitCode: 0,
 			stdout: "file1.txt",

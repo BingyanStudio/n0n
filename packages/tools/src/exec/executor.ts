@@ -59,11 +59,12 @@ function buildSpawnCmd(runtime: string, tmpFile: string): string[] {
 	}
 }
 
-const MAX_OUTPUT_LEN = 30_000;
-const truncate = (s: string) =>
-	s.length > MAX_OUTPUT_LEN
-		? `${s.slice(0, MAX_OUTPUT_LEN)}\n... [truncated, ${s.length} chars total]`
-		: s;
+/** 超过此阈值（stdout+stderr 合计）触发截断写文件 */
+const TRUNCATION_THRESHOLD = 8_000;
+/** 截断后展示的末尾字符数 */
+const TAIL_LENGTH = 2_000;
+/** 取字符串末尾 N 个字符 */
+const tail = (s: string, n: number) => (s.length > n ? s.slice(-n) : s);
 
 /**
  * 流式执行脚本。
@@ -243,11 +244,11 @@ export async function* execToolStream(
 				type: "tool_result",
 				tool: "exec" as const,
 				call,
-				timedOut: true,
+				status: "timed_out",
 				pid,
 				logFile,
-				stdoutSoFar: truncate(stdoutSoFar),
-				stderrSoFar: truncate(stderrSoFar),
+				stdoutSoFar: tail(stdoutSoFar, TAIL_LENGTH),
+				stderrSoFar: tail(stderrSoFar, TAIL_LENGTH),
 				durationMs,
 			} satisfies ExecToolResult;
 			return; // 不进入 finally 删除临时文件（后台协程负责）
@@ -259,28 +260,61 @@ export async function* execToolStream(
 		const stdout = stdoutChunks.join("");
 		const stderr = stderrChunks.join("");
 
-		const hasOutput = stdout.trim() || stderr.trim();
-		const hint =
-			!hasOutput && exitCode === 0
-				? "(no output — script may not have top-level executable code, or async operations may not have been awaited.)"
-				: "";
+		const totalLen = stdout.length + stderr.length;
 
-		yield {
-			type: "tool_result",
-			tool: "exec" as const,
-			call,
-			timedOut: false,
-			exitCode,
-			stdout: hint || truncate(stdout),
-			stderr: truncate(stderr),
-			durationMs,
-		} satisfies ExecToolResult;
+		if (totalLen > TRUNCATION_THRESHOLD) {
+			// ── 截断路径：完整输出写入文件 ──
+			const outputFile = join(
+				tempDir,
+				`exec_output_${call.id}_${Date.now()}.txt`,
+			);
+			const fileContent = [
+				"--- stdout ---",
+				stdout,
+				"--- stderr ---",
+				stderr,
+				`--- exit code: ${exitCode} ---`,
+			].join("\n");
+			await Bun.write(outputFile, fileContent);
+
+			yield {
+				type: "tool_result",
+				tool: "exec" as const,
+				call,
+				status: "truncated",
+				exitCode,
+				stdoutTail: tail(stdout, TAIL_LENGTH),
+				stderrTail: tail(stderr, TAIL_LENGTH),
+				outputFile,
+				stdoutLength: stdout.length,
+				stderrLength: stderr.length,
+				durationMs,
+			} satisfies ExecToolResult;
+		} else {
+			// ── 正常路径：输出直接返回 ──
+			const hasOutput = stdout.trim() || stderr.trim();
+			const hint =
+				!hasOutput && exitCode === 0
+					? "(no output — script may not have top-level executable code, or async operations may not have been awaited.)"
+					: "";
+
+			yield {
+				type: "tool_result",
+				tool: "exec" as const,
+				call,
+				status: "completed",
+				exitCode,
+				stdout: hint || stdout,
+				stderr,
+				durationMs,
+			} satisfies ExecToolResult;
+		}
 	} catch (err) {
 		yield {
 			type: "tool_result",
 			tool: "exec" as const,
 			call,
-			timedOut: false,
+			status: "completed" as const,
 			exitCode: 1,
 			stdout: "",
 			stderr: err instanceof Error ? err.message : String(err),

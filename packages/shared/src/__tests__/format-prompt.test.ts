@@ -229,7 +229,7 @@ describe("formatPrompt", () => {
 			{
 				type: "tool_result",
 				tool: "exec",
-				timedOut: false,
+				status: "completed" as const,
 				call: {
 					id: "tc_1",
 					tool: "exec",

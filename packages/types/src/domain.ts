@@ -107,22 +107,40 @@ interface ToolResultBase {
 	type: "tool_result";
 }
 
-/** exec 正常完成 */
-interface ExecCompleted extends ToolResultBase {
+/** exec 三态结果的公共字段 */
+interface ExecResultBase extends ToolResultBase {
 	tool: ExecToolCall["tool"];
 	call: ExecToolCall;
-	timedOut: false;
-	exitCode: number;
-	stdout: string;
-	stderr: string;
 	durationMs: number;
 }
 
+/** exec 正常完成，输出在阈值内 */
+interface ExecCompleted extends ExecResultBase {
+	status: "completed";
+	exitCode: number;
+	stdout: string;
+	stderr: string;
+}
+
+/** exec 正常完成，输出超长被截断并写入文件 */
+interface ExecTruncated extends ExecResultBase {
+	status: "truncated";
+	exitCode: number;
+	/** stdout 末尾截断内容 */
+	stdoutTail: string;
+	/** stderr 末尾截断内容 */
+	stderrTail: string;
+	/** 完整输出文件路径 */
+	outputFile: string;
+	/** 原始 stdout 总字符数 */
+	stdoutLength: number;
+	/** 原始 stderr 总字符数 */
+	stderrLength: number;
+}
+
 /** exec 超时，进程转入后台继续执行 */
-interface ExecTimedOut extends ToolResultBase {
-	tool: ExecToolCall["tool"];
-	call: ExecToolCall;
-	timedOut: true;
+interface ExecTimedOut extends ExecResultBase {
+	status: "timed_out";
 	/** 后台进程 PID */
 	pid: number;
 	/** 后台日志文件路径 */
@@ -131,10 +149,9 @@ interface ExecTimedOut extends ToolResultBase {
 	stdoutSoFar: string;
 	/** 超时前已捕获的 stderr */
 	stderrSoFar: string;
-	durationMs: number;
 }
 
-export type ExecToolResult = ExecCompleted | ExecTimedOut;
+export type ExecToolResult = ExecCompleted | ExecTruncated | ExecTimedOut;
 
 export type WriteToolResult = ToolResultBase & {
 	tool: WriteToolCall["tool"]; // "write"

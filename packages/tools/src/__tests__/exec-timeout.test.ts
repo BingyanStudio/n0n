@@ -52,7 +52,10 @@ describe("exec timeout 行为验证", () => {
 	test("正常脚本在 timeout 内完成 — 应返回正常结果", async () => {
 		const outcome = await collectWithHardTimeout("echo hello", 10, 5000);
 		expect(outcome.status).toBe("completed");
-		if (outcome.status === "completed" && !outcome.result.timedOut) {
+		if (
+			outcome.status === "completed" &&
+			outcome.result.status === "completed"
+		) {
 			expect(outcome.result.exitCode).toBe(0);
 			expect(outcome.result.stdout.trim()).toBe("hello");
 		}
@@ -64,8 +67,8 @@ describe("exec timeout 行为验证", () => {
 		// 修复后应正确返回，不再卡死
 		expect(outcome.status).toBe("completed");
 		if (outcome.status === "completed") {
-			expect(outcome.result.timedOut).toBe(true);
-			if (outcome.result.timedOut) {
+			expect(outcome.result.status === "timed_out").toBe(true);
+			if (outcome.result.status === "timed_out") {
 				expect(outcome.result.pid).toBeGreaterThan(0);
 				expect(outcome.result.logFile).toContain("exec_bg_");
 				// 超时后 kill 后台进程以清理
@@ -81,8 +84,8 @@ describe("exec timeout 行为验证", () => {
 
 		expect(outcome.status).toBe("completed");
 		if (outcome.status === "completed") {
-			expect(outcome.result.timedOut).toBe(true);
-			if (outcome.result.timedOut) {
+			expect(outcome.result.status === "timed_out").toBe(true);
+			if (outcome.result.status === "timed_out") {
 				try {
 					process.kill(outcome.result.pid, "SIGKILL");
 				} catch {}
@@ -99,8 +102,8 @@ describe("exec timeout 行为验证", () => {
 
 		expect(outcome.status).toBe("completed");
 		if (outcome.status === "completed") {
-			expect(outcome.result.timedOut).toBe(true);
-			if (outcome.result.timedOut) {
+			expect(outcome.result.status === "timed_out").toBe(true);
+			if (outcome.result.status === "timed_out") {
 				const lines = outcome.result.stdoutSoFar
 					.trim()
 					.split("\n")

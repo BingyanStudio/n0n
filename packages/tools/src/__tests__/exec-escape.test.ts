@@ -28,7 +28,7 @@ async function collectExecResult(script: string, runtime?: string) {
 		if (
 			event.type === "tool_result" &&
 			event.tool === "exec" &&
-			!event.timedOut
+			event.status === "completed"
 		) {
 			stdout = event.stdout;
 			stderr = event.stderr;

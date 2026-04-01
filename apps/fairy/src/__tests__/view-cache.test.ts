@@ -136,7 +136,7 @@ function makeHeavyToolRound(i: number): DomainMessage[] {
 		{
 			type: "tool_result",
 			tool: "exec",
-			timedOut: false,
+			status: "completed" as const,
 			call: {
 				id: `e-${i}`,
 				tool: "exec",
