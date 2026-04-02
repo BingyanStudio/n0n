@@ -10,6 +10,7 @@
 		"@n0n/types": "workspace:*",
 		"partial-json": "^0.1.7",
 		"picocolors": "^1.1.1",
-		"string-width": "^8.2.0"
+		"string-width": "^8.2.0",
+		"wrap-ansi": "^10.0.0"
 	}
 }
