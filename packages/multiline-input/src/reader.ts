@@ -118,9 +118,14 @@ export function readMultilineInput(
 		stdin.resume();
 		stdin.setEncoding("utf8");
 		w(BP_ON);
+		// Windows 上 Ctrl+C 即使在 raw mode 下也可能触发 SIGINT（Console Control Event），
+		// 注册空 handler 阻止默认退出行为，实际中断由 \x03 字符处理
+		const sigintHandler = () => {};
+		process.on("SIGINT", sigintHandler);
 
 		function cleanup(): void {
 			w(BP_OFF);
+			process.removeListener("SIGINT", sigintHandler);
 			stdin.removeListener("data", onData);
 			stdin.setRawMode(wasRaw ?? false);
 			// 不 pause stdin — 调用方可能还需要它
