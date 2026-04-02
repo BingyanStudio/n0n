@@ -93,6 +93,7 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 
 	const tips = [
 		"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
+		"- **Output truncation** — stdout+stderr exceeding ~4 000 tokens is auto-truncated: only the **last ~1 000 tokens** are kept and the full output is saved to a file. To avoid losing important content, **assess first** (`wc -l`, `ls -la`) then read selectively (`head`, `grep`, `sed`) or split across parallel tool calls.",
 		`- **${jsHint}** — when you need to parse JSON, filter arrays, do math, or produce structured summaries, write a script instead of chaining shell commands.`,
 		`- **Simple commands use default shell (\`${env.defaultShell}\`)** — \`git status\`, \`ls\`/\`dir\` don't need a language runtime.`,
 		"- **Use libraries in isolation** — for deeper analysis, use proper libraries (e.g. AST/analysis tools) in a temporary or isolated environment (such as a throwaway directory or managed Python runner like `uv`). Avoid running `bun add` or `pip install` in the main project workspace unless you explicitly intend to update its dependencies.",
