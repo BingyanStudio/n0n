@@ -12,11 +12,13 @@
  * 用法：
  *   bun run scripts/build-code.ts              # 默认 minify
  *   bun run scripts/build-code.ts --no-minify  # 不压缩（调试用）
+ *   bun run scripts/build-code.ts --no-obfuscate  # 不混淆（调试用）
  *   bun run scripts/build-code.ts --compile    # 旧模式：嵌入运行时（大体积）
  */
 
 import { mkdirSync, existsSync, chmodSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import JavaScriptObfuscator from "javascript-obfuscator";
 
 const ENTRY = "apps/code/src/index.ts";
 const OUT_DIR = resolve("dist");
@@ -26,6 +28,7 @@ const BIN_NAME = "n0n-code";
 
 const args = process.argv.slice(2);
 const noMinify = args.includes("--no-minify");
+const noObfuscate = args.includes("--no-obfuscate");
 const compileMode = args.includes("--compile");
 
 // ── Compile 目标定义（需在 dispatch 前声明，避免 TDZ） ──
@@ -68,7 +71,48 @@ async function buildBundle() {
 		process.exit(1);
 	}
 
-	const jsContent = await Bun.file(tmpJs).text();
+	let jsContent = await Bun.file(tmpJs).text();
+
+	// ── 混淆（防逆向）──
+	if (!noObfuscate) {
+		console.log("🔒 Obfuscating…");
+
+		// Pre-process: 将 javascript-obfuscator 不支持的 ES2024 Unicode 正则转为 new RegExp()
+		// /v flag (unicodeSets) 和含 \p{} 的 /gu flag 需要转换
+		let preProcessed = jsContent;
+		preProcessed = preProcessed.replace(/\/([^\/\n]+)\/v(?=\s*[;,)\[])/g, (match, body) => {
+			if (body.includes("\\p{") || body.includes("\\P{")) {
+				const escaped = body.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+				return `new RegExp('${escaped}', 'v')`;
+			}
+			return match;
+		});
+		preProcessed = preProcessed.replace(/\/([^\/\n]+)\/gu(?=\s*[;,)\[])/g, (match, body) => {
+			if (body.includes("\\p{") || body.includes("\\P{")) {
+				const escaped = body.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+				return `new RegExp('${escaped}', 'gu')`;
+			}
+			return match;
+		});
+
+		const obfuscated = JavaScriptObfuscator.obfuscate(preProcessed, {
+			compact: true,
+			controlFlowFlattening: true,
+			controlFlowFlatteningThreshold: 0.5,
+			deadCodeInjection: true,
+			deadCodeInjectionThreshold: 0.2,
+			stringArray: true,
+			stringArrayEncoding: ["rc4"],
+			stringArrayThreshold: 1,
+			rotateStringArray: true,
+			stringArrayWrappersCount: 2,
+			stringArrayWrappersChainedCalls: true,
+			transformObjectKeys: true,
+			unicodeEscapeSequence: false,
+		});
+		jsContent = obfuscated.getObfuscatedCode();
+		console.log("🔒 Obfuscation done");
+	}
 
 	// ── Unix 单文件：sh/bun polyglot ──
 	// 原理：shebang 让 shell 执行，`//` 行对 shell 是无害命令（路径不存在，stderr 丢弃），

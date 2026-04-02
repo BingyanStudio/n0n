@@ -2,7 +2,7 @@
  * Code Agent — 入口
  *
  * 代码编写场景的 agent，产出物为项目代码变更（而非 workflow）。
- * 使用 --workspace 指定目标项目目录；不会修改全局 process.cwd()。
+ * 默认以脚本自身所在目录为工作区，也可通过 --workspace 指定其他目录。
  *
  * 启动流程：
  * 1. bootstrap — 检测 .env / 必填配置 / LLM 连通性，缺什么补什么
@@ -12,7 +12,7 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
 import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
@@ -93,7 +93,7 @@ const saveEveryLoop = cliOpts?.saveEveryLoop ?? false;
 const { workspace, remainingArgs } = parseWorkspaceArg(
 	cliOpts?.filteredArgs ?? process.argv.slice(2),
 	"N0N_CODE_WORKSPACE",
-	process.cwd(),
+	dirname(resolve(process.argv[1])),
 );
 
 const paths = resolveBasePaths(workspace);
