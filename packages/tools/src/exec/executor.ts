@@ -74,7 +74,7 @@ function buildSpawnCmd(runtime: string, tmpFile: string): string[] {
 		case "python3":
 			return [runtime, tmpFile];
 		case "uv":
-			return ["uv", "run", "python", tmpFile];
+			return ["uv", "run", tmpFile];
 		default:
 			return [runtime, tmpFile];
 	}
