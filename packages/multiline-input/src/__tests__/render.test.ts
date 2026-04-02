@@ -188,3 +188,61 @@ describe("渲染 - 宽字符光标定位", () => {
 		expect(extractCursorRight(output)).toBe(0);
 	});
 });
+
+describe("渲染 - Tab 对齐", () => {
+	/** 模拟 Tab 插入：计算对齐空格数并插入 */
+	function insertTab(buf: InputBuffer, tabWidth = 4): void {
+		const dc = stringWidth(buf.lines[buf.cursorLine]!.slice(0, buf.cursorCol));
+		const spaces = tabWidth - (dc % tabWidth);
+		buf.insertText(" ".repeat(spaces));
+	}
+
+	test("行首 Tab → 4 空格", () => {
+		const buf = new InputBuffer();
+		insertTab(buf);
+		expect(buf.lines).toEqual(["    "]);
+		expect(buf.cursorCol).toBe(4);
+	});
+
+	test("1 字符后 Tab → 3 空格（对齐到 4）", () => {
+		const buf = new InputBuffer();
+		buf.insertText("a");
+		insertTab(buf);
+		expect(buf.lines).toEqual(["a   "]);
+		expect(buf.cursorCol).toBe(4);
+	});
+
+	test("3 字符后 Tab → 1 空格（对齐到 4）", () => {
+		const buf = new InputBuffer();
+		buf.insertText("abc");
+		insertTab(buf);
+		expect(buf.lines).toEqual(["abc "]);
+		expect(buf.cursorCol).toBe(4);
+	});
+
+	test("4 字符后 Tab → 4 空格（对齐到 8）", () => {
+		const buf = new InputBuffer();
+		buf.insertText("abcd");
+		insertTab(buf);
+		expect(buf.lines).toEqual(["abcd    "]);
+		expect(buf.cursorCol).toBe(8);
+	});
+
+	test("中文后 Tab 基于显示宽度对齐", () => {
+		const buf = new InputBuffer();
+		buf.insertText("你"); // 显示宽度 = 2
+		insertTab(buf);
+		// displayCol = 2, 4 - (2 % 4) = 2 空格
+		expect(buf.lines).toEqual(["你  "]);
+		const dc = stringWidth(buf.lines[0]!.slice(0, buf.cursorCol));
+		expect(dc).toBe(4); // 对齐到 4
+	});
+
+	test("连续两次 Tab", () => {
+		const buf = new InputBuffer();
+		insertTab(buf); // 0 → 4 空格
+		insertTab(buf); // 4 → 4 空格
+		expect(buf.lines).toEqual(["        "]);
+		expect(buf.cursorCol).toBe(8);
+	});
+});

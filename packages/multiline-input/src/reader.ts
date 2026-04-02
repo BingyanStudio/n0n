@@ -19,6 +19,9 @@ const BP_OFF = "\x1b[?2004l";
 const PASTE_START = "\x1b[200~";
 const PASTE_END = "\x1b[201~";
 
+/** Tab 对齐宽度（空格数） */
+const TAB_WIDTH = 4;
+
 export interface MultilineInputOptions {
 	/** 提示标签，显示在输入区域上方（如 " USER "），默认无 */
 	prompt?: string;
@@ -235,8 +238,18 @@ export function readMultilineInput(
 					continue;
 				}
 
-				// 忽略其他控制字符（保留 Tab=9）
-				if (code < 32 && code !== 9) {
+				// Tab → 插入对齐到 tab stop 的空格（避免 \t 的显示宽度不可预测）
+				if (code === 9) {
+					const dc = displayCol(buf.lines[buf.cursorLine]!, buf.cursorCol);
+					const spaces = TAB_WIDTH - (dc % TAB_WIDTH);
+					buf.insertText(" ".repeat(spaces));
+					i++;
+					needsRedraw = true;
+					continue;
+				}
+
+				// 忽略其他控制字符
+				if (code < 32) {
 					i++;
 					continue;
 				}
