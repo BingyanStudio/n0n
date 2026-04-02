@@ -88,6 +88,20 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 			const parts = [wrapTag("exec_meta", meta, model)];
 			if (msg.stdout) parts.push(wrapTag("stdout", msg.stdout, model));
 			if (msg.stderr) parts.push(wrapTag("stderr", msg.stderr, model));
+			// 检测模块/包未找到错误，附加诊断提示帮助 LLM 理解原因
+			const combined = (msg.stdout || "") + (msg.stderr || "");
+			if (
+				msg.exitCode !== 0 &&
+				/Cannot find package|Cannot find module|ERR_MODULE_NOT_FOUND|ModuleNotFoundError|No module named/i.test(combined)
+			) {
+				parts.push(
+					wrapTag(
+						"diagnostic_hint",
+						"Package/module not found. Possible causes: (1) the package is not listed in the project root dependencies — check package.json; (2) dependencies not installed — run the appropriate install command; (3) for Python with uv, declare inline dependencies using PEP 723 `# /// script` metadata.",
+						model,
+					),
+				);
+			}
 			return parts.join("\n");
 		}
 	}

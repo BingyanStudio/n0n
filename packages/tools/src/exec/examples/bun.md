@@ -30,6 +30,7 @@ async function tree(dir: string, prefix = ''): Promise<string[]> {
 console.log((await tree('src')).join('\n'));
 ```
 **With libraries — install then use immediately:**
+Only `node:*` built-in modules work out of the box. Third-party packages must be installed first (`bun add <pkg>` in a separate exec call) before importing.
 `bun add ts-morph` → then in the next exec call:
 ```
 import { Project } from 'ts-morph';
