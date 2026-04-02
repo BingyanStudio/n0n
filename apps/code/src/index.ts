@@ -2,7 +2,8 @@
  * Code Agent — 入口
  *
  * 代码编写场景的 agent，产出物为项目代码变更（而非 workflow）。
- * 默认以脚本自身所在目录为工作区，也可通过 --workspace 指定其他目录。
+ * 默认以 cwd 为工作区（终端启动），macOS 双击时 fallback 到脚本所在目录。
+ * 也可通过 --workspace 指定其他目录。
  *
  * 启动流程：
  * 1. bootstrap — 检测 .env / 必填配置 / LLM 连通性，缺什么补什么
@@ -93,7 +94,10 @@ const saveEveryLoop = cliOpts?.saveEveryLoop ?? false;
 const { workspace, remainingArgs } = parseWorkspaceArg(
 	cliOpts?.filteredArgs ?? process.argv.slice(2),
 	"N0N_CODE_WORKSPACE",
-	dirname(resolve(process.argv[1])),
+	// macOS 双击打开时 cwd 为 home 目录，此时 fallback 到脚本所在目录
+	process.cwd() === homedir()
+		? dirname(resolve(process.argv[1] ?? "."))
+		: process.cwd(),
 );
 
 const paths = resolveBasePaths(workspace);
