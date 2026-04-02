@@ -91,10 +91,14 @@ export class CliSetupRenderer implements SetupRenderer {
 						process.exit(1);
 					}
 					if (char === "\u007f" || char === "\b") {
-						if (buf.length > 0) buf = buf.slice(0, -1);
+						if (buf.length > 0) {
+							buf = buf.slice(0, -1);
+							process.stderr.write("\b \b");
+						}
 						return;
 					}
 					buf += char;
+					process.stderr.write("*");
 				};
 				stdin.on("data", onData);
 			} else {
