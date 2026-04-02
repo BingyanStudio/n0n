@@ -66,14 +66,3 @@ if (typeof parsed.path === "string" && parsed.path && "content" in parsed) {
 
 方案 B 更优：只有当 `content` key 出现时，才说明 `path` 的值已完整传输完毕，此时锁定 path 并开始流式写入 content。
 
----
-
-## ~~4. exec 工具：uv 命令优化 + 包未找到诊断提示~~ ✅ 已完成
-
-> **已在 `fix/exec-uv-and-diagnostic-hint` 分支完成。**
-
-**经过测试验证**，`.temp/` 作为 workspace 根的直接子目录，Bun/Node 向上一层即可找到 `node_modules/`，模块解析行为与脚本放在根目录完全一致。原始描述中的 `string-width` 找不到是 Bun monorepo 的正常行为（子包依赖不在根 `node_modules` 中），属于期望行为。
-
-**实际修复：**
-- `uv` 的 spawn 命令从 `["uv", "run", "python", tmpFile]` 改为 `["uv", "run", tmpFile]`，支持 PEP 723 inline script dependencies
-- exec 结果格式化中新增 `<diagnostic_hint>` 标签：当检测到模块/包未找到错误时，自动附加诊断提示（包不在根依赖中 / 未安装 / Python 可用 PEP 723）
