@@ -1,0 +1,12 @@
+{
+	"name": "@n0n/multiline-input",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"dependencies": {
+		"string-width": "^8.2.0"
+	}
+}
