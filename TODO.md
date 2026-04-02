@@ -59,3 +59,23 @@ if (typeof parsed.path === "string" && parsed.path && "content" in parsed) {
 ```
 
 方案 B 更优：只有当 `content` key 出现时，才说明 `path` 的值已完整传输完毕，此时锁定 path 并开始流式写入 content。
+
+---
+
+## 4. exec 工具临时脚本的包解析问题
+
+**问题：** exec 工具将用户脚本写入 `.temp/` 目录再执行，虽然设置了 `cwd`，但 Bun/Node 的模块解析是基于**脚本文件所在路径**而非 `cwd`。导致脚本中 `import` 项目依赖时找不到包：
+
+```
+error: Cannot find package 'string-width' from '/Users/.../n0n/.temp/_n0n_exec_xxx.ts'
+```
+
+**根因：** `.temp/` 下没有 `node_modules`，Bun 向上查找时也不会经过项目的 `node_modules`（如果 `.temp` 不在项目根目录的直接子级，或 Bun 的解析策略与预期不同）。
+
+**待评估方案：**
+- A) 不写入 `.temp`，改为写入项目根目录（用自定义前缀如 `_n0n_exec_` 标识），通过 `.gitignore` 规则和清理逻辑管理
+- B) 在 `.temp/` 下创建指向项目根 `node_modules` 的符号链接
+- C) 将脚本写入项目根目录的临时文件，执行后立即删除
+- D) 使用 `bun run --cwd` 或环境变量 `NODE_PATH` 控制模块解析路径
+
+需要进一步调查各方案的可靠性和副作用。
