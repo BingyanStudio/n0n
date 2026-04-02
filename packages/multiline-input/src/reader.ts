@@ -8,6 +8,11 @@
  * - 中文/emoji 等宽字符光标定位正确（基于 string-width）
  * - 主动 wrap：超过终端宽度的行会被正确计算显示行数，光标定位精确
  *
+ * stdin 管理：
+ * - 默认模式：readMultilineInput 自行管理 raw mode 和 data listener
+ * - connectStdin 模式：调用方通过 connectStdin 注入数据，readMultilineInput
+ *   不接触 stdin 的 raw mode / listener / encoding，由调用方统一管理
+ *
  * 布局：prompt 标签在输入区域上方（不参与重绘），输入区域无前缀。
  */
 
@@ -30,6 +35,17 @@ export interface MultilineInputOptions {
 	hint?: string;
 	/** 输出流，默认 process.stderr */
 	output?: NodeJS.WriteStream;
+	/**
+	 * 外部 stdin 数据源注入点。
+	 *
+	 * 当提供此选项时，readMultilineInput 不自行管理 stdin
+	 * （不设置 raw mode、不添加 data listener、不修改 encoding），
+	 * 而是通过此函数注册数据处理器，由调用方统一管理 stdin 生命周期。
+	 *
+	 * @param handler 接收 stdin 数据的处理函数
+	 * @returns 清理函数，readMultilineInput 结束时调用
+	 */
+	connectStdin?: (handler: (data: string) => void) => () => void;
 }
 
 export interface MultilineInputResult {
@@ -49,7 +65,6 @@ interface DrawState {
 
 /**
  * 计算行文本从 0 到 cursorCol 的终端显示宽度
- * 用于精确定位光标（中文=2列、emoji=2列、ASCII=1列）
  */
 function displayCol(line: string, cursorCol: number): number {
 	return stringWidth(line.slice(0, cursorCol));
@@ -57,7 +72,6 @@ function displayCol(line: string, cursorCol: number): number {
 
 /**
  * 计算一个逻辑行在终端上占用的实际行数
- * 考虑终端自动折行：displayWidth / termCols 向上取整，空行至少占 1 行
  */
 function terminalRowsForLine(line: string, cols: number): number {
 	const w = stringWidth(line);
@@ -67,7 +81,6 @@ function terminalRowsForLine(line: string, cols: number): number {
 
 /**
  * 计算光标在某逻辑行中的终端行偏移（0-based）
- * 即：光标前面的文本占了几个完整的终端行
  */
 function cursorTerminalRow(line: string, cursorCol: number, cols: number): number {
 	const w = displayCol(line, cursorCol);
@@ -76,7 +89,6 @@ function cursorTerminalRow(line: string, cursorCol: number, cols: number): numbe
 
 /**
  * 计算光标在终端行中的列偏移
- * 即：光标前面文本的显示宽度 mod 终端列数
  */
 function cursorTerminalCol(line: string, cursorCol: number, cols: number): number {
 	const w = displayCol(line, cursorCol);
@@ -112,30 +124,25 @@ export function readMultilineInput(
 			w(`${options.prompt}${hint ? ` ${hint}` : ""}\n`);
 		}
 
-		// ── 进入 raw mode ──
-		const wasRaw = stdin.isRaw;
-		stdin.setRawMode(true);
-		stdin.resume();
-		stdin.setEncoding("utf8");
+		// ── 启用 bracketed paste ──
 		w(BP_ON);
+
+		// ── stdin 连接：自管理 or 外部注入 ──
+		// disconnectStdin 在 cleanup 时调用，断开数据源
+		let disconnectStdin: (() => void) | null = null;
 
 		function cleanup(): void {
 			w(BP_OFF);
-			stdin.removeListener("data", onData);
-			stdin.setRawMode(wasRaw ?? false);
-			// 不 pause stdin — 调用方可能还需要它
+			disconnectStdin?.();
+			disconnectStdin = null;
 		}
 
 		function finish(result: MultilineInputResult | null): void {
 			const cols = getCols();
-			// 计算光标当前所在的终端行到渲染区域底部的距离
-			// 先算光标之后还有多少终端行
 			const cursorLine = buf.cursorLine;
 			const cursorColOffset = cursorTerminalRow(buf.lines[cursorLine]!, buf.cursorCol, cols);
 			const cursorLineTotal = terminalRowsForLine(buf.lines[cursorLine]!, cols);
-			// 光标所在逻辑行中，光标之后还剩的终端行数
 			let rowsBelow = cursorLineTotal - cursorColOffset - 1;
-			// 加上光标之后所有逻辑行的终端行数
 			for (let i = cursorLine + 1; i < buf.lines.length; i++) {
 				rowsBelow += terminalRowsForLine(buf.lines[i]!, cols);
 			}
@@ -160,24 +167,20 @@ export function readMultilineInput(
 		function redraw(): void {
 			const cols = getCols();
 
-			// 计算新的总终端行数
 			let newTotalRows = 0;
 			for (let i = 0; i < buf.lines.length; i++) {
 				newTotalRows += terminalRowsForLine(buf.lines[i]!, cols);
 			}
 
-			// 计算光标所在的终端行（从渲染区域顶部算起）
 			let newCursorRow = 0;
 			for (let i = 0; i < buf.cursorLine; i++) {
 				newCursorRow += terminalRowsForLine(buf.lines[i]!, cols);
 			}
 			newCursorRow += cursorTerminalRow(buf.lines[buf.cursorLine]!, buf.cursorCol, cols);
 
-			// 1) 从当前光标位置移到渲染区域顶部
 			if (state.cursorRow > 0) w(`\x1b[${state.cursorRow}A`);
 			w("\r");
 
-			// 2) 新增终端行时先 scroll 终端，确保有足够空间
 			if (newTotalRows > state.totalRows) {
 				const extra = newTotalRows - state.totalRows;
 				const toOldBottom = Math.max(0, state.totalRows - 1);
@@ -188,14 +191,12 @@ export function readMultilineInput(
 				w("\r");
 			}
 
-			// 3) clearDown + 重绘所有内容
 			w("\x1b[J");
 			for (let i = 0; i < buf.lines.length; i++) {
 				if (i > 0) w("\n");
 				w(buf.lines[i]!);
 			}
 
-			// 4) 从渲染区域底部移到光标所在的终端行
 			const up = newTotalRows - 1 - newCursorRow;
 			if (up > 0) w(`\x1b[${up}A`);
 			w("\r");
@@ -295,7 +296,7 @@ export function readMultilineInput(
 					continue;
 				}
 
-				// Tab → 插入对齐到 tab stop 的空格（避免 \t 的显示宽度不可预测）
+				// Tab → 插入对齐到 tab stop 的空格
 				if (code === 9) {
 					const dc = displayCol(buf.lines[buf.cursorLine]!, buf.cursorCol);
 					const spaces = TAB_WIDTH - (dc % TAB_WIDTH);
@@ -312,7 +313,6 @@ export function readMultilineInput(
 				}
 
 				// 普通字符（可能是多 code unit）
-				// 检查是否是 high surrogate
 				if (code >= 0xd800 && code <= 0xdbff && i + 1 < data.length) {
 					buf.insertText(data.slice(i, i + 2));
 					i += 2;
@@ -326,6 +326,22 @@ export function readMultilineInput(
 			if (needsRedraw) redraw();
 		}
 
-		stdin.on("data", onData);
+		// ── 连接 stdin 数据源 ──
+		if (options?.connectStdin) {
+			// 外部管理模式：调用方负责 raw mode、resume、encoding
+			disconnectStdin = options.connectStdin(onData);
+		} else {
+			// 自管理模式（默认）：readMultilineInput 直接控制 stdin
+			const wasRaw = stdin.isRaw;
+			stdin.setRawMode(true);
+			stdin.resume();
+			stdin.setEncoding("utf8");
+			stdin.on("data", onData);
+			disconnectStdin = () => {
+				stdin.removeListener("data", onData);
+				stdin.setRawMode(wasRaw ?? false);
+				// 不 pause stdin — 调用方可能还需要它
+			};
+		}
 	});
 }
