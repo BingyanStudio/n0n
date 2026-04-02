@@ -9,6 +9,7 @@
 	"dependencies": {
 		"@n0n/cli-ui": "workspace:*",
 		"@n0n/core": "workspace:*",
+		"@n0n/multiline-input": "workspace:*",
 		"@n0n/llm": "workspace:*",
 		"@n0n/shared": "workspace:*",
 		"@n0n/types": "workspace:*",

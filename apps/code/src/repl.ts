@@ -1,8 +1,10 @@
 /**
  * Code REPL — 代码编写场景的交互循环
  *
- * Ctrl+C 在模型输出时中断当前响应（而非立即终止进程），用户可在中断后继续输入新消息推入对话。
- * 在等待用户输入时，按下 Ctrl+C 会退出 REPL 进程。
+ * Ctrl+C 行为：
+ * - 用户输入时：中断当前输入（readMultilineInput 返回 null），不退出进程，继续下一轮
+ * - 模型输出时：中断当前响应（AbortController），用户可继续输入新消息
+ * - 退出方式：输入 "exit"
  *
  * 与 cli REPL 的区别：
  * - System prompt 为 code.md（代码 agent 而非 workflow builder）
@@ -18,6 +20,7 @@
 import { createInterface } from "node:readline";
 import { isTTY, label, style, writeln } from "@n0n/cli-ui";
 import { agentLoop, PlainRenderer } from "@n0n/core";
+import { readMultilineInput } from "@n0n/multiline-input";
 import {
 	type BaseWorkspacePaths,
 	formatAgentsMdPrompt,
@@ -27,7 +30,6 @@ import {
 } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { CodeRenderer } from "./code-renderer.ts";
-import { readMultilineInput } from "./multiline-input.ts";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
@@ -36,7 +38,7 @@ const USER_INPUT_HINT = [
 	"First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.",
 	"If genuinely stuck or ambiguous, submit `ask_user` with specific options for the user.",
 	"Otherwise, reason out what the engineer wrote — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
-];
+].join("\n");
 
 /** REPL 启动选项 */
 export interface CodeReplOptions {
@@ -113,6 +115,55 @@ async function makeUserInput(
 	};
 }
 
+/**
+ * 使用 @n0n/multiline-input 读取用户输入
+ *
+ * @returns 用户输入文本，Ctrl+C 中断时返回 null
+ */
+async function promptUser(): Promise<string | null> {
+	if (!isTTY) {
+		// 非 TTY 模式：使用 readline 逐行读取
+		return new Promise<string | null>((resolve) => {
+			const rl = createInterface({
+				input: process.stdin,
+				output: process.stderr,
+			});
+			rl.question("", (answer) => {
+				rl.close();
+				resolve(answer || null);
+			});
+			rl.once("close", () => resolve(null));
+		});
+	}
+
+	const result = await readMultilineInput({
+		prompt: `${label.user()}`,
+		hint: style.gray("(Alt+Enter 提交)"),
+	});
+	return result?.text ?? null;
+}
+
+/**
+ * 工具执行确认函数 — 按需创建 readline 实例
+ *
+ * 在 agent 运行期间被调用（此时 multiline-input 未激活，stdin 不在 raw mode），
+ * 因此可以安全使用 readline。
+ */
+function confirmFn(question: string): Promise<string> {
+	return new Promise<string>((resolve) => {
+		const rl = createInterface({
+			input: process.stdin,
+			output: process.stderr,
+			terminal: isTTY,
+		});
+		rl.question(question, (answer) => {
+			rl.close();
+			resolve(answer);
+		});
+		rl.once("close", () => resolve("n"));
+	});
+}
+
 export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
 	options: CodeReplOptions = {},
@@ -128,56 +179,24 @@ export async function startCodeRepl(
 		? new CodeRenderer(paths.workspace)
 		: new PlainRenderer();
 
-	const rl = createInterface({
-		input: process.stdin,
-		output: process.stderr,
-		terminal: isTTY,
-	});
-	let closed = false;
-	rl.on("close", () => {
-		closed = true;
-	});
-
-	const continuationPrompt = isTTY ? style.gray("... ") : "";
-	const prompt = async (q: string): Promise<string> => {
-		const result = await readMultilineInput(rl, q, { continuationPrompt });
-		return result ?? "exit";
-	};
-	const confirmFn = (question: string): Promise<string> =>
-		new Promise((resolve) => {
-			if (closed) return resolve("n");
-			rl.question(question, resolve);
-		});
-
 	// ── Ctrl+C 中断控制 ──
+	// 输入阶段：由 readMultilineInput 在 raw mode 中捕获 Ctrl+C，返回 null
+	// Agent 运行阶段：通过 process SIGINT 触发 AbortController
 	let abortController = new AbortController();
 	let agentRunning = false;
 
-	if (isTTY) {
-		rl.on("SIGINT", () => {
-			if (agentRunning) {
-				abortController.abort();
-			} else {
-				writeln();
-				writeln(style.gray("Bye!"));
-				rl.close();
-			}
-		});
-	} else {
-		process.on("SIGINT", () => {
-			if (agentRunning) {
-				abortController.abort();
-			} else {
-				writeln();
-				writeln(style.gray("Bye!"));
-				process.exit(0);
-			}
-		});
-	}
+	const sigintHandler = () => {
+		if (agentRunning) {
+			abortController.abort();
+		}
+		// 输入阶段的 Ctrl+C 由 readMultilineInput raw mode 内部处理，
+		// 不会触发 process SIGINT，因此这里只需处理 agent 运行中的情况
+	};
+	process.on("SIGINT", sigintHandler);
 
 	// ── 初始化 history：恢复模式 or 全新对话 ──
 	let history: DomainMessage[];
-	let userInput: string;
+	let userInput: string | null;
 
 	if (resumeFile) {
 		try {
@@ -190,31 +209,43 @@ export async function startCodeRepl(
 					),
 			);
 			writeln();
-			userInput = await prompt(`${label.user()} `);
+			userInput = await promptUser();
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : String(err ?? "未知错误");
 			writeln(`${style.red("✗")} 恢复对话失败: ${message}`);
 			writeln(style.gray("  将以全新对话启动。"));
 			writeln();
-			userInput = initialInput ?? (await prompt(`${label.user()} `));
+			userInput = initialInput ?? (await promptUser());
 			history = [
 				{ type: "system", content: systemPrompt },
 				{ type: "system", content: buildWorkspaceContext(paths.workspace) },
 			];
 		}
 	} else {
-		userInput = initialInput ?? (await prompt(`${label.user()} `));
+		userInput = initialInput ?? (await promptUser());
 		history = [
 			{ type: "system", content: systemPrompt },
 			{ type: "system", content: buildWorkspaceContext(paths.workspace) },
 		];
 	}
 
-	while (userInput.trim().toLowerCase() !== "exit") {
-		// 空输入跳过，重新 prompt
+	while (true) {
+		// Ctrl+C 中断 → 继续下一轮
+		if (userInput === null) {
+			writeln();
+			userInput = await promptUser();
+			continue;
+		}
+
+		// exit 退出
+		if (userInput.trim().toLowerCase() === "exit") {
+			break;
+		}
+
+		// 空输入跳过
 		if (userInput.trim() === "") {
-			userInput = await prompt(`${label.user()} `);
+			userInput = await promptUser();
 			continue;
 		}
 
@@ -233,12 +264,11 @@ export async function startCodeRepl(
 				writeln(`${style.red("✗")} 保存对话失败: ${message}`);
 			}
 			writeln();
-			userInput = await prompt(`${label.user()} `);
-			// log 命令不推入 history，直接继续
+			userInput = await promptUser();
 			continue;
 		}
 
-		// ── 将用户输入推入 history（在 log/exit 检测之后，确保指令不污染对话历史）──
+		// ── 将用户输入推入 history ──
 		history.push(await makeUserInput(userInput, paths.workspace));
 
 		abortController = new AbortController();
@@ -260,7 +290,7 @@ export async function startCodeRepl(
 				err instanceof Error ? err.message : String(err ?? "未知错误");
 			writeln(style.gray(`  ${message}`));
 			writeln();
-			userInput = await prompt(`${label.user()} `);
+			userInput = await promptUser();
 			continue;
 		} finally {
 			agentRunning = false;
@@ -281,10 +311,10 @@ export async function startCodeRepl(
 			}
 		}
 
-		// ── 被用户中断（通过 AbortController.signal 判断，避免与 submit report 冲突） ──
+		// ── 被用户中断 ──
 		if (abortController.signal.aborted) {
 			writeln();
-			userInput = await prompt(`${label.user()} `);
+			userInput = await promptUser();
 			continue;
 		}
 
@@ -295,7 +325,7 @@ export async function startCodeRepl(
 			writeln(`${style.red("✗")} Agent 异常终止`);
 			if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 			writeln();
-			userInput = await prompt(`${label.user()} `);
+			userInput = await promptUser();
 			continue;
 		}
 
@@ -307,8 +337,10 @@ export async function startCodeRepl(
 					writeln(`     ${style.gray(opt.affect)}`);
 				}
 				writeln();
-				userInput = await prompt(`${label.user()} `);
-				injectUserResponse(history, userInput);
+				userInput = await promptUser();
+				if (userInput !== null) {
+					injectUserResponse(history, userInput);
+				}
 				continue;
 			}
 			case "request_assist": {
@@ -320,8 +352,10 @@ export async function startCodeRepl(
 					}
 				}
 				writeln();
-				userInput = await prompt(`${label.user()} `);
-				injectUserResponse(history, userInput);
+				userInput = await promptUser();
+				if (userInput !== null) {
+					injectUserResponse(history, userInput);
+				}
 				continue;
 			}
 			case "completed": {
@@ -333,12 +367,12 @@ export async function startCodeRepl(
 					writeln(style.gray(`  ${agentResult.report}`));
 				}
 				writeln();
-				userInput = await prompt(`${label.user()} `);
+				userInput = await promptUser();
 				break;
 			}
 		}
 	}
 
-	rl.close();
+	process.removeListener("SIGINT", sigintHandler);
 	writeln(style.gray("Bye!"));
 }
