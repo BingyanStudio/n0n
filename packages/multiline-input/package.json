@@ -6,6 +6,9 @@
 	"exports": {
 		".": "./src/index.ts"
 	},
+	"scripts": {
+		"test:interactive": "bun src/test-interactive.ts"
+	},
 	"dependencies": {
 		"string-width": "^8.2.0"
 	}
