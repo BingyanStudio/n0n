@@ -20,7 +20,7 @@ import { parse as parsePartialJSON } from "partial-json";
 interface WritePreview {
 	/** 累积的 JSON 参数字符串 */
 	args: string;
-	/** 解析出的目标文件路径（一旦解析到就锁定） */
+	/** 解析出的目标文件路径（content key 出现后锁定，避免 partial-json 截断值） */
 	targetPath: string | null;
 	/** 上一次写入的 content 长度（用于去重，避免内容未变时重复写入） */
 	lastContentLength: number;
@@ -109,8 +109,16 @@ export class CodeRenderer extends RichRenderer {
 		}
 		if (!parsed) return;
 
-		// 提取 path（首次解析到即锁定）
-		if (!preview.targetPath && typeof parsed.path === "string" && parsed.path) {
+		// 提取 path — 仅当 content key 已出现时才锁定
+		// partial-json 会为未闭合的字符串值补全引号，导致 path 值可能是截断的
+		// （如 {"path": "ts 被解析为 path:"ts"，实际应为 "tsconfig.json"）
+		// 当 content key 出现时，说明 path 值已完整传输，此时锁定是安全的
+		if (
+			!preview.targetPath &&
+			typeof parsed.path === "string" &&
+			parsed.path &&
+			"content" in parsed
+		) {
 			preview.targetPath = this.resolvePath(parsed.path);
 		}
 

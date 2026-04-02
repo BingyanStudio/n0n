@@ -37,7 +37,9 @@ wrap-ansi(text, terminalWidth) → split('\n').length → eraseLines(count)
 
 ---
 
-## 3. code-renderer: 流式 write 预览的 path 过早锁定 BUG
+## ~~3. code-renderer: 流式 write 预览的 path 过早锁定 BUG~~ ✅ 已修复
+
+> **已在 `fix/code-renderer-path-lock` 分支修复。** path 锁定延迟到 content key 出现后，5 个测试覆盖。
 
 **问题：** `CodeRenderer.flushPreview()` 使用 `partial-json` 解析流式 JSON 参数，在 path 值尚未传输完整时就锁定了文件路径。
 
