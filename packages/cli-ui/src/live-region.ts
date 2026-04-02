@@ -4,31 +4,48 @@
  * 追踪已写入的行数，支持清除后重写（流式参数 → 最终摘要）。
  * 仅在 TTY 模式下支持行替换，非 TTY 时退化为追加输出。
  *
- * 行计数考虑终端自动换行(wrap)：当单行可见宽度超过终端列宽时，
- * 实际占用的终端行数 = ceil(visibleWidth / columns)。
+ * 行计数策略：主动 wrap
+ * 写入前先用 wrap-ansi 按终端列宽主动折行，再输出折行后的文本。
+ * 行数 = 折行后文本中的 \n 数量，100% 精确，无需事后估算。
  */
 
+import wrapAnsi from "wrap-ansi";
 import {
 	clearDown,
 	cursorUp,
 	isTTY,
 	terminalColumns,
-	visibleWidth,
 	write,
 } from "./ansi.ts";
+
+/** wrap-ansi 选项：硬折行，不裁剪空格，不做单词级换行 */
+const WRAP_OPTIONS = { trim: false, hard: true, wordWrap: false } as const;
 
 export class LiveRegion {
 	private lineCount = 0;
 
-	/** 写入内容（自动追踪行数，考虑终端 wrap） */
-	write(text: string): void {
-		write(text);
-		this.lineCount += this.countDisplayLines(text);
+	/** 写入一行（含换行）— LiveRegion 的主要 API */
+	writeln(text = ""): void {
+		const cols = terminalColumns();
+		// 主动 wrap：将超宽内容折成多个终端行
+		const wrapped = wrapAnsi(text, cols, WRAP_OPTIONS);
+		const output = `${wrapped}\n`;
+		write(output);
+		// 精确计数：折行后的 \n 数量就是实际占用的终端行数
+		this.lineCount += countNewlines(output);
 	}
 
-	/** 写入一行（含换行） */
-	writeln(text = ""): void {
-		this.write(`${text}\n`);
+	/**
+	 * 写入内容（不自动换行）
+	 *
+	 * 注意：对不以 \n 结尾的文本，行数计算可能不完全精确
+	 * （当前行的剩余宽度未被追踪）。建议优先使用 writeln()。
+	 */
+	write(text: string): void {
+		const cols = terminalColumns();
+		const wrapped = wrapAnsi(text, cols, WRAP_OPTIONS);
+		write(wrapped);
+		this.lineCount += countNewlines(wrapped);
 	}
 
 	/** 清除已写入的所有行，光标回到起始位置 */
@@ -37,8 +54,6 @@ export class LiveRegion {
 			this.lineCount = 0;
 			return;
 		}
-		// 上移到区域起始位置，然后清除到屏幕末尾
-		// 使用 clearDown 而非逐行清除，避免行数增长时残留未清除的行
 		cursorUp(this.lineCount);
 		clearDown();
 		this.lineCount = 0;
@@ -54,35 +69,13 @@ export class LiveRegion {
 	reset(): void {
 		this.lineCount = 0;
 	}
+}
 
-	/**
-	 * 计算文本在终端中实际占用的显示行数。
-	 * 每个 \n 产生一个换行，同时每行的可见宽度超过终端列宽时会自动 wrap。
-	 */
-	private countDisplayLines(text: string): number {
-		const cols = terminalColumns();
-		let displayLines = 0;
-
-		const lines = text.split("\n");
-		// text.split("\n") 产生 N 段，其中有 N-1 个换行符
-		// 每个换行符对应一个终端行结束，最后一段如果非空则正在当前行继续
-		for (let i = 0; i < lines.length; i++) {
-			const isLastSegment = i === lines.length - 1;
-
-			if (!isLastSegment) {
-				// 此段以 \n 结尾 — 至少占 1 行
-				const w = visibleWidth(lines[i] ?? "");
-				if (w === 0) {
-					displayLines += 1; // 空行
-				} else {
-					displayLines += Math.ceil(w / cols);
-				}
-			}
-			// 最后一段（\n 之后的尾部）不产生新行 — 它还在同一行上
-			// 但如果它很长也会 wrap，不过 LiveRegion 主要通过 writeln 使用，
-			// 最后一段通常为空字符串（因为 writeln 以 \n 结尾）
-		}
-
-		return displayLines;
+/** 计算字符串中 \n 的数量 */
+function countNewlines(text: string): number {
+	let count = 0;
+	for (let i = 0; i < text.length; i++) {
+		if (text[i] === "\n") count++;
 	}
+	return count;
 }

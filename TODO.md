@@ -4,7 +4,9 @@
 
 ---
 
-## 1. cli-ui/LiveRegion: 从被动估算折行到主动 wrap
+## ~~1. cli-ui/LiveRegion: 从被动估算折行到主动 wrap~~ ✅ 已完成
+
+> **已在 `fix/live-region-wrap` 分支完成。** 引入 `wrap-ansi`，移除 `countDisplayLines` 估算逻辑，45 个测试全部通过。
 
 **问题：** `LiveRegion` 通过 `visibleWidth / terminalColumns` 事后估算终端自动折行的行数，CJK/emoji/ANSI 混合内容下容易算错，导致 `clear()` 清除行数不匹配（残留或吞内容）。
 

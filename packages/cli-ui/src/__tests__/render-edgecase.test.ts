@@ -63,7 +63,7 @@ describe("终端边界行为", () => {
 		// 某些终端：80字符自动wrap到下一行，\n 再换一行 → 实际占 2 行但有1行空行
 		// 另一些终端：80字符pending wrap，\n 触发换行 → 实际占 1 行
 		//
-		// LiveRegion 的 countDisplayLines("A".repeat(80) + "\n") 算出多少？
+		// LiveRegion 写入 "A".repeat(80) + "\n" 后行计数是多少？
 		const vt = setupVT(80);
 		const { LiveRegion } = await import("../live-region.ts");
 		const region = new LiveRegion();
@@ -100,7 +100,7 @@ describe("终端边界行为", () => {
 		);
 
 		// 关键检查：clear 后光标应在 row 0
-		// 如果 countDisplayLines 算的是 1（ceil(80/80)=1），cursorUp(1)
+		// 如果行计数为 1，cursorUp(1)
 		// 但如果真实终端80字符自动换行了，实际占了2行，cursorUp(1)就不够
 		console.log(`\n⚠️  如果 upN=1 但实际占2行 → clear 不完全 → 残留！`);
 		console.log(`   这就是"恰好填满终端宽度"的经典 off-by-one 问题`);

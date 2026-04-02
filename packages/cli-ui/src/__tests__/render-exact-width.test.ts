@@ -15,7 +15,7 @@
  *   → writeln("A".repeat(80)) 实际占2行
  *
  * 大多数现代终端使用模型A（deferred wrap），但 ceil(80/80) = 1，
- * 所以 countDisplayLines 和模型A一致。
+ * 所以 wrap-ansi 主动折行后的行计数和模型A一致。
  *
  * 但如果终端使用模型B，或者某些中间状态，就会出现 off-by-one。
  *
