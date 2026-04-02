@@ -2,9 +2,9 @@
  * Code REPL — 代码编写场景的交互循环
  *
  * Ctrl+C 行为：
- * - 用户输入时：中断当前输入（readMultilineInput 返回 null），不退出进程，继续下一轮
- * - 模型输出时：中断当前响应（AbortController），用户可继续输入新消息
- * - 退出方式：输入 "exit"
+ * - 用户输入时：退出 REPL（readMultilineInput 返回 null → break）
+ * - 模型输出时：中断当前响应（AbortController），切换到用户输入
+ * - 退出方式：输入 "exit" 或在用户输入阶段按 Ctrl+C
  *
  * 与 cli REPL 的区别：
  * - System prompt 为 code.md（代码 agent 而非 workflow builder）
@@ -143,26 +143,6 @@ async function promptUser(): Promise<string | null> {
 	return result?.text ?? null;
 }
 
-/**
- * 工具执行确认函数 — 按需创建 readline 实例
- *
- * 在 agent 运行期间被调用（此时 multiline-input 未激活，stdin 不在 raw mode），
- * 因此可以安全使用 readline。
- */
-function confirmFn(question: string): Promise<string> {
-	return new Promise<string>((resolve) => {
-		const rl = createInterface({
-			input: process.stdin,
-			output: process.stderr,
-			terminal: isTTY,
-		});
-		rl.question(question, (answer) => {
-			rl.close();
-			resolve(answer);
-		});
-		rl.once("close", () => resolve("n"));
-	});
-}
 
 export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
@@ -180,19 +160,11 @@ export async function startCodeRepl(
 		: new PlainRenderer();
 
 	// ── Ctrl+C 中断控制 ──
-	// 输入阶段：由 readMultilineInput 在 raw mode 中捕获 Ctrl+C，返回 null
-	// Agent 运行阶段：通过 process SIGINT 触发 AbortController
+	// 输入阶段：readMultilineInput 在 raw mode 中捕获 Ctrl+C 返回 null → REPL break 退出
+	// Agent 运行阶段：通过 readline SIGINT 事件触发 AbortController.abort()
+	// 注意：不能用 process.on("SIGINT")，在 Bun/Windows 上不可靠；
+	//       必须用 readline 的 SIGINT 事件，与旧版行为一致
 	let abortController = new AbortController();
-	let agentRunning = false;
-
-	const sigintHandler = () => {
-		if (agentRunning) {
-			abortController.abort();
-		}
-		// 输入阶段的 Ctrl+C 由 readMultilineInput raw mode 内部处理，
-		// 不会触发 process SIGINT，因此这里只需处理 agent 运行中的情况
-	};
-	process.on("SIGINT", sigintHandler);
 
 	// ── 初始化 history：恢复模式 or 全新对话 ──
 	let history: DomainMessage[];
@@ -231,11 +203,9 @@ export async function startCodeRepl(
 	}
 
 	while (true) {
-		// Ctrl+C 中断 → 继续下一轮
+		// Ctrl+C → 退出 REPL
 		if (userInput === null) {
-			writeln();
-			userInput = await promptUser();
-			continue;
+			break;
 		}
 
 		// exit 退出
@@ -271,14 +241,31 @@ export async function startCodeRepl(
 		// ── 将用户输入推入 history ──
 		history.push(await makeUserInput(userInput, paths.workspace));
 
+		// Agent 运行阶段：创建临时 readline 用于 SIGINT 捕获和工具确认
+		// readMultilineInput 已结束（stdin 不在 raw mode），readline 可安全使用
 		abortController = new AbortController();
-		agentRunning = true;
+		const agentRl = createInterface({
+			input: process.stdin,
+			output: process.stderr,
+			terminal: isTTY,
+		});
+		agentRl.on("SIGINT", () => {
+			abortController.abort();
+		});
+		const agentConfirmFn = (question: string): Promise<string> =>
+			new Promise<string>((resolve) => {
+				agentRl.question(question, (answer) => {
+					resolve(answer);
+				});
+				agentRl.once("close", () => resolve("n"));
+			});
+
 		let agentResult: Awaited<ReturnType<typeof agentLoop<CodeResult>>>;
 		try {
 			agentResult = await agentLoop<CodeResult>(history, {
 				maxIterations: 100,
 				renderer,
-				confirmFn,
+				confirmFn: agentConfirmFn,
 				schema: CodeResultSchema,
 				signal: abortController.signal,
 				toolsWorkspace: { workspace: paths.workspace, tempDir: paths.temp },
@@ -293,7 +280,7 @@ export async function startCodeRepl(
 			userInput = await promptUser();
 			continue;
 		} finally {
-			agentRunning = false;
+			agentRl.close();
 		}
 		history = agentResult.history;
 
@@ -373,6 +360,5 @@ export async function startCodeRepl(
 		}
 	}
 
-	process.removeListener("SIGINT", sigintHandler);
 	writeln(style.gray("Bye!"));
 }
