@@ -55,7 +55,7 @@ export function saveConversation(
 ): string {
 	const log: ConversationLog = {
 		version: 1,
-		metadata: {
+		humanReadable: {
 			savedAt: new Date().toISOString(),
 			workspace,
 			messageCount: history.length,

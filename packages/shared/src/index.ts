@@ -18,7 +18,7 @@ export {
 // Conversation Log
 export type {
 	ConversationLog,
-	ConversationMetadata,
+	HumanReadableInfo,
 } from "./conversation-log/index.ts";
 export {
 	generateLogFileName,

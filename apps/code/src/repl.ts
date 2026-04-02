@@ -264,7 +264,7 @@ export async function startCodeRepl(
 			writeln(
 				style.green("✓") +
 					style.gray(
-						` 已从 ${resumeFile} 恢复对话（${log.metadata.messageCount} 条消息）`,
+						` 已从 ${resumeFile} 恢复对话（${log.history.length} 条消息）`,
 					),
 			);
 			writeln();

@@ -17,5 +17,5 @@ export {
 } from "./conversation-log.ts";
 export type {
 	ConversationLog,
-	ConversationMetadata,
+	HumanReadableInfo,
 } from "./types.ts";
