@@ -68,20 +68,12 @@ if (typeof parsed.path === "string" && parsed.path && "content" in parsed) {
 
 ---
 
-## 4. exec 工具临时脚本的包解析问题
+## ~~4. exec 工具：uv 命令优化 + 包未找到诊断提示~~ ✅ 已完成
 
-**问题：** exec 工具将用户脚本写入 `.temp/` 目录再执行，虽然设置了 `cwd`，但 Bun/Node 的模块解析是基于**脚本文件所在路径**而非 `cwd`。导致脚本中 `import` 项目依赖时找不到包：
+> **已在 `fix/exec-uv-and-diagnostic-hint` 分支完成。**
 
-```
-error: Cannot find package 'string-width' from '/Users/.../n0n/.temp/_n0n_exec_xxx.ts'
-```
+**经过测试验证**，`.temp/` 作为 workspace 根的直接子目录，Bun/Node 向上一层即可找到 `node_modules/`，模块解析行为与脚本放在根目录完全一致。原始描述中的 `string-width` 找不到是 Bun monorepo 的正常行为（子包依赖不在根 `node_modules` 中），属于期望行为。
 
-**根因：** `.temp/` 下没有 `node_modules`，Bun 向上查找时也不会经过项目的 `node_modules`（如果 `.temp` 不在项目根目录的直接子级，或 Bun 的解析策略与预期不同）。
-
-**待评估方案：**
-- A) 不写入 `.temp`，改为写入项目根目录（用自定义前缀如 `_n0n_exec_` 标识），通过 `.gitignore` 规则和清理逻辑管理
-- B) 在 `.temp/` 下创建指向项目根 `node_modules` 的符号链接
-- C) 将脚本写入项目根目录的临时文件，执行后立即删除
-- D) 使用 `bun run --cwd` 或环境变量 `NODE_PATH` 控制模块解析路径
-
-需要进一步调查各方案的可靠性和副作用。
+**实际修复：**
+- `uv` 的 spawn 命令从 `["uv", "run", "python", tmpFile]` 改为 `["uv", "run", tmpFile]`，支持 PEP 723 inline script dependencies
+- exec 结果格式化中新增 `<diagnostic_hint>` 标签：当检测到模块/包未找到错误时，自动附加诊断提示（包不在根依赖中 / 未安装 / Python 可用 PEP 723）
