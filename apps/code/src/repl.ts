@@ -1,28 +1,10 @@
 /**
  * Code REPL — 代码编写场景的交互循环
  *
- * Ctrl+C 行为：
- * - 用户输入时：退出 REPL（readMultilineInput 返回 null → break）
- * - 模型输出时：中断当前响应（AbortController），切换到用户输入
- * - 退出方式：输入 "exit" 或在用户输入阶段按 Ctrl+C
- *
- * stdin 管理架构：
- * REPL 是 stdin 的唯一 owner。整个生命周期只做一次 setRawMode(true)，
- * 一个持久 data listener 根据当前 phase 路由数据：
- *   input → readMultilineInput（通过 connectStdin 注入）
- *   agent → 仅检测 \x03 触发 abort
- *   idle  → 忽略
- * 这避免了反复 add/remove listener 和 toggle raw mode 导致的 stdin 状态腐蚀。
- *
  * 与 cli REPL 的区别：
  * - System prompt 为 code.md（代码 agent 而非 workflow builder）
  * - Submit schema 为 CodeResultSchema（completed/ask_user/request_assist）
  * - Context 注入项目结构和 git 状态，而非 workflow 列表
- *
- * 对话持久化：
- * - `log` 命令：导出当前对话历史到 workspace 根目录
- * - `--resume <file>`：从文件恢复对话继续
- * - `--save-every-loop`：每轮 agentLoop 结束后自动保存到 n0n-conversation-latest.json
  */
 
 import { createInterface } from "node:readline";
@@ -41,14 +23,12 @@ import { CodeRenderer } from "./code-renderer.ts";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
-/** Code agent 的用户输入行为引导 */
 const USER_INPUT_HINT = [
 	"First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.",
 	"If genuinely stuck or ambiguous, submit `ask_user` with specific options for the user.",
 	"Otherwise, reason out what the engineer wrote — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
 ].join("\n");
 
-/** REPL 启动选项 */
 export interface CodeReplOptions {
 	initialInput?: string;
 	resumeFile?: string;
@@ -122,25 +102,15 @@ async function makeUserInput(
 }
 
 // ── stdin 状态机 ──
-// stdin 是进程级单例。整个 REPL 生命周期由此状态机统一管理，
-// 避免多个组件反复争夺控制权（add/remove listener、toggle raw mode）
-// 导致的 stdin 内部状态腐蚀。
-//
-// 状态:
-//   idle  — 无数据路由（REPL 启动/退出间隙）
-//   input — 数据路由到 readMultilineInput 的 handler（用户输入阶段）
-//   agent — 仅检测 \x03 (Ctrl+C) 触发 abort（agent 运行阶段）
+// 避免多个组件反复争夺 stdin 控制权（add/remove listener、toggle raw mode）
+// 导致的 listener 累积和状态腐蚀。一个持久 listener + phase 路由替代。
 
 type StdinPhase = "idle" | "input" | "agent";
 
 interface StdinController {
-	/** 当前阶段 */
 	phase: StdinPhase;
-	/** input 阶段的数据处理器（由 readMultilineInput 通过 connectStdin 注册） */
 	dataHandler: ((data: string) => void) | null;
-	/** agent 阶段的 AbortController */
 	abortController: AbortController;
-	/** 恢复 stdin 到 REPL 启动前的状态 */
 	dispose: () => void;
 }
 
@@ -170,8 +140,6 @@ function createStdinController(): StdinController {
 		}
 	}
 
-	// stdin 生命周期：REPL 启动时进入 raw mode，退出时恢复
-	// 中间不再切换 raw mode，只通过 phase 路由数据
 	process.stdin.setRawMode(true);
 	process.stdin.resume();
 	process.stdin.setEncoding("utf8");
@@ -198,7 +166,7 @@ export async function startCodeRepl(
 	// ── stdin 控制器（仅 TTY 模式） ──
 	const stdin = isTTY ? createStdinController() : null;
 
-	// ── promptUser: 通过 connectStdin 将数据路由到 readMultilineInput ──
+	// ── promptUser ──
 	async function promptUser(): Promise<string | null> {
 		if (!stdin) {
 			return new Promise<string | null>((resolve) => {
@@ -233,7 +201,6 @@ export async function startCodeRepl(
 	// 避免 readline 的 emitKeypressEvents 在 stdin 上累积永久 listener
 	function confirmFn(question: string): Promise<string> {
 		if (!stdin) {
-			// 非 TTY: 使用 readline（不涉及 raw mode 管理）
 			return new Promise<string>((resolve) => {
 				const rl = createInterface({
 					input: process.stdin,
@@ -255,7 +222,6 @@ export async function startCodeRepl(
 				for (let i = 0; i < data.length; i++) {
 					const code = data.charCodeAt(i);
 					if (code === 3) {
-						// Ctrl+C → 视为拒绝，同时触发 abort
 						process.stderr.write("\n");
 						stdin.dataHandler = null;
 						stdin.phase = "agent";
@@ -264,7 +230,6 @@ export async function startCodeRepl(
 						return;
 					}
 					if (code === 13) {
-						// Enter → 提交
 						process.stderr.write("\n");
 						stdin.dataHandler = null;
 						stdin.phase = "agent";
@@ -272,7 +237,6 @@ export async function startCodeRepl(
 						return;
 					}
 					if (code === 127 || code === 8) {
-						// Backspace
 						if (line.length > 0) {
 							line = line.slice(0, -1);
 							process.stderr.write("\b \b");
@@ -280,7 +244,6 @@ export async function startCodeRepl(
 						continue;
 					}
 					if (code >= 32) {
-						// 可打印字符
 						line += data[i];
 						process.stderr.write(data[i]!);
 					}
