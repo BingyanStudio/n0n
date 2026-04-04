@@ -8,6 +8,7 @@
  * 设计原则：
  * - 利用指令式事件模型，不新增 Renderer 接口
  * - 改动封闭在 code app 内，不影响核心包和其他 app
+ * - 未来可扩展：如 edit 工具的实时 diff 预览（当前仅 write）
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
