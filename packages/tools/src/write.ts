@@ -146,9 +146,26 @@ function tryExtractPartialWrite(
 	);
 	if (valueStart === -1) return { path, content: "" };
 
-	const rawContent = partialJson.slice(valueStart + 1);
-	const cleaned = rawContent.replace(/\\?$/, "");
-	const content = cleaned
+	// 从 content 值的开始引号之后扫描，寻找未转义的闭合引号
+	const afterQuote = partialJson.slice(valueStart + 1);
+	let rawContent: string;
+
+	// 扫描闭合引号：逐字符检查，跳过 \" 转义
+	let closeIdx = -1;
+	for (let i = 0; i < afterQuote.length; i++) {
+		if (afterQuote[i] === '\\') { i++; continue; } // 跳过转义字符
+		if (afterQuote[i] === '"') { closeIdx = i; break; }
+	}
+
+	if (closeIdx !== -1) {
+		// 找到闭合引号：截取引号之前的内容（完整 content 值）
+		rawContent = afterQuote.slice(0, closeIdx);
+	} else {
+		// 未找到闭合引号：content 确实被截断，取到末尾并清理尾部不完整转义
+		rawContent = afterQuote.replace(/\\?$/, "");
+	}
+
+	const content = rawContent
 		.replace(/\\n/g, "\n")
 		.replace(/\\t/g, "\t")
 		.replace(/\\r/g, "\r")
