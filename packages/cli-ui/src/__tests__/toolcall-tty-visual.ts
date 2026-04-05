@@ -7,6 +7,7 @@
  * 场景B：超 maxLines 的 write 工具（行数持续增长到 maxLines 后稳定）
  */
 
+import type { ToolResult, ToolCallRecord } from "@n0n/types";
 import { RichRenderer } from "../rich-renderer.ts";
 
 function sleep(ms: number) {
@@ -44,22 +45,20 @@ async function scenarioA() {
 	renderer.streamEnd();
 	await sleep(300);
 
-	renderer.toolExecStart({
+	const call: ToolCallRecord = {
 		id: "call_1",
 		tool: "write",
 		args: { path: "src/app.ts", content: "hello world" },
-	});
+	};
+
+	renderer.toolExecStart(call);
 
 	renderer.toolExecEnd({
-		type: "tool_result" as const,
+		type: "tool_result",
 		tool: "write",
-		call: {
-			id: "call_1",
-			tool: "write",
-			args: { path: "src/app.ts", content: "hello world" },
-		},
-		success: true,
-	} as any);
+		call,
+		status: "completed",
+	} satisfies ToolResult);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -91,30 +90,21 @@ async function scenarioB() {
 	renderer.streamEnd();
 	await sleep(300);
 
-	renderer.toolExecStart({
+	const contentStr = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n");
+	const call: ToolCallRecord = {
 		id: "call_1",
 		tool: "write",
-		args: {
-			path: "output.txt",
-			content: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n"),
-		},
-	});
+		args: { path: "output.txt", content: contentStr },
+	};
+
+	renderer.toolExecStart(call);
 
 	renderer.toolExecEnd({
-		type: "tool_result" as const,
+		type: "tool_result",
 		tool: "write",
-		call: {
-			id: "call_1",
-			tool: "write",
-			args: {
-				path: "output.txt",
-				content: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join(
-					"\n",
-				),
-			},
-		},
-		success: true,
-	} as any);
+		call,
+		status: "completed",
+	} satisfies ToolResult);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -134,20 +124,23 @@ async function scenarioC() {
 	await sleep(300);
 
 	renderer.streamEnd();
-	renderer.toolExecStart({
+
+	const execCall: ToolCallRecord = {
 		id: "call_1",
 		tool: "exec",
 		args: { script: "echo round1" },
-	});
+	};
+	renderer.toolExecStart(execCall);
 	renderer.toolExecEnd({
-		type: "tool_result" as const,
+		type: "tool_result",
 		tool: "exec",
-		call: { id: "call_1", tool: "exec", args: { script: "echo round1" } },
+		call: execCall,
+		status: "completed",
 		exitCode: 0,
 		stdout: "round1\n",
 		stderr: "",
 		durationMs: 50,
-	} as any);
+	} satisfies ToolResult);
 
 	await sleep(500);
 
@@ -171,21 +164,19 @@ async function scenarioC() {
 
 	await sleep(500);
 	renderer.streamEnd();
-	renderer.toolExecStart({
+
+	const writeCall: ToolCallRecord = {
 		id: "call_2",
 		tool: "write",
 		args: { path: "test.txt", content: "line1\nline2\nline3" },
-	});
+	};
+	renderer.toolExecStart(writeCall);
 	renderer.toolExecEnd({
-		type: "tool_result" as const,
+		type: "tool_result",
 		tool: "write",
-		call: {
-			id: "call_2",
-			tool: "write",
-			args: { path: "test.txt", content: "line1\nline2\nline3" },
-		},
-		success: true,
-	} as any);
+		call: writeCall,
+		status: "completed",
+	} satisfies ToolResult);
 }
 
 console.error("🔍 TTY 下 RichRenderer 流式 Tool Call 渲染复现测试");
