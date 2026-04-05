@@ -12,7 +12,7 @@
 
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
-import type { DomainMessage, Renderer, ToolCallRecord } from "@n0n/types";
+import type { DomainMessage, PartialToolCallRecord, Renderer, ToolCallRecord } from "@n0n/types";
 import { FinishReason } from "@n0n/types";
 import type { ZodType } from "zod";
 import { getRuntime } from "../runtime.ts";
@@ -156,20 +156,15 @@ export async function agentLoop<T = unknown>(
 		// ── 3. 截断恢复 + seal ──
 		const tryRecover = async (toolName: string, toolCallId: string, partialJson: string) => {
 			const entry = toolkit.getEntry(toolName);
-			return (await entry?.recover?.(toolCallId, partialJson)) ?? null;
+			return (await entry?.recoverAndExecute?.(toolCallId, partialJson)) ?? null;
 		};
 		const truncation = await recoverTruncatedCalls(streamResult!, tryRecover);
 		scheduler.seal();
 
 		// 合并所有工具调用：streaming 完成的 + 截断恢复的
-		const allCalls: ToolCallRecord[] = [
+		const allCalls: (ToolCallRecord | PartialToolCallRecord)[] = [
 			...streamResult!.readyTools.values(),
-			// recovered pairs 的 call 是完整 ToolCallRecord；
-			// unrecoverable pairs 的 call 是占位记录（仅 id/tool 有效），
-			// 强转为 ToolCallRecord 以保持 assistant_tool_call 消息结构与 tool_arg_error 的配对。
-			...truncation.pairs.map(p =>
-				p.status === "recovered" ? p.call : p.call as unknown as ToolCallRecord
-			),
+			...truncation.pairs.map(p => p.call),
 		];
 
 		if (allCalls.length === 0) continue;

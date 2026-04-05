@@ -71,12 +71,12 @@ export interface RecoverResult {
 	result: DomainMessage;
 }
 
-/** 截断恢复函数：尝试从不完整的 JSON 参数中恢复并执行，返回 call+result 对 */
+/** 截断恢复+执行函数：尝试从不完整的 JSON 参数中恢复并执行，返回 call+result 对 */
 export type RecoverFn = (toolCallId: string, partialJson: string) => Promise<RecoverResult | null>;
 
 export type ToolEntry =
-	| { definition: ToolDefinition; stream: true; execute: StreamExecutor; recover?: RecoverFn }
-	| { definition: ToolDefinition; stream: false; execute: SyncExecutor; recover?: RecoverFn };
+	| { definition: ToolDefinition; stream: true; execute: StreamExecutor; recoverAndExecute?: RecoverFn }
+	| { definition: ToolDefinition; stream: false; execute: SyncExecutor; recoverAndExecute?: RecoverFn };
 
 // ── 基础注册表构建 ──
 
@@ -120,7 +120,7 @@ function buildBaseRegistry(
 				};
 				return writeTool(call, resolvedWorkspace);
 			},
-			recover: makeWriteRecover(resolvedWorkspace),
+			recoverAndExecute: makeWriteRecover(resolvedWorkspace),
 		},
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,
