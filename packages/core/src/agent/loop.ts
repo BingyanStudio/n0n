@@ -164,7 +164,12 @@ export async function agentLoop<T = unknown>(
 		// 合并所有工具调用：streaming 完成的 + 截断恢复的
 		const allCalls: ToolCallRecord[] = [
 			...streamResult!.readyTools.values(),
-			...truncation.pairs.map(p => p.call),
+			// recovered pairs 的 call 是完整 ToolCallRecord；
+			// unrecoverable pairs 的 call 是占位记录（仅 id/tool 有效），
+			// 强转为 ToolCallRecord 以保持 assistant_tool_call 消息结构与 tool_arg_error 的配对。
+			...truncation.pairs.map(p =>
+				p.status === "recovered" ? p.call : p.call as unknown as ToolCallRecord
+			),
 		];
 
 		if (allCalls.length === 0) continue;
