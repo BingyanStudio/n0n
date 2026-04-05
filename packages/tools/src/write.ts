@@ -2,11 +2,18 @@
  * write 工具 — 文件创建/覆盖
  *
  * 纯文件写入，不含修改逻辑（修改由 edit 工具负责）。
+ *
+ * WriteToolResult 是四态判别联合（status 字段）：
+ * - completed: 正常写入成功
+ * - failed: 写入失败（IO 错误等）
+ * - recovered: 从截断恢复后写入成功（内容不完整）
+ * - recover_failed: 从截断恢复失败（参数无法解析）
  */
 
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type {
+	DomainMessage,
 	ToolCallRecord,
 	ToolDefinition,
 	WriteToolCall,
@@ -36,9 +43,27 @@ export const WRITE_TOOL_DEFINITION: ToolDefinition = {
 	},
 };
 
+/** 正常写入（非截断恢复） */
 export async function writeTool(
 	call: WriteToolCall,
 	workspace: string,
+): Promise<WriteToolResult> {
+	return writeFile(call, workspace, "completed");
+}
+
+/** 截断恢复写入（内容不完整） */
+export async function writeToolRecovered(
+	call: WriteToolCall,
+	workspace: string,
+): Promise<WriteToolResult> {
+	return writeFile(call, workspace, "recovered");
+}
+
+/** 统一写入实现，status 由调用方决定 */
+async function writeFile(
+	call: WriteToolCall,
+	workspace: string,
+	successStatus: "completed" | "recovered",
 ): Promise<WriteToolResult> {
 	const filePath = isAbsolute(call.args.path)
 		? call.args.path
@@ -54,15 +79,16 @@ export async function writeTool(
 			type: "tool_result",
 			tool: "write" as const,
 			call,
-			success: true,
-			error: null,
+			status: successStatus,
 		};
 	} catch (err) {
+		// 截断恢复写入也可能失败（权限等），统一用 recover_failed 或 failed
+		const errorStatus = successStatus === "recovered" ? "recover_failed" : "failed";
 		return {
 			type: "tool_result",
 			tool: "write" as const,
 			call,
-			success: false,
+			status: errorStatus,
 			error: err instanceof Error ? err.message : String(err),
 		};
 	}
@@ -71,20 +97,25 @@ export async function writeTool(
 // ── 截断恢复 ──
 
 /**
- * 从截断的 write 工具 JSON 参数中恢复出可执行的 ToolCallRecord。
- * 用作 ToolEntry.recover，由截断恢复框架调用。
+ * 创建 write 工具的截断恢复函数（闭包绑定 workspace）。
+ * 恢复参数 → 执行写入 → 返回 {call, result} 对。
  */
-export function recoverPartialWrite(
-	toolCallId: string,
-	partialJson: string,
-): ToolCallRecord | null {
-	const extracted = tryExtractPartialWrite(partialJson);
-	if (!extracted) return null;
-	return {
-		id: toolCallId,
-		tool: "write",
-		args: { path: extracted.path, content: extracted.content },
-	} as ToolCallRecord;
+export function makeWriteRecover(workspace: string) {
+	return async (
+		toolCallId: string,
+		partialJson: string,
+	): Promise<{ call: ToolCallRecord; result: DomainMessage } | null> => {
+		const extracted = tryExtractPartialWrite(partialJson);
+		if (!extracted) return null;
+
+		const call: WriteToolCall = {
+			id: toolCallId,
+			tool: "write",
+			args: { path: extracted.path, content: extracted.content },
+		};
+		const result = await writeToolRecovered(call, workspace);
+		return { call, result };
+	};
 }
 
 /**

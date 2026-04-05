@@ -13,6 +13,7 @@
  */
 
 import type {
+	DomainMessage,
 	EditToolCall,
 	ExecToolCall,
 	ReminderToolCall,
@@ -48,7 +49,7 @@ import {
 	SubmitArgsSchema,
 	submitTool,
 } from "./submit.ts";
-import { WRITE_TOOL_DEFINITION, WriteArgsSchema, writeTool, recoverPartialWrite } from "./write.ts";
+import { WRITE_TOOL_DEFINITION, WriteArgsSchema, writeTool, makeWriteRecover } from "./write.ts";
 
 // ── 执行器类型 ──
 
@@ -64,8 +65,14 @@ type SyncExecutor = (
 	confirmFn?: (question: string) => Promise<string>,
 ) => Promise<ToolResult> | ToolResult;
 
-/** 截断恢复函数：从不完整的 JSON 参数中尝试恢复出可执行的 ToolCallRecord */
-export type RecoverFn = (toolCallId: string, partialJson: string) => ToolCallRecord | null;
+/** 截断恢复结果：恢复后的工具调用 + 执行结果 */
+export interface RecoverResult {
+	call: ToolCallRecord;
+	result: DomainMessage;
+}
+
+/** 截断恢复函数：尝试从不完整的 JSON 参数中恢复并执行，返回 call+result 对 */
+export type RecoverFn = (toolCallId: string, partialJson: string) => Promise<RecoverResult | null>;
 
 export type ToolEntry =
 	| { definition: ToolDefinition; stream: true; execute: StreamExecutor; recover?: RecoverFn }
@@ -113,7 +120,7 @@ function buildBaseRegistry(
 				};
 				return writeTool(call, resolvedWorkspace);
 			},
-			recover: recoverPartialWrite,
+			recover: makeWriteRecover(resolvedWorkspace),
 		},
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,
