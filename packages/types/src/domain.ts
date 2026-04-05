@@ -64,12 +64,24 @@ export interface AssistantTextMessage {
 	reasoningSignature?: string | null;
 }
 
+/** 截断的工具调用信息（参数未完整，工具未被执行） */
+export interface TruncatedToolCallInfo {
+	/** 原始 toolCallId */
+	id: string;
+	/** 工具名 */
+	tool: string;
+	/** 已接收的部分 JSON 参数 */
+	partialArgs: string;
+}
+
 export interface AssistantToolCallMessage {
 	type: "assistant_tool_call";
 	content: string | null;
 	reasoning?: string | null;
 	reasoningSignature?: string | null;
 	toolCalls: ToolCallRecord[];
+	/** 截断的工具调用（参数不完整，未被执行）。adapter 负责将其转换为协议所需的 tool call + response 对。 */
+	truncatedCalls?: TruncatedToolCallInfo[];
 }
 
 // ── 工具调用记录（判别联合） ──
@@ -293,6 +305,19 @@ export interface SubmitRejectedMessage {
 	maxAttempts: number;
 }
 
+/** 流式输出截断/中断时，未完成工具调用的错误记录 */
+export interface ToolCallTruncatedMessage {
+	type: "tool_call:truncated";
+	/** 被截断的工具名 */
+	tool: string;
+	/** 原始 toolCallId（如已分配） */
+	callId: string;
+	/** 截断原因 */
+	reason: "length" | "error" | "aborted";
+	/** 已接收的部分参数（可用于诊断） */
+	partialArgs: string;
+}
+
 // ── 通用工具消息（内部子循环使用） ──
 
 /**
@@ -331,4 +356,5 @@ export type DomainMessage =
 	| TurnFeedbackMessage
 	| ReminderDueMessage
 	| SubmitRejectedMessage
-	| ToolArgErrorMessage;
+	| ToolArgErrorMessage
+	| ToolCallTruncatedMessage;

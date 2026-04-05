@@ -258,6 +258,16 @@ export function formatPrompt(
 					tool: tc.tool,
 					args: tc.args,
 				}));
+				// 截断的工具调用也需要出现在 assistant 消息的 tool call 列表中（协议要求每个 tool response 有对应的 tool call）
+				if (msg.truncatedCalls) {
+					for (const tc of msg.truncatedCalls) {
+						toolCalls.push({
+							id: tc.id,
+							tool: tc.tool,
+							args: {},
+						});
+					}
+				}
 				result.push({
 					role: "assistant",
 					content: msg.content ?? "",
@@ -364,6 +374,22 @@ export function formatPrompt(
 					content: msg.content,
 				});
 				break;
+
+			case "tool_call:truncated": {
+				let errorContent = `Tool call was truncated during streaming (reason: ${msg.reason}).`;
+				if (msg.tool === "write") {
+					errorContent += `\n\nThe write tool's content was cut off due to max_tokens limit. The file has been written with the partial content received so far. To complete it:\n- Use edit to append/fix the remaining content.\n- Or rewrite the file in smaller chunks.\n- Consider splitting large files for better maintainability.`;
+				} else {
+					errorContent += `\nThe tool call arguments were incomplete and could not be parsed. Please retry with a shorter response, or break the task into smaller steps.`;
+				}
+				result.push({
+					role: "tool",
+					toolCallId: msg.callId,
+					toolName: msg.tool,
+					content: wrapTag("error", errorContent, modelId),
+				});
+				break;
+			}
 		}
 	}
 
