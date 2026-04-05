@@ -12,6 +12,17 @@
  * - XML tag 风格适配
  *
  * 不包含：协议消息格式构造、prompt caching 注入 — 这些属于 Client 内部。
+ *
+ * 设计决策：工具结果的格式化（formatExecResult / formatWriteResult / formatEditResult）
+ * 内聚在本模块而非各工具自身。原因：
+ * 1. 提示词格式化是面向模型的适配层，不同模型/用户可能需要不同的格式化策略。
+ *    工具自身不应关心"被用于什么场景"或"面向什么模型"。
+ * 2. 所有工具的格式化逻辑集中在一处，便于统一审查提示词质量、
+ *    调整 XML tag 风格、或为不同模型切换整套格式化方案。
+ * 3. 工具层只产出纯数据的 ToolResult（DomainMessage），格式化职责完全属于 adapter 层。
+ *
+ * 简言之，本模块是 DomainMessage → PromptMessage 的集中式 adapter，
+ * 工具特化的格式逻辑内聚在此是刻意设计（统一适配层），不是职责泄漏。
  */
 
 import type {
@@ -104,18 +115,38 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 			}
 			return parts.join("\n");
 		}
+		default: {
+			const _exhaustive: never = msg;
+			return `Unknown exec status: ${(msg as any).status}`;
+		}
 	}
 }
 
 function formatWriteResult(msg: WriteToolResult, model: string): string {
-	if (msg.success) {
-		return wrapTag(
-			"write_result",
-			`Written to \`${msg.call.args.path}\``,
-			model,
-		);
+	switch (msg.status) {
+		case "completed":
+			return wrapTag("write_result", `Written to \`${msg.call.args.path}\``, model);
+		case "failed":
+			return wrapTag("error", `Write failed: ${msg.error}`, model);
+		case "recovered": {
+			const hint = [
+				`Partial write to \`${msg.call.args.path}\` (content was truncated by max_tokens).`,
+				`The file contains only the first portion of your intended content.`,
+				``,
+				`To complete it, choose one strategy:`,
+				`1. Write the remaining content to a temp file, then use exec to append it: exec({ script: "cat tmp_rest.txt >> target_file" })`,
+				`2. Break the file into smaller, well-structured modules and write each separately.`,
+				`Do NOT use edit for large appends — it is intent-driven and not suited for bulk content insertion.`,
+			].join("\n");
+			return wrapTag("write_result", hint, model);
+		}
+		case "recover_failed":
+			return wrapTag("error", `Write failed after truncation recovery: ${msg.error}`, model);
+		default: {
+			const _exhaustive: never = msg;
+			return wrapTag("error", `Unknown write status: ${(msg as any).status}`, model);
+		}
 	}
-	return wrapTag("error", `Write failed: ${msg.error}`, model);
 }
 
 function formatDiffText(diff: EditDiff): string {
@@ -258,16 +289,6 @@ export function formatPrompt(
 					tool: tc.tool,
 					args: tc.args,
 				}));
-				// 截断的工具调用也需要出现在 assistant 消息的 tool call 列表中（协议要求每个 tool response 有对应的 tool call）
-				if (msg.truncatedCalls) {
-					for (const tc of msg.truncatedCalls) {
-						toolCalls.push({
-							id: tc.id,
-							tool: tc.tool,
-							args: {},
-						});
-					}
-				}
 				result.push({
 					role: "assistant",
 					content: msg.content ?? "",
@@ -375,21 +396,6 @@ export function formatPrompt(
 				});
 				break;
 
-			case "tool_call:truncated": {
-				let errorContent = `Tool call was truncated during streaming (reason: ${msg.reason}).`;
-				if (msg.tool === "write") {
-					errorContent += `\n\nThe write tool's content was cut off due to max_tokens limit. The file has been written with the partial content received so far. To complete it:\n- Use edit to append/fix the remaining content.\n- Or rewrite the file in smaller chunks.\n- Consider splitting large files for better maintainability.`;
-				} else {
-					errorContent += `\nThe tool call arguments were incomplete and could not be parsed. Please retry with a shorter response, or break the task into smaller steps.`;
-				}
-				result.push({
-					role: "tool",
-					toolCallId: msg.callId,
-					toolName: msg.tool,
-					content: wrapTag("error", errorContent, modelId),
-				});
-				break;
-			}
 		}
 	}
 

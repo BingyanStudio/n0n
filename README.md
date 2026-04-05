@@ -195,7 +195,8 @@ n0n/
 │   ├── workflow/      # delegateTask/generate/RAG 流水线
 │   ├── scheduler/     # Cron 调度器
 │   ├── tui/           # 终端 UI（React + Ink）
-│   └── cli-ui/        # 共享终端渲染
+│   ├── cli-ui/        # 共享终端渲染
+│   └── multiline-input/ # 多行输入组件
 │
 ├── apps/              # 应用入口
 │   ├── cli/           # 交互式 REPL

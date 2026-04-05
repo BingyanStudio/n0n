@@ -12,7 +12,7 @@
 
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
-import type { DomainMessage, Renderer, ToolCallRecord } from "@n0n/types";
+import type { DomainMessage, PartialToolCallRecord, Renderer, ToolCallRecord } from "@n0n/types";
 import { FinishReason } from "@n0n/types";
 import type { ZodType } from "zod";
 import { getRuntime } from "../runtime.ts";
@@ -154,22 +154,23 @@ export async function agentLoop<T = unknown>(
 		idleCount = 0;
 
 		// ── 3. 截断恢复 + seal ──
-		const truncation = recoverTruncatedCalls(streamResult!);
-		const allTools: ToolCallRecord[] = [...streamResult!.readyTools.values()];
-		for (const tc of truncation.recoveredTools) {
-			allTools.push(tc);
-			scheduler.enqueue(tc);
-		}
+		const tryRecover = async (toolName: string, toolCallId: string, partialJson: string) => {
+			const entry = toolkit.getEntry(toolName);
+			return (await entry?.recoverAndExecute?.(toolCallId, partialJson)) ?? null;
+		};
+		const truncation = await recoverTruncatedCalls(streamResult!, tryRecover);
 		scheduler.seal();
 
-		if (allTools.length === 0 && truncation.truncatedCalls.length === 0) continue;
+		// 合并所有工具调用：streaming 完成的 + 截断恢复的
+		const allCalls: (ToolCallRecord | PartialToolCallRecord)[] = [
+			...streamResult!.readyTools.values(),
+			...truncation.pairs.map(p => p.call),
+		];
+
+		if (allCalls.length === 0) continue;
 
 		// ── 4. 构建 assistant 消息 ──
-		messages.push(buildToolCallMessage(
-			streamResult!.accumulator,
-			allTools,
-			truncation.truncatedCalls,
-		));
+		messages.push(buildToolCallMessage(streamResult!.accumulator, allCalls));
 
 		// ── 5. 等待执行 + 渲染完成 ──
 		await Promise.all([
@@ -179,7 +180,10 @@ export async function agentLoop<T = unknown>(
 
 		// ── 6. 收集结果消息 ──
 		messages.push(...collectJobMessages(scheduler.orderedJobs()));
-		for (const msg of truncation.messages) messages.push(msg);
+		// 截断恢复的 result 已由 truncation 产出（recover 内执行完毕）
+		for (const pair of truncation.pairs) {
+			messages.push(pair.result);
+		}
 
 		// ── 7. Submit 检查 ──
 		const submit = checkSubmit(scheduler.orderedJobs(), options?.schema, submitRetries, MAX_SUBMIT_RETRIES);

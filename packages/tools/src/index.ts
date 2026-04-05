@@ -13,6 +13,7 @@
  */
 
 import type {
+	DomainMessage,
 	EditToolCall,
 	ExecToolCall,
 	ReminderToolCall,
@@ -48,7 +49,7 @@ import {
 	SubmitArgsSchema,
 	submitTool,
 } from "./submit.ts";
-import { WRITE_TOOL_DEFINITION, WriteArgsSchema, writeTool } from "./write.ts";
+import { WRITE_TOOL_DEFINITION, WriteArgsSchema, writeTool, makeWriteRecover } from "./write.ts";
 
 // ── 执行器类型 ──
 
@@ -64,9 +65,27 @@ type SyncExecutor = (
 	confirmFn?: (question: string) => Promise<string>,
 ) => Promise<ToolResult> | ToolResult;
 
-export type ToolEntry =
-	| { definition: ToolDefinition; stream: true; execute: StreamExecutor }
-	| { definition: ToolDefinition; stream: false; execute: SyncExecutor };
+/** 截断恢复结果：恢复后的工具调用 + 执行结果 */
+export interface RecoverResult {
+	call: ToolCallRecord;
+	result: DomainMessage;
+}
+
+/**
+ * 截断恢复+执行函数：尝试从不完整的 JSON 参数中恢复并执行，返回 call+result 对。
+ *
+ * 始终为非流式（返回 Promise），与 execute 的 stream 模式无关。原因：
+ * 截断恢复的结果不经过 scheduler/renderBuffer 流式管线，
+ * 而是由 tool-recovery 模块直接产出 (call, result) 对追加到 history。
+ * 截断场景下参数不完整，不适合做正常的流式执行。
+ */
+export type RecoverFn = (toolCallId: string, partialJson: string) => Promise<RecoverResult | null>;
+
+/** 工具注册表条目 — stream 字段决定 execute 类型，recoverAndExecute 与 stream 无关 */
+export type ToolEntry = { definition: ToolDefinition; recoverAndExecute?: RecoverFn } & (
+	| { stream: true; execute: StreamExecutor }
+	| { stream: false; execute: SyncExecutor }
+);
 
 // ── 基础注册表构建 ──
 
@@ -110,6 +129,7 @@ function buildBaseRegistry(
 				};
 				return writeTool(call, resolvedWorkspace);
 			},
+			recoverAndExecute: makeWriteRecover(resolvedWorkspace),
 		},
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,

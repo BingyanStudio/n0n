@@ -64,24 +64,12 @@ export interface AssistantTextMessage {
 	reasoningSignature?: string | null;
 }
 
-/** 截断的工具调用信息（参数未完整，工具未被执行） */
-export interface TruncatedToolCallInfo {
-	/** 原始 toolCallId */
-	id: string;
-	/** 工具名 */
-	tool: string;
-	/** 已接收的部分 JSON 参数 */
-	partialArgs: string;
-}
-
 export interface AssistantToolCallMessage {
 	type: "assistant_tool_call";
 	content: string | null;
 	reasoning?: string | null;
 	reasoningSignature?: string | null;
-	toolCalls: ToolCallRecord[];
-	/** 截断的工具调用（参数不完整，未被执行）。adapter 负责将其转换为协议所需的 tool call + response 对。 */
-	truncatedCalls?: TruncatedToolCallInfo[];
+	toolCalls: (ToolCallRecord | PartialToolCallRecord)[];
 }
 
 // ── 工具调用记录（判别联合） ──
@@ -122,6 +110,17 @@ export type ToolCallRecord =
 	| EditToolCall
 	| ReminderToolCall
 	| SubmitToolCall;
+
+/**
+ * 截断恢复失败的不完整工具调用记录。
+ * 仅 id 和 tool 字段有意义，args 为空对象。
+ * 用于在 assistant_tool_call 消息中保持与 tool_arg_error result 的配对完整性。
+ */
+export interface PartialToolCallRecord {
+	id: string;
+	tool: string;
+	args: Record<string, never>;
+}
 
 // ── 工具结果 ──
 // 每个 Result 嵌入原始 ToolCall（call 字段）。
@@ -182,12 +181,39 @@ interface ExecTimedOut extends ExecResultBase {
 
 export type ExecToolResult = ExecCompleted | ExecTruncated | ExecTimedOut;
 
-export type WriteToolResult = ToolResultBase & {
-	tool: WriteToolCall["tool"]; // "write"
+/** write 结果的公共字段 */
+interface WriteResultBase extends ToolResultBase {
+	tool: WriteToolCall["tool"];
 	call: WriteToolCall;
-	success: boolean;
-	error: string | null;
-};
+}
+
+/** write 正常写入成功 */
+interface WriteCompleted extends WriteResultBase {
+	status: "completed";
+}
+
+/** write 写入失败 */
+interface WriteFailed extends WriteResultBase {
+	status: "failed";
+	error: string;
+}
+
+/** write 从截断恢复后写入成功（内容不完整） */
+interface WriteRecovered extends WriteResultBase {
+	status: "recovered";
+}
+
+/** write 从截断恢复失败（参数无法解析） */
+interface WriteRecoverFailed extends WriteResultBase {
+	status: "recover_failed";
+	error: string;
+}
+
+export type WriteToolResult =
+	| WriteCompleted
+	| WriteFailed
+	| WriteRecovered
+	| WriteRecoverFailed;
 
 /** diff 中的单行 */
 export interface DiffLine {
@@ -305,19 +331,6 @@ export interface SubmitRejectedMessage {
 	maxAttempts: number;
 }
 
-/** 流式输出截断/中断时，未完成工具调用的错误记录 */
-export interface ToolCallTruncatedMessage {
-	type: "tool_call:truncated";
-	/** 被截断的工具名 */
-	tool: string;
-	/** 原始 toolCallId（如已分配） */
-	callId: string;
-	/** 截断原因 */
-	reason: "length" | "error" | "aborted";
-	/** 已接收的部分参数（可用于诊断） */
-	partialArgs: string;
-}
-
 // ── 通用工具消息（内部子循环使用） ──
 
 /**
@@ -356,5 +369,4 @@ export type DomainMessage =
 	| TurnFeedbackMessage
 	| ReminderDueMessage
 	| SubmitRejectedMessage
-	| ToolArgErrorMessage
-	| ToolCallTruncatedMessage;
+	| ToolArgErrorMessage;
