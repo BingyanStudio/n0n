@@ -115,6 +115,10 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 			}
 			return parts.join("\n");
 		}
+		default: {
+			const _exhaustive: never = msg;
+			return `Unknown exec status: ${(msg as any).status}`;
+		}
 	}
 }
 
@@ -138,6 +142,10 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 		}
 		case "recover_failed":
 			return wrapTag("error", `Write failed after truncation recovery: ${msg.error}`, model);
+		default: {
+			const _exhaustive: never = msg;
+			return wrapTag("error", `Unknown write status: ${(msg as any).status}`, model);
+		}
 	}
 }
 
