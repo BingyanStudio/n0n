@@ -1,8 +1,8 @@
 /**
- * truncation — 流式输出截断时的工具调用恢复
+ * tool-recovery — 流式输出截断时的工具调用恢复
  *
  * 当 LLM 输出被 max_tokens 截断或异常中断时，部分工具调用的 JSON 参数可能不完整。
- * 本模块对每个截断工具逐一处理：
+ * 本模块对每个截断工具逐一恢复并执行：
  *
  * - 工具名/ID 都解析不出来 → 跳过（当这个工具没有被调用过）
  * - 能识别工具 →
@@ -10,9 +10,6 @@
  *   - 无 recover 函数 → 生成 tool_arg_error 作为 result
  *
  * 输出统一为 (call, result) 对的列表。loop 不需要关心具体工具类型。
- *
- * TODO 命名歧义：本模块名 "truncation" 描述的是原因（截断），而非职责（恢复）。
- * 应重命名为 "recovery" 或 "tool-recovery"，函数 analyzeTruncatedCalls → recoverPartialCalls。
  */
 
 import type {
@@ -29,14 +26,27 @@ export interface PartialToolCall {
 	partialInput: string;
 }
 
-/** 单个截断工具的恢复结果：call（放入 assistant 消息）+ result（放入 history） */
-export interface RecoveredPair {
+/** 恢复成功：call 是完整的 ToolCallRecord，result 是工具执行结果 */
+export interface RecoveredCall {
+	status: "recovered";
 	call: ToolCallRecord;
 	result: DomainMessage;
 }
 
-/** 截断分析的输出 */
-export interface TruncationResult {
+/** 恢复失败：call 是占位记录（仅 id/tool 有效，args 无意义），result 是 tool_arg_error */
+export interface UnrecoverableCall {
+	status: "unrecoverable";
+	/** 占位 call — 仅 id 和 tool 字段有意义，args 为空对象。
+	 *  用于保持 assistant_tool_call 消息结构与 tool_arg_error result 的配对完整性。 */
+	call: { id: string; tool: string; args: Record<string, never> };
+	result: DomainMessage;
+}
+
+/** 单个截断工具的恢复结果 — 判别联合 */
+export type RecoveredPair = RecoveredCall | UnrecoverableCall;
+
+/** 截断恢复的输出 */
+export interface RecoveryResult {
 	/** 所有截断工具的 (call, result) 对 — 无论恢复成功还是失败 */
 	pairs: RecoveredPair[];
 }
@@ -52,15 +62,19 @@ export type TryRecoverFn = (
 ) => Promise<{ call: ToolCallRecord; result: DomainMessage } | null>;
 
 /**
- * 分析截断的工具调用，逐一恢复并执行。
+ * 恢复截断的工具调用，逐一尝试恢复并执行。
+ *
+ * 对每个截断工具：
+ * - 有 tryRecover 且恢复成功 → 使用恢复后的 call + result
+ * - 恢复失败或无 tryRecover → 生成占位 call + tool_arg_error result
  *
  * @param partials 未完整的工具调用列表
  * @param tryRecover 可选的恢复函数，由工具注册表提供
  */
-export async function analyzeTruncatedCalls(
+export async function recoverPartialCalls(
 	partials: PartialToolCall[],
 	tryRecover?: TryRecoverFn,
-): Promise<TruncationResult> {
+): Promise<RecoveryResult> {
 	const pairs: RecoveredPair[] = [];
 
 	for (const partial of partials) {
@@ -74,15 +88,18 @@ export async function analyzeTruncatedCalls(
 
 		if (recovered) {
 			// recover 成功：拿到 call + result（工具已执行）
-			pairs.push(recovered);
+			pairs.push({ status: "recovered", ...recovered });
 		} else {
-			// recover 失败：生成空 args 的占位 call + tool_arg_error result
-			const placeholderCall: ToolCallRecord = {
+			// recover 失败：生成占位 call + tool_arg_error result
+			// 占位 call 仅用于保持 assistant_tool_call 消息结构完整性。
+			// 对应的 tool_arg_error result 会告知模型此调用失败。
+			const placeholderCall = {
 				id: partial.toolCallId,
 				tool: partial.toolName,
-				args: {},
-			} as ToolCallRecord;
+				args: {} as Record<string, never>,
+			};
 			pairs.push({
+				status: "unrecoverable",
 				call: placeholderCall,
 				result: {
 					type: "tool_arg_error",

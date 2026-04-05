@@ -13,20 +13,20 @@ import type {
 import type { StreamAccumulator } from "@n0n/types";
 import type { PipelineJob } from "./scheduler.ts";
 import {
-	analyzeTruncatedCalls,
+	recoverPartialCalls,
 	type PartialToolCall,
 	type TryRecoverFn,
-	type TruncationResult,
-} from "./truncation.ts";
+	type RecoveryResult,
+} from "./tool-recovery.ts";
 import type { StreamingResult } from "./streaming.ts";
 
-// ── 截断分析 ──
+// ── 截断恢复 ──
 
-/** 从 streaming 结果中提取未完成的工具调用，委托 truncation 模块恢复并执行 */
+/** 从 streaming 结果中提取未完成的工具调用，委托 tool-recovery 模块恢复并执行 */
 export async function recoverTruncatedCalls(
 	result: StreamingResult,
 	tryRecover?: TryRecoverFn,
-): Promise<TruncationResult> {
+): Promise<RecoveryResult> {
 	const partials: PartialToolCall[] = [];
 	const acc = result.accumulator;
 
@@ -41,7 +41,7 @@ export async function recoverTruncatedCalls(
 		});
 	}
 
-	return analyzeTruncatedCalls(partials, tryRecover);
+	return recoverPartialCalls(partials, tryRecover);
 }
 
 // ── 消息构建 ──

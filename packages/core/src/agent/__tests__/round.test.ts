@@ -2,7 +2,7 @@
  * round 纯函数单元测试
  *
  * 验证单轮后处理的各函数：
- * - recoverTruncatedCalls：从 streaming 结果中识别截断工具并恢复执行
+ * - recoverTruncatedCalls：从 streaming 结果中识别截断工具，委托 tool-recovery 模块恢复并执行
  * - buildToolCallMessage：构建 assistant_tool_call 消息
  * - collectJobMessages：从 scheduler jobs 收集 domain messages
  * - checkSubmit：submit 校验（无 schema / 有 schema / 重试 / 超限）
@@ -106,6 +106,7 @@ describe("recoverTruncatedCalls", () => {
 		});
 
 		expect(result.pairs).toHaveLength(1);
+		expect(result.pairs[0]!.status).toBe("unrecoverable");
 		expect(result.pairs[0]!.call.tool).toBe("exec");
 		expect(result.pairs[0]!.call.args as any).toEqual({});
 		expect(result.pairs[0]!.result.type).toBe("tool_arg_error");
@@ -136,6 +137,7 @@ describe("recoverTruncatedCalls", () => {
 		}, tryRecover);
 
 		expect(result.pairs).toHaveLength(1);
+		expect(result.pairs[0]!.status).toBe("recovered");
 		expect(result.pairs[0]!.call.tool).toBe("write");
 		expect((result.pairs[0]!.call.args as any).path).toBe("test.ts");
 		expect(result.pairs[0]!.result.type).toBe("tool_result");
