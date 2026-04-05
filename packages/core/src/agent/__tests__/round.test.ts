@@ -2,7 +2,7 @@
  * round 纯函数单元测试
  *
  * 验证单轮后处理的各函数：
- * - recoverTruncatedCalls：从 streaming 结果中识别截断工具并委托恢复
+ * - recoverTruncatedCalls：从 streaming 结果中识别截断工具并恢复执行
  * - buildToolCallMessage：构建 assistant_tool_call 消息
  * - collectJobMessages：从 scheduler jobs 收集 domain messages
  * - checkSubmit：submit 校验（无 schema / 有 schema / 重试 / 超限）
@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "bun:test";
 import { StreamAccumulator } from "@n0n/types";
-import type { ToolCallRecord, ToolResult, SubmitToolResult } from "@n0n/types";
+import type { ToolCallRecord, ToolResult, SubmitToolResult, DomainMessage } from "@n0n/types";
 import type { PipelineJob } from "../scheduler.ts";
 import type { StreamingResult } from "../streaming.ts";
 import {
@@ -22,15 +22,6 @@ import {
 import { z } from "zod";
 
 // ── 辅助 ──
-
-function makeStreamingResult(overrides: Partial<StreamingResult> = {}): StreamingResult {
-	const acc = new StreamAccumulator();
-	return {
-		accumulator: overrides.accumulator ?? acc,
-		readyTools: overrides.readyTools ?? new Map(),
-		interrupt: overrides.interrupt ?? null,
-	};
-}
 
 function makeAccWithToolCalls(
 	tools: Array<{ index: number; id: string; name: string; input: string }>,
@@ -87,64 +78,67 @@ function mockExecResult(tc: ToolCallRecord): ToolResult {
 // ── recoverTruncatedCalls ──
 
 describe("recoverTruncatedCalls", () => {
-	it("无截断工具 → 空结果", () => {
+	it("无截断工具 → 空 pairs", async () => {
 		const acc = makeAccWithToolCalls([
 			{ index: 0, id: "tc_1", name: "exec", input: '{"script":"ls"}' },
 		]);
 		const readyTools = new Map<number, ToolCallRecord>();
 		readyTools.set(0, { id: "tc_1", tool: "exec", args: { script: "ls" } } as ToolCallRecord);
 
-		const result = recoverTruncatedCalls({
+		const result = await recoverTruncatedCalls({
 			accumulator: acc,
 			readyTools,
 			interrupt: null,
 		});
 
-		expect(result.recoveredTools).toHaveLength(0);
-		expect(result.truncatedCalls).toHaveLength(0);
-		expect(result.messages).toHaveLength(0);
+		expect(result.pairs).toHaveLength(0);
 	});
 
-	it("截断的非 write 工具 → truncatedCalls + messages", () => {
+	it("截断的非 write 工具（无 recover）→ 占位 call + tool_arg_error", async () => {
 		const acc = makeAccWithToolCalls([
 			{ index: 0, id: "tc_1", name: "exec", input: '{"scri' },
 		]);
 
-		const result = recoverTruncatedCalls({
+		const result = await recoverTruncatedCalls({
 			accumulator: acc,
 			readyTools: new Map(),
 			interrupt: "length",
 		});
 
-		expect(result.recoveredTools).toHaveLength(0);
-		expect(result.truncatedCalls).toHaveLength(1);
-		expect(result.truncatedCalls[0]!.tool).toBe("exec");
-		expect(result.messages).toHaveLength(1);
-		expect(result.messages[0]!.type).toBe("tool_call:truncated");
+		expect(result.pairs).toHaveLength(1);
+		expect(result.pairs[0]!.call.tool).toBe("exec");
+		expect(result.pairs[0]!.call.args as any).toEqual({});
+		expect(result.pairs[0]!.result.type).toBe("tool_arg_error");
 	});
 
-	it("截断的 write 工具 → 尝试恢复", () => {
+	it("截断的 write 工具（有 recover）→ 恢复+执行", async () => {
 		const acc = makeAccWithToolCalls([
 			{ index: 0, id: "tc_1", name: "write", input: '{"path":"test.ts","content":"partial con' },
 		]);
 
-		// 模拟 write 工具的 recover 能力
-		const tryRecover = (toolName: string, toolCallId: string, partialJson: string) => {
+		// 模拟 recover：恢复参数 + 执行 → 返回 {call, result}
+		const tryRecover = async (toolName: string, toolCallId: string, _partialJson: string) => {
 			if (toolName !== "write") return null;
-			const pathMatch = partialJson.match(/"path"\s*:\s*"([^"]+)"/);
-			if (!pathMatch) return null;
-			return { id: toolCallId, tool: "write", args: { path: pathMatch[1], content: "partial con" } } as any;
+			const call = { id: toolCallId, tool: "write", args: { path: "test.ts", content: "partial con" } } as ToolCallRecord;
+			const result: DomainMessage = {
+				type: "tool_result",
+				tool: "write",
+				call: call as any,
+				status: "recovered",
+			} as any;
+			return { call, result };
 		};
 
-		const result = recoverTruncatedCalls({
+		const result = await recoverTruncatedCalls({
 			accumulator: acc,
 			readyTools: new Map(),
 			interrupt: "length",
 		}, tryRecover);
 
-		expect(result.recoveredTools).toHaveLength(1);
-		expect(result.recoveredTools[0]!.tool).toBe("write");
-		expect(result.recoveredTools[0]!.args.path).toBe("test.ts");
+		expect(result.pairs).toHaveLength(1);
+		expect(result.pairs[0]!.call.tool).toBe("write");
+		expect((result.pairs[0]!.call.args as any).path).toBe("test.ts");
+		expect(result.pairs[0]!.result.type).toBe("tool_result");
 	});
 });
 
@@ -164,23 +158,6 @@ describe("buildToolCallMessage", () => {
 		expect(msg.reasoning).toBe("reasoning");
 		expect(msg.toolCalls).toHaveLength(1);
 		expect(msg.toolCalls[0]!.id).toBe("tc_1");
-		expect(msg.truncatedCalls).toBeUndefined();
-	});
-
-	it("包含截断工具信息", () => {
-		const acc = new StreamAccumulator();
-		const tc: ToolCallRecord = { id: "tc_1", tool: "exec", args: { script: "ls" } } as ToolCallRecord;
-		const truncated = [{ id: "tc_2", tool: "write", partialArgs: '{"path":"x"}' }];
-
-		const msg = buildToolCallMessage(acc, [tc], truncated);
-		expect(msg.truncatedCalls).toHaveLength(1);
-		expect(msg.truncatedCalls![0]!.id).toBe("tc_2");
-	});
-
-	it("空截断列表不设置 truncatedCalls", () => {
-		const acc = new StreamAccumulator();
-		const msg = buildToolCallMessage(acc, [], []);
-		expect(msg.truncatedCalls).toBeUndefined();
 	});
 });
 
@@ -249,7 +226,7 @@ describe("checkSubmit", () => {
 
 	it("有 schema，校验通过 → accepted", () => {
 		const schema = z.object({ answer: z.number() });
-		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: 42 }, report: null } } as ToolCallRecord;
+		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: 42 } } } as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: 42 });
 		const jobs = [mockJob(submitTc, submitResult)];
 
@@ -260,7 +237,7 @@ describe("checkSubmit", () => {
 
 	it("有 schema，校验失败 → rejected", () => {
 		const schema = z.object({ answer: z.number() });
-		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: "not a number" }, report: null } } as ToolCallRecord;
+		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: "not a number" } } } as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: "not a number" });
 		const jobs = [mockJob(submitTc, submitResult)];
 
@@ -272,7 +249,7 @@ describe("checkSubmit", () => {
 
 	it("重试次数达到上限 → gaveUp", () => {
 		const schema = z.object({ answer: z.number() });
-		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: "bad" }, report: null } } as ToolCallRecord;
+		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: "bad" } } } as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: "bad" });
 		const jobs = [mockJob(submitTc, submitResult)];
 
