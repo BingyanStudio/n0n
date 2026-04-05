@@ -8,6 +8,7 @@
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
+	PartialToolCallRecord,
 	ToolCallRecord,
 } from "@n0n/types";
 import type { StreamAccumulator } from "@n0n/types";
@@ -49,7 +50,7 @@ export async function recoverTruncatedCalls(
 /** 构建 assistant_tool_call 消息 */
 export function buildToolCallMessage(
 	acc: StreamAccumulator,
-	toolCalls: ToolCallRecord[],
+	toolCalls: (ToolCallRecord | PartialToolCallRecord)[],
 ): AssistantToolCallMessage {
 	return {
 		type: "assistant_tool_call",

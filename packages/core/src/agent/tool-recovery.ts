@@ -14,6 +14,7 @@
 
 import type {
 	ToolCallRecord,
+	PartialToolCallRecord,
 	DomainMessage,
 } from "@n0n/types";
 
@@ -38,7 +39,7 @@ export interface UnrecoverableCall {
 	status: "unrecoverable";
 	/** 占位 call — 仅 id 和 tool 字段有意义，args 为空对象。
 	 *  用于保持 assistant_tool_call 消息结构与 tool_arg_error result 的配对完整性。 */
-	call: { id: string; tool: string; args: Record<string, never> };
+	call: PartialToolCallRecord;
 	result: DomainMessage;
 }
 

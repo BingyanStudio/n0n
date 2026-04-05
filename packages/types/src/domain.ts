@@ -69,7 +69,7 @@ export interface AssistantToolCallMessage {
 	content: string | null;
 	reasoning?: string | null;
 	reasoningSignature?: string | null;
-	toolCalls: ToolCallRecord[];
+	toolCalls: (ToolCallRecord | PartialToolCallRecord)[];
 }
 
 // ── 工具调用记录（判别联合） ──
@@ -110,6 +110,17 @@ export type ToolCallRecord =
 	| EditToolCall
 	| ReminderToolCall
 	| SubmitToolCall;
+
+/**
+ * 截断恢复失败的不完整工具调用记录。
+ * 仅 id 和 tool 字段有意义，args 为空对象。
+ * 用于在 assistant_tool_call 消息中保持与 tool_arg_error result 的配对完整性。
+ */
+export interface PartialToolCallRecord {
+	id: string;
+	tool: string;
+	args: Record<string, never>;
+}
 
 // ── 工具结果 ──
 // 每个 Result 嵌入原始 ToolCall（call 字段）。
