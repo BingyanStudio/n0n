@@ -8,6 +8,7 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import type { ExecArgs, ToolCallRecord } from "@n0n/types";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 // 保存原始值用于恢复
@@ -194,11 +195,12 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 			for (const chunk of chunks) {
 				renderer.toolCallArgChunk(0, chunk);
 			}
-			renderer.toolCallArgEnd(0, {
+			const tc: ToolCallRecord = {
 				id: "call_1",
 				tool: "exec",
-				args: JSON.parse(json),
-			} as any);
+				args: JSON.parse(json) as ExecArgs,
+			};
+			renderer.toolCallArgEnd(0, tc);
 			renderer.streamEnd();
 			renderer.toolExecStart({
 				id: "call_1",
