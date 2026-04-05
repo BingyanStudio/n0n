@@ -361,7 +361,7 @@ export class RichRenderer implements Renderer {
 				break;
 			}
 			case "write": {
-				if (!result.success) {
+				if (result.status === "failed" || result.status === "recover_failed") {
 					return `${style.dim("◂")} ${style.cyan("write")} ${result.call.args.path}: ${style.red(result.error ?? "failed")}`;
 				}
 				return `${style.dim("◂")} ${style.cyan("write")} ${result.call.args.path}`;
