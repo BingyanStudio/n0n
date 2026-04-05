@@ -8,7 +8,8 @@
 
 import { describe, expect, it } from "bun:test";
 import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
-import { ExecutionScheduler, RenderBuffer } from "../pipeline.ts";
+import { ExecutionScheduler } from "../scheduler.ts";
+import { RenderBuffer } from "../render-buffer.ts";
 
 // ── Mock 工具 ──
 
