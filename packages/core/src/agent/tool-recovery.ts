@@ -81,11 +81,17 @@ export async function recoverPartialCalls(
 	for (const partial of partials) {
 		if (!partial.toolCallId || !partial.toolName) continue;
 
-		const recovered = await tryRecover?.(
-			partial.toolName,
-			partial.toolCallId,
-			partial.partialInput,
-		);
+		let recovered: { call: ToolCallRecord; result: DomainMessage } | null | undefined;
+		try {
+			recovered = await tryRecover?.(
+				partial.toolName,
+				partial.toolCallId,
+				partial.partialInput,
+			);
+		} catch {
+			// recoverAndExecute 抛异常视同恢复失败，走 unrecoverable 分支
+			recovered = null;
+		}
 
 		if (recovered) {
 			// recover 成功：拿到 call + result（工具已执行）
