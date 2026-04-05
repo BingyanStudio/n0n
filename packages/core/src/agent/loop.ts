@@ -154,7 +154,12 @@ export async function agentLoop<T = unknown>(
 		idleCount = 0;
 
 		// ── 3. 截断恢复 + seal ──
-		const truncation = recoverTruncatedCalls(streamResult!);
+		// 从工具注册表构造恢复函数（ToolEntry.recover → TryRecoverFn）
+		const tryRecover = (toolName: string, toolCallId: string, partialJson: string) => {
+			const entry = toolkit.getEntry(toolName);
+			return entry?.recover?.(toolCallId, partialJson) ?? null;
+		};
+		const truncation = recoverTruncatedCalls(streamResult!, tryRecover);
 		const allTools: ToolCallRecord[] = [...streamResult!.readyTools.values()];
 		for (const tc of truncation.recoveredTools) {
 			allTools.push(tc);

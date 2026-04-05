@@ -16,13 +16,14 @@ import type { PipelineJob } from "./scheduler.ts";
 import {
 	analyzeTruncatedCalls,
 	type PartialToolCall,
+	type TryRecoverFn,
 } from "./truncation.ts";
 import type { StreamingResult } from "./streaming.ts";
 
 // ── 截断分析 ──
 
 /** 从 streaming 结果中提取未完成的工具调用，委托 truncation 模块分析 */
-export function recoverTruncatedCalls(result: StreamingResult) {
+export function recoverTruncatedCalls(result: StreamingResult, tryRecover?: TryRecoverFn) {
 	const partials: PartialToolCall[] = [];
 	const acc = result.accumulator;
 
@@ -37,7 +38,7 @@ export function recoverTruncatedCalls(result: StreamingResult) {
 		});
 	}
 
-	return analyzeTruncatedCalls(partials, result.interrupt ?? "length");
+	return analyzeTruncatedCalls(partials, result.interrupt ?? "length", tryRecover);
 }
 
 // ── 消息构建 ──

@@ -48,7 +48,7 @@ import {
 	SubmitArgsSchema,
 	submitTool,
 } from "./submit.ts";
-import { WRITE_TOOL_DEFINITION, WriteArgsSchema, writeTool } from "./write.ts";
+import { WRITE_TOOL_DEFINITION, WriteArgsSchema, writeTool, recoverPartialWrite } from "./write.ts";
 
 // ── 执行器类型 ──
 
@@ -64,9 +64,12 @@ type SyncExecutor = (
 	confirmFn?: (question: string) => Promise<string>,
 ) => Promise<ToolResult> | ToolResult;
 
+/** 截断恢复函数：从不完整的 JSON 参数中尝试恢复出可执行的 ToolCallRecord */
+export type RecoverFn = (toolCallId: string, partialJson: string) => ToolCallRecord | null;
+
 export type ToolEntry =
-	| { definition: ToolDefinition; stream: true; execute: StreamExecutor }
-	| { definition: ToolDefinition; stream: false; execute: SyncExecutor };
+	| { definition: ToolDefinition; stream: true; execute: StreamExecutor; recover?: RecoverFn }
+	| { definition: ToolDefinition; stream: false; execute: SyncExecutor; recover?: RecoverFn };
 
 // ── 基础注册表构建 ──
 
@@ -110,6 +113,7 @@ function buildBaseRegistry(
 				};
 				return writeTool(call, resolvedWorkspace);
 			},
+			recover: recoverPartialWrite,
 		},
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,

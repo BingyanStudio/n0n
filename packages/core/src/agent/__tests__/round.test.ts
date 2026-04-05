@@ -128,11 +128,19 @@ describe("recoverTruncatedCalls", () => {
 			{ index: 0, id: "tc_1", name: "write", input: '{"path":"test.ts","content":"partial con' },
 		]);
 
+		// 模拟 write 工具的 recover 能力
+		const tryRecover = (toolName: string, toolCallId: string, partialJson: string) => {
+			if (toolName !== "write") return null;
+			const pathMatch = partialJson.match(/"path"\s*:\s*"([^"]+)"/);
+			if (!pathMatch) return null;
+			return { id: toolCallId, tool: "write", args: { path: pathMatch[1], content: "partial con" } } as any;
+		};
+
 		const result = recoverTruncatedCalls({
 			accumulator: acc,
 			readyTools: new Map(),
 			interrupt: "length",
-		});
+		}, tryRecover);
 
 		expect(result.recoveredTools).toHaveLength(1);
 		expect(result.recoveredTools[0]!.tool).toBe("write");
