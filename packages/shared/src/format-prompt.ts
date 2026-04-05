@@ -20,6 +20,9 @@
  * 2. 所有工具的格式化逻辑集中在一处，便于统一审查提示词质量、
  *    调整 XML tag 风格、或为不同模型切换整套格式化方案。
  * 3. 工具层只产出纯数据的 ToolResult（DomainMessage），格式化职责完全属于 adapter 层。
+ *
+ * 简言之，本模块是 DomainMessage → PromptMessage 的集中式 adapter，
+ * 工具特化的格式逻辑内聚在此是刻意设计（统一适配层），不是职责泄漏。
  */
 
 import type {
