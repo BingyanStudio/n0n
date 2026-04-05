@@ -167,8 +167,7 @@ async function scenario3() {
 			tool: "write",
 			args: { path: "test.txt", content: "hello world" },
 		},
-		success: true,
-		error: null,
+		status: "completed" as const,
 	});
 }
 

@@ -202,8 +202,7 @@ describe("RichRenderer tool call streaming", () => {
 				tool: "write",
 				args: { path: "test.txt", content: "hello" },
 			},
-			success: true,
-			error: null,
+			status: "completed",
 		});
 
 		const result = captureStop();
@@ -292,8 +291,7 @@ describe("RichRenderer tool call streaming", () => {
 				tool: "write",
 				args: { path: "out.txt", content: "data" },
 			},
-			success: true,
-			error: null,
+			status: "completed",
 		});
 
 		const result = captureStop();

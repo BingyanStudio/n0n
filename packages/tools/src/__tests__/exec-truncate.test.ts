@@ -6,6 +6,10 @@
  * - stdoutTail 包含末尾内容
  * - outputFile 已创建且包含完整输出
  * - 短输出仍返回 status: "completed"
+ *
+ * TODO 平台兼容：使用 bun runtime 生成大量输出，
+ * 避免依赖 Unix 命令（seq / printf / bash for 循环等），
+ * 确保 Windows / macOS / Linux 均可通过。
  */
 
 import { describe, expect, test } from "bun:test";
@@ -41,9 +45,13 @@ describe("exec 输出截断", () => {
 	});
 
 	test("超长输出 — 应返回 status: truncated + outputFile", async () => {
-		// 生成超过 8000 字符的输出
-		const script = `for i in $(seq 1 500); do echo "line_$i: $(printf '%0.s=' $(seq 1 20))"; done`;
-		const result = await collectResult(script);
+		// 使用 bun runtime 生成超过 8000 字符的输出
+		const script = [
+			"for (let i = 1; i <= 500; i++) {",
+			'  console.log(`line_${i}: ${"=".repeat(20)}`);',
+			"}",
+		].join("\n");
+		const result = await collectResult(script, "bun");
 
 		expect(result.status).toBe("truncated");
 		if (result.status === "truncated") {
@@ -61,9 +69,13 @@ describe("exec 输出截断", () => {
 	});
 
 	test("超长 stderr — 应返回 status: truncated", async () => {
-		// 向 stderr 输出大量内容
-		const script = `for i in $(seq 1 500); do echo "err_$i: $(printf '%0.s=' $(seq 1 20))" >&2; done`;
-		const result = await collectResult(script);
+		// 使用 bun runtime 向 stderr 输出大量内容
+		const script = [
+			"for (let i = 1; i <= 500; i++) {",
+			'  console.error(`err_${i}: ${"=".repeat(20)}`);',
+			"}",
+		].join("\n");
+		const result = await collectResult(script, "bun");
 
 		expect(result.status).toBe("truncated");
 		if (result.status === "truncated") {
@@ -73,9 +85,13 @@ describe("exec 输出截断", () => {
 	});
 
 	test("恰好在阈值内 — 应返回 status: completed", async () => {
-		// 生成不超过阈值的输出（~300 行 × 25 字符 ≈ 7500 chars ≈ 2500 tokens < 4000）
-		const script = 'for i in $(seq 1 300); do echo "short_line_${i}_padding"; done';
-		const result = await collectResult(script);
+		// 使用 bun runtime 生成不超过阈值的输出（~300 行 × 25 字符 ≈ 7500 chars ≈ 2500 tokens < 4000）
+		const script = [
+			"for (let i = 1; i <= 300; i++) {",
+			"  console.log(`short_line_${i}_padding`);",
+			"}",
+		].join("\n");
+		const result = await collectResult(script, "bun");
 
 		expect(result.status).toBe("completed");
 		if (result.status === "completed") {

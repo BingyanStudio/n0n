@@ -94,9 +94,10 @@ function fmtResult(r: ToolResult): string {
 			}
 			break;
 		case "write":
-			return r.success
-				? r.call.args.path
-				: `${r.call.args.path}: ${r.error ?? "failed"}`;
+			if (r.status === "failed" || r.status === "recover_failed") {
+				return `${r.call.args.path}: ${r.error ?? "failed"}`;
+			}
+			return r.call.args.path;
 		case "edit": {
 			const path = r.call.args.path;
 			const duration = `${(r.durationMs / 1000).toFixed(1)}s`;
