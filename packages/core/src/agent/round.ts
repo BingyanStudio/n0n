@@ -9,7 +9,6 @@ import type {
 	AssistantToolCallMessage,
 	DomainMessage,
 	ToolCallRecord,
-	TruncatedToolCallInfo,
 } from "@n0n/types";
 import type { StreamAccumulator } from "@n0n/types";
 import type { PipelineJob } from "./scheduler.ts";
@@ -17,13 +16,17 @@ import {
 	analyzeTruncatedCalls,
 	type PartialToolCall,
 	type TryRecoverFn,
+	type TruncationResult,
 } from "./truncation.ts";
 import type { StreamingResult } from "./streaming.ts";
 
 // ── 截断分析 ──
 
-/** 从 streaming 结果中提取未完成的工具调用，委托 truncation 模块分析 */
-export function recoverTruncatedCalls(result: StreamingResult, tryRecover?: TryRecoverFn) {
+/** 从 streaming 结果中提取未完成的工具调用，委托 truncation 模块恢复并执行 */
+export async function recoverTruncatedCalls(
+	result: StreamingResult,
+	tryRecover?: TryRecoverFn,
+): Promise<TruncationResult> {
 	const partials: PartialToolCall[] = [];
 	const acc = result.accumulator;
 
@@ -38,7 +41,7 @@ export function recoverTruncatedCalls(result: StreamingResult, tryRecover?: TryR
 		});
 	}
 
-	return analyzeTruncatedCalls(partials, result.interrupt ?? "length", tryRecover);
+	return analyzeTruncatedCalls(partials, tryRecover);
 }
 
 // ── 消息构建 ──
@@ -46,16 +49,14 @@ export function recoverTruncatedCalls(result: StreamingResult, tryRecover?: TryR
 /** 构建 assistant_tool_call 消息 */
 export function buildToolCallMessage(
 	acc: StreamAccumulator,
-	executedTools: ToolCallRecord[],
-	truncatedCalls?: TruncatedToolCallInfo[],
+	toolCalls: ToolCallRecord[],
 ): AssistantToolCallMessage {
 	return {
 		type: "assistant_tool_call",
 		content: acc.content || null,
 		reasoning: acc.reasoning || undefined,
 		reasoningSignature: acc.reasoningSignature || undefined,
-		toolCalls: executedTools,
-		truncatedCalls: truncatedCalls?.length ? truncatedCalls : undefined,
+		toolCalls,
 	};
 }
 

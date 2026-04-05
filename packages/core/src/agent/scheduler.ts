@@ -89,6 +89,9 @@ export class ExecutionScheduler {
 	}
 
 	// ── 条件检查 ──
+	// TODO 基于约定的硬编码：canExecute 通过 switch(tc.tool) 硬编码了每种工具的并行策略。
+	// 应改为 ToolEntry 上声明 scheduling 配置（如 { type: "barrier" } | { type: "path-exclusive", getPath } | { type: "always" }），
+	// canExecute 从配置读取，不再依赖工具名字符串。
 
 	private canExecute(job: PipelineJob): boolean {
 		const tc = job.tc;
