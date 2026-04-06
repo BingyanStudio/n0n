@@ -171,6 +171,9 @@ function toAnthropicFormat(
 		cache_control?: { type: "ephemeral" };
 	}> = [];
 	const messages: AnthropicMessage[] = [];
+	// 追踪真实 user 消息索引（区分 user_input 和 tool_result→user），
+	// 用于缓存断点选择——tool_result→user 每轮都增长，不适合做缓存锚点
+	const realUserIndices = new Set<number>();
 
 	for (const msg of promptMessages) {
 		switch (msg.role) {
@@ -179,7 +182,17 @@ function toAnthropicFormat(
 				break;
 
 			case "user":
-				messages.push({ role: "user", content: msg.content });
+				// TODO 此修复（统一 array 格式 + realUserIndices）尚未经过线上验证，
+				// 若后续再次出现 cache 不命中，需进一步排查。参见 n0n-conversation-20260406-104955.json
+				// 统一使用 content block array 格式，避免 cache_control 注入时
+				// string↔array 格式翻转破坏 Anthropic prompt caching 前缀匹配。
+				// 当 cache 断点移动时，之前被注入 cache_control 的消息从 array
+				// 恢复为 string 会导致 Anthropic 认为前缀改变，缓存永远无法命中。
+				realUserIndices.add(messages.length);
+				messages.push({
+					role: "user",
+					content: [{ type: "text", text: msg.content } as AnthropicContent],
+				});
 				break;
 
 			case "assistant": {
@@ -242,10 +255,10 @@ function toAnthropicFormat(
 		// Messages 部分：使用 selectCacheBreakpoints 选择断点
 		// Anthropic 限制最多 4 个 cache_control，减去 system 已用的配额
 		const maxMessageBreakpoints = 4 - cacheCount;
-		const breakpoints = selectCacheBreakpoints(messages).slice(
-			0,
-			maxMessageBreakpoints,
-		);
+		const breakpoints = selectCacheBreakpoints(
+			messages,
+			(i) => realUserIndices.has(i),
+		).slice(0, maxMessageBreakpoints);
 		for (const idx of breakpoints) {
 			const msg = messages[idx];
 			if (!msg) continue;

@@ -84,4 +84,27 @@ describe("selectCacheBreakpoints", () => {
 		const bp = selectCacheBreakpoints([]);
 		expect(bp.length).toBe(0);
 	});
+
+	test("isRealUser: tool_result→user 不计入 anchor", () => {
+		// S U A T(→user) A T(→user) A T(→user) U
+		// 不传 isRealUser 时，倒数第二个 user 是 idx=5(tool)
+		// 传 isRealUser 时，倒数第二个 real user 是 idx=0(user)
+		const msgs = [S, U, A, U, A, U, A, U, U];
+		// 没有 isRealUser: 倒数第二个 role=user 是 idx=7
+		const bpOld = selectCacheBreakpoints(msgs);
+		expect(bpOld).toContain(7); // 倒数第二个 user
+
+		// 有 isRealUser: 只有 idx=1 和 idx=8 是 real user
+		const realUsers = new Set([1, 8]);
+		const bpNew = selectCacheBreakpoints(msgs, (i) => realUsers.has(i));
+		expect(bpNew).toContain(1); // 倒数第二个 real user（anchor）
+		expect(bpNew).toContain(8); // 最后一个 user
+	});
+
+	test("isRealUser: 未提供时退化为按 role=user 匹配", () => {
+		const msgs = [S, U, A, T, U];
+		const bp1 = selectCacheBreakpoints(msgs);
+		const bp2 = selectCacheBreakpoints(msgs, undefined);
+		expect(bp1).toEqual(bp2);
+	});
 });
