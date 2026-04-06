@@ -284,7 +284,7 @@ const scenarios: Scenario[] = [
 			{
 				type: "reminder:due",
 				content: "Check test results\n- Step 1 done\n- Step 2 pending",
-				originalDelay: 3,
+				originalEstimate: 3,
 			},
 		],
 	},

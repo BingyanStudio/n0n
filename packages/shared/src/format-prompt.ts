@@ -182,10 +182,10 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 		case "edit":
 			return formatEditResult(msg as EditToolResult, model);
 		case "reminder": {
-			const delay = msg.call.args.estimate ?? 7;
+			const estimate = msg.call.args.estimate ?? 7;
 			return wrapTag(
 				"result",
-				`Reminder set. Commitment: ${delay} rounds for next step. A <reminder> will be injected when it expires.`,
+				`Reminder set. Estimate: ${estimate} rounds for next step. A <reminder> will appear when it expires.`,
 				model,
 			);
 		}
@@ -324,7 +324,7 @@ export function formatPrompt(
 					role: "user",
 					content: wrapTag(
 						"reminder",
-						`Your reminder fired (set ${msg.originalDelay} rounds ago):\n${msg.content}`,
+						`Your reminder fired (estimated ${msg.originalEstimate} rounds, now expired):\n${msg.content}`,
 						modelId,
 					),
 				});

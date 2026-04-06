@@ -6,7 +6,7 @@ role: user
 
 --- content ---
 <reminder>
-Your reminder fired (set 3 rounds ago):
+Your reminder fired (estimated 3 rounds, now expired):
 Check test results
 - Step 1 done
 - Step 2 pending

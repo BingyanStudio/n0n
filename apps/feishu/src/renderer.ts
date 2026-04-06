@@ -113,7 +113,7 @@ function fmtResult(r: ToolResult): string {
 			return `${path} ${duration} ${rounds} ${lineStats} ✓`;
 		}
 		case "reminder":
-			return `delay=${r.call.args.estimate ?? 0}`;
+			return `est=${r.call.args.estimate ?? 0}`;
 		case "submit":
 			return compact(json(r.cleanedResult), 120);
 	}

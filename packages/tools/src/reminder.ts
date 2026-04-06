@@ -1,16 +1,14 @@
 /**
- * reminder 工具 — 为 agent 自己设置延迟提醒
+ * reminder 工具 — agent 的番茄钟 / 效率追踪器
  *
- * 设计意图：模型在长线任务中容易忘记全局目标和进展。
- * 对比 todo list 方案，reminder 将规划、反思、调整融入工作流程：
- * - 模型自定义每步所需轮数（承诺），到期时触发强制反思
- * - 承诺违背时必须输出 <reflection> 分析原因，形成负反馈闭环
- * - OKR 结构化内容（Objective + Key Results + Current）强制清晰规划
+ * 设计意图：让 agent 像人类使用番茄钟一样，为每个阶段设定时间预算。
+ * 通过诚实估算 → 执行 → 到期反思的循环，持续校准对工作量的判断力。
  *
- * 核心机制：承诺-反思循环
- * - delay 是一个承诺：agent 承诺在 N 轮内完成当前阶段
- * - 到期时系统注入 <reminder> 标签内容，触发强制反思
- * - agent 必须用 <reflection> 标签输出反思结论
+ * 核心机制：估算-反思循环
+ * - estimate 是 agent 对下一步所需轮次的诚实预测（1 轮 = 1 次 assistant 响应，可含多个并行工具调用）
+ * - 到期时系统注入 <reminder> 标签内容，触发反思
+ * - 反思关注：是客观因素（意外复杂度）还是效率问题（工具调用未并行）？
+ * - 无论超时与否，反思帮助 agent 更好地理解任务本身
  */
 
 import type {
@@ -25,25 +23,39 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 	name: "reminder",
 	description: [
 		"Set a memo/reminder for yourself (overwrites any previous — only one active at a time).",
-		"The content will appear as `<reminder>` tag in a future user message after the specified delay (rounds).",
+		"The content will appear as a `<reminder>` tag in a future message after the specified number of rounds.",
 		"",
-		"**delay is a commitment** — you are promising to complete the **next step** within N rounds.",
-		"If the reminder fires (delay expires), it means your commitment was not met.",
-		"You MUST then output a `<reflection>` block analyzing why, before setting the next reminder.",
+		"**1 round = 1 assistant response.** A single response can contain many parallel tool calls,",
+		"so reading 5 files in one response is 1 round, not 5. Batching independent calls saves rounds.",
+		"",
+		"**estimate is your honest prediction** — how many rounds will the next step realistically take?",
+		"The goal is accuracy, not speed. Underestimating wastes the mechanism;",
+		"overestimating is fine (finishing early is a good sign).",
+		"",
+		"When the reminder fires, reflect on why it took longer or shorter than expected:",
+		"- Objective factors (unexpected complexity, missing information)?",
+		"- Efficiency opportunities (could you have batched more tool calls into fewer rounds)?",
+		"Either way, reflection helps you understand the task itself better. Recalibrate and continue.",
 		"",
 		"Usage: After breaking down the task, create a reminder summarizing:",
 		"  1. The overall Objective",
 		"  2. Key Results (checklist of what remains)",
 		"  3. Current progress and next step",
-		"  4. delay = rounds to complete the next step (NOT the entire task)",
+		"  4. estimate = rounds for the next step (NOT the entire task)",
 		"",
-		"Example:",
-		"  O: Refactor submit schema",
-		"  KR: 1.✅ Read code  2.[ ] Update schema  3.[ ] Update references  4.[ ] Test",
-		"  Current: KR1 done, next: KR2, ~2 rounds → delay: 2",
+		"Example — small step:",
+		"  O: Fix login bug",
+		"  KR: 1.[ ] Read auth files  2.[ ] Identify bug  3.[ ] Fix  4.[ ] Test",
+		"  Current: starting KR1, need to read 3 files (1 round, parallel) → estimate: 1",
+		"",
+		"Example — complex step:",
+		"  O: Refactor database layer",
+		"  KR: 1.✅ Read code  2.[ ] Redesign schema  3.[ ] Update 6 files  4.[ ] Test",
+		"  Current: KR2, need to analyze dependencies across 4 modules,",
+		"    draft new schema, validate constraints.",
+		"    ~3 rounds of investigation + 1 round of design → estimate: 5",
 		"",
 		"After completing each step, set a new reminder for the next step.",
-		"Prefer conservative estimates — overdelivering early is better than breaking a commitment.",
 	].join("\n"),
 	parameters: {
 		type: "object",
@@ -56,7 +68,7 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 			estimate: {
 				type: "number",
 				description:
-					"Number of rounds to complete the **next step** — not the entire task (default: 7). This is a promise, not a guess.",
+					"Estimated rounds to complete the next step — not the entire task (default: 7). Be honest: 1 round if trivial, 5+ if complex. Accuracy matters more than speed.",
 			},
 		},
 		required: ["content"],
@@ -67,7 +79,7 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 export interface PendingReminder {
 	content: string;
 	roundsLeft: number;
-	/** 模型设置时承诺的原始轮数 */
+	/** 模型设置时估算的原始轮数 */
 	originalEstimate: number;
 }
 
@@ -75,12 +87,12 @@ export function reminderTool(
 	call: ReminderToolCall,
 	reminders: PendingReminder[],
 ): ReminderToolResult {
-	const delay = call.args.estimate ?? 7;
+	const estimate = call.args.estimate ?? 7;
 	reminders.length = 0;
 	reminders.push({
 		content: call.args.content,
-		roundsLeft: delay,
-		originalEstimate: delay,
+		roundsLeft: estimate,
+		originalEstimate: estimate,
 	});
 
 	return {
