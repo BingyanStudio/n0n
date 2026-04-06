@@ -324,7 +324,7 @@ export function formatPrompt(
 					role: "user",
 					content: wrapTag(
 						"reminder",
-						`Your estimate of ${msg.originalEstimate} rounds has elapsed. Review your progress, reflect on the accuracy of your estimate, and recalibrate:\n${msg.content}`,
+						`Your estimate of ${msg.originalEstimate} rounds has elapsed. Review your progress and recalibrate:\n${msg.content}\n\nReflect: was the estimate accurate? If it took longer than expected, consider:\n- Could you have issued multiple independent tool calls in a single response? (This system executes them in parallel — no need to call one at a time.)\n- Was there unexpected complexity that should inform your next estimate?`,
 						modelId,
 					),
 				});
