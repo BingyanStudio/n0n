@@ -88,7 +88,7 @@ function makeToolRound(i: number): DomainMessage[] {
 					tool: "reminder",
 					args: {
 						content: `O: 检查 view.ts 代码结构\nKR: [ ] 读取文件 [ ] 分析结构 [ ] 提出优化建议\n当前：开始读取`,
-						delay: 3,
+						estimate: 3,
 					},
 				},
 			],
@@ -99,7 +99,7 @@ function makeToolRound(i: number): DomainMessage[] {
 			call: {
 				id: `r-${i}`,
 				tool: "reminder",
-				args: { content: "...", delay: 3 },
+				args: { content: "...", estimate: 3 },
 			},
 			acknowledged: true as const,
 		},

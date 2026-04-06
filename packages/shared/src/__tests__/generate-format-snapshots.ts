@@ -264,7 +264,7 @@ const scenarios: Scenario[] = [
 				call: {
 					id: "tc_7",
 					tool: "reminder",
-					args: { content: "Check test results", delay: 3 },
+					args: { content: "Check test results", estimate: 3 },
 				},
 				acknowledged: true,
 			},
@@ -284,7 +284,7 @@ const scenarios: Scenario[] = [
 			{
 				type: "reminder:due",
 				content: "Check test results\n- Step 1 done\n- Step 2 pending",
-				originalDelay: 3,
+				originalEstimate: 3,
 			},
 		],
 	},

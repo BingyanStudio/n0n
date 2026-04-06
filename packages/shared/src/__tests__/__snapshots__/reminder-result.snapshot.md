@@ -8,6 +8,6 @@ toolName: reminder
 
 --- content ---
 <result>
-Reminder set. Commitment: 3 rounds. A <reminder> will be injected when it expires.
+Reminder set. Estimate: 3 rounds for next step. A <reminder> will appear when it expires.
 </result>
 ```
