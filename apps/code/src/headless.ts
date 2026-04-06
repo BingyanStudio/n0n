@@ -45,14 +45,16 @@ export interface HeadlessResult {
 	error: string | null;
 }
 
-function buildWorkspaceContext(workspace: string): string {
+function buildEnvironmentSection(workspace: string): string {
 	return [
-		"## Workspace Environment",
 		"",
-		`Your current working directory (cwd) is: \`${workspace}\``,
-		"All tool paths resolve relative to this directory.",
-		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
-		"Read existing code before modifying it to understand project structure.",
+		"# 环境",
+		"",
+		`- 工作目录：\`${workspace}\``,
+		"- 所有工具路径基于此目录解析。",
+		"",
+		"使用相对路径（如 `src/utils.ts`），它们会正确解析。",
+		"修改代码前先阅读现有代码以理解项目结构。",
 	].join("\n");
 }
 
@@ -119,6 +121,7 @@ export async function runHeadless(
 	if (agentsMd) {
 		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
 	}
+	systemPrompt += buildEnvironmentSection(paths.workspace);
 
 	const renderer = new PlainRenderer();
 	const abortController = new AbortController();
@@ -128,7 +131,6 @@ export async function runHeadless(
 
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
-		{ type: "system", content: buildWorkspaceContext(paths.workspace) },
 		{
 			type: "user_input",
 			content: instruction,

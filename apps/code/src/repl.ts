@@ -23,12 +23,6 @@ import { CodeRenderer } from "./code-renderer.ts";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
-const USER_INPUT_HINT = [
-	"First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.",
-	"If genuinely stuck or ambiguous, submit `ask_user` with specific options for the user.",
-	"Otherwise, reason out what the engineer wrote — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
-].join("\n");
-
 export interface CodeReplOptions {
 	initialInput?: string;
 	resumeFile?: string;
@@ -39,17 +33,18 @@ type CodeWorkspacePaths = BaseWorkspacePaths;
 
 // ── 辅助函数（无 stdin 交互） ──
 
-function buildWorkspaceContext(workspace: string): string {
+function buildEnvironmentSection(workspace: string): string {
 	return [
-		"## Workspace Environment",
 		"",
-		`Your current working directory (cwd) is: \`${workspace}\``,
-		"All tool paths resolve relative to this directory:",
-		"- `exec` scripts run with cwd = workspace root (the project directory)",
-		"- `write` / `edit` relative paths resolve against workspace root",
+		"# 环境",
 		"",
-		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
-		"Read existing code before modifying it to understand project structure.",
+		`- 工作目录：\`${workspace}\``,
+		"- 所有工具路径基于此目录解析：",
+		"  - `exec` 脚本的 cwd = 工作目录",
+		"  - `write` / `edit` 的相对路径基于工作目录解析",
+		"",
+		"使用相对路径（如 `src/utils.ts`），它们会正确解析。",
+		"修改代码前先阅读现有代码以理解项目结构。",
 	].join("\n");
 }
 
@@ -97,7 +92,7 @@ async function makeUserInput(
 		type: "user_input",
 		content,
 		context: await gatherContext(workspace),
-		hint: USER_INPUT_HINT,
+		hint: null,
 	};
 }
 
@@ -159,6 +154,7 @@ export async function startCodeRepl(
 	if (agentsMd) {
 		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
 	}
+	systemPrompt += buildEnvironmentSection(paths.workspace);
 	const renderer = isTTY
 		? new CodeRenderer(paths.workspace)
 		: new PlainRenderer();
@@ -276,17 +272,11 @@ export async function startCodeRepl(
 			writeln(style.gray("  将以全新对话启动。"));
 			writeln();
 			userInput = initialInput ?? (await promptUser());
-			history = [
-				{ type: "system", content: systemPrompt },
-				{ type: "system", content: buildWorkspaceContext(paths.workspace) },
-			];
+			history = [{ type: "system", content: systemPrompt }];
 		}
 	} else {
 		userInput = initialInput ?? (await promptUser());
-		history = [
-			{ type: "system", content: systemPrompt },
-			{ type: "system", content: buildWorkspaceContext(paths.workspace) },
-		];
+		history = [{ type: "system", content: systemPrompt }];
 	}
 
 	while (true) {
