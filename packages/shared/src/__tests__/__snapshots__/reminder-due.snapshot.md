@@ -6,7 +6,7 @@ role: user
 
 --- content ---
 <reminder>
-Your reminder fired (estimated 3 rounds, now expired):
+Your estimate of 3 rounds has elapsed. Review your progress, reflect on the accuracy of your estimate, and recalibrate:
 Check test results
 - Step 1 done
 - Step 2 pending

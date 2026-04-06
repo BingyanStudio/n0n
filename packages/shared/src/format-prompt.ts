@@ -324,7 +324,7 @@ export function formatPrompt(
 					role: "user",
 					content: wrapTag(
 						"reminder",
-						`Your reminder fired (estimated ${msg.originalEstimate} rounds, now expired):\n${msg.content}`,
+						`Your estimate of ${msg.originalEstimate} rounds has elapsed. Review your progress, reflect on the accuracy of your estimate, and recalibrate:\n${msg.content}`,
 						modelId,
 					),
 				});
