@@ -48,13 +48,13 @@ export interface HeadlessResult {
 function buildEnvironmentSection(workspace: string): string {
 	return [
 		"",
-		"# 环境",
+		"# Environment",
 		"",
-		`- 工作目录：\`${workspace}\``,
-		"- 所有工具路径基于此目录解析。",
+		`- Working directory: \`${workspace}\``,
+		"- All tool paths resolve relative to this directory.",
 		"",
-		"使用相对路径（如 `src/utils.ts`），它们会正确解析。",
-		"修改代码前先阅读现有代码以理解项目结构。",
+		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
+		"Read existing code before modifying it to understand project structure.",
 	].join("\n");
 }
 

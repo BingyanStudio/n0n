@@ -36,15 +36,15 @@ type CodeWorkspacePaths = BaseWorkspacePaths;
 function buildEnvironmentSection(workspace: string): string {
 	return [
 		"",
-		"# 环境",
+		"# Environment",
 		"",
-		`- 工作目录：\`${workspace}\``,
-		"- 所有工具路径基于此目录解析：",
-		"  - `exec` 脚本的 cwd = 工作目录",
-		"  - `write` / `edit` 的相对路径基于工作目录解析",
+		`- Working directory: \`${workspace}\``,
+		"- All tool paths resolve relative to this directory:",
+		"  - `exec` scripts run with cwd = working directory",
+		"  - `write` / `edit` relative paths resolve against working directory",
 		"",
-		"使用相对路径（如 `src/utils.ts`），它们会正确解析。",
-		"修改代码前先阅读现有代码以理解项目结构。",
+		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
+		"Read existing code before modifying it to understand project structure.",
 	].join("\n");
 }
 
