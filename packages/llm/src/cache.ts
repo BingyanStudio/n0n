@@ -13,16 +13,18 @@
  *
  * Anthropic 最多支持 4 个缓存断点（ephemeral），激进策略全部用满：
  * 1. 最后一条 system 消息 — 缓存稳定的 system prompt
- * 2. 倒数第二个 user 消息 — **交错思考下的稳定缓存边界**
- *    （新 user 消息插入后，服务端会清空其与上一个 user 之间的 thinking content，
- *    导致 token 分布剧变。在上一个 user 处设 anchor，确保 S..prev_user 前缀仍可命中缓存）
+ * 2. 倒数第二个 **真实 user** 消息 — 稳定缓存锚点
+ *    在 Anthropic 格式中 tool_result 也是 role=user，但它们每轮都在增长，
+ *    不适合做锚点。真正的 user_input 消息才是稳定的对话边界。
+ *    使用 isRealUser 回调来区分；未提供时退化为按 role=user 匹配（向后兼容）。
  * 3-4. 从末尾向前补满剩余 non-assistant 消息 — 最新历史缓存
  *
- * 当只有 1 个 user 消息时（无 reminder），断点 2 不存在，
+ * 当只有 1 个真实 user 消息时（无 reminder），断点 2 不存在，
  * 退化为 system + 最后 3 条 non-assistant（与旧策略等价）。
  */
 export function selectCacheBreakpoints(
 	messages: readonly { role: string }[],
+	isRealUser?: (index: number) => boolean,
 ): number[] {
 	const selected = new Set<number>();
 
@@ -34,12 +36,14 @@ export function selectCacheBreakpoints(
 		}
 	}
 
-	// 断点 2：倒数第二个 user 消息（thinking 清空后的稳定缓存边界）
-	let userCount = 0;
+	// 断点 2：倒数第二个真实 user 消息（稳定缓存锚点）
+	// isRealUser 区分 user_input（稳定）和 tool_result→user（每轮增长）
+	const checkUser = isRealUser ?? ((i: number) => messages[i]?.role === "user");
+	let realUserCount = 0;
 	for (let i = messages.length - 1; i >= 0; i--) {
-		if (messages[i]?.role === "user") {
-			userCount++;
-			if (userCount === 2) {
+		if (checkUser(i)) {
+			realUserCount++;
+			if (realUserCount === 2) {
 				selected.add(i);
 				break;
 			}
