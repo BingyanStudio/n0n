@@ -41,7 +41,7 @@ export type EditArgs = z.infer<typeof EditArgsSchema>;
 
 export const ReminderArgsSchema = z.object({
 	content: z.string(),
-	delay: z.number().optional(),
+	estimate: z.number().optional(),
 });
 export type ReminderArgs = z.infer<typeof ReminderArgsSchema>;
 

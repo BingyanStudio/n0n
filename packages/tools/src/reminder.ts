@@ -53,7 +53,7 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 				description:
 					"Reminder content: include OKR summary, progress status, and next step",
 			},
-			delay: {
+			estimate: {
 				type: "number",
 				description:
 					"Number of rounds to complete the **next step** — not the entire task (default: 7). This is a promise, not a guess.",
@@ -68,19 +68,19 @@ export interface PendingReminder {
 	content: string;
 	roundsLeft: number;
 	/** 模型设置时承诺的原始轮数 */
-	originalDelay: number;
+	originalEstimate: number;
 }
 
 export function reminderTool(
 	call: ReminderToolCall,
 	reminders: PendingReminder[],
 ): ReminderToolResult {
-	const delay = call.args.delay ?? 7;
+	const delay = call.args.estimate ?? 7;
 	reminders.length = 0;
 	reminders.push({
 		content: call.args.content,
 		roundsLeft: delay,
-		originalDelay: delay,
+		originalEstimate: delay,
 	});
 
 	return {

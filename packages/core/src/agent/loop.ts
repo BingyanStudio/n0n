@@ -288,6 +288,6 @@ function injectReminders(messages: DomainMessage[], reminders: PendingReminder[]
 	reminders.length = 0;
 	reminders.push(...remaining);
 	for (const r of due) {
-		messages.push({ type: "reminder:due", content: r.content, originalDelay: r.originalDelay });
+		messages.push({ type: "reminder:due", content: r.content, originalDelay: r.originalEstimate });
 	}
 }

@@ -264,7 +264,7 @@ const scenarios: Scenario[] = [
 				call: {
 					id: "tc_7",
 					tool: "reminder",
-					args: { content: "Check test results", delay: 3 },
+					args: { content: "Check test results", estimate: 3 },
 				},
 				acknowledged: true,
 			},

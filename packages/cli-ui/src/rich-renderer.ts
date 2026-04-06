@@ -388,7 +388,7 @@ export class RichRenderer implements Renderer {
 			case "reminder": {
 				const chars = result.call.args.content.length;
 				const estTk = estimateTokens(result.call.args.content);
-				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.delay} rounds)`)} ${style.gray(`${chars} chars`)} ${style.dim(`~${estTk} tok`)}`;
+				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(in ${result.call.args.estimate} rounds)`)} ${style.gray(`${chars} chars`)} ${style.dim(`~${estTk} tok`)}`;
 			}
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;

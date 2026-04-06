@@ -182,7 +182,7 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 		case "edit":
 			return formatEditResult(msg as EditToolResult, model);
 		case "reminder": {
-			const delay = msg.call.args.delay ?? 7;
+			const delay = msg.call.args.estimate ?? 7;
 			return wrapTag(
 				"result",
 				`Reminder set. Commitment: ${delay} rounds for next step. A <reminder> will be injected when it expires.`,
