@@ -78,6 +78,7 @@ export interface AssistantToolCallMessage {
 import type {
 	EditArgs,
 	ExecArgs,
+	PaddingArgs,
 	ReminderArgs,
 	SubmitArgs,
 	WriteArgs,
@@ -90,6 +91,11 @@ interface ToolCallBase {
 export type ExecToolCall = ToolCallBase & { tool: "exec"; args: ExecArgs };
 export type WriteToolCall = ToolCallBase & { tool: "write"; args: WriteArgs };
 export type EditToolCall = ToolCallBase & { tool: "edit"; args: EditArgs };
+// TODO: review — padding 工具效果待验证
+export type PaddingToolCall = ToolCallBase & {
+	tool: "padding";
+	args: PaddingArgs;
+};
 export type ReminderToolCall = ToolCallBase & {
 	tool: "reminder";
 	args: ReminderArgs;
@@ -108,6 +114,7 @@ export type ToolCallRecord =
 	| ExecToolCall
 	| WriteToolCall
 	| EditToolCall
+	| PaddingToolCall
 	| ReminderToolCall
 	| SubmitToolCall;
 
@@ -259,6 +266,12 @@ export type EditToolResult = ToolResultBase & {
 	durationMs: number;
 };
 
+export type PaddingToolResult = ToolResultBase & {
+	tool: PaddingToolCall["tool"];
+	call: PaddingToolCall;
+	acknowledged: true;
+};
+
 export type ReminderToolResult = ToolResultBase & {
 	tool: ReminderToolCall["tool"]; // "reminder"
 	call: ReminderToolCall;
@@ -278,6 +291,7 @@ export type ToolResult =
 	| ExecToolResult
 	| WriteToolResult
 	| EditToolResult
+	| PaddingToolResult
 	| ReminderToolResult
 	| SubmitToolResult;
 

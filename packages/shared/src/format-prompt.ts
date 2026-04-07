@@ -80,11 +80,7 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 				);
 			if (msg.stderrTail)
 				parts.push(
-					wrapTag(
-						"stderr",
-						`... (truncated)\n${msg.stderrTail}`,
-						model,
-					),
+					wrapTag("stderr", `... (truncated)\n${msg.stderrTail}`, model),
 				);
 			const hint = [
 				`Full output (${msg.totalLines} lines) written to: ${msg.outputFile}`,
@@ -103,7 +99,9 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 			const combined = (msg.stdout || "") + (msg.stderr || "");
 			if (
 				msg.exitCode !== 0 &&
-				/Cannot find package|Cannot find module|ERR_MODULE_NOT_FOUND|ModuleNotFoundError|No module named/i.test(combined)
+				/Cannot find package|Cannot find module|ERR_MODULE_NOT_FOUND|ModuleNotFoundError|No module named/i.test(
+					combined,
+				)
 			) {
 				parts.push(
 					wrapTag(
@@ -117,6 +115,7 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 		}
 		default: {
 			const _exhaustive: never = msg;
+			// biome-ignore lint/suspicious/noExplicitAny: exhaustive switch default — msg is never
 			return `Unknown exec status: ${(msg as any).status}`;
 		}
 	}
@@ -125,7 +124,11 @@ function formatExecResult(msg: ExecToolResult, model: string): string {
 function formatWriteResult(msg: WriteToolResult, model: string): string {
 	switch (msg.status) {
 		case "completed":
-			return wrapTag("write_result", `Written to \`${msg.call.args.path}\``, model);
+			return wrapTag(
+				"write_result",
+				`Written to \`${msg.call.args.path}\``,
+				model,
+			);
 		case "failed":
 			return wrapTag("error", `Write failed: ${msg.error}`, model);
 		case "recovered": {
@@ -141,10 +144,19 @@ function formatWriteResult(msg: WriteToolResult, model: string): string {
 			return wrapTag("write_result", hint, model);
 		}
 		case "recover_failed":
-			return wrapTag("error", `Write failed after truncation recovery: ${msg.error}`, model);
+			return wrapTag(
+				"error",
+				`Write failed after truncation recovery: ${msg.error}`,
+				model,
+			);
 		default: {
 			const _exhaustive: never = msg;
-			return wrapTag("error", `Unknown write status: ${(msg as any).status}`, model);
+			return wrapTag(
+				"error",
+				// biome-ignore lint/suspicious/noExplicitAny: exhaustive switch default — msg is never
+				`Unknown write status: ${(msg as any).status}`,
+				model,
+			);
 		}
 	}
 }
@@ -181,6 +193,10 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 			return formatWriteResult(msg as WriteToolResult, model);
 		case "edit":
 			return formatEditResult(msg as EditToolResult, model);
+		// TODO: review — padding 工具效果待验证
+		case "padding": {
+			return "continue";
+		}
 		case "reminder": {
 			const estimate = msg.call.args.estimate ?? 7;
 			return wrapTag(
@@ -395,7 +411,6 @@ export function formatPrompt(
 					content: msg.content,
 				});
 				break;
-
 		}
 	}
 

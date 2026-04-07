@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noExplicitAny: test script using monkey-patching requires `as any` for private property access
+// biome-ignore-all lint/style/noNonNullAssertion: test script with bounded array access
 /**
  * TTY 复现脚本 v3：直接 instrument LiveRegion 追踪 lineCount
  */

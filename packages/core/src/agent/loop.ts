@@ -12,21 +12,27 @@
 
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
 import { makeToolkit } from "@n0n/tools";
-import type { DomainMessage, PartialToolCallRecord, Renderer, ToolCallRecord } from "@n0n/types";
+import type {
+	DomainMessage,
+	PartialToolCallRecord,
+	Renderer,
+	TokenUsage,
+	ToolCallRecord,
+} from "@n0n/types";
 import { FinishReason } from "@n0n/types";
 import type { ZodType } from "zod";
 import { getRuntime } from "../runtime.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import { RenderBuffer } from "./render-buffer.ts";
-import { ExecutionScheduler } from "./scheduler.ts";
-import { executeToolStream } from "./tool.ts";
-import { parseStream, type StreamingResult } from "./streaming.ts";
 import {
-	recoverTruncatedCalls,
 	buildToolCallMessage,
-	collectJobMessages,
 	checkSubmit,
+	collectJobMessages,
+	recoverTruncatedCalls,
 } from "./round.ts";
+import { ExecutionScheduler } from "./scheduler.ts";
+import { parseStream, type StreamingResult } from "./streaming.ts";
+import { executeToolStream } from "./tool.ts";
 
 // ── 结果类型 ──
 
@@ -66,12 +72,16 @@ export async function agentLoop<T = unknown>(
 			tempDir: ".temp",
 		}),
 	};
-	const toolkit = await makeToolkit(options?.schema, toolsConfig, client.modelId);
+	const toolkit = await makeToolkit(
+		options?.schema,
+		toolsConfig,
+		client.modelId,
+	);
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
 	let submitRetries = 0;
-	let lastUsage = null as any;
+	let lastUsage = null as TokenUsage | null;
 
 	for (let iter = 0; iter < maxIter; iter++) {
 		if (options?.signal?.aborted) {
@@ -93,17 +103,32 @@ export async function agentLoop<T = unknown>(
 		let streamResult: StreamingResult | null = null;
 
 		for await (const event of parseStream(
-			client.stream({ messages, tools: toolkit.tools, toolChoice: "auto" }, options?.signal),
+			client.stream(
+				{ messages, tools: toolkit.tools, toolChoice: "auto" },
+				options?.signal,
+			),
 			options?.signal,
 		)) {
 			switch (event.type) {
 				// 渲染分发
-				case "thinking_chunk":  renderer.thinkingChunk(event.text); break;
-				case "thinking_end":    renderer.thinkingEnd(); break;
-				case "content_chunk":   renderer.contentChunk(event.text); break;
-				case "content_end":     renderer.contentEnd(); break;
-				case "tool_arg_start":  renderer.toolCallArgStart(event.index, event.name); break;
-				case "tool_arg_chunk":  renderer.toolCallArgChunk(event.index, event.chunk); break;
+				case "thinking_chunk":
+					renderer.thinkingChunk(event.text);
+					break;
+				case "thinking_end":
+					renderer.thinkingEnd();
+					break;
+				case "content_chunk":
+					renderer.contentChunk(event.text);
+					break;
+				case "content_end":
+					renderer.contentEnd();
+					break;
+				case "tool_arg_start":
+					renderer.toolCallArgStart(event.index, event.name);
+					break;
+				case "tool_arg_chunk":
+					renderer.toolCallArgChunk(event.index, event.chunk);
+					break;
 
 				// 工具就绪 → 渲染 + 入队调度
 				case "tool_ready":
@@ -118,10 +143,17 @@ export async function agentLoop<T = unknown>(
 			}
 		}
 		renderer.streamEnd();
+		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 		lastUsage = streamResult!.accumulator.usage;
 
 		// ── 2. 分类本轮结果，决定后续动作 ──
-		const outcome = classifyRound(streamResult!, messages, idleCount, runtime.agent.maxIdleRounds);
+		const outcome = classifyRound(
+			// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
+			streamResult!,
+			messages,
+			idleCount,
+			runtime.agent.maxIdleRounds,
+		);
 
 		if (outcome.action === "exit") {
 			scheduler.seal();
@@ -137,11 +169,16 @@ export async function agentLoop<T = unknown>(
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
 				return {
 					result: null,
+					// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 					report: `Agent terminated: max idle rounds exceeded. Last content: ${(streamResult!.accumulator.content || "").slice(0, 200)}`,
 					history: messages,
 				};
 			}
-			messages.push({ type: "idle_nudge", idleCount, maxIdleRounds: runtime.agent.maxIdleRounds });
+			messages.push({
+				type: "idle_nudge",
+				idleCount,
+				maxIdleRounds: runtime.agent.maxIdleRounds,
+			});
 			continue;
 		}
 
@@ -154,22 +191,31 @@ export async function agentLoop<T = unknown>(
 		idleCount = 0;
 
 		// ── 3. 截断恢复 + seal ──
-		const tryRecover = async (toolName: string, toolCallId: string, partialJson: string) => {
+		const tryRecover = async (
+			toolName: string,
+			toolCallId: string,
+			partialJson: string,
+		) => {
 			const entry = toolkit.getEntry(toolName);
-			return (await entry?.recoverAndExecute?.(toolCallId, partialJson)) ?? null;
+			return (
+				(await entry?.recoverAndExecute?.(toolCallId, partialJson)) ?? null
+			);
 		};
+		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 		const truncation = await recoverTruncatedCalls(streamResult!, tryRecover);
 		scheduler.seal();
 
 		// 合并所有工具调用：streaming 完成的 + 截断恢复的
 		const allCalls: (ToolCallRecord | PartialToolCallRecord)[] = [
+			// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 			...streamResult!.readyTools.values(),
-			...truncation.pairs.map(p => p.call),
+			...truncation.pairs.map((p) => p.call),
 		];
 
 		if (allCalls.length === 0) continue;
 
 		// ── 4. 构建 assistant 消息 ──
+		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 		messages.push(buildToolCallMessage(streamResult!.accumulator, allCalls));
 
 		// ── 5. 等待执行 + 渲染完成 ──
@@ -186,23 +232,53 @@ export async function agentLoop<T = unknown>(
 		}
 
 		// ── 7. Submit 检查 ──
-		const submit = checkSubmit(scheduler.orderedJobs(), options?.schema, submitRetries, MAX_SUBMIT_RETRIES);
+		const submit = checkSubmit(
+			scheduler.orderedJobs(),
+			options?.schema,
+			submitRetries,
+			MAX_SUBMIT_RETRIES,
+		);
 		if (submit.accepted) {
 			renderer.submitAccepted();
-			return { result: submit.accepted.value as T, report: submit.accepted.report, history: messages };
+			return {
+				result: submit.accepted.value as T,
+				report: submit.accepted.report,
+				history: messages,
+			};
 		}
 		if (submit.gaveUp) {
-			renderer.submitRejected(submitRetries + 1, MAX_SUBMIT_RETRIES, `giving up after ${submitRetries + 1} attempts`);
-			return { result: null, report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${submit.gaveUp.error}`, history: messages };
+			renderer.submitRejected(
+				submitRetries + 1,
+				MAX_SUBMIT_RETRIES,
+				`giving up after ${submitRetries + 1} attempts`,
+			);
+			return {
+				result: null,
+				report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${submit.gaveUp.error}`,
+				history: messages,
+			};
 		}
 		if (submit.rejected) {
 			submitRetries = submit.rejected.retries;
-			renderer.submitRejected(submitRetries, MAX_SUBMIT_RETRIES, submit.rejected.error);
-			messages.push({ type: "submit:rejected", error: submit.rejected.error, attempt: submitRetries, maxAttempts: MAX_SUBMIT_RETRIES });
+			renderer.submitRejected(
+				submitRetries,
+				MAX_SUBMIT_RETRIES,
+				submit.rejected.error,
+			);
+			messages.push({
+				type: "submit:rejected",
+				error: submit.rejected.error,
+				attempt: submitRetries,
+				maxAttempts: MAX_SUBMIT_RETRIES,
+			});
 		}
 	}
 
-	return { result: null, report: `Agent terminated: max iterations (${maxIter}) exceeded`, history: messages };
+	return {
+		result: null,
+		report: `Agent terminated: max iterations (${maxIter}) exceeded`,
+		history: messages,
+	};
 }
 
 // ── 本轮结果分类（纯函数） ──
@@ -216,11 +292,12 @@ type RoundOutcome =
 function classifyRound(
 	result: StreamingResult,
 	messages: DomainMessage[],
-	idleCount: number,
-	maxIdleRounds: number,
+	_idleCount: number,
+	_maxIdleRounds: number,
 ): RoundOutcome {
 	const hasReadyTools = result.readyTools.size > 0;
-	const hasIncomplete = result.accumulator.toolCalls.size > result.readyTools.size;
+	const hasIncomplete =
+		result.accumulator.toolCalls.size > result.readyTools.size;
 	const hasAnyTools = hasReadyTools || hasIncomplete;
 
 	// aborted，无任何工具 → 直接返回
@@ -241,7 +318,11 @@ function classifyRound(
 			reasoning: result.accumulator.reasoning || undefined,
 			reasoningSignature: result.accumulator.reasoningSignature || undefined,
 		});
-		return { action: "exit", reason: "Content was filtered by the model provider.", report: "Agent terminated: content filter triggered" };
+		return {
+			action: "exit",
+			reason: "Content was filtered by the model provider.",
+			report: "Agent terminated: content filter triggered",
+		};
 	}
 
 	// length 截断且无工具 → 告知模型重试
@@ -254,7 +335,8 @@ function classifyRound(
 		});
 		messages.push({
 			type: "user_text",
-			content: "Your previous response was truncated due to max_tokens limit. Please retry with a shorter response, or break the task into smaller steps.",
+			content:
+				"Your previous response was truncated due to max_tokens limit. Please retry with a shorter response, or break the task into smaller steps.",
 		});
 		return { action: "retry_truncated" };
 	}
@@ -277,7 +359,10 @@ function classifyRound(
 
 // ── Reminders ──
 
-function injectReminders(messages: DomainMessage[], reminders: PendingReminder[]): void {
+function injectReminders(
+	messages: DomainMessage[],
+	reminders: PendingReminder[],
+): void {
 	const due: PendingReminder[] = [];
 	const remaining: PendingReminder[] = [];
 	for (const r of reminders) {
@@ -288,6 +373,10 @@ function injectReminders(messages: DomainMessage[], reminders: PendingReminder[]
 	reminders.length = 0;
 	reminders.push(...remaining);
 	for (const r of due) {
-		messages.push({ type: "reminder:due", content: r.content, originalEstimate: r.originalEstimate });
+		messages.push({
+			type: "reminder:due",
+			content: r.content,
+			originalEstimate: r.originalEstimate,
+		});
 	}
 }

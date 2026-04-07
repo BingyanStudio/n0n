@@ -241,7 +241,7 @@ export async function startCodeRepl(
 					}
 					if (code >= 32) {
 						line += data[i];
-						process.stderr.write(data[i]!);
+						process.stderr.write(data[i] as string);
 					}
 				}
 			};

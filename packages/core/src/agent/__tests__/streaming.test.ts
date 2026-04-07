@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noNonNullAssertion: test assertions on known-shape results
+// biome-ignore-all lint/suspicious/noExplicitAny: test mocks use any for flexibility
 /**
  * parseStream 单元测试
  *
@@ -10,7 +12,7 @@
 
 import { describe, expect, it } from "bun:test";
 import type { StreamEvent } from "@n0n/types";
-import { parseStream, type ParsedStreamEvent } from "../streaming.ts";
+import { type ParsedStreamEvent, parseStream } from "../streaming.ts";
 
 // ── 辅助 ──
 
@@ -20,7 +22,10 @@ async function* fakeStream(events: StreamEvent[]): AsyncGenerator<StreamEvent> {
 }
 
 /** 收集 parseStream 的所有输出事件 */
-async function collect(events: StreamEvent[], signal?: AbortSignal): Promise<ParsedStreamEvent[]> {
+async function collect(
+	events: StreamEvent[],
+	signal?: AbortSignal,
+): Promise<ParsedStreamEvent[]> {
 	const result: ParsedStreamEvent[] = [];
 	for await (const e of parseStream(fakeStream(events), signal)) {
 		result.push(e);
@@ -86,7 +91,13 @@ describe("parseStream", () => {
 		it("thinking → tool_args 转换：自动插入 thinking_end", async () => {
 			const events = await collect([
 				{ type: "thinking", text: "I need to run code" },
-				{ type: "tool_call_delta", index: 0, id: "tc_1", name: "exec", arguments: '{"script":"ls"}' },
+				{
+					type: "tool_call_delta",
+					index: 0,
+					id: "tc_1",
+					name: "exec",
+					arguments: '{"script":"ls"}',
+				},
 				{ type: "done", finishReason: "tool_calls", usage: null },
 			]);
 
@@ -100,7 +111,13 @@ describe("parseStream", () => {
 		it("content → tool_args 转换：自动插入 content_end", async () => {
 			const events = await collect([
 				{ type: "content", text: "Let me check" },
-				{ type: "tool_call_delta", index: 0, id: "tc_1", name: "exec", arguments: '{"script":"ls"}' },
+				{
+					type: "tool_call_delta",
+					index: 0,
+					id: "tc_1",
+					name: "exec",
+					arguments: '{"script":"ls"}',
+				},
 				{ type: "done", finishReason: "tool_calls", usage: null },
 			]);
 
@@ -115,7 +132,13 @@ describe("parseStream", () => {
 	describe("工具调用解析", () => {
 		it("单个工具调用，参数一次性完整", async () => {
 			const events = await collect([
-				{ type: "tool_call_delta", index: 0, id: "tc_1", name: "exec", arguments: '{"script":"ls"}' },
+				{
+					type: "tool_call_delta",
+					index: 0,
+					id: "tc_1",
+					name: "exec",
+					arguments: '{"script":"ls"}',
+				},
 				{ type: "done", finishReason: "tool_calls", usage: null },
 			]);
 
@@ -134,7 +157,13 @@ describe("parseStream", () => {
 
 		it("单个工具调用，参数分片到达", async () => {
 			const events = await collect([
-				{ type: "tool_call_delta", index: 0, id: "tc_1", name: "exec", arguments: '{"scr' },
+				{
+					type: "tool_call_delta",
+					index: 0,
+					id: "tc_1",
+					name: "exec",
+					arguments: '{"scr',
+				},
 				{ type: "tool_call_delta", index: 0, arguments: 'ipt":' },
 				{ type: "tool_call_delta", index: 0, arguments: '"ls -la"}' },
 				{ type: "done", finishReason: "tool_calls", usage: null },
@@ -152,8 +181,20 @@ describe("parseStream", () => {
 
 		it("多个工具调用并行", async () => {
 			const events = await collect([
-				{ type: "tool_call_delta", index: 0, id: "tc_1", name: "write", arguments: '{"path":"a.ts","content":"hello"}' },
-				{ type: "tool_call_delta", index: 1, id: "tc_2", name: "write", arguments: '{"path":"b.ts","content":"world"}' },
+				{
+					type: "tool_call_delta",
+					index: 0,
+					id: "tc_1",
+					name: "write",
+					arguments: '{"path":"a.ts","content":"hello"}',
+				},
+				{
+					type: "tool_call_delta",
+					index: 1,
+					id: "tc_2",
+					name: "write",
+					arguments: '{"path":"b.ts","content":"world"}',
+				},
 				{ type: "done", finishReason: "tool_calls", usage: null },
 			]);
 
@@ -166,7 +207,13 @@ describe("parseStream", () => {
 
 		it("JSON 未完整时不触发 tool_ready", async () => {
 			const events = await collect([
-				{ type: "tool_call_delta", index: 0, id: "tc_1", name: "write", arguments: '{"path":"a.ts","cont' },
+				{
+					type: "tool_call_delta",
+					index: 0,
+					id: "tc_1",
+					name: "write",
+					arguments: '{"path":"a.ts","cont',
+				},
 				{ type: "done", finishReason: "length", usage: null },
 			]);
 
@@ -241,7 +288,17 @@ describe("parseStream", () => {
 			const events = await collect([
 				{ type: "thinking", text: "reason" },
 				{ type: "content", text: "answer" },
-				{ type: "done", finishReason: "stop", usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, cacheReadTokens: 0, cacheWriteTokens: 0 } },
+				{
+					type: "done",
+					finishReason: "stop",
+					usage: {
+						inputTokens: 100,
+						outputTokens: 50,
+						totalTokens: 150,
+						cacheReadTokens: 0,
+						cacheWriteTokens: 0,
+					},
+				},
 			]);
 
 			const done = ofType(events, "done")[0]!;

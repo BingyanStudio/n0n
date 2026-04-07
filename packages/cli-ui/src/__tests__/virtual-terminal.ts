@@ -74,12 +74,15 @@ export class VirtualTerminal {
 				// CSI 序列: \x1b[ ... 终止字符
 				const csiStart = i + 2;
 				let csiEnd = csiStart;
-				while (csiEnd < data.length && !/[A-Za-z~@]/.test(data[csiEnd]!)) {
+				while (
+					csiEnd < data.length &&
+					!/[A-Za-z~@]/.test(data[csiEnd] as string)
+				) {
 					csiEnd++;
 				}
 				if (csiEnd < data.length) {
 					const params = data.slice(csiStart, csiEnd);
-					const cmd = data[csiEnd]!;
+					const cmd = data[csiEnd] as string;
 					this.handleCSI(params, cmd);
 					i = csiEnd + 1;
 				} else {
@@ -93,7 +96,7 @@ export class VirtualTerminal {
 				i++;
 			} else {
 				// 普通可见字符
-				this.putChar(data[i]!);
+				this.putChar(data[i] as string);
 				i++;
 			}
 		}
@@ -141,6 +144,7 @@ export class VirtualTerminal {
 		}
 
 		this.ensureRow(this.cursorRow);
+		// biome-ignore lint/style/noNonNullAssertion: bounds guaranteed by ensureRow
 		const row = this.buffer[this.cursorRow]!;
 
 		if (w === 2) {
@@ -178,6 +182,7 @@ export class VirtualTerminal {
 			// 先清除当前行光标之后的部分
 			this.ensureRow(this.cursorRow);
 			for (let c = this.cursorCol; c < this.cols; c++) {
+				// biome-ignore lint/style/noNonNullAssertion: bounds guaranteed by ensureRow
 				this.buffer[this.cursorRow]![c] = emptyCell();
 			}
 			// 清除光标下方所有行
@@ -190,6 +195,7 @@ export class VirtualTerminal {
 	/** Erase in Line: 0=光标到行尾, 1=行首到光标, 2=整行 */
 	private eraseLine(mode: number): void {
 		this.ensureRow(this.cursorRow);
+		// biome-ignore lint/style/noNonNullAssertion: bounds guaranteed by ensureRow
 		const row = this.buffer[this.cursorRow]!;
 		if (mode === 2) {
 			for (let c = 0; c < this.cols; c++) row[c] = emptyCell();

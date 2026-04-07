@@ -86,7 +86,7 @@ describe("流式渲染逐帧检查", () => {
 
 		for (let ci = 0; ci < chunks.length; ci++) {
 			if (ci === 0) renderer.toolCallArgStart(0, "exec");
-			renderer.toolCallArgChunk(0, chunks[ci]!);
+			renderer.toolCallArgChunk(0, chunks[ci] as string);
 
 			const allLines = vt.getVisibleLines();
 			const cleanLines = allLines.map((l) => stripAnsi(l));
@@ -147,7 +147,7 @@ describe("流式渲染逐帧检查", () => {
 
 		for (let ci = 0; ci < chunks.length; ci++) {
 			if (ci === 0) renderer.toolCallArgStart(0, "submit");
-			renderer.toolCallArgChunk(0, chunks[ci]!);
+			renderer.toolCallArgChunk(0, chunks[ci] as string);
 
 			const allLines = vt.getVisibleLines();
 			const streamLines = allLines.slice(baseLines).map((l) => stripAnsi(l));
@@ -185,7 +185,7 @@ describe("流式渲染逐帧检查", () => {
 
 			for (let ci = 0; ci < chunks.length; ci++) {
 				if (ci === 0) renderer.toolCallArgStart(0, "exec");
-				renderer.toolCallArgChunk(0, chunks[ci]!);
+				renderer.toolCallArgChunk(0, chunks[ci] as string);
 
 				const streamLines = vt
 					.getVisibleLines()

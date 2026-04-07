@@ -9,17 +9,17 @@ import type {
 	AssistantToolCallMessage,
 	DomainMessage,
 	PartialToolCallRecord,
+	StreamAccumulator,
 	ToolCallRecord,
 } from "@n0n/types";
-import type { StreamAccumulator } from "@n0n/types";
 import type { PipelineJob } from "./scheduler.ts";
-import {
-	recoverPartialCalls,
-	type PartialToolCall,
-	type TryRecoverFn,
-	type RecoveryResult,
-} from "./tool-recovery.ts";
 import type { StreamingResult } from "./streaming.ts";
+import {
+	type PartialToolCall,
+	type RecoveryResult,
+	recoverPartialCalls,
+	type TryRecoverFn,
+} from "./tool-recovery.ts";
 
 // ── 截断恢复 ──
 
@@ -62,7 +62,9 @@ export function buildToolCallMessage(
 }
 
 /** 从 scheduler 完成的 jobs 中收集 domain messages（结果 + 错误） */
-export function collectJobMessages(jobs: readonly PipelineJob[]): DomainMessage[] {
+export function collectJobMessages(
+	jobs: readonly PipelineJob[],
+): DomainMessage[] {
 	const msgs: DomainMessage[] = [];
 	for (const job of jobs) {
 		if (job.argError) msgs.push(job.argError);

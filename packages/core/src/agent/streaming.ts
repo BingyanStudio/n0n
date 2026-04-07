@@ -7,10 +7,9 @@
  * 不知道 Renderer、Scheduler 的存在。纯输入→输出映射。
  */
 
-import type { StreamEvent, TokenUsage, AssistantToolCallPart } from "@n0n/types";
-import { StreamAccumulator, FinishReason } from "@n0n/types";
-import type { ToolCallRecord } from "@n0n/types";
-import { parseToolCalls, isValidToolCall } from "./tool.ts";
+import type { StreamEvent, ToolCallRecord } from "@n0n/types";
+import { FinishReason, StreamAccumulator } from "@n0n/types";
+import { isValidToolCall, parseToolCalls } from "./tool.ts";
 
 // ── 输出事件（判别联合） ──
 
@@ -86,9 +85,17 @@ export async function* parseStream(
 
 				if (!seenIndices.has(event.index)) {
 					seenIndices.add(event.index);
-					yield { type: "tool_arg_start", index: event.index, name: event.name ?? "?" };
+					yield {
+						type: "tool_arg_start",
+						index: event.index,
+						name: event.name ?? "?",
+					};
 				}
-				yield { type: "tool_arg_chunk", index: event.index, chunk: event.arguments };
+				yield {
+					type: "tool_arg_chunk",
+					index: event.index,
+					chunk: event.arguments,
+				};
 
 				// JSON 完整性检测 → yield tool_ready
 				if (!completedIndices.has(event.index)) {

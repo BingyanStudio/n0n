@@ -224,7 +224,6 @@ function toAnthropicFormat(
 		}
 	}
 
-
 	const system =
 		systemParts.length === 0
 			? undefined

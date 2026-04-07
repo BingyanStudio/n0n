@@ -10,13 +10,7 @@
  */
 
 import wrapAnsi from "wrap-ansi";
-import {
-	clearDown,
-	cursorUp,
-	isTTY,
-	terminalColumns,
-	write,
-} from "./ansi.ts";
+import { clearDown, cursorUp, isTTY, terminalColumns, write } from "./ansi.ts";
 
 /** wrap-ansi 选项：硬折行，不裁剪空格，不做单词级换行 */
 const WRAP_OPTIONS = { trim: false, hard: true, wordWrap: false } as const;

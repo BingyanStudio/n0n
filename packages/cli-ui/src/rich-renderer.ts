@@ -385,6 +385,10 @@ export class RichRenderer implements Renderer {
 						.join(" ") || style.gray("(no changes)");
 				return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${lineStats} ${style.green("✓")}`;
 			}
+			// TODO: review — padding 工具效果待验证
+			case "padding": {
+				return `${style.dim("◂")} ${style.cyan("padding")}`;
+			}
 			case "reminder": {
 				const chars = result.call.args.content.length;
 				const estTk = estimateTokens(result.call.args.content);
@@ -392,6 +396,10 @@ export class RichRenderer implements Renderer {
 			}
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;
+			}
+			default: {
+				console.warn("[RichRenderer] unknown tool result:", result);
+				return `${style.dim("◂")} ${style.yellow("unknown")}`;
 			}
 		}
 	}

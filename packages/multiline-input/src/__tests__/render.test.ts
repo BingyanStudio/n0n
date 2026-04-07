@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noNonNullAssertion: test assertions on known-shape data
+// biome-ignore-all lint/suspicious/noControlCharactersInRegex: ANSI escape parsing requires control chars
 /**
  * 渲染逻辑测试 — 验证 redraw 生成的 ANSI 序列正确性
  *
@@ -278,22 +280,14 @@ describe("渲染 - 折行（超过终端宽度）", () => {
 	test("单行刚好等于终端宽度 → 占 1 终端行", () => {
 		const buf = new InputBuffer();
 		buf.insertText("a".repeat(20));
-		const { next } = buildRedrawOutput(
-			buf,
-			{ cursorRow: 0, totalRows: 0 },
-			20,
-		);
+		const { next } = buildRedrawOutput(buf, { cursorRow: 0, totalRows: 0 }, 20);
 		expect(next.totalRows).toBe(1);
 	});
 
 	test("单行超过终端宽度 → 占 2 终端行", () => {
 		const buf = new InputBuffer();
 		buf.insertText("a".repeat(25)); // 25 字符，终端宽度 20
-		const { next } = buildRedrawOutput(
-			buf,
-			{ cursorRow: 0, totalRows: 0 },
-			20,
-		);
+		const { next } = buildRedrawOutput(buf, { cursorRow: 0, totalRows: 0 }, 20);
 		expect(next.totalRows).toBe(2);
 		// 光标在第二个终端行
 		expect(next.cursorRow).toBe(1);
@@ -316,11 +310,7 @@ describe("渲染 - 折行（超过终端宽度）", () => {
 		buf.insertText("a".repeat(25)); // 占 2 终端行（cols=20）
 		buf.insertNewline();
 		buf.insertText("b".repeat(10)); // 占 1 终端行
-		const { next } = buildRedrawOutput(
-			buf,
-			{ cursorRow: 0, totalRows: 0 },
-			20,
-		);
+		const { next } = buildRedrawOutput(buf, { cursorRow: 0, totalRows: 0 }, 20);
 		expect(next.totalRows).toBe(3); // 2 + 1
 	});
 
@@ -386,9 +376,7 @@ describe("渲染 - 折行（超过终端宽度）", () => {
 describe("渲染 - Tab 对齐", () => {
 	/** 模拟 Tab 插入：计算对齐空格数并插入 */
 	function insertTab(buf: InputBuffer, tabWidth = 4): void {
-		const dc = stringWidth(
-			buf.lines[buf.cursorLine]!.slice(0, buf.cursorCol),
-		);
+		const dc = stringWidth(buf.lines[buf.cursorLine]!.slice(0, buf.cursorCol));
 		const spaces = tabWidth - (dc % tabWidth);
 		buf.insertText(" ".repeat(spaces));
 	}

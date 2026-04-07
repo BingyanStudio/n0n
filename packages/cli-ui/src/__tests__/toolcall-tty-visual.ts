@@ -7,7 +7,7 @@
  * 场景B：超 maxLines 的 write 工具（行数持续增长到 maxLines 后稳定）
  */
 
-import type { ToolResult, ToolCallRecord } from "@n0n/types";
+import type { ToolCallRecord, ToolResult } from "@n0n/types";
 import { RichRenderer } from "../rich-renderer.ts";
 
 function sleep(ms: number) {
@@ -90,7 +90,9 @@ async function scenarioB() {
 	renderer.streamEnd();
 	await sleep(300);
 
-	const contentStr = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n");
+	const contentStr = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join(
+		"\n",
+	);
 	const call: ToolCallRecord = {
 		id: "call_1",
 		tool: "write",

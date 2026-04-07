@@ -16,6 +16,7 @@ import type {
 	DomainMessage,
 	EditToolCall,
 	ExecToolCall,
+	PaddingToolCall,
 	ReminderToolCall,
 	SubmitArgs,
 	SubmitToolCall,
@@ -39,6 +40,11 @@ import {
 	makeExecToolDefinition,
 } from "./exec/index.ts";
 import {
+	PADDING_TOOL_DEFINITION,
+	PaddingArgsSchema,
+	paddingTool,
+} from "./padding.ts";
+import {
 	type PendingReminder,
 	REMINDER_TOOL_DEFINITION,
 	ReminderArgsSchema,
@@ -49,7 +55,12 @@ import {
 	SubmitArgsSchema,
 	submitTool,
 } from "./submit.ts";
-import { WRITE_TOOL_DEFINITION, WriteArgsSchema, writeTool, makeWriteRecover } from "./write.ts";
+import {
+	makeWriteRecover,
+	WRITE_TOOL_DEFINITION,
+	WriteArgsSchema,
+	writeTool,
+} from "./write.ts";
 
 // ── 执行器类型 ──
 
@@ -79,10 +90,16 @@ export interface RecoverResult {
  * 而是由 tool-recovery 模块直接产出 (call, result) 对追加到 history。
  * 截断场景下参数不完整，不适合做正常的流式执行。
  */
-export type RecoverFn = (toolCallId: string, partialJson: string) => Promise<RecoverResult | null>;
+export type RecoverFn = (
+	toolCallId: string,
+	partialJson: string,
+) => Promise<RecoverResult | null>;
 
 /** 工具注册表条目 — stream 字段决定 execute 类型，recoverAndExecute 与 stream 无关 */
-export type ToolEntry = { definition: ToolDefinition; recoverAndExecute?: RecoverFn } & (
+export type ToolEntry = {
+	definition: ToolDefinition;
+	recoverAndExecute?: RecoverFn;
+} & (
 	| { stream: true; execute: StreamExecutor }
 	| { stream: false; execute: SyncExecutor }
 );
@@ -147,6 +164,19 @@ function buildBaseRegistry(
 				);
 			},
 		},
+		// TODO: review — padding 工具效果待验证
+		padding: {
+			definition: PADDING_TOOL_DEFINITION,
+			stream: false,
+			execute: (tc) => {
+				const call: PaddingToolCall = {
+					id: tc.id,
+					tool: "padding" as const,
+					args: PaddingArgsSchema.parse(tc.args),
+				};
+				return paddingTool(call);
+			},
+		},
 		reminder: {
 			definition: REMINDER_TOOL_DEFINITION,
 			stream: false,
@@ -174,6 +204,7 @@ export const REGISTERED_TOOLS = new Set([
 	"exec",
 	"write",
 	"edit",
+	"padding",
 	"reminder",
 	"submit",
 ]);
@@ -215,9 +246,14 @@ export async function makeToolkit(
 	};
 
 	// 从注册表构建 ToolDefinition 列表
-	const tools: ToolDefinition[] = Object.values(registry).map(
-		(entry) => entry.definition,
-	);
+	// padding 排在首位，为模型提供"多次调用"信号
+	const paddingDef = registry.padding?.definition;
+	const restDefs = Object.entries(registry)
+		.filter(([name]) => name !== "padding")
+		.map(([, entry]) => entry.definition);
+	const tools: ToolDefinition[] = paddingDef
+		? [paddingDef, ...restDefs]
+		: restDefs;
 
 	return {
 		tools,

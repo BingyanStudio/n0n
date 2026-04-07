@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noNonNullAssertion: test assertions on known-shape results
+// biome-ignore-all lint/suspicious/noExplicitAny: test mocks use any for flexibility
 /**
  * round 纯函数单元测试
  *
@@ -9,17 +11,21 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import type {
+	DomainMessage,
+	SubmitToolResult,
+	ToolCallRecord,
+	ToolResult,
+} from "@n0n/types";
 import { StreamAccumulator } from "@n0n/types";
-import type { ToolCallRecord, ToolResult, SubmitToolResult, DomainMessage } from "@n0n/types";
-import type { PipelineJob } from "../scheduler.ts";
-import type { StreamingResult } from "../streaming.ts";
-import {
-	recoverTruncatedCalls,
-	buildToolCallMessage,
-	collectJobMessages,
-	checkSubmit,
-} from "../round.ts";
 import { z } from "zod";
+import {
+	buildToolCallMessage,
+	checkSubmit,
+	collectJobMessages,
+	recoverTruncatedCalls,
+} from "../round.ts";
+import type { PipelineJob } from "../scheduler.ts";
 
 // ── 辅助 ──
 
@@ -39,7 +45,11 @@ function makeAccWithToolCalls(
 	return acc;
 }
 
-function mockJob(tc: ToolCallRecord, result: ToolResult | null, argError?: any): PipelineJob {
+function mockJob(
+	tc: ToolCallRecord,
+	result: ToolResult | null,
+	argError?: any,
+): PipelineJob {
 	return {
 		tc,
 		done: true,
@@ -49,11 +59,18 @@ function mockJob(tc: ToolCallRecord, result: ToolResult | null, argError?: any):
 	} as unknown as PipelineJob;
 }
 
-function mockSubmitResult(cleanedResult: unknown, report?: string): SubmitToolResult {
+function mockSubmitResult(
+	cleanedResult: unknown,
+	report?: string,
+): SubmitToolResult {
 	return {
 		type: "tool_result",
 		tool: "submit",
-		call: { id: "sub_1", tool: "submit", args: { result: cleanedResult, report: report ?? null } },
+		call: {
+			id: "sub_1",
+			tool: "submit",
+			args: { result: cleanedResult, report: report ?? null },
+		},
 		cleanedResult,
 	} as SubmitToolResult;
 }
@@ -83,7 +100,11 @@ describe("recoverTruncatedCalls", () => {
 			{ index: 0, id: "tc_1", name: "exec", input: '{"script":"ls"}' },
 		]);
 		const readyTools = new Map<number, ToolCallRecord>();
-		readyTools.set(0, { id: "tc_1", tool: "exec", args: { script: "ls" } } as ToolCallRecord);
+		readyTools.set(0, {
+			id: "tc_1",
+			tool: "exec",
+			args: { script: "ls" },
+		} as ToolCallRecord);
 
 		const result = await recoverTruncatedCalls({
 			accumulator: acc,
@@ -114,13 +135,26 @@ describe("recoverTruncatedCalls", () => {
 
 	it("截断的 write 工具（有 recover）→ 恢复+执行", async () => {
 		const acc = makeAccWithToolCalls([
-			{ index: 0, id: "tc_1", name: "write", input: '{"path":"test.ts","content":"partial con' },
+			{
+				index: 0,
+				id: "tc_1",
+				name: "write",
+				input: '{"path":"test.ts","content":"partial con',
+			},
 		]);
 
 		// 模拟 recover：恢复参数 + 执行 → 返回 {call, result}
-		const tryRecover = async (toolName: string, toolCallId: string, _partialJson: string) => {
+		const tryRecover = async (
+			toolName: string,
+			toolCallId: string,
+			_partialJson: string,
+		) => {
 			if (toolName !== "write") return null;
-			const call = { id: toolCallId, tool: "write", args: { path: "test.ts", content: "partial con" } } as ToolCallRecord;
+			const call = {
+				id: toolCallId,
+				tool: "write",
+				args: { path: "test.ts", content: "partial con" },
+			} as ToolCallRecord;
 			const result: DomainMessage = {
 				type: "tool_result",
 				tool: "write",
@@ -130,11 +164,14 @@ describe("recoverTruncatedCalls", () => {
 			return { call, result };
 		};
 
-		const result = await recoverTruncatedCalls({
-			accumulator: acc,
-			readyTools: new Map(),
-			interrupt: "length",
-		}, tryRecover);
+		const result = await recoverTruncatedCalls(
+			{
+				accumulator: acc,
+				readyTools: new Map(),
+				interrupt: "length",
+			},
+			tryRecover,
+		);
 
 		expect(result.pairs).toHaveLength(1);
 		expect(result.pairs[0]!.status).toBe("recovered");
@@ -152,7 +189,11 @@ describe("buildToolCallMessage", () => {
 		acc.push({ type: "content", text: "Let me do this" });
 		acc.push({ type: "thinking", text: "reasoning" });
 
-		const tc: ToolCallRecord = { id: "tc_1", tool: "exec", args: { script: "ls" } } as ToolCallRecord;
+		const tc: ToolCallRecord = {
+			id: "tc_1",
+			tool: "exec",
+			args: { script: "ls" },
+		} as ToolCallRecord;
 		const msg = buildToolCallMessage(acc, [tc]);
 
 		expect(msg.type).toBe("assistant_tool_call");
@@ -178,7 +219,12 @@ describe("collectJobMessages", () => {
 
 	it("收集参数错误", () => {
 		const tc = mockExecTC("tc_1");
-		const argError = { type: "tool_arg_error", callId: "tc_1", tool: "exec", error: "bad args" };
+		const argError = {
+			type: "tool_arg_error",
+			callId: "tc_1",
+			tool: "exec",
+			error: "bad args",
+		};
 		const jobs = [mockJob(tc, null, argError)];
 
 		const msgs = collectJobMessages(jobs);
@@ -216,7 +262,11 @@ describe("checkSubmit", () => {
 	});
 
 	it("无 schema → 直接 accepted", () => {
-		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: 42 }, report: "done" } } as ToolCallRecord;
+		const submitTc = {
+			id: "sub_1",
+			tool: "submit",
+			args: { result: { answer: 42 }, report: "done" },
+		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: 42 }, "done");
 		const jobs = [mockJob(submitTc, submitResult)];
 
@@ -228,7 +278,11 @@ describe("checkSubmit", () => {
 
 	it("有 schema，校验通过 → accepted", () => {
 		const schema = z.object({ answer: z.number() });
-		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: 42 } } } as ToolCallRecord;
+		const submitTc = {
+			id: "sub_1",
+			tool: "submit",
+			args: { result: { answer: 42 } },
+		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: 42 });
 		const jobs = [mockJob(submitTc, submitResult)];
 
@@ -239,7 +293,11 @@ describe("checkSubmit", () => {
 
 	it("有 schema，校验失败 → rejected", () => {
 		const schema = z.object({ answer: z.number() });
-		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: "not a number" } } } as ToolCallRecord;
+		const submitTc = {
+			id: "sub_1",
+			tool: "submit",
+			args: { result: { answer: "not a number" } },
+		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: "not a number" });
 		const jobs = [mockJob(submitTc, submitResult)];
 
@@ -251,7 +309,11 @@ describe("checkSubmit", () => {
 
 	it("重试次数达到上限 → gaveUp", () => {
 		const schema = z.object({ answer: z.number() });
-		const submitTc = { id: "sub_1", tool: "submit", args: { result: { answer: "bad" } } } as ToolCallRecord;
+		const submitTc = {
+			id: "sub_1",
+			tool: "submit",
+			args: { result: { answer: "bad" } },
+		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: "bad" });
 		const jobs = [mockJob(submitTc, submitResult)];
 

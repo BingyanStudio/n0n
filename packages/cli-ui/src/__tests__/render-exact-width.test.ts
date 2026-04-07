@@ -93,7 +93,7 @@ describe("精确宽度边界", () => {
 		const lines1 = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("=== contentEnd 后屏幕 ===");
 		for (let i = 0; i < lines1.length; i++) {
-			const l = lines1[i]!;
+			const l = lines1[i] as string;
 			console.log(
 				`  [${i}] len=${l.length} "${l.slice(0, 60)}${l.length > 60 ? "..." : ""}"`,
 			);
@@ -129,7 +129,7 @@ describe("精确宽度边界", () => {
 		const lines1 = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("=== CJK 边界 contentEnd 后 ===");
 		for (let i = 0; i < lines1.length; i++) {
-			const l = lines1[i]!;
+			const l = lines1[i] as string;
 			console.log(
 				`  [${i}] len=${l.length} "${l.slice(0, 50)}${l.length > 50 ? "..." : ""}"`,
 			);
@@ -157,7 +157,7 @@ describe("精确宽度边界", () => {
 		// 逐字符流式发送（最恶劣的情况）
 		for (let i = 0; i < realJson.length; i++) {
 			if (i === 0) renderer.toolCallArgStart(0, "submit");
-			renderer.toolCallArgChunk(0, realJson[i]!);
+			renderer.toolCallArgChunk(0, realJson[i] as string);
 		}
 		renderer.streamEnd();
 

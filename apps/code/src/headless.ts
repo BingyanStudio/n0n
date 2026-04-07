@@ -190,7 +190,8 @@ export async function runHeadless(
 					return {
 						success: false,
 						result: ir,
-						report: "Agent requested assistance too many times in headless mode",
+						report:
+							"Agent requested assistance too many times in headless mode",
 						rounds,
 						durationMs: Date.now() - startTime,
 						error: `Agent requested help ${needInfoCount} times in headless mode`,

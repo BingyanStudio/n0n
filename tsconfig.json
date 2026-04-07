@@ -51,6 +51,7 @@
 		"jsx": "react-jsx",
 		"jsxImportSource": "react"
 	},
+	"files": ["text-imports.d.ts"],
 	"include": [
 		"packages/*/src/**/*.ts",
 		"apps/*/src/**/*.ts",

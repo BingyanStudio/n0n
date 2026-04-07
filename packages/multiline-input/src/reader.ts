@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noNonNullAssertion: internal array/string access with bounds checks
 /**
  * readMultilineInput — 终端多行输入读取器
  *
@@ -51,12 +52,20 @@ function terminalRowsForLine(line: string, cols: number): number {
 	return Math.ceil(w / cols);
 }
 
-function cursorTerminalRow(line: string, cursorCol: number, cols: number): number {
+function cursorTerminalRow(
+	line: string,
+	cursorCol: number,
+	cols: number,
+): number {
 	const w = displayCol(line, cursorCol);
 	return Math.floor(w / cols);
 }
 
-function cursorTerminalCol(line: string, cursorCol: number, cols: number): number {
+function cursorTerminalCol(
+	line: string,
+	cursorCol: number,
+	cols: number,
+): number {
 	const w = displayCol(line, cursorCol);
 	return w % cols;
 }
@@ -94,7 +103,11 @@ export function readMultilineInput(
 		function finish(result: MultilineInputResult | null): void {
 			const cols = getCols();
 			const cursorLine = buf.cursorLine;
-			const cursorColOffset = cursorTerminalRow(buf.lines[cursorLine]!, buf.cursorCol, cols);
+			const cursorColOffset = cursorTerminalRow(
+				buf.lines[cursorLine]!,
+				buf.cursorCol,
+				cols,
+			);
 			const cursorLineTotal = terminalRowsForLine(buf.lines[cursorLine]!, cols);
 			let rowsBelow = cursorLineTotal - cursorColOffset - 1;
 			for (let i = cursorLine + 1; i < buf.lines.length; i++) {
@@ -129,7 +142,11 @@ export function readMultilineInput(
 			for (let i = 0; i < buf.cursorLine; i++) {
 				newCursorRow += terminalRowsForLine(buf.lines[i]!, cols);
 			}
-			newCursorRow += cursorTerminalRow(buf.lines[buf.cursorLine]!, buf.cursorCol, cols);
+			newCursorRow += cursorTerminalRow(
+				buf.lines[buf.cursorLine]!,
+				buf.cursorCol,
+				cols,
+			);
 
 			if (state.cursorRow > 0) w(`\x1b[${state.cursorRow}A`);
 			w("\r");
@@ -153,7 +170,11 @@ export function readMultilineInput(
 			const up = newTotalRows - 1 - newCursorRow;
 			if (up > 0) w(`\x1b[${up}A`);
 			w("\r");
-			const dc = cursorTerminalCol(buf.lines[buf.cursorLine]!, buf.cursorCol, cols);
+			const dc = cursorTerminalCol(
+				buf.lines[buf.cursorLine]!,
+				buf.cursorCol,
+				cols,
+			);
 			if (dc > 0) w(`\x1b[${dc}C`);
 
 			state = { cursorRow: newCursorRow, totalRows: newTotalRows };
@@ -194,12 +215,21 @@ export function readMultilineInput(
 			while (i < data.length) {
 				const code = data.charCodeAt(i);
 
-				if (code === 3) { abort(); return; }
-				if (code === 4) { submit(); return; }
+				if (code === 3) {
+					abort();
+					return;
+				}
+				if (code === 4) {
+					submit();
+					return;
+				}
 
 				if (code === 27) {
 					const next = data[i + 1];
-					if (next === "\r") { submit(); return; }
+					if (next === "\r") {
+						submit();
+						return;
+					}
 					if (next === "[") {
 						const arrow = data[i + 2];
 						if (arrow === "A") buf.moveUp();
@@ -237,7 +267,10 @@ export function readMultilineInput(
 					continue;
 				}
 
-				if (code < 32) { i++; continue; }
+				if (code < 32) {
+					i++;
+					continue;
+				}
 
 				if (code >= 0xd800 && code <= 0xdbff && i + 1 < data.length) {
 					buf.insertText(data.slice(i, i + 2));
