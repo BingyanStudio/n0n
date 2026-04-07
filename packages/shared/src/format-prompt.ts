@@ -193,6 +193,7 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 			return formatWriteResult(msg as WriteToolResult, model);
 		case "edit":
 			return formatEditResult(msg as EditToolResult, model);
+		// TODO: review — padding 工具效果待验证
 		case "padding": {
 			return "continue";
 		}

@@ -164,6 +164,7 @@ function buildBaseRegistry(
 				);
 			},
 		},
+		// TODO: review — padding 工具效果待验证
 		padding: {
 			definition: PADDING_TOOL_DEFINITION,
 			stream: false,

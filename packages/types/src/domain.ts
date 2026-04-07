@@ -91,6 +91,7 @@ interface ToolCallBase {
 export type ExecToolCall = ToolCallBase & { tool: "exec"; args: ExecArgs };
 export type WriteToolCall = ToolCallBase & { tool: "write"; args: WriteArgs };
 export type EditToolCall = ToolCallBase & { tool: "edit"; args: EditArgs };
+// TODO: review — padding 工具效果待验证
 export type PaddingToolCall = ToolCallBase & {
 	tool: "padding";
 	args: PaddingArgs;

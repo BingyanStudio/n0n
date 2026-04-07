@@ -8,6 +8,8 @@
  * 排在工具列表第一位，为模型提供"多次调用"的信号。
  */
 
+// TODO: review — padding 工具效果待验证，可能需要调整 description 措辞或移除
+
 import type {
 	PaddingToolCall,
 	PaddingToolResult,
