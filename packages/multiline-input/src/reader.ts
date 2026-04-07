@@ -215,7 +215,7 @@ export function readMultilineInput(
 			while (i < data.length) {
 				const code = data.charCodeAt(i);
 
-				if (code === 3) {
+				if (code === 17) {
 					abort();
 					return;
 				}

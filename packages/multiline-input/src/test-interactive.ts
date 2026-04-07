@@ -10,7 +10,7 @@
  *   3. 折行处理 — 输入超过终端宽度的长文本，观察自动折行
  *   4. 历史编辑 — 用方向键移动光标，Backspace 删除，在中间插入
  *   5. 粘贴功能 — 从剪贴板粘贴多行文本（bracketed paste）
- *   6. Ctrl+C   — 应中断当前输入（返回 null），而非退出进程
+ *   6. Ctrl+Q   — 应中断当前输入（返回 null），而非退出进程
  *
  * 每次提交后会打印输入结果的详细信息，然后进入下一轮输入。
  * 输入 "exit"（单独一行）后退出测试。
@@ -41,7 +41,7 @@ function banner(): void {
 		`    ${GREEN}Alt+Enter${RESET}   提交输入（或 ${GREEN}Ctrl+D${RESET}）\n`,
 	);
 	process.stderr.write(
-		`    ${GREEN}Ctrl+C${RESET}      中断当前输入（不退出进程）\n`,
+		`    ${GREEN}Ctrl+Q${RESET}      中断当前输入（不退出进程）\n`,
 	);
 	process.stderr.write(`    ${GREEN}方向键${RESET}      上下左右移动光标\n`);
 	process.stderr.write(`    ${GREEN}Backspace${RESET}   删除前一个字符\n`);
@@ -60,7 +60,7 @@ function printResult(
 
 	if (result === null) {
 		process.stderr.write(
-			`${YELLOW}⚠ 第 ${round} 轮: Ctrl+C 中断 (返回 null)${RESET}\n`,
+			`${YELLOW}⚠ 第 ${round} 轮: Ctrl+Q 中断 (返回 null)${RESET}\n`,
 		);
 	} else {
 		process.stderr.write(`${GREEN}✓ 第 ${round} 轮提交结果:${RESET}\n`);
@@ -106,7 +106,7 @@ async function main(): Promise<void> {
 		round++;
 
 		const promptLabel = `${BG_BLUE}${WHITE}${BOLD} 第 ${round} 轮 ${RESET}`;
-		const hint = `${DIM}(Alt+Enter 提交, Ctrl+C 中断)${RESET}`;
+		const hint = `${DIM}(Alt+Enter 提交, Ctrl+Q 中断)${RESET}`;
 
 		const result = await readMultilineInput({
 			prompt: promptLabel,
@@ -115,10 +115,10 @@ async function main(): Promise<void> {
 
 		printResult(result, round);
 
-		// Ctrl+C 返回 null 时不退出，继续下一轮
+		// Ctrl+Q 返回 null 时不退出，继续下一轮
 		if (result === null) {
 			process.stderr.write(
-				`${DIM}  → Ctrl+C 已捕获，进程未退出，继续下一轮...${RESET}\n\n`,
+				`${DIM}  → Ctrl+Q 已捕获，进程未退出，继续下一轮...${RESET}\n\n`,
 			);
 			continue;
 		}
