@@ -385,9 +385,6 @@ export class RichRenderer implements Renderer {
 						.join(" ") || style.gray("(no changes)");
 				return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${lineStats} ${style.green("✓")}`;
 			}
-			case "think": {
-				return `${style.dim("◂")} ${style.cyan("think")}`;
-			}
 			case "reminder": {
 				const chars = result.call.args.content.length;
 				const estTk = estimateTokens(result.call.args.content);

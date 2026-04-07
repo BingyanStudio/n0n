@@ -16,7 +16,6 @@ import type {
 	DomainMessage,
 	EditToolCall,
 	ExecToolCall,
-	ThinkToolCall,
 	ReminderToolCall,
 	SubmitArgs,
 	SubmitToolCall,
@@ -39,11 +38,6 @@ import {
 	execToolStream,
 	makeExecToolDefinition,
 } from "./exec/index.ts";
-import {
-	THINK_TOOL_DEFINITION,
-	ThinkArgsSchema,
-	thinkTool,
-} from "./think.ts";
 import {
 	type PendingReminder,
 	REMINDER_TOOL_DEFINITION,
@@ -164,19 +158,6 @@ function buildBaseRegistry(
 				);
 			},
 		},
-		// TODO: review — think 工具效果待验证
-		think: {
-			definition: THINK_TOOL_DEFINITION,
-			stream: false,
-			execute: (tc) => {
-				const call: ThinkToolCall = {
-					id: tc.id,
-					tool: "think" as const,
-					args: ThinkArgsSchema.parse(tc.args),
-				};
-				return thinkTool(call);
-			},
-		},
 		reminder: {
 			definition: REMINDER_TOOL_DEFINITION,
 			stream: false,
@@ -204,7 +185,6 @@ export const REGISTERED_TOOLS = new Set([
 	"exec",
 	"write",
 	"edit",
-	"think",
 	"reminder",
 	"submit",
 ]);
@@ -246,14 +226,7 @@ export async function makeToolkit(
 	};
 
 	// 从注册表构建 ToolDefinition 列表
-	// think 排在首位，为模型提供"多次调用"信号
-	const thinkDef = registry.think?.definition;
-	const restDefs = Object.entries(registry)
-		.filter(([name]) => name !== "think")
-		.map(([, entry]) => entry.definition);
-	const tools: ToolDefinition[] = thinkDef
-		? [thinkDef, ...restDefs]
-		: restDefs;
+	const tools = Object.values(registry).map((entry) => entry.definition);
 
 	return {
 		tools,

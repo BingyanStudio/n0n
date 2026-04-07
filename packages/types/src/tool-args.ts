@@ -45,13 +45,6 @@ export const ReminderArgsSchema = z.object({
 });
 export type ReminderArgs = z.infer<typeof ReminderArgsSchema>;
 
-// ── think ──
-
-export const ThinkArgsSchema = z.object({
-	content: z.string(),
-});
-export type ThinkArgs = z.infer<typeof ThinkArgsSchema>;
-
 // ── submit ──
 
 export const SubmitArgsSchema = z.object({

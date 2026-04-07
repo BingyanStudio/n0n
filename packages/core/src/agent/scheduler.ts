@@ -116,7 +116,6 @@ export class ExecutionScheduler {
 			}
 			case "exec":
 				return this.active.size === 0;
-			case "think":
 			case "reminder":
 			case "submit":
 				return true;

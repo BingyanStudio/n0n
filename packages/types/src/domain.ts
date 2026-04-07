@@ -78,7 +78,6 @@ export interface AssistantToolCallMessage {
 import type {
 	EditArgs,
 	ExecArgs,
-	ThinkArgs,
 	ReminderArgs,
 	SubmitArgs,
 	WriteArgs,
@@ -91,7 +90,6 @@ interface ToolCallBase {
 export type ExecToolCall = ToolCallBase & { tool: "exec"; args: ExecArgs };
 export type WriteToolCall = ToolCallBase & { tool: "write"; args: WriteArgs };
 export type EditToolCall = ToolCallBase & { tool: "edit"; args: EditArgs };
-export type ThinkToolCall = ToolCallBase & { tool: "think"; args: ThinkArgs };
 export type ReminderToolCall = ToolCallBase & {
 	tool: "reminder";
 	args: ReminderArgs;
@@ -110,7 +108,6 @@ export type ToolCallRecord =
 	| ExecToolCall
 	| WriteToolCall
 	| EditToolCall
-	| ThinkToolCall
 	| ReminderToolCall
 	| SubmitToolCall;
 
@@ -262,12 +259,6 @@ export type EditToolResult = ToolResultBase & {
 	durationMs: number;
 };
 
-export type ThinkToolResult = ToolResultBase & {
-	tool: ThinkToolCall["tool"];
-	call: ThinkToolCall;
-	acknowledged: true;
-};
-
 export type ReminderToolResult = ToolResultBase & {
 	tool: ReminderToolCall["tool"]; // "reminder"
 	call: ReminderToolCall;
@@ -287,7 +278,6 @@ export type ToolResult =
 	| ExecToolResult
 	| WriteToolResult
 	| EditToolResult
-	| ThinkToolResult
 	| ReminderToolResult
 	| SubmitToolResult;
 
