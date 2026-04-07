@@ -21,3 +21,4 @@ workflows/
 workflows/memory
 dist/ 
 .DS_Store
+n0n-conversation-*.json
