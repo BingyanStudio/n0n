@@ -397,8 +397,8 @@ export class RichRenderer implements Renderer {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;
 			}
 			default: {
-				const name = "tool" in result ? String(result.tool) : "unknown";
-				return `${style.dim("◂")} ${style.cyan(name)}`;
+				console.warn("[RichRenderer] unknown tool result:", result);
+				return `${style.dim("◂")} ${style.yellow("unknown")}`;
 			}
 		}
 	}
