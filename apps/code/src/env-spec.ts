@@ -14,6 +14,17 @@ export const codeEnvSpec: EnvSpec = {
 		LLM_ENV_GROUP,
 		EDITOR_LLM_ENV_GROUP,
 		{
+			title: "编辑后端",
+			vars: [
+				{
+					key: "EDIT_BACKEND",
+					desc: "编辑后端类型",
+					example: "freeform-patch",
+					default: "str-replace",
+				},
+			],
+		},
+		{
 			title: "安全配置",
 			vars: [
 				{
