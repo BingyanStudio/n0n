@@ -16,7 +16,7 @@ import type {
 	DomainMessage,
 	EditToolCall,
 	ExecToolCall,
-	PaddingToolCall,
+	ThinkToolCall,
 	ReminderToolCall,
 	SubmitArgs,
 	SubmitToolCall,
@@ -40,10 +40,10 @@ import {
 	makeExecToolDefinition,
 } from "./exec/index.ts";
 import {
-	PADDING_TOOL_DEFINITION,
-	PaddingArgsSchema,
-	paddingTool,
-} from "./padding.ts";
+	THINK_TOOL_DEFINITION,
+	ThinkArgsSchema,
+	thinkTool,
+} from "./think.ts";
 import {
 	type PendingReminder,
 	REMINDER_TOOL_DEFINITION,
@@ -164,17 +164,17 @@ function buildBaseRegistry(
 				);
 			},
 		},
-		// TODO: review — padding 工具效果待验证
-		padding: {
-			definition: PADDING_TOOL_DEFINITION,
+		// TODO: review — think 工具效果待验证
+		think: {
+			definition: THINK_TOOL_DEFINITION,
 			stream: false,
 			execute: (tc) => {
-				const call: PaddingToolCall = {
+				const call: ThinkToolCall = {
 					id: tc.id,
-					tool: "padding" as const,
-					args: PaddingArgsSchema.parse(tc.args),
+					tool: "think" as const,
+					args: ThinkArgsSchema.parse(tc.args),
 				};
-				return paddingTool(call);
+				return thinkTool(call);
 			},
 		},
 		reminder: {
@@ -204,7 +204,7 @@ export const REGISTERED_TOOLS = new Set([
 	"exec",
 	"write",
 	"edit",
-	"padding",
+	"think",
 	"reminder",
 	"submit",
 ]);
@@ -246,13 +246,13 @@ export async function makeToolkit(
 	};
 
 	// 从注册表构建 ToolDefinition 列表
-	// padding 排在首位，为模型提供"多次调用"信号
-	const paddingDef = registry.padding?.definition;
+	// think 排在首位，为模型提供"多次调用"信号
+	const thinkDef = registry.think?.definition;
 	const restDefs = Object.entries(registry)
-		.filter(([name]) => name !== "padding")
+		.filter(([name]) => name !== "think")
 		.map(([, entry]) => entry.definition);
-	const tools: ToolDefinition[] = paddingDef
-		? [paddingDef, ...restDefs]
+	const tools: ToolDefinition[] = thinkDef
+		? [thinkDef, ...restDefs]
 		: restDefs;
 
 	return {

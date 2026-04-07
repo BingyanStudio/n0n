@@ -45,13 +45,12 @@ export const ReminderArgsSchema = z.object({
 });
 export type ReminderArgs = z.infer<typeof ReminderArgsSchema>;
 
-// ── padding ──
-// TODO: review — padding 工具效果待验证
+// ── think ──
 
-export const PaddingArgsSchema = z.object({
-	think: z.string(),
+export const ThinkArgsSchema = z.object({
+	content: z.string(),
 });
-export type PaddingArgs = z.infer<typeof PaddingArgsSchema>;
+export type ThinkArgs = z.infer<typeof ThinkArgsSchema>;
 
 // ── submit ──
 
