@@ -16,7 +16,11 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
-import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
+import {
+	buildLLMConfigFromEnv,
+	createLLMClient,
+	createResponsesClient,
+} from "@n0n/llm";
 import {
 	bootstrap,
 	ensureDirs,
@@ -161,7 +165,7 @@ const runtime =
 				client: createLLMClient(llmConfig),
 				editBackend: {
 					type: "freeform-patch",
-					freeformPatchConfig: {
+					responsesClient: createResponsesClient({
 						baseUrl:
 							process.env.EDITOR_LLM_BASE_URL ||
 							process.env.LLM_BASE_URL ||
@@ -171,7 +175,7 @@ const runtime =
 							process.env.LLM_API_KEY ||
 							"",
 						model: process.env.EDITOR_LLM_MODEL || "gpt-5.4-mini",
-					},
+					}),
 				},
 		  })
 		: createRuntimeContext({

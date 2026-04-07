@@ -6,7 +6,7 @@
  */
 
 import type { LLMClient } from "@n0n/types";
-import type { FreeformPatchConfig } from "./edit/freeform-patch/index.ts";
+import type { ResponsesClient } from "./edit/freeform-patch/index.ts";
 
 interface ToolsConfigBase {
 	security: {
@@ -26,9 +26,9 @@ interface StrReplaceToolsConfig extends ToolsConfigBase {
 
 interface FreeformPatchToolsConfig extends ToolsConfigBase {
 	editBackendType: "freeform-patch";
-	freeformPatchConfig: FreeformPatchConfig;
+	responsesClient: ResponsesClient;
 }
 
 export type ToolsConfig = StrReplaceToolsConfig | FreeformPatchToolsConfig;
 
-export type { FreeformPatchConfig } from "./edit/freeform-patch/index.ts";
+export type { ResponsesClient } from "./edit/freeform-patch/index.ts";

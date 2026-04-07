@@ -121,7 +121,7 @@ function buildBaseRegistry(
 
 	const editBackend: EditBackend =
 		toolsConfig.editBackendType === "freeform-patch"
-			? new FreeformPatchBackend(toolsConfig.freeformPatchConfig)
+			? new FreeformPatchBackend(toolsConfig.responsesClient)
 			: new StrReplaceBackend(toolsConfig.editorClient);
 
 	return {
@@ -244,7 +244,7 @@ export async function makeToolkit(
 
 // ── Re-exports ──
 
-export type { ToolsConfig, FreeformPatchConfig } from "./config.ts";
+export type { ToolsConfig, ResponsesClient } from "./config.ts";
 export type { EnvSnapshot, RuntimeProbe } from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";

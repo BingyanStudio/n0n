@@ -9,7 +9,7 @@
  */
 
 import type { LLMClient } from "@n0n/types";
-import type { FreeformPatchConfig } from "@n0n/tools";
+import type { ResponsesClient } from "@n0n/tools";
 
 // ── 类型 ──
 
@@ -26,7 +26,7 @@ export interface SecurityConfig {
 /** 编辑后端配置 — discriminated union，与 ToolsConfig 的 edit 部分对齐 */
 export type EditBackendConfig =
 	| { type: "str-replace"; editorClient: LLMClient }
-	| { type: "freeform-patch"; freeformPatchConfig: FreeformPatchConfig };
+	| { type: "freeform-patch"; responsesClient: ResponsesClient };
 
 export interface RuntimeContext {
 	/** 主 LLM Client 实例 */

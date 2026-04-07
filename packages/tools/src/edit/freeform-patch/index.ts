@@ -14,14 +14,6 @@ import { ALL_TOOLS, FIRST_ROUND_TOOLS } from "./grammar.ts";
 import { applyPatchToSource, parsePatch } from "./parser.ts";
 import systemPrompt from "./prompt.md" with { type: "text" };
 
-export interface FreeformPatchConfig {
-	baseUrl: string;
-	apiKey: string;
-	model: string;
-}
-
-const MAX_ROUNDS = 5;
-
 interface ResponseItem {
 	type: string;
 	call_id?: string;
@@ -29,19 +21,32 @@ interface ResponseItem {
 	input?: string;
 }
 
-interface ResponsesResult {
+export interface ResponsesResult {
 	output: ResponseItem[];
 }
 
+/**
+ * OpenAI Responses API 的最小调用接口。
+ *
+ * baseUrl、apiKey、model 等细节由外部实现闭包，
+ * FreeformPatchBackend 只关心 "给 input + tools，拿 result"。
+ */
+export interface ResponsesClient {
+	create(
+		input: unknown[],
+		tools: unknown[],
+		signal?: AbortSignal,
+	): Promise<ResponsesResult | { error: string }>;
+}
+
+const MAX_ROUNDS = 5;
+
 export class FreeformPatchBackend implements EditBackend {
 	readonly name = "freeform-patch";
-	private readonly config: FreeformPatchConfig;
-	private readonly apiUrl: string;
+	private readonly client: ResponsesClient;
 
-	constructor(config: FreeformPatchConfig) {
-		this.config = config;
-		const base = config.baseUrl.replace(/\/v1\/?$/, "").replace(/\/$/, "");
-		this.apiUrl = `${base}/v1/responses`;
+	constructor(client: ResponsesClient) {
+		this.client = client;
 	}
 
 	async execute(
@@ -70,7 +75,7 @@ export class FreeformPatchBackend implements EditBackend {
 			callbacks?.onEvent?.(round, { type: "thinking", text: `round ${round + 1}...` });
 
 			const tools = round === 0 ? FIRST_ROUND_TOOLS : ALL_TOOLS;
-			const json = await this.callApi(conversation, tools, signal);
+			const json = await this.client.create(conversation, tools, signal);
 			if ("error" in json && typeof json.error === "string") {
 				return { content: current, feedback, error: json.error, rounds: round + 1 };
 			}
@@ -154,14 +159,12 @@ export class FreeformPatchBackend implements EditBackend {
 	private parseRange(raw: string, totalLines: number): { start: number; end: number } {
 		if (!raw) return { start: 1, end: totalLines };
 
-		// "-5" → 倒数 5 行
 		const tailMatch = raw.match(/^-(\d+)$/);
 		if (tailMatch) {
 			const n = Number.parseInt(tailMatch[1] as string, 10);
 			return { start: Math.max(1, totalLines - n + 1), end: totalLines };
 		}
 
-		// "10~20" 或 "10-20"
 		const rangeMatch = raw.match(/^(\d+)[~\-](\d+)$/);
 		if (rangeMatch) {
 			const s = Number.parseInt(rangeMatch[1] as string, 10);
@@ -170,34 +173,5 @@ export class FreeformPatchBackend implements EditBackend {
 		}
 
 		return { start: 1, end: totalLines };
-	}
-
-	private async callApi(
-		input: unknown[],
-		tools: unknown[],
-		signal?: AbortSignal,
-	): Promise<ResponsesResult | { error: string }> {
-		let res: Response;
-		try {
-			res = await fetch(this.apiUrl, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${this.config.apiKey}`,
-				},
-				body: JSON.stringify({ model: this.config.model, input, tools }),
-				signal,
-			});
-		} catch (err) {
-			if (signal?.aborted) return { error: "Aborted" };
-			return { error: `Fetch: ${err instanceof Error ? err.message : String(err)}` };
-		}
-
-		if (!res.ok) {
-			const text = await res.text();
-			return { error: `API ${res.status}: ${text.slice(0, 300)}` };
-		}
-
-		return (await res.json()) as ResponsesResult;
 	}
 }

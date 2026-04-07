@@ -70,7 +70,7 @@ export async function agentLoop<T = unknown>(
 	const toolsConfig: ToolsConfig = runtime.editBackend.type === "freeform-patch"
 		? {
 			editBackendType: "freeform-patch",
-			freeformPatchConfig: runtime.editBackend.freeformPatchConfig,
+			responsesClient: runtime.editBackend.responsesClient,
 			security: runtime.security,
 			agent: runtime.agent,
 			...workspacePaths,

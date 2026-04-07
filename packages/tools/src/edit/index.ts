@@ -16,4 +16,4 @@ export {
 export type { EditBackend, EditBackendResult } from "./backend.ts";
 export { StrReplaceBackend, applySingleOp, editorLoop } from "./str-replace/index.ts";
 export { FreeformPatchBackend } from "./freeform-patch/index.ts";
-export type { FreeformPatchConfig } from "./freeform-patch/index.ts";
+export type { ResponsesClient } from "./freeform-patch/index.ts";
