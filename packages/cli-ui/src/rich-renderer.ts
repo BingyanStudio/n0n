@@ -396,6 +396,9 @@ export class RichRenderer implements Renderer {
 			case "submit": {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;
 			}
+			default: {
+				return `${style.dim("◂")} ${style.cyan(result.tool)}`;
+			}
 		}
 	}
 
