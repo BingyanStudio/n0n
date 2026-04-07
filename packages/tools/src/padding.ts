@@ -19,13 +19,11 @@ export { PaddingArgsSchema } from "@n0n/types";
 export const PADDING_TOOL_DEFINITION: ToolDefinition = {
 	name: "padding",
 	description: [
-		"Call this tool after your other tool calls in the same response.",
-		"In the `think` parameter, review whether there are additional operations you can issue now",
-		"without waiting for results from the calls you've already made.",
+		"Call this after your other tool calls. In `think`, review what else you can do without waiting for pending results.",
 		"",
-		"This system executes independent tool calls in parallel and automatically sequences dependent ones.",
-		"Deterministic tools (write, edit) nearly always succeed — you don't need their results to proceed",
-		"with the next step. The only reason to wait is when you genuinely need a tool's output to decide what to do next.",
+		"write and edit always succeed — treat them as done immediately.",
+		"After calling them, use padding to plan your next operations, then issue those calls in the same response.",
+		"Only wait when you genuinely need a tool's output (e.g. exec) to decide what to do next.",
 	].join("\n"),
 	parameters: {
 		type: "object",
