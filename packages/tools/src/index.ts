@@ -16,7 +16,6 @@ import type {
 	DomainMessage,
 	EditToolCall,
 	ExecToolCall,
-	PaddingToolCall,
 	ReminderToolCall,
 	SubmitArgs,
 	SubmitToolCall,
@@ -39,11 +38,6 @@ import {
 	execToolStream,
 	makeExecToolDefinition,
 } from "./exec/index.ts";
-import {
-	PADDING_TOOL_DEFINITION,
-	PaddingArgsSchema,
-	paddingTool,
-} from "./padding.ts";
 import {
 	type PendingReminder,
 	REMINDER_TOOL_DEFINITION,
@@ -164,19 +158,6 @@ function buildBaseRegistry(
 				);
 			},
 		},
-		// TODO: review — padding 工具效果待验证
-		padding: {
-			definition: PADDING_TOOL_DEFINITION,
-			stream: false,
-			execute: (tc) => {
-				const call: PaddingToolCall = {
-					id: tc.id,
-					tool: "padding" as const,
-					args: PaddingArgsSchema.parse(tc.args),
-				};
-				return paddingTool(call);
-			},
-		},
 		reminder: {
 			definition: REMINDER_TOOL_DEFINITION,
 			stream: false,
@@ -204,7 +185,6 @@ export const REGISTERED_TOOLS = new Set([
 	"exec",
 	"write",
 	"edit",
-	"padding",
 	"reminder",
 	"submit",
 ]);
@@ -246,14 +226,7 @@ export async function makeToolkit(
 	};
 
 	// 从注册表构建 ToolDefinition 列表
-	// padding 排在首位，为模型提供"多次调用"信号
-	const paddingDef = registry.padding?.definition;
-	const restDefs = Object.entries(registry)
-		.filter(([name]) => name !== "padding")
-		.map(([, entry]) => entry.definition);
-	const tools: ToolDefinition[] = paddingDef
-		? [paddingDef, ...restDefs]
-		: restDefs;
+	const tools = Object.values(registry).map((entry) => entry.definition);
 
 	return {
 		tools,

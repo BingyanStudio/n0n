@@ -116,8 +116,6 @@ export class ExecutionScheduler {
 			}
 			case "exec":
 				return this.active.size === 0;
-			// TODO: review — padding 工具效果待验证
-			case "padding":
 			case "reminder":
 			case "submit":
 				return true;
