@@ -1,6 +1,8 @@
 /**
  * Round — Agent 对话轮次执行
  *
+ * @deprecated 此模块不再维护
+ *
  * 负责一次完整的 agent round：
  * 1. 收集上下文（已有工作流、定时任务）
  * 2. 创建 FeishuConversation + FeishuRenderer

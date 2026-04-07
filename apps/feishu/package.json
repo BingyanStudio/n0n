@@ -2,6 +2,7 @@
 	"name": "@n0n/feishu",
 	"version": "0.0.0",
 	"private": true,
+	"deprecated": "此模块不再维护",
 	"type": "module",
 	"dependencies": {
 		"@larksuiteoapi/node-sdk": "^1.59.0",

@@ -1,6 +1,8 @@
 /**
  * FeishuConversation — 飞书会话消息管理器（CardKit 流式版）
  *
+ * @deprecated 此模块不再维护
+ *
  * 使用 CardKit API 实现流式卡片更新：
  * - 创建卡片实体（streaming_mode=true）→ 发送卡片实体消息
  * - 文本流式更新（打字机效果）via cardElement.content

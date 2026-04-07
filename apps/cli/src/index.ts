@@ -1,6 +1,8 @@
 /**
  * CLI 入口 — 子命令路由 + 进程生命周期管理
  *
+ * @deprecated 此模块不再维护
+ *
  * CLI:
  *   bun run apps/cli/src/index.ts                    交互式对话
  *   bun run apps/cli/src/index.ts run <workflow.ts>  运行已有 workflow
