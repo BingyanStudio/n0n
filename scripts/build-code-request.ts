@@ -61,6 +61,7 @@ const toolsConfig = {
 	tempDir: resolve(workspace, ".temp"),
 	security: { blockedCommands: [] as string[] },
 	agent: { defaultExecTimeout: 120 },
+	editBackendType: "str-replace" as const,
 	editorClient: null as any,
 };
 

@@ -3,9 +3,9 @@
  *
  * 拆分为子模块：
  * - edit.ts: 工具定义 + 流式执行入口
- * - editor-loop.ts: Editor LLM 专用循环（str_replace/view_file/submit）
- * - edit.md: 工具描述文本
- * - editor-agent.md: Editor Agent 系统提示词
+ * - backend.ts: EditBackend 抽象接口
+ * - str-replace/: Editor LLM 多轮 str_replace 循环后端
+ * - freeform-patch/: OpenAI Responses API + freeform patch 后端
  */
 
 export {
@@ -13,4 +13,7 @@ export {
 	EditArgsSchema,
 	editToolStream,
 } from "./edit.ts";
-export { applySingleOp, editorLoop } from "./editor-loop.ts";
+export type { EditBackend, EditBackendResult } from "./backend.ts";
+export { StrReplaceBackend, applySingleOp, editorLoop } from "./str-replace/index.ts";
+export { FreeformPatchBackend } from "./freeform-patch/index.ts";
+export type { FreeformPatchConfig } from "./freeform-patch/index.ts";
