@@ -1,27 +1,34 @@
 /**
  * Tools 配置类型
+ *
+ * 使用 discriminated union 按 editBackendType 区分编辑后端配置，
+ * 避免可选字段组合产生的无效状态。
  */
 
 import type { LLMClient } from "@n0n/types";
 import type { FreeformPatchConfig } from "./edit/freeform-patch/index.ts";
 
-export interface ToolsConfig {
+interface ToolsConfigBase {
 	security: {
 		blockedCommands: string[];
 	};
 	agent: {
 		defaultExecTimeout: number;
 	};
-	/** 工具默认工作区根目录 */
 	workspace: string;
-	/** 临时文件目录（exec 临时脚本等） */
 	tempDir: string;
-	/** Editor LLM Client — 用于影子编辑层 */
-	editorClient: LLMClient;
-	/** 编辑后端类型，默认 "str-replace" */
-	editBackendType?: "str-replace" | "freeform-patch";
-	/** freeform-patch 后端配置（editBackendType = "freeform-patch" 时必填） */
-	freeformPatchConfig?: FreeformPatchConfig;
 }
+
+interface StrReplaceToolsConfig extends ToolsConfigBase {
+	editBackendType: "str-replace";
+	editorClient: LLMClient;
+}
+
+interface FreeformPatchToolsConfig extends ToolsConfigBase {
+	editBackendType: "freeform-patch";
+	freeformPatchConfig: FreeformPatchConfig;
+}
+
+export type ToolsConfig = StrReplaceToolsConfig | FreeformPatchToolsConfig;
 
 export type { FreeformPatchConfig } from "./edit/freeform-patch/index.ts";

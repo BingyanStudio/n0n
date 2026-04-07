@@ -63,15 +63,25 @@ export async function agentLoop<T = unknown>(
 	const maxIter = options?.maxIterations ?? runtime.agent.maxIterations;
 	const renderer: Renderer = options?.renderer ?? new PlainRenderer();
 	const client = runtime.client;
-	const toolsConfig: ToolsConfig = {
-		security: runtime.security,
-		agent: runtime.agent,
-		editorClient: runtime.editorClient,
-		...(options?.toolsWorkspace ?? {
-			workspace: process.cwd(),
-			tempDir: ".temp",
-		}),
+	const workspacePaths = options?.toolsWorkspace ?? {
+		workspace: process.cwd(),
+		tempDir: ".temp",
 	};
+	const toolsConfig: ToolsConfig = runtime.editBackend.type === "freeform-patch"
+		? {
+			editBackendType: "freeform-patch",
+			freeformPatchConfig: runtime.editBackend.freeformPatchConfig,
+			security: runtime.security,
+			agent: runtime.agent,
+			...workspacePaths,
+		}
+		: {
+			editBackendType: "str-replace",
+			editorClient: runtime.editBackend.editorClient,
+			security: runtime.security,
+			agent: runtime.agent,
+			...workspacePaths,
+		};
 	const toolkit = await makeToolkit(
 		options?.schema,
 		toolsConfig,

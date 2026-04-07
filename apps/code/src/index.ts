@@ -103,14 +103,41 @@ const { workspace, remainingArgs } = parseWorkspaceArg(
 const paths = resolveBasePaths(workspace);
 ensureDirs(paths);
 const llmConfig = buildLLMConfigFromEnv("LLM");
-const editorLlmConfig = buildLLMConfigFromEnv(
-	"EDITOR_LLM",
-	llmConfig.providerConfig,
-);
-const runtime = createRuntimeContext({
-	client: createLLMClient(llmConfig),
-	editorClient: createLLMClient(editorLlmConfig),
-});
+
+// 编辑后端：通过 EDIT_BACKEND 环境变量切换，默认 str-replace
+const editBackendType =
+	process.env.EDIT_BACKEND === "freeform-patch"
+		? "freeform-patch"
+		: "str-replace";
+
+const runtime =
+	editBackendType === "freeform-patch"
+		? createRuntimeContext({
+				client: createLLMClient(llmConfig),
+				editBackend: {
+					type: "freeform-patch",
+					freeformPatchConfig: {
+						baseUrl:
+							process.env.EDITOR_LLM_BASE_URL ||
+							process.env.LLM_BASE_URL ||
+							"",
+						apiKey:
+							process.env.EDITOR_LLM_API_KEY ||
+							process.env.LLM_API_KEY ||
+							"",
+						model: process.env.EDITOR_LLM_MODEL || "gpt-5.4-mini",
+					},
+				},
+		  })
+		: createRuntimeContext({
+				client: createLLMClient(llmConfig),
+				editBackend: {
+					type: "str-replace",
+					editorClient: createLLMClient(
+						buildLLMConfigFromEnv("EDITOR_LLM", llmConfig.providerConfig),
+					),
+				},
+		  });
 initRuntime(runtime);
 
 const { startCodeRepl } = await import("./repl.ts");
