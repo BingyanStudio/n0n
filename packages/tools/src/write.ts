@@ -83,7 +83,8 @@ async function writeFile(
 		};
 	} catch (err) {
 		// 截断恢复写入也可能失败（权限等），统一用 recover_failed 或 failed
-		const errorStatus = successStatus === "recovered" ? "recover_failed" : "failed";
+		const errorStatus =
+			successStatus === "recovered" ? "recover_failed" : "failed";
 		return {
 			type: "tool_result",
 			tool: "write" as const,
@@ -153,8 +154,14 @@ function tryExtractPartialWrite(
 	// 扫描闭合引号：逐字符检查，跳过 \" 转义
 	let closeIdx = -1;
 	for (let i = 0; i < afterQuote.length; i++) {
-		if (afterQuote[i] === '\\') { i++; continue; } // 跳过转义字符
-		if (afterQuote[i] === '"') { closeIdx = i; break; }
+		if (afterQuote[i] === "\\") {
+			i++;
+			continue;
+		} // 跳过转义字符
+		if (afterQuote[i] === '"') {
+			closeIdx = i;
+			break;
+		}
 	}
 
 	if (closeIdx !== -1) {

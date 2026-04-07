@@ -66,8 +66,8 @@ function analyzeEvents(events: WriteEvent[]) {
 		CSI_RE.lastIndex = 0;
 		let match = CSI_RE.exec(event.data);
 		while (match !== null) {
-			const params = match[1]!;
-			const cmd = match[2]!;
+			const params = match[1] ?? "";
+			const cmd = match[2] ?? "";
 			if (cmd === "A") {
 				totalCursorUp += Number.parseInt(params, 10) || 1;
 				clearCount++;
@@ -95,7 +95,7 @@ describe("渲染诊断", () => {
 		const json = '{"script":"echo hello"}';
 		for (let i = 0; i < json.length; i++) {
 			if (i === 0) renderer.toolCallArgStart(0, "exec");
-			renderer.toolCallArgChunk(0, json[i]!);
+			renderer.toolCallArgChunk(0, json[i] as string);
 		}
 
 		const stats = analyzeEvents(events);
@@ -123,7 +123,7 @@ describe("渲染诊断", () => {
 		const json = '{"script":"echo hello","runtime":"cmd"}';
 		for (let i = 0; i < json.length; i++) {
 			if (i === 0) renderer.toolCallArgStart(0, "exec");
-			renderer.toolCallArgChunk(0, json[i]!);
+			renderer.toolCallArgChunk(0, json[i] as string);
 		}
 
 		// 标记 contentEnd 之前

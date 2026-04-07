@@ -128,7 +128,7 @@ describe("终端边界行为", () => {
 
 		for (let i = 0; i < json.length; i++) {
 			if (i === 0) renderer.toolCallArgStart(0, "exec");
-			renderer.toolCallArgChunk(0, json[i]!);
+			renderer.toolCallArgChunk(0, json[i] as string);
 			frameCount++;
 			frameSizes.push(vt.getVisibleLines().length);
 		}

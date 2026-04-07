@@ -6,11 +6,7 @@
  * 非队首工具的事件暂存 buffer。队首完成时出队，下一个的 buffer 被 flush。
  */
 
-import type {
-	Renderer,
-	ToolCallRecord,
-	ToolResult,
-} from "@n0n/types";
+import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
 
 // ── 事件类型 ──
 
@@ -95,6 +91,7 @@ export class RenderBuffer {
 			}
 
 			while (buf.events.length > 0) {
+				// biome-ignore lint/style/noNonNullAssertion: shift() is safe — guarded by while(events.length > 0)
 				const event = buf.events.shift()!;
 				switch (event.kind) {
 					case "start":
@@ -126,7 +123,10 @@ export class RenderBuffer {
 
 	private wait(): Promise<void> {
 		return new Promise<void>((r) => {
-			this.wakeup = () => { this.wakeup = null; r(); };
+			this.wakeup = () => {
+				this.wakeup = null;
+				r();
+			};
 		});
 	}
 }

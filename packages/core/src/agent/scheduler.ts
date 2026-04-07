@@ -12,11 +12,7 @@
  * 后续应考虑通过事件回调接口进一步解耦调度与渲染，使两者可独立测试和替换。
  */
 
-import type {
-	ToolCallRecord,
-	ToolResult,
-	ToolStreamEvent,
-} from "@n0n/types";
+import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
 import type { RenderBuffer } from "./render-buffer.ts";
 
 // ── PipelineJob ──
@@ -25,7 +21,13 @@ import type { RenderBuffer } from "./render-buffer.ts";
 export interface PipelineJob {
 	tc: ToolCallRecord;
 	result: ToolResult | null;
-	argError: { type: "tool_arg_error"; callId: string; tool: string; error: string; schema?: Record<string, unknown> } | null;
+	argError: {
+		type: "tool_arg_error";
+		callId: string;
+		tool: string;
+		error: string;
+		schema?: Record<string, unknown>;
+	} | null;
 	done: boolean;
 }
 
@@ -83,7 +85,10 @@ export class ExecutionScheduler {
 			}
 
 			await new Promise<void>((r) => {
-				this.notify = () => { this.notify = null; r(); };
+				this.notify = () => {
+					this.notify = null;
+					r();
+				};
 			});
 		}
 	}
@@ -104,7 +109,8 @@ export class ExecutionScheduler {
 					if (
 						(active.tc.tool === "write" || active.tc.tool === "edit") &&
 						active.tc.args.path === path
-					) return false;
+					)
+						return false;
 				}
 				return true;
 			}

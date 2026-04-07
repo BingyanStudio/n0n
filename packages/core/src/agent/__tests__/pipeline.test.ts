@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noNonNullAssertion: test assertions on known-shape results
+// biome-ignore-all lint/suspicious/noExplicitAny: test mocks use any for flexibility
 /**
  * ExecutionScheduler + RenderBuffer 单元测试
  *
@@ -8,13 +10,17 @@
 
 import { describe, expect, it } from "bun:test";
 import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
-import { ExecutionScheduler } from "../scheduler.ts";
 import { RenderBuffer } from "../render-buffer.ts";
+import { ExecutionScheduler } from "../scheduler.ts";
 
 // ── Mock 工具 ──
 
 function mockWriteTC(id: string, path: string): ToolCallRecord {
-	return { id, tool: "write", args: { path, content: "test" } } as ToolCallRecord;
+	return {
+		id,
+		tool: "write",
+		args: { path, content: "test" },
+	} as ToolCallRecord;
 }
 
 function mockEditTC(id: string, path: string): ToolCallRecord {
@@ -44,7 +50,9 @@ function createControllableExecutor() {
 	const log: string[] = [];
 	const resolvers = new Map<string, () => void>();
 
-	const executor = async function* (tc: ToolCallRecord): AsyncGenerator<ToolStreamEvent> {
+	const executor = async function* (
+		tc: ToolCallRecord,
+	): AsyncGenerator<ToolStreamEvent> {
 		log.push(`start:${tc.id}`);
 		await new Promise<void>((r) => resolvers.set(tc.id, r));
 		log.push(`end:${tc.id}`);
@@ -56,7 +64,10 @@ function createControllableExecutor() {
 		log,
 		resolve(id: string) {
 			const r = resolvers.get(id);
-			if (r) { r(); resolvers.delete(id); }
+			if (r) {
+				r();
+				resolvers.delete(id);
+			}
 		},
 	};
 }
@@ -64,7 +75,9 @@ function createControllableExecutor() {
 /** 创建立即完成的执行器 */
 function createInstantExecutor() {
 	const log: string[] = [];
-	const executor = async function* (tc: ToolCallRecord): AsyncGenerator<ToolStreamEvent> {
+	const executor = async function* (
+		tc: ToolCallRecord,
+	): AsyncGenerator<ToolStreamEvent> {
 		log.push(`exec:${tc.id}`);
 		yield mockResult(tc);
 	};
@@ -77,7 +90,9 @@ function createChunkExecutor() {
 	const resolvers = new Map<string, () => void>();
 	const chunkQueues = new Map<string, string[]>();
 
-	const executor = async function* (tc: ToolCallRecord): AsyncGenerator<ToolStreamEvent> {
+	const executor = async function* (
+		tc: ToolCallRecord,
+	): AsyncGenerator<ToolStreamEvent> {
 		log.push(`start:${tc.id}`);
 		// 输出预设的 chunks
 		const chunks = chunkQueues.get(tc.id) || [];
@@ -98,7 +113,10 @@ function createChunkExecutor() {
 		},
 		resolve(id: string) {
 			const r = resolvers.get(id);
-			if (r) { r(); resolvers.delete(id); }
+			if (r) {
+				r();
+				resolvers.delete(id);
+			}
 		},
 	};
 }
@@ -302,10 +320,7 @@ describe("RenderBuffer", () => {
 		};
 
 		const runPromise = scheduler.run();
-		const drainPromise = renderBuffer.drain(
-			mockRenderer as any,
-			() => {},
-		);
+		const drainPromise = renderBuffer.drain(mockRenderer as any, () => {});
 
 		await new Promise((r) => setTimeout(r, 10));
 
@@ -320,9 +335,12 @@ describe("RenderBuffer", () => {
 		await drainPromise;
 
 		expect(renderLog).toEqual([
-			"start:e1", "end",
-			"start:e2", "end",
-			"start:w1", "end",
+			"start:e1",
+			"end",
+			"start:e2",
+			"end",
+			"start:w1",
+			"end",
 		]);
 	});
 
@@ -342,7 +360,8 @@ describe("RenderBuffer", () => {
 		const renderLog: string[] = [];
 		const mockRenderer = {
 			toolExecStart: (tc: ToolCallRecord) => renderLog.push(`start:${tc.id}`),
-			toolExecChunk: (_tool: string, chunk: string) => renderLog.push(`chunk:${chunk}`),
+			toolExecChunk: (_tool: string, chunk: string) =>
+				renderLog.push(`chunk:${chunk}`),
 			toolExecEnd: (_result: ToolResult) => renderLog.push("end"),
 		};
 
@@ -372,8 +391,13 @@ describe("RenderBuffer", () => {
 
 		// 最终顺序验证
 		expect(renderLog).toEqual([
-			"start:e1", "chunk:chunk-a1", "chunk:chunk-a2", "end",
-			"start:e2", "chunk:chunk-b1", "end",
+			"start:e1",
+			"chunk:chunk-a1",
+			"chunk:chunk-a2",
+			"end",
+			"start:e2",
+			"chunk:chunk-b1",
+			"end",
 		]);
 	});
 });

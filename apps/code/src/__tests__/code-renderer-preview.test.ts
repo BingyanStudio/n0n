@@ -99,7 +99,7 @@ describe("CodeRenderer 流式 write 预览", () => {
 			"write",
 			[
 				'{"pa',
-				'th": "ts',       // partial-json 解析出 path:"ts"（截断！）
+				'th": "ts', // partial-json 解析出 path:"ts"（截断！）
 				"config.json",
 				'", "content": "',
 				"{}",
@@ -140,11 +140,9 @@ describe("CodeRenderer 流式 write 预览", () => {
 	test("非 write 工具不触发预览", () => {
 		const renderer = new CodeRenderer(TEST_WORKSPACE);
 
-		simulateStream(
-			renderer, 0, "exec",
-			['{"script": "echo hello"}'],
-			{ script: "echo hello" },
-		);
+		simulateStream(renderer, 0, "exec", ['{"script": "echo hello"}'], {
+			script: "echo hello",
+		});
 
 		expect(listFiles(TEST_WORKSPACE)).toEqual([]);
 	});
@@ -165,13 +163,13 @@ describe("CodeRenderer 流式 write 预览", () => {
 		// path 和 content 都已出现，流式预览已触发写入
 		renderer.toolCallArgStart(0, "write");
 		renderer.toolCallArgChunk(0, '{"path": "test.txt", "content": "data"');
-		
+
 		// 此时 test.txt 已被流式写入（path+content 都完整）
 		expect(listFiles(TEST_WORKSPACE)).toContain("test.txt");
-		
+
 		// aborted 只是清理内部状态，不会额外写入
 		renderer.aborted();
-		
+
 		// 文件仍存在（已写入的不会被撤回），但状态已清理
 		expect(listFiles(TEST_WORKSPACE)).toContain("test.txt");
 	});

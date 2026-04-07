@@ -21,7 +21,6 @@ import { readMultilineInput } from "./reader.ts";
 const CYAN = "\x1b[36m";
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
-const RED = "\x1b[31m";
 const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
@@ -32,28 +31,24 @@ function banner(): void {
 	const w = process.stderr.columns || 80;
 	const line = "─".repeat(w);
 	process.stderr.write(`\n${DIM}${line}${RESET}\n`);
-	process.stderr.write(
-		`${BOLD}${CYAN}  multiline-input 交互测试${RESET}\n`,
-	);
+	process.stderr.write(`${BOLD}${CYAN}  multiline-input 交互测试${RESET}\n`);
 	process.stderr.write(`${DIM}${line}${RESET}\n\n`);
 	process.stderr.write(`${DIM}  操作说明:${RESET}\n`);
-	process.stderr.write(`    ${GREEN}Enter${RESET}       插入换行（多行输入）\n`);
+	process.stderr.write(
+		`    ${GREEN}Enter${RESET}       插入换行（多行输入）\n`,
+	);
 	process.stderr.write(
 		`    ${GREEN}Alt+Enter${RESET}   提交输入（或 ${GREEN}Ctrl+D${RESET}）\n`,
 	);
-	process.stderr.write(`    ${GREEN}Ctrl+C${RESET}      中断当前输入（不退出进程）\n`);
 	process.stderr.write(
-		`    ${GREEN}方向键${RESET}      上下左右移动光标\n`,
+		`    ${GREEN}Ctrl+C${RESET}      中断当前输入（不退出进程）\n`,
 	);
-	process.stderr.write(
-		`    ${GREEN}Backspace${RESET}   删除前一个字符\n`,
-	);
+	process.stderr.write(`    ${GREEN}方向键${RESET}      上下左右移动光标\n`);
+	process.stderr.write(`    ${GREEN}Backspace${RESET}   删除前一个字符\n`);
 	process.stderr.write(
 		`    ${GREEN}粘贴${RESET}        直接 Ctrl+V 粘贴（bracketed paste）\n`,
 	);
-	process.stderr.write(
-		`\n${DIM}  输入 "exit" 退出测试${RESET}\n\n`,
-	);
+	process.stderr.write(`\n${DIM}  输入 "exit" 退出测试${RESET}\n\n`);
 }
 
 function printResult(
@@ -68,9 +63,7 @@ function printResult(
 			`${YELLOW}⚠ 第 ${round} 轮: Ctrl+C 中断 (返回 null)${RESET}\n`,
 		);
 	} else {
-		process.stderr.write(
-			`${GREEN}✓ 第 ${round} 轮提交结果:${RESET}\n`,
-		);
+		process.stderr.write(`${GREEN}✓ 第 ${round} 轮提交结果:${RESET}\n`);
 		process.stderr.write(`  ${DIM}行数:${RESET} ${result.lineCount}\n`);
 		process.stderr.write(
 			`  ${DIM}字符数:${RESET} ${result.text.length} (code units)\n`,
@@ -84,12 +77,10 @@ function printResult(
 		process.stderr.write(`  ${DIM}内容:${RESET}\n`);
 		for (let i = 0; i < lines.length; i++) {
 			const lineNum = String(i + 1).padStart(3, " ");
-			const display = lines[i]!
+			const display = (lines[i] as string)
 				.replace(/\t/g, "→   ")
 				.replace(/ /g, "·");
-			process.stderr.write(
-				`    ${DIM}${lineNum} │${RESET} ${display}\n`,
-			);
+			process.stderr.write(`    ${DIM}${lineNum} │${RESET} ${display}\n`);
 		}
 
 		// 检测折行（单行超过终端宽度）

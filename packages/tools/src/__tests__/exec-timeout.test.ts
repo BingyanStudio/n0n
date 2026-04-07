@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: test scripts contain template literals as string content
 /**
  * exec timeout 行为验证测试
  *

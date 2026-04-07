@@ -190,7 +190,7 @@ async function scenario4() {
 	];
 	for (let i = 0; i < argChunks.length; i++) {
 		if (i === 0) renderer.toolCallArgStart(0, "edit");
-		renderer.toolCallArgChunk(0, argChunks[i]!);
+		renderer.toolCallArgChunk(0, argChunks[i] as string);
 		await sleep(120);
 	}
 

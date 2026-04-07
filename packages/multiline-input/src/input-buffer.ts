@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noNonNullAssertion: internal array access with bounds checks
 /**
  * InputBuffer — 多行文本编辑缓冲区（纯逻辑，无 IO）
  *

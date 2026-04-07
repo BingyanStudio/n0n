@@ -13,9 +13,9 @@
  */
 
 import type {
-	ToolCallRecord,
-	PartialToolCallRecord,
 	DomainMessage,
+	PartialToolCallRecord,
+	ToolCallRecord,
 } from "@n0n/types";
 
 /** 截断分析的输入：某个工具调用的累积状态 */
@@ -81,7 +81,10 @@ export async function recoverPartialCalls(
 	for (const partial of partials) {
 		if (!partial.toolCallId || !partial.toolName) continue;
 
-		let recovered: { call: ToolCallRecord; result: DomainMessage } | null | undefined;
+		let recovered:
+			| { call: ToolCallRecord; result: DomainMessage }
+			| null
+			| undefined;
 		try {
 			recovered = await tryRecover?.(
 				partial.toolName,
@@ -112,7 +115,8 @@ export async function recoverPartialCalls(
 					type: "tool_arg_error",
 					callId: partial.toolCallId,
 					tool: partial.toolName,
-					error: "Tool call arguments were truncated by max_tokens and could not be recovered. Please retry with a shorter response, or break the task into smaller steps.",
+					error:
+						"Tool call arguments were truncated by max_tokens and could not be recovered. Please retry with a shorter response, or break the task into smaller steps.",
 				},
 			});
 		}

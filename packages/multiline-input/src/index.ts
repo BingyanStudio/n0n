@@ -7,7 +7,7 @@
 
 export { InputBuffer } from "./input-buffer.ts";
 export {
-	readMultilineInput,
 	type MultilineInputOptions,
 	type MultilineInputResult,
+	readMultilineInput,
 } from "./reader.ts";

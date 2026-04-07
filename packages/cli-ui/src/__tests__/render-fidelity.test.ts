@@ -245,7 +245,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		const json = '{"script":"echo hi"}';
 		for (let i = 0; i < json.length; i++) {
 			if (i === 0) renderer.toolCallArgStart(0, "exec");
-			renderer.toolCallArgChunk(0, json[i]!);
+			renderer.toolCallArgChunk(0, json[i] as string);
 		}
 		renderer.streamEnd();
 

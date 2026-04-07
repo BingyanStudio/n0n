@@ -315,6 +315,7 @@ export async function editorLoop(
 				.map((p) => ({
 					id: p.tc.toolCallId,
 					tool: p.tc.toolName,
+					// biome-ignore lint/style/noNonNullAssertion: filtered by preceding .filter(p => p.args !== null)
 					args: p.args!,
 				})),
 		});
