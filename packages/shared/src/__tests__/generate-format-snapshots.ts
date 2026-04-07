@@ -101,7 +101,7 @@ const scenarios: Scenario[] = [
 					{
 						id: "tc_2",
 						tool: "write",
-						args: { path: "test.txt", content: "hi" },
+						args: { path: "test.txt", content: "hi" , is_completed_and_i_will_immediately_call_the_next_tool: true },
 					},
 				],
 			},
@@ -205,7 +205,7 @@ const scenarios: Scenario[] = [
 				call: {
 					id: "tc_5",
 					tool: "write",
-					args: { path: "src/config.ts", content: "export const x = 1;" },
+					args: { path: "src/config.ts", content: "export const x = 1;" , is_completed_and_i_will_immediately_call_the_next_tool: true },
 				},
 				status: "completed",
 			},
@@ -221,7 +221,7 @@ const scenarios: Scenario[] = [
 				call: {
 					id: "tc_6",
 					tool: "edit",
-					args: { path: "src/auth.ts", intent: "fix the null check" },
+					args: { path: "src/auth.ts", intent: "fix the null check" , is_completed_and_i_will_immediately_call_the_next_tool: true },
 				},
 				success: true,
 				diff: {
@@ -264,7 +264,7 @@ const scenarios: Scenario[] = [
 				call: {
 					id: "tc_7",
 					tool: "reminder",
-					args: { content: "Check test results", estimate: 3 },
+					args: { content: "Check test results", estimate: 3 , is_completed_and_i_will_immediately_call_the_next_tool: true },
 				},
 				acknowledged: true,
 			},

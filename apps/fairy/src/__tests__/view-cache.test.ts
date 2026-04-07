@@ -104,6 +104,7 @@ function makeHeavyToolRound(i: number): DomainMessage[] {
 					args: {
 						content: `O: 分析 module-${i}.ts\nKR: [ ] 读取代码 [ ] 识别性能问题 [ ] 提出优化方案\n当前：开始读取文件`,
 						estimate: 3,
+						is_completed_and_i_will_immediately_call_the_next_tool: true,
 					},
 				},
 			],
@@ -114,7 +115,7 @@ function makeHeavyToolRound(i: number): DomainMessage[] {
 			call: {
 				id: `r-${i}`,
 				tool: "reminder",
-				args: { content: "...", estimate: 3 },
+				args: { content: "...", estimate: 3 , is_completed_and_i_will_immediately_call_the_next_tool: true },
 			},
 			acknowledged: true as const,
 		},

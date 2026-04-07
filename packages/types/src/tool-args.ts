@@ -26,6 +26,7 @@ export type ExecArgs = z.infer<typeof ExecArgsSchema>;
 export const WriteArgsSchema = z.object({
 	path: z.string(),
 	content: z.string(),
+	is_completed_and_i_will_immediately_call_the_next_tool: z.boolean(),
 });
 export type WriteArgs = z.infer<typeof WriteArgsSchema>;
 
@@ -34,6 +35,7 @@ export type WriteArgs = z.infer<typeof WriteArgsSchema>;
 export const EditArgsSchema = z.object({
 	path: z.string(),
 	intent: z.string(),
+	is_completed_and_i_will_immediately_call_the_next_tool: z.boolean(),
 });
 export type EditArgs = z.infer<typeof EditArgsSchema>;
 
@@ -42,6 +44,7 @@ export type EditArgs = z.infer<typeof EditArgsSchema>;
 export const ReminderArgsSchema = z.object({
 	content: z.string(),
 	estimate: z.number().optional(),
+	is_completed_and_i_will_immediately_call_the_next_tool: z.boolean(),
 });
 export type ReminderArgs = z.infer<typeof ReminderArgsSchema>;
 

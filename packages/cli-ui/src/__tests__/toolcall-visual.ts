@@ -142,7 +142,7 @@ async function scenario3() {
 	renderer.toolExecStart({
 		id: "call_4",
 		tool: "write",
-		args: { path: "test.txt", content: "hello world" },
+		args: { path: "test.txt", content: "hello world" , is_completed_and_i_will_immediately_call_the_next_tool: true },
 	});
 	await sleep(100);
 
@@ -165,7 +165,7 @@ async function scenario3() {
 		call: {
 			id: "call_4",
 			tool: "write",
-			args: { path: "test.txt", content: "hello world" },
+			args: { path: "test.txt", content: "hello world" , is_completed_and_i_will_immediately_call_the_next_tool: true },
 		},
 		status: "completed" as const,
 	});
@@ -201,7 +201,7 @@ async function scenario4() {
 	renderer.toolExecStart({
 		id: "call_5",
 		tool: "edit",
-		args: { path: "src/index.ts", intent: "修复类型错误" },
+		args: { path: "src/index.ts", intent: "修复类型错误" , is_completed_and_i_will_immediately_call_the_next_tool: true },
 	});
 	await sleep(100);
 
@@ -217,7 +217,7 @@ async function scenario4() {
 		call: {
 			id: "call_5",
 			tool: "edit",
-			args: { path: "src/index.ts", intent: "修复类型错误" },
+			args: { path: "src/index.ts", intent: "修复类型错误" , is_completed_and_i_will_immediately_call_the_next_tool: true },
 		},
 		success: true,
 		diff: { added: 3, removed: 2, chunks: [] },
