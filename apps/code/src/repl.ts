@@ -126,7 +126,7 @@ function createStdinController(): StdinController {
 				ctrl.dataHandler?.(data);
 				break;
 			case "agent":
-				if (data.includes("\x03")) {
+				if (data.includes("\x11")) {
 					ctrl.abortController.abort();
 				}
 				break;
@@ -217,7 +217,7 @@ export async function startCodeRepl(
 			stdin.dataHandler = (data: string) => {
 				for (let i = 0; i < data.length; i++) {
 					const code = data.charCodeAt(i);
-					if (code === 3) {
+					if (code === 17) {
 						process.stderr.write("\n");
 						stdin.dataHandler = null;
 						stdin.phase = "agent";
