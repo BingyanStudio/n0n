@@ -1,9 +1,11 @@
 /**
- * Anthropic Prompt Caching — 断点选择工具
+ * Anthropic Prompt Caching — 断点选择工具（已弃用）
  *
- * SSOT：缓存断点的选择逻辑集中在此文件。
- * anthropic-client.ts（原生 Anthropic）和 openai-client.ts（litellm 代理）
- * 共用断点选择算法，各自负责 cache_control 注入方式。
+ * 此模块中的手动断点选择逻辑已被 Anthropic 自动缓存替代。
+ * anthropic-client.ts 现在使用请求顶层 cache_control，
+ * openai-client.ts（litellm）使用末尾单断点模拟自动缓存。
+ *
+ * 保留此文件供测试参考和对比分析使用。
  */
 
 /**

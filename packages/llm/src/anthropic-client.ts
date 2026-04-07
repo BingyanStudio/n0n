@@ -10,13 +10,10 @@
  * - message_delta(stop_reason) → StreamEvent.done
  *
  * 特性：
- * - Prompt caching：单路径，通过 cache_control 注入（SSOT: cache.ts）
+ * - Prompt caching：使用 Anthropic 自动缓存（请求顶层 cache_control），
+ *   系统自动在最后一个可缓存块设断点，配合 20 块回溯窗口匹配前缀
  * - Thinking：构造请求时注入 thinking 参数
  * - system 消息拆离（Anthropic 格式要求 system 在消息体外）
- *
- * 协议选择经验：代理网关通常同时提供 OpenAI 和 Anthropic 端点。
- * OpenAI-compatible 是"最低公约数"，高级特性（thinking_delta、prompt caching）必然丢失。
- * 当网关支持 Anthropic Messages API 时应优先使用本 client。
  */
 
 import { formatPrompt } from "@n0n/shared";
@@ -31,7 +28,6 @@ import {
 	type TokenUsage,
 	type ToolDefinition,
 } from "@n0n/types";
-import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
 import { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
@@ -79,7 +75,6 @@ interface AnthropicRequest {
 		| Array<{
 				type: "text";
 				text: string;
-				cache_control?: { type: "ephemeral" };
 		  }>;
 	messages: AnthropicMessage[];
 	tools?: AnthropicTool[];
@@ -87,6 +82,7 @@ interface AnthropicRequest {
 	stream?: boolean;
 	thinking?: { type: "enabled"; budget_tokens: number };
 	temperature?: number;
+	cache_control?: { type: "ephemeral" };
 }
 
 // ── SSE Event Types ──
@@ -155,7 +151,6 @@ interface AnthropicConversionResult {
 		| Array<{
 				type: "text";
 				text: string;
-				cache_control?: { type: "ephemeral" };
 		  }>
 		| undefined;
 	messages: AnthropicMessage[];
@@ -163,17 +158,12 @@ interface AnthropicConversionResult {
 
 function toAnthropicFormat(
 	promptMessages: PromptMessage[],
-	enableCache: boolean,
 ): AnthropicConversionResult {
 	const systemParts: Array<{
 		type: "text";
 		text: string;
-		cache_control?: { type: "ephemeral" };
 	}> = [];
 	const messages: AnthropicMessage[] = [];
-	// 追踪真实 user 消息索引（区分 user_input 和 tool_result→user），
-	// 用于缓存断点选择——tool_result→user 每轮都增长，不适合做缓存锚点
-	const realUserIndices = new Set<number>();
 
 	for (const msg of promptMessages) {
 		switch (msg.role) {
@@ -182,16 +172,9 @@ function toAnthropicFormat(
 				break;
 
 			case "user":
-				// TODO 此修复（统一 array 格式 + realUserIndices）尚未经过线上验证，
-				// 若后续再次出现 cache 不命中，需进一步排查。参见 n0n-conversation-20260406-104955.json
-				// 统一使用 content block array 格式，避免 cache_control 注入时
-				// string↔array 格式翻转破坏 Anthropic prompt caching 前缀匹配。
-				// 当 cache 断点移动时，之前被注入 cache_control 的消息从 array
-				// 恢复为 string 会导致 Anthropic 认为前缀改变，缓存永远无法命中。
-				realUserIndices.add(messages.length);
 				messages.push({
 					role: "user",
-					content: [{ type: "text", text: msg.content } as AnthropicContent],
+					content: msg.content,
 				});
 				break;
 
@@ -241,52 +224,11 @@ function toAnthropicFormat(
 		}
 	}
 
-	// Prompt caching: 注入 cache_control
-	if (enableCache) {
-		// System 部分：最后一个 system block 加 cache
-		let cacheCount = 0;
-		if (systemParts.length > 0) {
-			systemParts[systemParts.length - 1]!.cache_control = {
-				type: "ephemeral",
-			};
-			cacheCount++;
-		}
-
-		// Messages 部分：使用 selectCacheBreakpoints 选择断点
-		// Anthropic 限制最多 4 个 cache_control，减去 system 已用的配额
-		const maxMessageBreakpoints = 4 - cacheCount;
-		const breakpoints = selectCacheBreakpoints(
-			messages,
-			(i) => realUserIndices.has(i),
-		).slice(0, maxMessageBreakpoints);
-		for (const idx of breakpoints) {
-			const msg = messages[idx];
-			if (!msg) continue;
-			if (typeof msg.content === "string") {
-				// 转为 content block 以注入 cache_control
-				messages[idx] = {
-					role: msg.role,
-					content: [
-						{
-							type: "text",
-							text: msg.content,
-							cache_control: { type: "ephemeral" },
-						} as unknown as AnthropicContent,
-					],
-				};
-			} else if (Array.isArray(msg.content) && msg.content.length > 0) {
-				const lastBlock = msg.content[msg.content.length - 1]!;
-				(lastBlock as unknown as Record<string, unknown>).cache_control = {
-					type: "ephemeral",
-				};
-			}
-		}
-	}
 
 	const system =
 		systemParts.length === 0
 			? undefined
-			: systemParts.length === 1 && !systemParts[0]?.cache_control
+			: systemParts.length === 1
 				? systemParts[0]?.text
 				: systemParts;
 
@@ -329,7 +271,7 @@ export class AnthropicClient implements LLMClient {
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
-		const { system, messages } = toAnthropicFormat(promptMessages, true);
+		const { system, messages } = toAnthropicFormat(promptMessages);
 
 		const defaultMaxTokens =
 			this.config.maxOutputTokens ?? DEFAULT_STREAM_MAX_TOKENS;
@@ -339,6 +281,7 @@ export class AnthropicClient implements LLMClient {
 			system,
 			messages,
 			stream: true,
+			cache_control: { type: "ephemeral" },
 		};
 
 		if (request.tools?.length) {

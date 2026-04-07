@@ -22,7 +22,6 @@ import type {
 	TokenUsage,
 	ToolDefinition,
 } from "@n0n/types";
-import { selectCacheBreakpoints } from "./cache.ts";
 import type { LLMConfig } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
 
@@ -200,20 +199,17 @@ export class OpenAIClient implements LLMClient {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const apiMessages = toOpenAIMessages(promptMessages);
 
-		// 如果后端是 anthropic（通过 litellm），注入 cache_control
-		// Anthropic 限制最多 4 个 cache_control 断点，selectCacheBreakpoints 已保证 ≤ 4
+		// litellm + anthropic backend：在最后一条消息注入 cache_control
+		// 模拟 Anthropic 自动缓存行为，只在末尾设断点，利用 20 块回溯窗口自动匹配前缀
 		if (
 			this.config.providerConfig.provider === "openai-compatible" &&
 			this.config.providerConfig.backendProvider === "anthropic"
 		) {
-			const breakpoints = selectCacheBreakpoints(apiMessages).slice(0, 4);
-			for (const idx of breakpoints) {
-				const msg = apiMessages[idx];
-				if (msg) {
-					(msg as unknown as Record<string, unknown>).cache_control = {
-						type: "ephemeral",
-					};
-				}
+			const last = apiMessages[apiMessages.length - 1];
+			if (last) {
+				(last as unknown as Record<string, unknown>).cache_control = {
+					type: "ephemeral",
+				};
 			}
 		}
 
