@@ -1,13 +1,12 @@
 /**
- * freeform-patch 后端工具定义
+ * freeform-patch 后端工具定义（全部 freeform grammar）
  *
- * 三个工具配合完成编辑闭环：
- * - apply_patch (custom/freeform): 生成并应用 patch
- * - view_file (function): 验证修改后的文件内容
- * - submit (function): 提交反馈评分，驱动主模型 ICL
+ * - apply_patch: 结构化 patch 格式
+ * - view_file: 行范围（如 "10~20"、"-5"）或空（全部）
+ * - submit: 反馈文本即输入内容
  */
 
-export const PATCH_GRAMMAR = `start: begin_patch hunk+ end_patch
+const PATCH_GRAMMAR = `start: begin_patch hunk+ end_patch
 begin_patch: "*** Begin Patch" LF
 end_patch: "*** End Patch" LF?
 hunk: add_hunk | delete_hunk | update_hunk
@@ -24,54 +23,35 @@ eof_line: "*** End of File" LF
 %import common.LF
 `;
 
+const VIEW_FILE_GRAMMAR = `start: /[^\\n]*/
+`;
+
+const SUBMIT_GRAMMAR = `start: /[\\s\\S]+/
+`;
+
 export const APPLY_PATCH_TOOL = {
 	type: "custom" as const,
 	name: "apply_patch",
 	description:
-		"Apply a patch to edit the file. This is a FREEFORM tool — output raw patch text, not JSON.",
-	format: {
-		type: "grammar",
-		syntax: "lark",
-		definition: PATCH_GRAMMAR,
-	},
+		"Apply a patch to edit the file. FREEFORM — output raw patch text.",
+	format: { type: "grammar", syntax: "lark", definition: PATCH_GRAMMAR },
 };
 
 export const VIEW_FILE_TOOL = {
-	type: "function" as const,
+	type: "custom" as const,
 	name: "view_file",
 	description:
-		"View the current file content after applying patches. Use to verify your changes are correct before submitting.",
-	parameters: {
-		type: "object",
-		properties: {
-			start_line: {
-				type: "number",
-				description: "Start line (1-based, inclusive). Omit to start from beginning.",
-			},
-			end_line: {
-				type: "number",
-				description: "End line (1-based, inclusive). Omit to read to end.",
-			},
-		},
-	},
+		'View the current file content. FREEFORM — output a line range like "10~20", or "-5" for last 5 lines, or empty for the entire file.',
+	format: { type: "grammar", syntax: "lark", definition: VIEW_FILE_GRAMMAR },
 };
 
 export const SUBMIT_TOOL = {
-	type: "function" as const,
+	type: "custom" as const,
 	name: "submit",
 	description:
-		"Submit when edits are complete, OR immediately when the intent is ambiguous/vague/impossible. You MUST provide deduction-based scored feedback using the [score/4] format.",
-	parameters: {
-		type: "object",
-		properties: {
-			feedback: {
-				type: "string",
-				description:
-					"Deduction-based feedback: '[score/4] Verdict. {deductions}' — start at 4, subtract: −1 line-number ref, −1 trivially describable, −1 ambiguous target, −1 missing change spec, −2 unexecutable, −1 multi-concern. Minimum 0. When score < 4, add Rewrite line.",
-			},
-		},
-		required: ["feedback"],
-	},
+		"Submit when done (or immediately if intent is unexecutable). FREEFORM — output your [score/4] deduction-based feedback as plain text.",
+	format: { type: "grammar", syntax: "lark", definition: SUBMIT_GRAMMAR },
 };
 
+export const FIRST_ROUND_TOOLS = [APPLY_PATCH_TOOL, SUBMIT_TOOL];
 export const ALL_TOOLS = [APPLY_PATCH_TOOL, VIEW_FILE_TOOL, SUBMIT_TOOL];

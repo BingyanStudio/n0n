@@ -1,12 +1,8 @@
 /**
- * FreeformPatchBackend — OpenAI Responses API + freeform apply_patch
+ * FreeformPatchBackend — OpenAI Responses API + 全 freeform 工具
  *
- * 闭环编辑循环：
- * 1. 模型调用 apply_patch 生成 patch + submit 反馈（首轮只提供这两个工具）
- * 2. 如果 patch 应用失败，追加 view_file 工具供模型验证后重试
- * 3. 模型调用 submit 提交反馈评分（驱动主模型 ICL）
- *
- * 要求：gpt-5.x 系列模型 + 支持 /v1/responses 端点的网关。
+ * 闭环流程：apply_patch → view_file(验证) → submit(反馈)
+ * 所有工具均使用 grammar，无 JSON schema 开销。
  */
 
 import type {
@@ -14,11 +10,7 @@ import type {
 	EditBackendCallbacks,
 	EditBackendResult,
 } from "../backend.ts";
-import {
-	APPLY_PATCH_TOOL,
-	SUBMIT_TOOL,
-	VIEW_FILE_TOOL,
-} from "./grammar.ts";
+import { ALL_TOOLS, FIRST_ROUND_TOOLS } from "./grammar.ts";
 import { applyPatchToSource, parsePatch } from "./parser.ts";
 import systemPrompt from "./prompt.md" with { type: "text" };
 
@@ -30,27 +22,16 @@ export interface FreeformPatchConfig {
 
 const MAX_ROUNDS = 5;
 
-// 首轮工具：apply_patch + submit（不含 view_file，避免模型跳过编辑直接查看）
-const FIRST_ROUND_TOOLS = [APPLY_PATCH_TOOL, SUBMIT_TOOL];
-// 后续轮工具：追加 view_file 供验证和重试
-const ALL_TOOLS = [APPLY_PATCH_TOOL, VIEW_FILE_TOOL, SUBMIT_TOOL];
-
-// ── Responses API 类型 ──
-
 interface ResponseItem {
 	type: string;
-	id?: string;
 	call_id?: string;
 	name?: string;
 	input?: string;
-	arguments?: string;
 }
 
 interface ResponsesResult {
 	output: ResponseItem[];
 }
-
-// ── 后端实现 ──
 
 export class FreeformPatchBackend implements EditBackend {
 	readonly name = "freeform-patch";
@@ -73,19 +54,11 @@ export class FreeformPatchBackend implements EditBackend {
 		let feedback: string | null = null;
 		let patchApplied = false;
 
-		const input: unknown[] = [
+		const conversation: unknown[] = [
 			{ role: "developer", content: systemPrompt },
 			{
 				role: "user",
-				content: [
-					"<source_file>",
-					source,
-					"</source_file>",
-					"",
-					"<edit_intent>",
-					intent,
-					"</edit_intent>",
-				].join("\n"),
+				content: `<source_file>\n${source}\n</source_file>\n\n<edit_intent>\n${intent}\n</edit_intent>`,
 			},
 		];
 
@@ -96,10 +69,8 @@ export class FreeformPatchBackend implements EditBackend {
 
 			callbacks?.onEvent?.(round, { type: "thinking", text: `round ${round + 1}...` });
 
-			// 首轮不含 view_file，后续轮加入
 			const tools = round === 0 ? FIRST_ROUND_TOOLS : ALL_TOOLS;
-
-			const json = await this.callApi(input, tools, signal);
+			const json = await this.callApi(conversation, tools, signal);
 			if ("error" in json && typeof json.error === "string") {
 				return { content: current, feedback, error: json.error, rounds: round + 1 };
 			}
@@ -108,80 +79,48 @@ export class FreeformPatchBackend implements EditBackend {
 			const response = json as ResponsesResult;
 
 			for (const item of response.output) {
-				// apply_patch (freeform)
-				if (item.type === "custom_tool_call" && item.name === "apply_patch") {
-					const patchText = item.input ?? "";
-					callbacks?.onToolResult?.(round, `apply_patch (${patchText.split("\n").length} lines)`);
+				if (item.type !== "custom_tool_call") continue;
+				const raw = item.input ?? "";
 
-					const hunk = parsePatch(patchText);
-					if ("error" in hunk) {
-						input.push(item);
-						input.push({
-							type: "custom_tool_call_output",
-							call_id: item.call_id,
-							output: `Error: ${hunk.error}. Please fix and try again.`,
-						});
-						continue;
+				switch (item.name) {
+					case "apply_patch": {
+						callbacks?.onToolResult?.(round, `apply_patch (${raw.split("\n").length} lines)`);
+
+						const hunk = parsePatch(raw);
+						if ("error" in hunk) {
+							this.pushResult(conversation, item, `Error: ${hunk.error}`);
+							break;
+						}
+						const result = applyPatchToSource(current, hunk);
+						if (typeof result !== "string") {
+							this.pushResult(conversation, item, `Error: ${result.error}`);
+							break;
+						}
+						current = result;
+						patchApplied = true;
+						this.pushResult(conversation, item, "OK: Patch applied.");
+						break;
 					}
 
-					const result = applyPatchToSource(current, hunk);
-					if (typeof result !== "string") {
-						input.push(item);
-						input.push({
-							type: "custom_tool_call_output",
-							call_id: item.call_id,
-							output: `Error: ${result.error}. Call view_file to see current content, then retry.`,
-						});
-						continue;
+					case "view_file": {
+						const lines = current.split("\n");
+						const { start, end } = this.parseRange(raw.trim(), lines.length);
+						const numbered = lines
+							.slice(start - 1, end)
+							.map((l, i) => `${start + i}| ${l}`)
+							.join("\n");
+						const content = `<source_file lines="${start}-${end}" total="${lines.length}">\n${numbered}\n</source_file>`;
+						callbacks?.onToolResult?.(round, `view_file → L${start}-${end}`);
+						this.pushResult(conversation, item, content);
+						break;
 					}
 
-					current = result;
-					patchApplied = true;
-					input.push(item);
-					input.push({
-						type: "custom_tool_call_output",
-						call_id: item.call_id,
-						output: "OK: Patch applied successfully.",
-					});
-				}
-
-				// view_file (function)
-				if (item.type === "function_call" && item.name === "view_file") {
-					let args: Record<string, unknown> = {};
-					try { args = JSON.parse(item.arguments ?? "{}"); } catch {}
-
-					const lines = current.split("\n");
-					const startLine = typeof args.start_line === "number" ? args.start_line : undefined;
-					const endLine = typeof args.end_line === "number" ? args.end_line : undefined;
-
-					let content: string;
-					if (startLine !== undefined || endLine !== undefined) {
-						const s = Math.max(1, startLine ?? 1);
-						const e = Math.min(lines.length, endLine ?? lines.length);
-						const numbered = lines.slice(s - 1, e).map((l, i) => `${s + i}| ${l}`).join("\n");
-						content = `<source_file lines="${s}-${e}" total="${lines.length}">\n${numbered}\n</source_file>`;
-						callbacks?.onToolResult?.(round, `view_file → L${s}-${e}`);
-					} else {
-						content = `<source_file>\n${current}\n</source_file>`;
-						callbacks?.onToolResult?.(round, `view_file → ${lines.length} lines`);
+					case "submit": {
+						feedback = raw.trim() || null;
+						hasSubmit = true;
+						callbacks?.onToolResult?.(round, feedback ? `submit\n  ${feedback}` : "submit");
+						break;
 					}
-
-					input.push(item);
-					input.push({
-						type: "function_call_output",
-						call_id: item.call_id,
-						output: content,
-					});
-				}
-
-				// submit (function)
-				if (item.type === "function_call" && item.name === "submit") {
-					let args: Record<string, unknown> = {};
-					try { args = JSON.parse(item.arguments ?? "{}"); } catch {}
-
-					feedback = typeof args.feedback === "string" ? args.feedback : null;
-					hasSubmit = true;
-					callbacks?.onToolResult?.(round, feedback ? `submit\n  ${feedback}` : "submit");
 				}
 			}
 
@@ -195,13 +134,42 @@ export class FreeformPatchBackend implements EditBackend {
 			}
 		}
 
-		// 循环结束仍未 submit，如果 patch 已应用则视为成功
 		return {
 			content: current,
 			feedback,
 			error: patchApplied ? null : `Did not submit within ${MAX_ROUNDS} rounds`,
 			rounds: MAX_ROUNDS,
 		};
+	}
+
+	private pushResult(conversation: unknown[], item: ResponseItem, output: string) {
+		conversation.push(item);
+		conversation.push({
+			type: "custom_tool_call_output",
+			call_id: item.call_id,
+			output,
+		});
+	}
+
+	private parseRange(raw: string, totalLines: number): { start: number; end: number } {
+		if (!raw) return { start: 1, end: totalLines };
+
+		// "-5" → 倒数 5 行
+		const tailMatch = raw.match(/^-(\d+)$/);
+		if (tailMatch) {
+			const n = Number.parseInt(tailMatch[1] as string, 10);
+			return { start: Math.max(1, totalLines - n + 1), end: totalLines };
+		}
+
+		// "10~20" 或 "10-20"
+		const rangeMatch = raw.match(/^(\d+)[~\-](\d+)$/);
+		if (rangeMatch) {
+			const s = Number.parseInt(rangeMatch[1] as string, 10);
+			const e = Number.parseInt(rangeMatch[2] as string, 10);
+			return { start: Math.max(1, s), end: Math.min(totalLines, e) };
+		}
+
+		return { start: 1, end: totalLines };
 	}
 
 	private async callApi(
@@ -222,7 +190,7 @@ export class FreeformPatchBackend implements EditBackend {
 			});
 		} catch (err) {
 			if (signal?.aborted) return { error: "Aborted" };
-			return { error: `Fetch error: ${err instanceof Error ? err.message : String(err)}` };
+			return { error: `Fetch: ${err instanceof Error ? err.message : String(err)}` };
 		}
 
 		if (!res.ok) {
