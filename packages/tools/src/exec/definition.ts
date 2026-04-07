@@ -92,6 +92,7 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 		: "Use a language runtime for complex logic";
 
 	const tips = [
+		"- **Prefer `write` and `edit` for file operations** — they are more efficient and easier to review than shell commands. Use `exec` for batch operations (bulk renames, bulk replacements) or when you need shell-specific functionality.",
 		"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
 		"- **Output truncation** — stdout+stderr exceeding ~4 000 tokens is auto-truncated: only the **last ~1 000 tokens** are kept and the full output is saved to a file. To avoid losing important content, **assess first** (`wc -l`, `ls -la`) then read selectively (`head`, `grep`, `sed`) or split across parallel tool calls.",
 		`- **${jsHint}** — when you need to parse JSON, filter arrays, do math, or produce structured summaries, write a script instead of chaining shell commands.`,
