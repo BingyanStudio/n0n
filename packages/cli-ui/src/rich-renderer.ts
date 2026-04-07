@@ -397,7 +397,8 @@ export class RichRenderer implements Renderer {
 				return `${style.dim("◂")} ${style.cyan("submit")}`;
 			}
 			default: {
-				return `${style.dim("◂")} ${style.cyan(result.tool)}`;
+				const name = "tool" in result ? String(result.tool) : "unknown";
+				return `${style.dim("◂")} ${style.cyan(name)}`;
 			}
 		}
 	}
