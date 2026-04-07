@@ -40,6 +40,7 @@ if (args.includes("--help") || args.includes("-h")) {
 
 环境变量:
   N0N_CODE_WORKSPACE      默认 workspace 路径（优先级低于命令行参数）
+  N0N_PREFIX              配置前缀（如 PPIO），切换时自动将 PPIO_LLM_* 覆盖到 LLM_*
 `);
 	process.exit(0);
 }
