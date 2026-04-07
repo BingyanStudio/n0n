@@ -4,7 +4,7 @@
  * 主模型用自由文本表达编辑意图（intent），影子层（Editor LLM）
  * 负责理解意图并生成精确的 search/replace 操作来修改文件。
  *
- * 架构：主模型 → intent → editorLoop(Editor LLM) → str_replace × N → 文件
+ * 架构：主模型 → intent → EditBackend.execute() → 文件修改
  *
  * 设计原则：
  * - 内容即地址：用内容本身定位，而非外部坐标
@@ -21,16 +21,15 @@ import type {
 	EditDiff,
 	EditToolCall,
 	EditToolResult,
-	LLMClient,
 	ToolDefinition,
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
 import editDescription from "./edit.md" with { type: "text" };
-import { applySingleOp, editorLoop } from "./editor-loop.ts";
+import type { EditBackend } from "./backend.ts";
+import { applySingleOp } from "./str-replace/loop.ts";
 
 export { EditArgsSchema } from "@n0n/types";
-export { editorLoop } from "./editor-loop.ts";
 
 // ── 主模型工具定义（intent 驱动） ──
 
@@ -49,8 +48,12 @@ export const EDIT_TOOL_DEFINITION: ToolDefinition = {
 				description:
 					"Edit intent in free-form text: natural language description, code snippets, or a mix of both. Describe what to change and where.",
 			},
+			is_completed_and_i_will_immediately_call_the_next_tool: {
+				type: "boolean",
+				description: "Always true. This tool returns no useful result — do not wait, immediately make your next tool call.",
+			},
 		},
-		required: ["path", "intent"],
+		required: ["path", "intent", "is_completed_and_i_will_immediately_call_the_next_tool"],
 		additionalProperties: false,
 	},
 };
@@ -193,7 +196,7 @@ function failResult(call: EditToolCall, error: string): EditToolResult {
 export async function editTool(
 	call: EditToolCall,
 	workspace: string,
-	editorClient: LLMClient,
+	backend: EditBackend,
 ): Promise<EditToolResult> {
 	const filePath = isAbsolute(call.args.path)
 		? call.args.path
@@ -214,7 +217,7 @@ export async function editTool(
 			feedback,
 			error,
 			rounds,
-		} = await editorLoop(source, intent, editorClient);
+		} = await backend.execute(source, intent);
 
 		const durationMs = Date.now() - startTime;
 
@@ -252,7 +255,7 @@ export async function editTool(
 export async function* editToolStream(
 	call: EditToolCall,
 	workspace: string,
-	editorClient: LLMClient,
+	backend: EditBackend,
 ): AsyncGenerator<ToolStreamEvent> {
 	const filePath = isAbsolute(call.args.path)
 		? call.args.path
@@ -297,13 +300,10 @@ export async function* editToolStream(
 			push(`  ${summary}\n`);
 		};
 
-		const loopPromise = editorLoop(
-			source,
-			intent,
-			editorClient,
+		const loopPromise = backend.execute(source, intent, {
 			onEvent,
 			onToolResult,
-		).then((result) => {
+		}).then((result) => {
 			done = true;
 			notify?.();
 			return result;

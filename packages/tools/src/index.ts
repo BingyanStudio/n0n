@@ -31,7 +31,10 @@ import {
 	EDIT_TOOL_DEFINITION,
 	EditArgsSchema,
 	editToolStream,
+	StrReplaceBackend,
+	FreeformPatchBackend,
 } from "./edit/index.ts";
+import type { EditBackend } from "./edit/index.ts";
 import { detectEnv } from "./env.ts";
 import {
 	ExecArgsSchema,
@@ -116,6 +119,11 @@ function buildBaseRegistry(
 		defaultExecTimeout: toolsConfig.agent.defaultExecTimeout,
 	};
 
+	const editBackend: EditBackend =
+		toolsConfig.editBackendType === "freeform-patch" && toolsConfig.freeformPatchConfig
+			? new FreeformPatchBackend(toolsConfig.freeformPatchConfig)
+			: new StrReplaceBackend(toolsConfig.editorClient);
+
 	return {
 		exec: {
 			definition: execToolDef,
@@ -154,7 +162,7 @@ function buildBaseRegistry(
 				return editToolStream(
 					call,
 					resolvedWorkspace,
-					toolsConfig.editorClient,
+					editBackend,
 				);
 			},
 		},
