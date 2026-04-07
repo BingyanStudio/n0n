@@ -20,4 +20,4 @@ echo "==> Step 2: Rendering with Qwen chat template..."
 uv run scripts/render-chat-template.py
 
 echo ""
-echo "==> Done. Output: .temp/rendered-prompt.txt"
+echo "==> Done. Output: .temp/rendered-prompt.md"

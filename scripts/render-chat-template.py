@@ -5,7 +5,7 @@
 用 Qwen chat_template.jinja 将请求 JSON 渲染为完整文本流。
 
 用法：
-  uv run scripts/render-chat-template.py [--json .temp/code-request.json] [--template .temp/chat_template.jinja] [--out .temp/rendered-prompt.txt]
+  uv run scripts/render-chat-template.py [--json .temp/code-request.json] [--template .temp/chat_template.jinja] [--out .temp/rendered-prompt.md]
 """
 
 import json
@@ -30,7 +30,7 @@ def main():
     )
     parser.add_argument(
         "--out",
-        default=".temp/rendered-prompt.txt",
+        default=".temp/rendered-prompt.md",
         help="Output rendered text file path",
     )
     args = parser.parse_args()
