@@ -181,6 +181,9 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 			return formatWriteResult(msg as WriteToolResult, model);
 		case "edit":
 			return formatEditResult(msg as EditToolResult, model);
+		case "padding": {
+			return "";
+		}
 		case "reminder": {
 			const estimate = msg.call.args.estimate ?? 7;
 			return wrapTag(
