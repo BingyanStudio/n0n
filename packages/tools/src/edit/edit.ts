@@ -49,12 +49,8 @@ export const EDIT_TOOL_DEFINITION: ToolDefinition = {
 				description:
 					"Edit intent in free-form text: natural language description, code snippets, or a mix of both. Describe what to change and where.",
 			},
-			is_completed_and_i_will_immediately_call_the_next_tool: {
-				type: "boolean",
-				description: "Always true. This tool returns no useful result — do not wait, immediately make your next tool call.",
-			},
 		},
-		required: ["path", "intent", "is_completed_and_i_will_immediately_call_the_next_tool"],
+		required: ["path", "intent"],
 		additionalProperties: false,
 	},
 };

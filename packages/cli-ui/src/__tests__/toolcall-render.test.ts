@@ -179,7 +179,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecStart({
 			id: "call_2",
 			tool: "write",
-			args: { path: "test.txt", content: "hello" , is_completed_and_i_will_immediately_call_the_next_tool: true },
+			args: { path: "test.txt", content: "hello" },
 		});
 
 		// 两个 toolCallEnd
@@ -200,7 +200,7 @@ describe("RichRenderer tool call streaming", () => {
 			call: {
 				id: "call_2",
 				tool: "write",
-				args: { path: "test.txt", content: "hello" , is_completed_and_i_will_immediately_call_the_next_tool: true },
+				args: { path: "test.txt", content: "hello" },
 			},
 			status: "completed",
 		});
@@ -281,7 +281,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecStart({
 			id: "call_2",
 			tool: "write",
-			args: { path: "out.txt", content: "data" , is_completed_and_i_will_immediately_call_the_next_tool: true },
+			args: { path: "out.txt", content: "data" },
 		});
 		renderer.toolExecEnd({
 			type: "tool_result",
@@ -289,7 +289,7 @@ describe("RichRenderer tool call streaming", () => {
 			call: {
 				id: "call_2",
 				tool: "write",
-				args: { path: "out.txt", content: "data" , is_completed_and_i_will_immediately_call_the_next_tool: true },
+				args: { path: "out.txt", content: "data" },
 			},
 			status: "completed",
 		});
@@ -322,7 +322,7 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolExecStart({
 			id: "call_1",
 			tool: "edit",
-			args: { path: "src/index.ts", intent: "fix bug" , is_completed_and_i_will_immediately_call_the_next_tool: true },
+			args: { path: "src/index.ts", intent: "fix bug" },
 		});
 
 		renderer.toolExecEnd({
@@ -331,7 +331,7 @@ describe("RichRenderer tool call streaming", () => {
 			call: {
 				id: "call_1",
 				tool: "edit",
-				args: { path: "src/index.ts", intent: "fix bug" , is_completed_and_i_will_immediately_call_the_next_tool: true },
+				args: { path: "src/index.ts", intent: "fix bug" },
 			},
 			success: true,
 			diff: { added: 5, removed: 3, chunks: [] },

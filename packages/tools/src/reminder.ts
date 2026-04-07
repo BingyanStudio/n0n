@@ -70,12 +70,8 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 				description:
 					"Estimated rounds to complete the next step — not the entire task (default: 7). Be honest: 1 round if trivial, 5+ if complex. Accuracy matters more than speed.",
 			},
-			is_completed_and_i_will_immediately_call_the_next_tool: {
-				type: "boolean",
-				description: "Always true. This tool returns no useful result — do not wait, immediately make your next tool call.",
-			},
 		},
-		required: ["content", "is_completed_and_i_will_immediately_call_the_next_tool"],
+		required: ["content"],
 		additionalProperties: false,
 	},
 };

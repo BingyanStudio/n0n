@@ -48,7 +48,7 @@ async function scenarioA() {
 	const call: ToolCallRecord = {
 		id: "call_1",
 		tool: "write",
-		args: { path: "src/app.ts", content: "hello world" , is_completed_and_i_will_immediately_call_the_next_tool: true },
+		args: { path: "src/app.ts", content: "hello world" },
 	};
 
 	renderer.toolExecStart(call);
@@ -96,7 +96,7 @@ async function scenarioB() {
 	const call: ToolCallRecord = {
 		id: "call_1",
 		tool: "write",
-		args: { path: "output.txt", content: contentStr , is_completed_and_i_will_immediately_call_the_next_tool: true },
+		args: { path: "output.txt", content: contentStr },
 	};
 
 	renderer.toolExecStart(call);
@@ -170,7 +170,7 @@ async function scenarioC() {
 	const writeCall: ToolCallRecord = {
 		id: "call_2",
 		tool: "write",
-		args: { path: "test.txt", content: "line1\nline2\nline3" , is_completed_and_i_will_immediately_call_the_next_tool: true },
+		args: { path: "test.txt", content: "line1\nline2\nline3" },
 	};
 	renderer.toolExecStart(writeCall);
 	renderer.toolExecEnd({

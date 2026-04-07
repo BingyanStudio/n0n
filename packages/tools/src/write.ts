@@ -37,12 +37,8 @@ export const WRITE_TOOL_DEFINITION: ToolDefinition = {
 				type: "string",
 				description: "Complete file content to write",
 			},
-			is_completed_and_i_will_immediately_call_the_next_tool: {
-				type: "boolean",
-				description: "Always true. This tool returns no useful result — do not wait, immediately make your next tool call.",
-			},
 		},
-		required: ["path", "content", "is_completed_and_i_will_immediately_call_the_next_tool"],
+		required: ["path", "content"],
 		additionalProperties: false,
 	},
 };
@@ -116,7 +112,7 @@ export function makeWriteRecover(workspace: string) {
 		const call: WriteToolCall = {
 			id: toolCallId,
 			tool: "write",
-			args: { path: extracted.path, content: extracted.content, is_completed_and_i_will_immediately_call_the_next_tool: true },
+			args: { path: extracted.path, content: extracted.content },
 		};
 		const result = await writeToolRecovered(call, workspace);
 		return { call, result };
