@@ -194,7 +194,7 @@ function toolResultToContent(msg: ToolResult, model: string): string {
 		case "edit":
 			return formatEditResult(msg as EditToolResult, model);
 		case "padding": {
-			return "";
+			return "continue";
 		}
 		case "reminder": {
 			const estimate = msg.call.args.estimate ?? 7;
