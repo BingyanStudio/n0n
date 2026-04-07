@@ -65,6 +65,12 @@ def main():
     )
     env.globals["raise_exception"] = raise_exception
 
+    # GLM 模板使用 tojson(ensure_ascii=False)，需覆盖默认 tojson 过滤器
+    def tojson_filter(value, ensure_ascii=True, indent=None):
+        return json.dumps(value, ensure_ascii=ensure_ascii, indent=indent)
+
+    env.filters["tojson"] = tojson_filter
+
     template = env.from_string(template_source)
 
     # 渲染：Qwen 模板接收 messages、tools、add_generation_prompt 等参数
@@ -103,17 +109,32 @@ def main():
 
     # 打印结构概览
     print(f"\nStructure overview:")
-    # 找到所有 <|im_start|> 标记并打印角色
     lines = rendered.split("\n")
     for i, line in enumerate(lines):
+        role = None
         if "<|im_start|>" in line:
             role = line.replace("<|im_start|>", "").strip()
-            # 找到对应的 <|im_end|> 计算该段长度
+        elif any(tag in line for tag in ["<|system|>", "<|user|>", "<|assistant|>", "<|observation|>"]):
+            for tag in ["<|system|>", "<|user|>", "<|assistant|>", "<|observation|>"]:
+                if tag in line:
+                    role = tag.replace("<|", "").replace("|>", "")
+                    break
+        elif line.strip().startswith("[H] "):
+            role = "human"
+        elif line.strip().startswith("[A] ") or line.strip() == "[A]":
+            role = "assistant"
+        elif "<function_calls>" in line:
+            role = "function_calls"
+        elif "<function_results>" in line:
+            role = "function_results"
+        if role:
             end_line = i
             for j in range(i + 1, len(lines)):
-                if "<|im_end|>" in lines[j]:
-                    end_line = j
+                if "<|im_end|>" in lines[j] or (j > i and any(t in lines[j] for t in ["<|system|>", "<|user|>", "<|assistant|>", "<|observation|>"])):
+                    end_line = j - 1 if "<|im_end|>" not in lines[j] else j
                     break
+            else:
+                end_line = len(lines) - 1
             segment_chars = sum(len(lines[k]) for k in range(i, min(end_line + 1, len(lines))))
             print(f"  [{role}] line {i+1}-{end_line+1} ({segment_chars:,} chars)")
 

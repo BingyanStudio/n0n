@@ -1,0 +1,98 @@
+{#- Claude chat template (approximate) -#}
+{#- Anthropic 不公开内部渲染格式，此模板基于可观测行为模拟，仅供预览参考 -#}
+
+{%- macro render_content(content) -%}
+    {%- if content is string -%}
+        {{- content }}
+    {%- elif content is iterable and content is not mapping -%}
+        {%- for item in content -%}
+            {%- if item is mapping and item.type == 'text' -%}
+                {{- item.text }}
+            {%- elif item is string -%}
+                {{- item }}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- else -%}
+        {{- content }}
+    {%- endif -%}
+{%- endmacro -%}
+
+{#- Tools section (placed before system prompt) -#}
+{%- if tools -%}
+In this environment you have access to a set of tools you can use to answer the user's question.
+You can invoke functions by writing a "<function_calls>" block like the following as part of your reply to the user:
+
+<function_calls>
+<invoke name="$FUNCTION_NAME">
+<parameter name="$PARAMETER_NAME">$PARAMETER_VALUE</parameter>
+...
+</invoke>
+</function_calls>
+
+String and scalar parameters should be specified as is, while lists and objects should use JSON format.
+
+Here are the functions available in JSONSchema format:
+<functions>
+{%- for tool in tools %}
+{%- if tool.function is defined %}
+{%- set fn = tool.function %}
+{%- else %}
+{%- set fn = tool %}
+{%- endif %}
+<function>{{ {"description": fn.description, "name": fn.name, "parameters": fn.parameters} | tojson(indent=2) }}</function>
+{%- endfor %}
+</functions>
+
+{% endif -%}
+
+{#- System message -#}
+{%- for m in messages -%}
+{%- if m.role == 'system' -%}
+{{ render_content(m.content) }}
+
+{% endif -%}
+{%- endfor -%}
+
+{#- Conversation turns -#}
+{%- for m in messages -%}
+{%- if m.role == 'user' -%}
+
+[H] {{ render_content(m.content) }}
+
+{%- elif m.role == 'assistant' -%}
+
+[A] {% if m.tool_calls -%}
+{%- for tc in m.tool_calls -%}
+{%- if tc.function is defined -%}
+{%- set fn = tc.function -%}
+{%- else -%}
+{%- set fn = tc -%}
+{%- endif -%}
+<function_calls>
+<invoke name="{{ fn.name }}">
+{%- if fn.arguments is string -%}
+{%- set args = fn.arguments -%}
+{%- else -%}
+{%- for k, v in fn.arguments.items() -%}
+<parameter name="{{ k }}">{{ v | tojson if v is mapping or (v is iterable and v is not string) else v }}</parameter>
+{%- endfor -%}
+{%- endif -%}
+</invoke>
+</function_calls>
+{% endfor -%}
+{%- else -%}
+{{- render_content(m.content) }}
+{%- endif %}
+
+{%- elif m.role == 'tool' -%}
+
+<function_results>
+{{ render_content(m.content) }}
+</function_results>
+
+{%- endif -%}
+{%- endfor -%}
+
+{%- if add_generation_prompt %}
+
+[A] {% endif -%}

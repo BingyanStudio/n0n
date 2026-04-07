@@ -1,5 +1,5 @@
 #!/bin/sh
-# 一键预览 apps/code 场景的完整 Qwen 文本流
+# 一键预览 apps/code 场景的完整文本流（同时渲染 Qwen 和 GLM 两个模板）
 #
 # 用法：
 #   sh scripts/preview-code-prompt.sh                          # 使用默认用户消息
@@ -16,8 +16,25 @@ echo "==> Step 1: Building request JSON..."
 bun run scripts/build-code-request.ts "$@"
 
 echo ""
-echo "==> Step 2: Rendering with Qwen chat template..."
-uv run scripts/render-chat-template.py
+echo "==> Step 2a: Rendering with Qwen chat template..."
+uv run scripts/render-chat-template.py \
+  --template scripts/chat_template_qwen.jinja \
+  --out .temp/rendered-prompt-qwen.md
 
 echo ""
-echo "==> Done. Output: .temp/rendered-prompt.md"
+echo "==> Step 2b: Rendering with GLM chat template..."
+uv run scripts/render-chat-template.py \
+  --template scripts/chat_template_glm.jinja \
+  --out .temp/rendered-prompt-glm.md
+
+echo ""
+echo "==> Step 2c: Rendering with Claude chat template (approximate)..."
+uv run scripts/render-chat-template.py \
+  --template scripts/chat_template_claude.jinja \
+  --out .temp/rendered-prompt-claude.md
+
+echo ""
+echo "==> Done."
+echo "  Qwen output:   .temp/rendered-prompt-qwen.md"
+echo "  GLM  output:   .temp/rendered-prompt-glm.md"
+echo "  Claude output:  .temp/rendered-prompt-claude.md"
