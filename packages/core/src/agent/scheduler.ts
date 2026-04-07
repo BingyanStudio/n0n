@@ -121,7 +121,8 @@ export class ExecutionScheduler {
 			case "submit":
 				return true;
 			default:
-				return false;
+				// 未识别的工具按最保守策略执行：等所有 active 完成
+				return this.active.size === 0;
 		}
 	}
 
