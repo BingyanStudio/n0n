@@ -81,9 +81,9 @@ function buildSpawnCmd(runtime: string, tmpFile: string): string[] {
 }
 
 /** 超过此阈值（stdout+stderr 合计预估 token 数）触发截断写文件 */
-const TRUNCATION_THRESHOLD_TOKENS = 4_000;
+const TRUNCATION_THRESHOLD_TOKENS = 5_000;
 /** 截断后展示的末尾 token 数 */
-const TAIL_TOKENS = 1_000;
+const TAIL_TOKENS = 2_000;
 
 /**
  * 流式执行脚本。
