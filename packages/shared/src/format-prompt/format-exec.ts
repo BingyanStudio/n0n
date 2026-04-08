@@ -1,5 +1,8 @@
 /**
  * exec tool result 格式化 — 含 anti-few-shot 变体
+ *
+ * 多部分拼装（meta、stdout/stderr tag、hint 等）各自使用
+ * msgIndex+N 偏移独立选择变体，组合爆炸产生远超单维度的多样性。
  */
 
 import type { ExecToolResult } from "@n0n/types";
@@ -7,23 +10,13 @@ import { pick, wrapTag } from "./utils.ts";
 
 // ── 变体模板 ──
 
-interface MetaTemplate {
-	format: (runtime: string, cwd: string, exit: number, ms: number) => string;
-}
-
-const metaTemplates: MetaTemplate[] = [
-	{
-		format: (rt, cwd, exit, ms) =>
-			`[${rt}] [cwd: ${cwd}] [exit: ${exit}] [${ms}ms]`,
-	},
-	{
-		format: (rt, cwd, exit, ms) =>
-			`runtime=${rt} cwd=${cwd} exitCode=${exit} duration=${ms}ms`,
-	},
-	{
-		format: (rt, cwd, exit, ms) =>
-			`(${rt}) ${cwd} | exit ${exit} | ${ms}ms`,
-	},
+const metaTemplates = [
+	(rt: string, cwd: string, exit: number, ms: number) =>
+		`[${rt}] [cwd: ${cwd}] [exit: ${exit}] [${ms}ms]`,
+	(rt: string, cwd: string, exit: number, ms: number) =>
+		`runtime=${rt} cwd=${cwd} exitCode=${exit} duration=${ms}ms`,
+	(rt: string, cwd: string, exit: number, ms: number) =>
+		`(${rt}) ${cwd} | exit ${exit} | ${ms}ms`,
 ];
 
 const timedOutMetaTemplates = [
@@ -45,39 +38,21 @@ const truncatedMetaTemplates = [
 ];
 
 const timeoutNoticeTemplates = [
-	(pid: number, logFile: string) => [
-		`Process exceeded timeout, moved to background.`,
-		`PID: ${pid}`,
-		`Log file: ${logFile}`,
-		`Read the log file later to check process status.`,
-	].join("\n"),
-	(pid: number, logFile: string) => [
-		`Timed out — process continues in background (PID ${pid}).`,
-		`Output is being logged to: ${logFile}`,
-		`Check the log file for progress.`,
-	].join("\n"),
-	(pid: number, logFile: string) => [
-		`Background process started (PID: ${pid}).`,
-		`The command timed out but is still running.`,
-		`Monitor via log: ${logFile}`,
-	].join("\n"),
+	(pid: number, logFile: string) =>
+		`Process exceeded timeout, moved to background.\nPID: ${pid}\nLog file: ${logFile}\nRead the log file later to check process status.`,
+	(pid: number, logFile: string) =>
+		`Timed out — process continues in background (PID ${pid}).\nOutput is being logged to: ${logFile}\nCheck the log file for progress.`,
+	(pid: number, logFile: string) =>
+		`Background process started (PID: ${pid}).\nThe command timed out but is still running.\nMonitor via log: ${logFile}`,
 ];
 
 const truncatedHintTemplates = [
-	(totalLines: number, outputFile: string) => [
-		`Full output (${totalLines} lines) written to: ${outputFile}`,
-		`Use exec to read specific parts: grep, sed, head, tail, or bun script.`,
-		`Do NOT re-cat the full file — it will be truncated again.`,
-	].join("\n"),
-	(totalLines: number, outputFile: string) => [
-		`Complete output saved to ${outputFile} (${totalLines} lines total).`,
-		`Read selectively with grep, head, tail, or a script — do not cat the whole file.`,
-	].join("\n"),
-	(totalLines: number, outputFile: string) => [
-		`${totalLines} lines captured in ${outputFile}.`,
-		`Extract what you need with targeted commands (grep/sed/head/tail).`,
-		`Avoid re-dumping the full file — it will truncate again.`,
-	].join("\n"),
+	(totalLines: number, outputFile: string) =>
+		`Full output (${totalLines} lines) written to: ${outputFile}\nUse exec to read specific parts: grep, sed, head, tail, or bun script.\nDo NOT re-cat the full file — it will be truncated again.`,
+	(totalLines: number, outputFile: string) =>
+		`Complete output saved to ${outputFile} (${totalLines} lines total).\nRead selectively with grep, head, tail, or a script — do not cat the whole file.`,
+	(totalLines: number, outputFile: string) =>
+		`${totalLines} lines captured in ${outputFile}.\nExtract what you need with targeted commands (grep/sed/head/tail).\nAvoid re-dumping the full file — it will truncate again.`,
 ];
 
 const diagnosticHintTemplates = [
@@ -98,16 +73,16 @@ export function formatExecResult(
 ): string {
 	const runtime = msg.call.args.runtime ?? "unknown";
 	const cwd = msg.call.args.cwd ?? ".";
-	const stdoutTag = pick(stdoutTagNames, msgIndex);
-	const stderrTag = pick(stderrTagNames, msgIndex + 1000);
+	// 每个 pick 点用不同偏移：meta=+0, stdoutTag=+1, stderrTag=+2, notice/hint=+3, diagnostic=+4
+	const stdoutTag = pick(stdoutTagNames, msgIndex + 1);
+	const stderrTag = pick(stderrTagNames, msgIndex + 2);
 
 	switch (msg.status) {
 		case "timed_out": {
 			const metaFn = pick(timedOutMetaTemplates, msgIndex);
-			const meta = metaFn(runtime, cwd, msg.durationMs);
-			const parts = [wrapTag("exec_meta", meta, model)];
+			const parts = [wrapTag("exec_meta", metaFn(runtime, cwd, msg.durationMs), model)];
 
-			const noticeFn = pick(timeoutNoticeTemplates, msgIndex);
+			const noticeFn = pick(timeoutNoticeTemplates, msgIndex + 3);
 			parts.push(wrapTag("timeout_notice", noticeFn(msg.pid, msg.logFile), model));
 
 			if (msg.stdoutSoFar)
@@ -118,8 +93,7 @@ export function formatExecResult(
 		}
 		case "truncated": {
 			const metaFn = pick(truncatedMetaTemplates, msgIndex);
-			const meta = metaFn(runtime, cwd, msg.exitCode, msg.durationMs, msg.outputFile);
-			const parts = [wrapTag("exec_meta", meta, model)];
+			const parts = [wrapTag("exec_meta", metaFn(runtime, cwd, msg.exitCode, msg.durationMs, msg.outputFile), model)];
 
 			if (msg.stdoutTail)
 				parts.push(
@@ -134,14 +108,13 @@ export function formatExecResult(
 					wrapTag(stderrTag, `... (truncated)\n${msg.stderrTail}`, model),
 				);
 
-			const hintFn = pick(truncatedHintTemplates, msgIndex);
+			const hintFn = pick(truncatedHintTemplates, msgIndex + 3);
 			parts.push(wrapTag("output_hint", hintFn(msg.totalLines, msg.outputFile), model));
 			return parts.join("\n");
 		}
 		case "completed": {
-			const metaTpl = pick(metaTemplates, msgIndex);
-			const meta = metaTpl.format(runtime, cwd, msg.exitCode, msg.durationMs);
-			const parts = [wrapTag("exec_meta", meta, model)];
+			const metaFn = pick(metaTemplates, msgIndex);
+			const parts = [wrapTag("exec_meta", metaFn(runtime, cwd, msg.exitCode, msg.durationMs), model)];
 
 			if (msg.stdout) parts.push(wrapTag(stdoutTag, msg.stdout, model));
 			if (msg.stderr) parts.push(wrapTag(stderrTag, msg.stderr, model));
@@ -153,8 +126,7 @@ export function formatExecResult(
 					combined,
 				)
 			) {
-				const hint = pick(diagnosticHintTemplates, msgIndex);
-				parts.push(wrapTag("diagnostic_hint", hint, model));
+				parts.push(wrapTag("diagnostic_hint", pick(diagnosticHintTemplates, msgIndex + 4), model));
 			}
 			return parts.join("\n");
 		}

@@ -1,16 +1,9 @@
 /**
  * format-prompt — DomainMessage[] → PromptMessage[]
  *
- * 提示词组织的编排层。将领域消息转换为协议无关的提示词消息格式。
- * 工具结果的格式化委托给各自的模块（format-exec / format-write / format-edit），
- * 每个模块内维护 anti-few-shot 表述变体，通过确定性种子选择，保证 prompt cache 安全。
- *
- * 职责：
- * - tool result 格式化（委托子模块）
- * - user_input 上下文拼接
- * - 连续 system 消息合并
- * - idle_nudge / reminder:due / submit:rejected 等文本生成
- * - XML tag 风格适配
+ * 纯编排层。将领域消息转换为协议无关的提示词消息格式。
+ * 所有含自然语言的格式化逻辑委托给各自的子模块，
+ * 每个模块内维护 anti-few-shot 表述变体。
  *
  * 不包含：协议消息格式构造、prompt caching 注入 — 这些属于 Client 内部。
  */
@@ -20,64 +13,22 @@ import type {
 	ExecToolResult,
 	EditToolResult,
 	PromptMessage,
+	ReminderToolResult,
+	SubmitToolResult,
 	ToolCallPart,
 	ToolResult,
 	WriteToolResult,
 } from "@n0n/types";
-import { adaptTags, pick, wrapTag } from "./utils.ts";
+import { adaptTags, wrapTag } from "./utils.ts";
 import { formatExecResult } from "./format-exec.ts";
 import { formatWriteResult } from "./format-write.ts";
 import { formatEditResult } from "./format-edit.ts";
-
-// ── 自然语言变体模板 ──
-
-const reminderSetTemplates = [
-	(est: number) =>
-		`Reminder set. Estimate: ${est} rounds for next step. A <reminder> will appear when it expires.`,
-	(est: number) =>
-		`Reminder saved (fires in ~${est} rounds). You'll see a <reminder> when it's time.`,
-	(est: number) =>
-		`Got it — reminder scheduled, estimated ${est} rounds out. A <reminder> tag will notify you.`,
-];
-
-const submitSuccessTemplates = [
-	"Submitted successfully.",
-	"Submission received.",
-	"Result submitted.",
-];
-
-const idleNudgeTemplates = [
-	(idle: number, max: number) =>
-		`You replied with plain text without using any tools. You MUST use tools to make progress. Idle ${idle}/${max}.`,
-	(idle: number, max: number) =>
-		`No tool calls detected in your last response. Use tools to proceed — idle count: ${idle}/${max}.`,
-	(idle: number, max: number) =>
-		`Plain text response without tool usage. Tools are required to make progress (${idle}/${max} idle rounds).`,
-];
-
-const reminderDueTemplates = [
-	(est: number, content: string) =>
-		`Your reminder has fired (estimate was ${est} rounds). Review and recalibrate:\n${content}`,
-	(est: number, content: string) =>
-		`Reminder triggered (originally set for ~${est} rounds). Check progress:\n${content}`,
-	(est: number, content: string) =>
-		`Scheduled reminder (est. ${est} rounds) — time to review:\n${content}`,
-];
-
-const turnFeedbackTemplates = [
-	(status: string, type: string, detail: string) =>
-		`Status: ${status} | Type: ${type}\n${detail}`,
-	(status: string, type: string, detail: string) =>
-		`[${status}] result_type=${type}\n${detail}`,
-	(status: string, type: string, detail: string) =>
-		`Outcome: ${status} (${type})\n${detail}`,
-];
-
-const toolArgErrorTemplates = [
-	(error: string) => `Invalid tool arguments: ${error}`,
-	(error: string) => `Tool argument validation failed: ${error}`,
-	(error: string) => `Bad tool args — ${error}`,
-];
+import { formatReminderResult } from "./format-reminder.ts";
+import { formatSubmitResult } from "./format-submit.ts";
+import { formatIdleNudge } from "./format-idle-nudge.ts";
+import { formatReminderDue } from "./format-reminder-due.ts";
+import { formatTurnFeedback } from "./format-turn-feedback.ts";
+import { formatToolArgError } from "./format-tool-arg-error.ts";
 
 // ── tool result 分发 ──
 
@@ -93,19 +44,10 @@ function toolResultToContent(
 			return formatWriteResult(msg as WriteToolResult, model, msgIndex);
 		case "edit":
 			return formatEditResult(msg as EditToolResult, model, msgIndex);
-		case "reminder": {
-			const estimate = msg.call.args.estimate ?? 7;
-			const tpl = pick(reminderSetTemplates, msgIndex);
-			return wrapTag("result", tpl(estimate), model);
-		}
-		case "submit": {
-			const text = pick(submitSuccessTemplates, msgIndex);
-			const parts = [wrapTag("result", text, model)];
-			if ("userResponse" in msg && msg.userResponse) {
-				parts.push(wrapTag("user_response", msg.userResponse, model));
-			}
-			return parts.join("\n");
-		}
+		case "reminder":
+			return formatReminderResult(msg as ReminderToolResult, model, msgIndex);
+		case "submit":
+			return formatSubmitResult(msg as SubmitToolResult, model, msgIndex);
 	}
 }
 
@@ -149,9 +91,6 @@ function mergeConsecutiveSystem(messages: PromptMessage[]): PromptMessage[] {
 /**
  * DomainMessage[] → PromptMessage[]
  *
- * 将领域消息转换为协议无关的提示词消息格式。
- * Client 内部消费此输出，进一步转换为各自的 API 格式。
- *
  * @param messages 领域消息历史
  * @param modelId 模型标识，用于 XML tag 风格选择
  */
@@ -173,10 +112,7 @@ export function formatPrompt(
 				break;
 
 			case "generic_user_text":
-				result.push({
-					role: "user",
-					content: msg.content,
-				});
+				result.push({ role: "user", content: msg.content });
 				break;
 
 			case "user_image":
@@ -220,31 +156,19 @@ export function formatPrompt(
 				});
 				break;
 
-			case "idle_nudge": {
-				const tpl = pick(idleNudgeTemplates, i);
+			case "idle_nudge":
 				result.push({
 					role: "user",
-					content: wrapTag(
-						"system_warning",
-						tpl(msg.idleCount, msg.maxIdleRounds),
-						modelId,
-					),
+					content: formatIdleNudge(msg, modelId, i),
 				});
 				break;
-			}
 
-			case "reminder:due": {
-				const tpl = pick(reminderDueTemplates, i);
+			case "reminder:due":
 				result.push({
 					role: "user",
-					content: wrapTag(
-						"reminder",
-						tpl(msg.originalEstimate, msg.content),
-						modelId,
-					),
+					content: formatReminderDue(msg, modelId, i),
 				});
 				break;
-			}
 
 			case "submit:rejected":
 				result.push({
@@ -264,33 +188,21 @@ export function formatPrompt(
 				});
 				break;
 
-			case "turn_feedback": {
-				const tpl = pick(turnFeedbackTemplates, i);
+			case "turn_feedback":
 				result.push({
 					role: "user",
-					content: wrapTag(
-						"turn_feedback",
-						tpl(msg.status, msg.resultType, msg.detail),
-						modelId,
-					),
+					content: formatTurnFeedback(msg, modelId, i),
 				});
 				break;
-			}
 
-			case "tool_arg_error": {
-				const errorTpl = pick(toolArgErrorTemplates, i);
-				let errorContent = errorTpl(msg.error);
-				if (msg.schema) {
-					errorContent += `\n\nExpected schema:\n${JSON.stringify(msg.schema, null, 2)}`;
-				}
+			case "tool_arg_error":
 				result.push({
 					role: "tool",
 					toolCallId: msg.callId,
 					toolName: msg.tool,
-					content: wrapTag("error", errorContent, modelId),
+					content: formatToolArgError(msg, modelId, i),
 				});
 				break;
-			}
 
 			case "generic_tool_call": {
 				const toolCalls: ToolCallPart[] = msg.toolCalls.map((tc) => ({
