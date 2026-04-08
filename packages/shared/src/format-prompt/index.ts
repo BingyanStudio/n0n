@@ -24,20 +24,60 @@ import type {
 	ToolResult,
 	WriteToolResult,
 } from "@n0n/types";
-import { adaptTagsFor, wrapTagFor } from "../tags.ts";
+import { adaptTags, pick, wrapTag } from "./utils.ts";
 import { formatExecResult } from "./format-exec.ts";
 import { formatWriteResult } from "./format-write.ts";
 import { formatEditResult } from "./format-edit.ts";
 
-// ── tag 工具（内部封装） ──
+// ── 自然语言变体模板 ──
 
-function wrapTag(name: string, content: string, model: string): string {
-	return wrapTagFor(name, content, model);
-}
+const reminderSetTemplates = [
+	(est: number) =>
+		`Reminder set. Estimate: ${est} rounds for next step. A <reminder> will appear when it expires.`,
+	(est: number) =>
+		`Reminder saved (fires in ~${est} rounds). You'll see a <reminder> when it's time.`,
+	(est: number) =>
+		`Got it — reminder scheduled, estimated ${est} rounds out. A <reminder> tag will notify you.`,
+];
 
-function adaptTags(text: string, model: string): string {
-	return adaptTagsFor(text, model);
-}
+const submitSuccessTemplates = [
+	"Submitted successfully.",
+	"Submission received.",
+	"Result submitted.",
+];
+
+const idleNudgeTemplates = [
+	(idle: number, max: number) =>
+		`You replied with plain text without using any tools. You MUST use tools to make progress. Idle ${idle}/${max}.`,
+	(idle: number, max: number) =>
+		`No tool calls detected in your last response. Use tools to proceed — idle count: ${idle}/${max}.`,
+	(idle: number, max: number) =>
+		`Plain text response without tool usage. Tools are required to make progress (${idle}/${max} idle rounds).`,
+];
+
+const reminderDueTemplates = [
+	(est: number, content: string) =>
+		`Your reminder has fired (estimate was ${est} rounds). Review and recalibrate:\n${content}`,
+	(est: number, content: string) =>
+		`Reminder triggered (originally set for ~${est} rounds). Check progress:\n${content}`,
+	(est: number, content: string) =>
+		`Scheduled reminder (est. ${est} rounds) — time to review:\n${content}`,
+];
+
+const turnFeedbackTemplates = [
+	(status: string, type: string, detail: string) =>
+		`Status: ${status} | Type: ${type}\n${detail}`,
+	(status: string, type: string, detail: string) =>
+		`[${status}] result_type=${type}\n${detail}`,
+	(status: string, type: string, detail: string) =>
+		`Outcome: ${status} (${type})\n${detail}`,
+];
+
+const toolArgErrorTemplates = [
+	(error: string) => `Invalid tool arguments: ${error}`,
+	(error: string) => `Tool argument validation failed: ${error}`,
+	(error: string) => `Bad tool args — ${error}`,
+];
 
 // ── tool result 分发 ──
 
@@ -55,14 +95,12 @@ function toolResultToContent(
 			return formatEditResult(msg as EditToolResult, model, msgIndex);
 		case "reminder": {
 			const estimate = msg.call.args.estimate ?? 7;
-			return wrapTag(
-				"result",
-				`Reminder set. Estimate: ${estimate} rounds for next step. A <reminder> will appear when it expires.`,
-				model,
-			);
+			const tpl = pick(reminderSetTemplates, msgIndex);
+			return wrapTag("result", tpl(estimate), model);
 		}
 		case "submit": {
-			const parts = [wrapTag("result", "Submitted successfully.", model)];
+			const text = pick(submitSuccessTemplates, msgIndex);
+			const parts = [wrapTag("result", text, model)];
 			if ("userResponse" in msg && msg.userResponse) {
 				parts.push(wrapTag("user_response", msg.userResponse, model));
 			}
@@ -134,7 +172,7 @@ export function formatPrompt(
 				});
 				break;
 
-			case "user_text":
+			case "generic_user_text":
 				result.push({
 					role: "user",
 					content: msg.content,
@@ -182,27 +220,31 @@ export function formatPrompt(
 				});
 				break;
 
-			case "idle_nudge":
+			case "idle_nudge": {
+				const tpl = pick(idleNudgeTemplates, i);
 				result.push({
 					role: "user",
 					content: wrapTag(
 						"system_warning",
-						`You replied with plain text without using any tools. You MUST use tools to make progress. Idle ${msg.idleCount}/${msg.maxIdleRounds}.`,
+						tpl(msg.idleCount, msg.maxIdleRounds),
 						modelId,
 					),
 				});
 				break;
+			}
 
-			case "reminder:due":
+			case "reminder:due": {
+				const tpl = pick(reminderDueTemplates, i);
 				result.push({
 					role: "user",
 					content: wrapTag(
 						"reminder",
-						`Your reminder has fired (estimate was ${msg.originalEstimate} rounds). Review and recalibrate:\n${msg.content}`,
+						tpl(msg.originalEstimate, msg.content),
 						modelId,
 					),
 				});
 				break;
+			}
 
 			case "submit:rejected":
 				result.push({
@@ -222,19 +264,22 @@ export function formatPrompt(
 				});
 				break;
 
-			case "turn_feedback":
+			case "turn_feedback": {
+				const tpl = pick(turnFeedbackTemplates, i);
 				result.push({
 					role: "user",
 					content: wrapTag(
 						"turn_feedback",
-						`Status: ${msg.status} | Type: ${msg.resultType}\n${msg.detail}`,
+						tpl(msg.status, msg.resultType, msg.detail),
 						modelId,
 					),
 				});
 				break;
+			}
 
 			case "tool_arg_error": {
-				let errorContent = `Invalid tool arguments: ${msg.error}`;
+				const errorTpl = pick(toolArgErrorTemplates, i);
+				let errorContent = errorTpl(msg.error);
 				if (msg.schema) {
 					errorContent += `\n\nExpected schema:\n${JSON.stringify(msg.schema, null, 2)}`;
 				}
