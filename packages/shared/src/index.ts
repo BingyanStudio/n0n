@@ -25,6 +25,8 @@ export {
 	loadConversation,
 	saveConversation,
 } from "./conversation-log/index.ts";
+// Deep parse JSON strings
+export { deepParseJsonStrings } from "./deep-parse-json-strings.ts";
 // Format Prompt
 export { formatPrompt } from "./format-prompt.ts";
 // Frontmatter
