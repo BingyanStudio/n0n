@@ -268,7 +268,7 @@ export type ReminderToolResult = ToolResultBase & {
 export type SubmitToolResult = ToolResultBase & {
 	tool: SubmitToolCall["tool"]; // "submit"
 	call: SubmitToolCall;
-	/** 经 extractSubmitResult 处理后的最终结果（有 schema 时 ≠ call.args.result） */
+	/** submit 的结果值（等于 call.args，由 schema 后验证） */
 	cleanedResult: unknown;
 	/** 用户对 submit 结果的回应（由 REPL 注入，非模型生成） */
 	userResponse?: string;
