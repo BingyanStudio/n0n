@@ -11,7 +11,7 @@
  */
 
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
-import { makeToolkit } from "@n0n/tools";
+import { DefaultSubmitSchema, makeToolkit } from "@n0n/tools";
 import type {
 	DomainMessage,
 	PartialToolCallRecord,
@@ -244,7 +244,7 @@ export async function agentLoop<T = unknown>(
 		// ── 7. Submit 检查 ──
 		const submit = checkSubmit(
 			scheduler.orderedJobs(),
-			options?.schema,
+			(options?.schema ?? DefaultSubmitSchema) as ZodType<T>,
 			submitRetries,
 			MAX_SUBMIT_RETRIES,
 		);
@@ -252,7 +252,7 @@ export async function agentLoop<T = unknown>(
 			renderer.submitAccepted();
 			return {
 				result: submit.accepted.value as T,
-				report: submit.accepted.report,
+				report: null,
 				history: messages,
 			};
 		}
