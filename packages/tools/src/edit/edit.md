@@ -20,4 +20,3 @@ edit({ path: "src/auth.ts", intent: "Replace the validateToken function with:\nf
 
 - Describe **what** to change using semantic references (function names, variable names, etc.)
 - For small changes, natural language is concise; for rewrites, provide the full new code
-- The editor agent will give you feedback if your intent can be improved
