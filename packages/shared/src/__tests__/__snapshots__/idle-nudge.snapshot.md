@@ -6,6 +6,6 @@ role: user
 
 --- content ---
 <system_warning>
-Plain text response without tool usage. Tools are required to make progress (2/5 idle rounds).
+Plain text responses are never shown to the user. To deliver information, call the submit tool. To make progress, use other tools. (2/5 idle rounds)
 </system_warning>
 ```

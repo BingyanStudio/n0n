@@ -10,11 +10,11 @@ import { pick, wrapTag } from "./utils.ts";
 
 const templates = [
 	(idle: number, max: number) =>
-		`You replied with plain text without using any tools. You MUST use tools to make progress. Idle ${idle}/${max}.`,
+		`Your previous response was plain text with no tool calls. The user CANNOT see it — only content sent via the submit tool reaches the user. You must call tools to make progress. Idle ${idle}/${max}.`,
 	(idle: number, max: number) =>
-		`No tool calls detected in your last response. Use tools to proceed — idle count: ${idle}/${max}.`,
+		`No tool calls detected. Your last message is invisible to the user; they only receive results delivered through submit. Use tools to proceed — idle count: ${idle}/${max}.`,
 	(idle: number, max: number) =>
-		`Plain text response without tool usage. Tools are required to make progress (${idle}/${max} idle rounds).`,
+		`Plain text responses are never shown to the user. To deliver information, call the submit tool. To make progress, use other tools. (${idle}/${max} idle rounds)`,
 ];
 
 export function formatIdleNudge(
