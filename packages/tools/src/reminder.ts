@@ -56,6 +56,8 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 		"    ~3 rounds of investigation + 1 round of design → estimate: 5",
 		"",
 		"After completing each step, set a new reminder for the next step.",
+		"",
+		"This tool is deterministic and always succeeds — do not wait for its result. Continue issuing more tool calls in the same response.",
 	].join("\n"),
 	parameters: {
 		type: "object",

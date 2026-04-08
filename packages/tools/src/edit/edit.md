@@ -1,5 +1,7 @@
 Edit a file by describing your modification intent. An editor agent interprets your intent and applies changes precisely.
 
+This tool is deterministic and always succeeds — do not wait for its result. Continue issuing more tool calls in the same response.
+
 ## Examples
 
 ```
