@@ -28,7 +28,6 @@ function submitPair(
 	id: string,
 	args: SubmitCallArgs,
 ): [DomainMessage, DomainMessage] {
-	const { report, ...cleanedResult } = args;
 	const call = { id, tool: "submit" as const, args: args as any };
 	return [
 		{
@@ -42,7 +41,7 @@ function submitPair(
 			type: "tool_result",
 			tool: "submit" as const,
 			call,
-			cleanedResult,
+			cleanedResult: args,
 			userResponse: undefined,
 		} as DomainMessage,
 	];

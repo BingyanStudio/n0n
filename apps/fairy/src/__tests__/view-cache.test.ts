@@ -71,7 +71,7 @@ function makeQuickRound(i: number): DomainMessage[] {
 			call: {
 				id: `s-${i}`,
 				tool: "submit",
-				args: { result: { reply: "..." } },
+				args: { reply: "..." },
 			},
 			cleanedResult: { reply: "..." },
 		} satisfies SubmitToolResult,
@@ -168,7 +168,7 @@ function makeHeavyToolRound(i: number): DomainMessage[] {
 			call: {
 				id: `s-${i}`,
 				tool: "submit",
-				args: { result: { reply: "..." } },
+				args: { reply: "..." },
 			},
 			cleanedResult: { reply: "..." },
 		} satisfies SubmitToolResult,
