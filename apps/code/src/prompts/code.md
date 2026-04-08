@@ -71,22 +71,6 @@ Your workflow: **read → implement → verify → iterate**.
 - Submit results via the `submit` tool, which supports three types: `completed` (task done, with summary and optional next-step suggestions), `ask_user` (need user decision, provide 2–4 specific options), `request_assist` (need user to check something, provide a checklist).
 
 <example>
-Task: edit two files and run tests
-
-<bad_example>
-Response 1: [edit file_a.ts] → wait for result
-Response 2: [edit file_b.ts] → wait for result
-Response 3: [exec bun test]
-→ Three round trips for independent operations
-</bad_example>
-
-<good_example>
-Response 1: [edit file_a.ts] + [edit file_b.ts] + [write file_c.ts] + [exec bun test]
-→ One response, the system auto-sequences dependent operations
-</good_example>
-</example>
-
-<example>
 Task: "分析 src 目录的代码结构"
 
 <bad_example>
