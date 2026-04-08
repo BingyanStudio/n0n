@@ -82,6 +82,19 @@ def main():
         # 直接传入即可，模板会 tojson 序列化
         pass
 
+    # Pre-process: parse stringified tool_call arguments back to dicts.
+    # OpenAI format uses JSON strings for arguments, but Jinja templates
+    # (Qwen, GLM) iterate over them as dicts.
+    for msg in request_data["messages"]:
+        if msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                fn = tc.get("function", tc)
+                if isinstance(fn.get("arguments"), str):
+                    try:
+                        fn["arguments"] = json.loads(fn["arguments"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
     rendered = template.render(
         messages=request_data["messages"],
         tools=tools_for_template,
