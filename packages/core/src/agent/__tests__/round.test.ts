@@ -319,4 +319,75 @@ describe("checkSubmit", () => {
 		expect(result.gaveUp).toBeDefined();
 		expect(result.gaveUp!.error).toContain("schema");
 	});
+
+	it("嵌套 JSON 字符串字段 → 自动解析后通过校验", () => {
+		const schema = z.object({
+			type: z.literal("ask_user"),
+			question: z.string(),
+			options: z.array(z.object({
+				choice: z.string(),
+				affect: z.string(),
+			})),
+		});
+		const raw = {
+			type: "ask_user",
+			question: "Pick one",
+			options: '[{"choice":"A","affect":"do A"},{"choice":"B","affect":"do B"}]',
+		};
+		const submitTc = {
+			id: "sub_1",
+			tool: "submit",
+			args: raw,
+		} as ToolCallRecord;
+		const submitResult = mockSubmitResult(raw);
+		const jobs = [mockJob(submitTc, submitResult)];
+
+		const result = checkSubmit(jobs, schema, 0, 4);
+		expect(result.accepted).toBeDefined();
+		expect((result.accepted!.value as any).options).toBeArrayOfSize(2);
+		expect((result.accepted!.value as any).options[0].choice).toBe("A");
+	});
+
+	it("多层嵌套 JSON 字符串 → 递归解析", () => {
+		const schema = z.object({
+			type: z.literal("request_assist"),
+			content: z.string(),
+			checklist: z.array(z.object({
+				label: z.string(),
+				detail: z.string().optional(),
+			})),
+		});
+		const raw = {
+			type: "request_assist",
+			content: "Need help",
+			checklist: '[{"label":"Step 1","detail":"Do this"},{"label":"Step 2"}]',
+		};
+		const submitTc = {
+			id: "sub_1",
+			tool: "submit",
+			args: raw,
+		} as ToolCallRecord;
+		const submitResult = mockSubmitResult(raw);
+		const jobs = [mockJob(submitTc, submitResult)];
+
+		const result = checkSubmit(jobs, schema, 0, 4);
+		expect(result.accepted).toBeDefined();
+		expect((result.accepted!.value as any).checklist).toBeArrayOfSize(2);
+	});
+
+	it("非 JSON 字符串值不受影响", () => {
+		const schema = z.object({ answer: z.string() });
+		const raw = { answer: "just a plain string" };
+		const submitTc = {
+			id: "sub_1",
+			tool: "submit",
+			args: raw,
+		} as ToolCallRecord;
+		const submitResult = mockSubmitResult(raw);
+		const jobs = [mockJob(submitTc, submitResult)];
+
+		const result = checkSubmit(jobs, schema, 0, 4);
+		expect(result.accepted).toBeDefined();
+		expect((result.accepted!.value as any).answer).toBe("just a plain string");
+	});
 });

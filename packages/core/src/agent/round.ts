@@ -12,6 +12,7 @@ import type {
 	StreamAccumulator,
 	ToolCallRecord,
 } from "@n0n/types";
+import { deepParseJsonStrings } from "@n0n/shared";
 import type { PipelineJob } from "./scheduler.ts";
 import type { StreamingResult } from "./streaming.ts";
 import {
@@ -100,7 +101,8 @@ export function checkSubmit<T>(
 			return { accepted: { value: job.result.cleanedResult } };
 		}
 
-		const parsed = schema.safeParse(job.result.cleanedResult);
+		const cleaned = deepParseJsonStrings(job.result.cleanedResult);
+		const parsed = schema.safeParse(cleaned);
 		if (parsed.success) {
 			return { accepted: { value: parsed.data } };
 		}
