@@ -137,7 +137,7 @@ export function makeExecToolDefinition(
 				timeout: {
 					type: "number",
 					description:
-						"Timeout in seconds (default: 120). Process continues in background if exceeded.",
+						"Timeout in seconds (default: 120, max: 240). Process continues in background if exceeded.",
 				},
 			},
 			required: ["script"],

@@ -17,7 +17,8 @@ export const ExecArgsSchema = z.object({
 	script: z.string(),
 	runtime: z.string().optional(),
 	cwd: z.string().optional(),
-	timeout: z.number().optional(),
+	// prompt cache 的 TTL 为 5 分钟，超时过长会导致缓存失效
+	timeout: z.number().max(240).optional(),
 });
 export type ExecArgs = z.infer<typeof ExecArgsSchema>;
 
