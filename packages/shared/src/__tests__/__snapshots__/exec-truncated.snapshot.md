@@ -8,14 +8,14 @@ toolName: exec
 
 --- content ---
 <exec_meta>
-[sh] [cwd: .] [exit: 0] [320ms] [output truncated → .temp/exec_output_tc_3.txt]
+(sh) . | exit 0 | 320ms | truncated to .temp/exec_output_tc_3.txt
 </exec_meta>
-<stdout>
+<output>
 ... (last 4 of 850 lines)
 ./src/exec/executor.ts
 ./src/exec/security.ts
 ./src/types/domain.ts
-</stdout>
+</output>
 <output_hint>
 Full output (850 lines) written to: .temp/exec_output_tc_3.txt
 Use exec to read specific parts: grep, sed, head, tail, or bun script.

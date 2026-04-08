@@ -6,6 +6,6 @@ role: user
 
 --- content ---
 <system_warning>
-You replied with plain text without using any tools. You MUST use tools to make progress. Idle 2/5.
+Plain text response without tool usage. Tools are required to make progress (2/5 idle rounds).
 </system_warning>
 ```

@@ -6,6 +6,6 @@ role: user
 
 --- content ---
 <submit_rejected>
-Submit rejected (attempt 1/4): Missing required field: summary
+Invalid submission (try 1 of 4) — Missing required field: summary
 </submit_rejected>
 ```

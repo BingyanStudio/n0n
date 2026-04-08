@@ -8,7 +8,7 @@ toolName: exec
 
 --- content ---
 <exec_meta>
-[unknown] [cwd: .] [exit: 1] [5ms]
+(unknown) . | exit 1 | 5ms
 </exec_meta>
 <stderr>
 cat: missing.txt: No such file or directory

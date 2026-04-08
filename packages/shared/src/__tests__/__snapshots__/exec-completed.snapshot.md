@@ -8,11 +8,11 @@ toolName: exec
 
 --- content ---
 <exec_meta>
-[sh] [cwd: src] [exit: 0] [12ms]
+(sh) src | exit 0 | 12ms
 </exec_meta>
-<stdout>
+<output>
 hello
 index.ts
 utils.ts
-</stdout>
+</output>
 ```

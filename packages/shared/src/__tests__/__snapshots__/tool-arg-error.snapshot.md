@@ -8,7 +8,7 @@ toolName: exec
 
 --- content ---
 <error>
-Invalid tool arguments: script: Required
+Bad tool args — script: Required
 
 Expected schema:
 {

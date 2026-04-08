@@ -8,7 +8,7 @@ toolName: exec
 
 --- content ---
 <exec_meta>
-[unknown] [cwd: .] [timed out after 30003ms]
+(unknown) . | timed out | 30003ms
 </exec_meta>
 <timeout_notice>
 Process exceeded timeout, moved to background.
@@ -16,8 +16,8 @@ PID: 65432
 Log file: .temp/exec_bg_65432.log
 Read the log file later to check process status.
 </timeout_notice>
-<stdout>
+<output>
 npm warn deprecated inflight@1.0.6
 added 142 packages in 28s
-</stdout>
+</output>
 ```

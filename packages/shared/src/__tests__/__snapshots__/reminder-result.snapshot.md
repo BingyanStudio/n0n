@@ -8,6 +8,6 @@ toolName: reminder
 
 --- content ---
 <result>
-Reminder set. Estimate: 3 rounds for next step. A <reminder> will appear when it expires.
+Got it — reminder scheduled, estimated 3 rounds out. A <reminder> tag will notify you.
 </result>
 ```

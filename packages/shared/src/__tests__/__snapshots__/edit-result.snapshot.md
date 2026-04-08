@@ -8,7 +8,7 @@ toolName: edit
 
 --- content ---
 <edit_result>
-Edited `src/auth.ts`:
+Updated `src/auth.ts`:
   const user = getUser();
   if (!user) return null;
   return user.name;

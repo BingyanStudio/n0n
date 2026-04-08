@@ -8,6 +8,6 @@ toolName: write
 
 --- content ---
 <write_result>
-Written to `src/config.ts`
+`src/config.ts` created successfully
 </write_result>
 ```
