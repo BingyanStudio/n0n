@@ -47,8 +47,6 @@ export type ReminderArgs = z.infer<typeof ReminderArgsSchema>;
 
 // ── submit ──
 
-export const SubmitArgsSchema = z.object({
-	result: z.unknown(),
-	report: z.string().optional(),
-});
+/** submit 参数不约束具体结构，由各场景的 schema 在后验证阶段校验 */
+export const SubmitArgsSchema = z.record(z.string(), z.unknown());
 export type SubmitArgs = z.infer<typeof SubmitArgsSchema>;

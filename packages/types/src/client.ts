@@ -68,7 +68,7 @@ export interface ToolDefinition {
 	description: string;
 	parameters: {
 		type: "object";
-		properties: Record<string, unknown>;
+		properties?: Record<string, unknown>;
 		required?: string[];
 		additionalProperties?: false;
 	};

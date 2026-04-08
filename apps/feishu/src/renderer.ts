@@ -47,7 +47,7 @@ function fmtToolCall(tc: ToolCallRecord): { summary: string; detail: string } {
 			summary = `▸ **write**  ${compact(tc.args.path, 80)}`;
 			break;
 		case "submit":
-			summary = `▸ **submit**  ${compact(json(tc.args.result), 60)}`;
+			summary = `▸ **submit**  ${compact(json(tc.args), 60)}`;
 			break;
 		case "reminder":
 			summary = `▸ **reminder**  ${compact(tc.args.content, 60)}`;

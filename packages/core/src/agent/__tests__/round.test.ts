@@ -60,8 +60,7 @@ function mockJob(
 }
 
 function mockSubmitResult(
-	cleanedResult: unknown,
-	report?: string,
+	cleanedResult: Record<string, unknown>,
 ): SubmitToolResult {
 	return {
 		type: "tool_result",
@@ -69,7 +68,7 @@ function mockSubmitResult(
 		call: {
 			id: "sub_1",
 			tool: "submit",
-			args: { result: cleanedResult, report: report ?? null },
+			args: cleanedResult,
 		},
 		cleanedResult,
 	} as SubmitToolResult;
@@ -265,15 +264,14 @@ describe("checkSubmit", () => {
 		const submitTc = {
 			id: "sub_1",
 			tool: "submit",
-			args: { result: { answer: 42 }, report: "done" },
+			args: { answer: 42 },
 		} as ToolCallRecord;
-		const submitResult = mockSubmitResult({ answer: 42 }, "done");
+		const submitResult = mockSubmitResult({ answer: 42 });
 		const jobs = [mockJob(submitTc, submitResult)];
 
 		const result = checkSubmit(jobs, undefined, 0, 4);
 		expect(result.accepted).toBeDefined();
 		expect(result.accepted!.value).toEqual({ answer: 42 });
-		expect(result.accepted!.report).toBe("done");
 	});
 
 	it("有 schema，校验通过 → accepted", () => {
@@ -281,7 +279,7 @@ describe("checkSubmit", () => {
 		const submitTc = {
 			id: "sub_1",
 			tool: "submit",
-			args: { result: { answer: 42 } },
+			args: { answer: 42 },
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: 42 });
 		const jobs = [mockJob(submitTc, submitResult)];
@@ -296,7 +294,7 @@ describe("checkSubmit", () => {
 		const submitTc = {
 			id: "sub_1",
 			tool: "submit",
-			args: { result: { answer: "not a number" } },
+			args: { answer: "not a number" },
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: "not a number" });
 		const jobs = [mockJob(submitTc, submitResult)];
@@ -312,7 +310,7 @@ describe("checkSubmit", () => {
 		const submitTc = {
 			id: "sub_1",
 			tool: "submit",
-			args: { result: { answer: "bad" } },
+			args: { answer: "bad" },
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: "bad" });
 		const jobs = [mockJob(submitTc, submitResult)];

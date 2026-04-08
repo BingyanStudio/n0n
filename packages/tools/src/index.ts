@@ -49,7 +49,6 @@ import {
 } from "./reminder.ts";
 import {
 	makeSubmitToolDefinition,
-	SubmitArgsSchema,
 	submitTool,
 } from "./submit.ts";
 import {
@@ -212,19 +211,16 @@ export async function makeToolkit(
 ): Promise<Toolkit> {
 	const env = await detectEnv();
 	const execToolDef = makeExecToolDefinition(env, model);
-	const hasSchema = !!schema;
-
 	const submitEntry: ToolEntry = {
 		definition: makeSubmitToolDefinition(schema),
 		stream: false,
 		execute: (tc) => {
-			const parsedArgs = hasSchema ? tc.args : SubmitArgsSchema.parse(tc.args);
 			const call: SubmitToolCall = {
 				id: tc.id,
 				tool: "submit" as const,
-				args: parsedArgs as SubmitArgs,
+				args: tc.args as SubmitArgs,
 			};
-			return submitTool(call, hasSchema);
+			return submitTool(call);
 		},
 	};
 
@@ -248,3 +244,4 @@ export type { ToolsConfig, ResponsesClient } from "./config.ts";
 export type { EnvSnapshot, RuntimeProbe } from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";
+export { DefaultSubmitSchema } from "./submit.ts";

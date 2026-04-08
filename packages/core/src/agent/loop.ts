@@ -252,7 +252,7 @@ export async function agentLoop<T = unknown>(
 			renderer.submitAccepted();
 			return {
 				result: submit.accepted.value as T,
-				report: submit.accepted.report,
+				report: null,
 				history: messages,
 			};
 		}

@@ -115,11 +115,7 @@ function extractPathLines(messages: DomainMessage[]): string[] {
 				if (tc.tool === "reminder") {
 					lines.push(`[progress] ${tc.args.content}`);
 				} else if (tc.tool === "submit") {
-					const result = tc.args.result as
-						| { reply?: string }
-						| null
-						| undefined;
-					const reply = result?.reply;
+					const reply = (tc.args as { reply?: string })?.reply;
 					if (reply) {
 						lines.push(`[fairy] ${reply}`);
 					}

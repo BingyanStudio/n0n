@@ -80,7 +80,7 @@ import { toJSONSchema } from "zod";
 
 export interface SubmitCheckResult {
 	/** submit 校验通过的值 */
-	accepted?: { value: unknown; report: string | null };
+	accepted?: { value: unknown };
 	/** submit 校验失败的错误 */
 	rejected?: { error: string; retries: number };
 	/** 已达最大重试次数 */
@@ -97,22 +97,12 @@ export function checkSubmit<T>(
 		if (!job.result || job.result.tool !== "submit") continue;
 
 		if (!schema) {
-			return {
-				accepted: {
-					value: job.result.cleanedResult as T,
-					report: job.result.call.args.report ?? null,
-				},
-			};
+			return { accepted: { value: job.result.cleanedResult } };
 		}
 
 		const parsed = schema.safeParse(job.result.cleanedResult);
 		if (parsed.success) {
-			return {
-				accepted: {
-					value: parsed.data,
-					report: job.result.call.args.report ?? null,
-				},
-			};
+			return { accepted: { value: parsed.data } };
 		}
 
 		const issues = parsed.error.issues
