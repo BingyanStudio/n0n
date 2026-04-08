@@ -14,7 +14,7 @@ import type { DomainMessage, PromptMessage } from "@n0n/types";
 import { formatPrompt } from "../format-prompt/index.ts";
 
 const MODEL = "claude-sonnet-4-20250514";
-const SNAPSHOT_DIR = "packages/shared/src/__tests__/__snapshots__";
+const SNAPSHOT_DIR = join(import.meta.dir, "__snapshots__");
 
 mkdirSync(SNAPSHOT_DIR, { recursive: true });
 
