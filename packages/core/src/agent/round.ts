@@ -89,12 +89,16 @@ export interface SubmitCheckResult {
 
 export function checkSubmit<T>(
 	jobs: readonly PipelineJob[],
-	schema: ZodType<T>,
+	schema: ZodType<T> | undefined,
 	currentRetries: number,
 	maxRetries: number,
 ): SubmitCheckResult {
 	for (const job of jobs) {
 		if (!job.result || job.result.tool !== "submit") continue;
+
+		if (!schema) {
+			return { accepted: { value: job.result.cleanedResult } };
+		}
 
 		const parsed = schema.safeParse(job.result.cleanedResult);
 		if (parsed.success) {

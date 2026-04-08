@@ -254,24 +254,24 @@ describe("checkSubmit", () => {
 	it("无 submit 调用 → 空结果", () => {
 		const tc = mockExecTC("tc_1");
 		const jobs = [mockJob(tc, mockExecResult(tc))];
-		const result = checkSubmit(jobs, z.object({ report: z.string() }), 0, 4);
+		const result = checkSubmit(jobs, undefined, 0, 4);
 		expect(result.accepted).toBeUndefined();
 		expect(result.rejected).toBeUndefined();
 		expect(result.gaveUp).toBeUndefined();
 	});
 
-	it("默认 schema → accepted", () => {
+	it("无 schema → 直接 accepted", () => {
 		const submitTc = {
 			id: "sub_1",
 			tool: "submit",
-			args: { report: "done" },
+			args: { answer: 42 },
 		} as ToolCallRecord;
-		const submitResult = mockSubmitResult({ report: "done" });
+		const submitResult = mockSubmitResult({ answer: 42 });
 		const jobs = [mockJob(submitTc, submitResult)];
 
-		const result = checkSubmit(jobs, z.object({ report: z.string() }), 0, 4);
+		const result = checkSubmit(jobs, undefined, 0, 4);
 		expect(result.accepted).toBeDefined();
-		expect(result.accepted!.value).toEqual({ report: "done" });
+		expect(result.accepted!.value).toEqual({ answer: 42 });
 	});
 
 	it("有 schema，校验通过 → accepted", () => {
