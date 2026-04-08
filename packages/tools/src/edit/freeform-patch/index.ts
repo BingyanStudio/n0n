@@ -39,7 +39,7 @@ export interface ResponsesClient {
 	): Promise<ResponsesResult | { error: string }>;
 }
 
-const MAX_ROUNDS = 5;
+const MAX_ROUNDS = 25;
 
 export class FreeformPatchBackend implements EditBackend {
 	readonly name = "freeform-patch";
