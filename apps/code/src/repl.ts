@@ -21,6 +21,7 @@ import {
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { CodeRenderer } from "./code-renderer.ts";
 import codePromptText from "./prompts/code.md" with { type: "text" };
+import { buildFewshotMessages } from "./fewshot.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
 export interface CodeReplOptions {
@@ -272,11 +273,11 @@ export async function startCodeRepl(
 			writeln(style.gray("  将以全新对话启动。"));
 			writeln();
 			userInput = initialInput ?? (await promptUser());
-			history = [{ type: "system", content: systemPrompt }];
+			history = [{ type: "system", content: systemPrompt }, ...buildFewshotMessages()];
 		}
 	} else {
 		userInput = initialInput ?? (await promptUser());
-		history = [{ type: "system", content: systemPrompt }];
+		history = [{ type: "system", content: systemPrompt }, ...buildFewshotMessages()];
 	}
 
 	while (true) {

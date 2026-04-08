@@ -14,6 +14,7 @@ import { resolve } from "node:path";
 
 import codePromptText from "../apps/code/src/prompts/code.md" with { type: "text" };
 import { CodeResultSchema } from "../apps/code/src/schema.ts";
+import { buildFewshotMessages } from "../apps/code/src/fewshot.ts";
 
 // ── 参数 ──
 
@@ -87,6 +88,7 @@ function gatherContextSync(): string | null {
 
 const domainMessages: DomainMessage[] = [
 	{ type: "system", content: systemPrompt },
+	...buildFewshotMessages(),
 	{
 		type: "user_input",
 		content: userArg!,

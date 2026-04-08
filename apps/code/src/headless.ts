@@ -15,6 +15,7 @@ import {
 } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
+import { buildFewshotMessages } from "./fewshot.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
 export interface HeadlessOptions {
@@ -131,6 +132,7 @@ export async function runHeadless(
 
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
+		...buildFewshotMessages(),
 		{
 			type: "user_input",
 			content: instruction,
