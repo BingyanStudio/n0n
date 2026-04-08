@@ -38,7 +38,7 @@ export async function generate<T = unknown>(
 			content: GENERATE_SYSTEM_PROMPT,
 		},
 		{
-			type: "user_text",
+			type: "generic_user_text",
 			content: instruction,
 		},
 	];

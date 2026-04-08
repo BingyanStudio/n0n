@@ -43,7 +43,7 @@ const scenarios: Scenario[] = [
 	{
 		file: "user-text",
 		title: "user_text 消息",
-		messages: [{ type: "user_text", content: "Hello, help me fix this bug." }],
+		messages: [{ type: "generic_user_text", content: "Hello, help me fix this bug." }],
 	},
 	{
 		file: "user-input",

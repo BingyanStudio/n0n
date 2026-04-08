@@ -94,7 +94,7 @@ const testLLM = async () => {
 		try {
 			// 流式调用 — 收到首个有效事件即判定连接正常，立即中断节省 token
 			for await (const event of client.stream(
-				{ messages: [{ type: "user_text", content: "hi" }] },
+				{ messages: [{ type: "generic_user_text", content: "hi" }] },
 				controller.signal,
 			)) {
 				if (event.type === "error") {

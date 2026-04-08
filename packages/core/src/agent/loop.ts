@@ -344,7 +344,7 @@ function classifyRound(
 			reasoningSignature: result.accumulator.reasoningSignature || undefined,
 		});
 		messages.push({
-			type: "user_text",
+			type: "generic_user_text",
 			content:
 				"Your previous response was truncated due to max_tokens limit. Please retry with a shorter response, or break the task into smaller steps.",
 		});

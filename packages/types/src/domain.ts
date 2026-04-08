@@ -10,7 +10,7 @@
  * 4. 可持久化/可重放 — 纯数据结构天然支持序列化、存储和测试回放。
  *
  * 反例（禁止）：
- *   messages.push({ type: "user_text", content: `⏰ REMINDER: ${r.content}\n\n⚠️ ...` });
+ *   messages.push({ type: "generic_user_text", content: `⏰ REMINDER: ${r.content}\n\n⚠️ ...` });
  *   // ❌ 将提示词混入 DomainMessage
  *
  * 正例：
@@ -26,7 +26,7 @@ export interface GenericSystemMessage {
 
 // ── 通用用户文本消息 ──
 export interface GenericUserTextMessage {
-	type: "user_text";
+	type: "generic_user_text";
 	content: string;
 }
 

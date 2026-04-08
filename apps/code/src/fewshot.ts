@@ -53,7 +53,7 @@ function submitPair(
 function scenario1_parallelCalls(): DomainMessage[] {
 	return [
 		{
-			type: "user_text",
+			type: "generic_user_text",
 			content: [
 				"<system-reminder>",
 				"Below is a practice scenario. Demonstrate the correct tool-calling pattern, then submit the result.",
@@ -180,7 +180,7 @@ function scenario1_parallelCalls(): DomainMessage[] {
 function scenario2_scriptOverShell(): DomainMessage[] {
 	return [
 		{
-			type: "user_text",
+			type: "generic_user_text",
 			content: [
 				"<system-reminder>",
 				"Project context:",

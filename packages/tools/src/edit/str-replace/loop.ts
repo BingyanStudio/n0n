@@ -131,7 +131,7 @@ export async function editorLoop(
 	const messages: DomainMessage[] = [
 		{ type: "system", content: prompt },
 		{
-			type: "user_text",
+			type: "generic_user_text",
 			content: [
 				"<source_file>",
 				source,

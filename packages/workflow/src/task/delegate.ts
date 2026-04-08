@@ -58,7 +58,7 @@ export async function delegateTask<T = unknown>(
 						"You are a consultant. Provide concise, actionable advice. Use submit to deliver your advice.",
 				},
 				{
-					type: "user_text",
+					type: "generic_user_text",
 					content: [
 						`I want to accomplish: "${query}"`,
 						"",
@@ -134,7 +134,7 @@ export async function delegateTask<T = unknown>(
 
 	const history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
-		{ type: "user_text", content: enrichedPrompt },
+		{ type: "generic_user_text", content: enrichedPrompt },
 	];
 
 	const result = await agentLoop(history, {

@@ -333,7 +333,7 @@ if (import.meta.main) {
 			const timeout = setTimeout(() => controller.abort(), 15_000);
 			try {
 				for await (const event of client.stream(
-					{ messages: [{ type: "user_text", content: "hi" }] },
+					{ messages: [{ type: "generic_user_text", content: "hi" }] },
 					controller.signal,
 				)) {
 					if (event.type === "error") {
