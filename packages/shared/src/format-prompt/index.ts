@@ -25,6 +25,7 @@ import { formatWriteResult } from "./format-write.ts";
 import { formatEditResult } from "./format-edit.ts";
 import { formatReminderResult } from "./format-reminder.ts";
 import { formatSubmitResult } from "./format-submit.ts";
+import { formatSubmitRejected } from "./format-submit-rejected.ts";
 import { formatIdleNudge } from "./format-idle-nudge.ts";
 import { formatReminderDue } from "./format-reminder-due.ts";
 import { formatTurnFeedback } from "./format-turn-feedback.ts";
@@ -173,11 +174,7 @@ export function formatPrompt(
 			case "submit:rejected":
 				result.push({
 					role: "user",
-					content: wrapTag(
-						"submit_rejected",
-						`Submit rejected (attempt ${msg.attempt}/${msg.maxAttempts}): ${msg.error}`,
-						modelId,
-					),
+					content: formatSubmitRejected(msg, modelId, i),
 				});
 				break;
 
