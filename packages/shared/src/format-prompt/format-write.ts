@@ -3,12 +3,7 @@
  */
 
 import type { WriteToolResult } from "@n0n/types";
-import { wrapTagFor } from "../tags.ts";
-import { pick } from "./seed.ts";
-
-function wrapTag(name: string, content: string, model: string): string {
-	return wrapTagFor(name, content, model);
-}
+import { pick, wrapTag } from "./utils.ts";
 
 // ── 变体模板 ──
 
@@ -75,6 +70,7 @@ export function formatWriteResult(
 			const _exhaustive: never = msg;
 			return wrapTag(
 				"error",
+				// biome-ignore lint/suspicious/noExplicitAny: exhaustive switch default
 				`Unknown write status: ${(msg as any).status}`,
 				model,
 			);
