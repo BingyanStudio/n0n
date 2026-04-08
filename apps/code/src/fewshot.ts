@@ -1,22 +1,55 @@
 /**
  * fewshot — 预填充对话示例
  *
- * 构造一组真实格式的 DomainMessage，注入到对话历史的 system 消息之后、
- * 用户首条消息之前。模型看到"自己曾经"正确使用工具的记录，
+ * 构造真实格式的 DomainMessage 序列，注入到 system 消息之后、
+ * 用户首条消息之前。模型看到"自己曾经"正确使用工具的完整记录，
  * 在后续交互中会自然复现这些模式。
  *
- * 每个教学场景由 <system-reminder> 包裹的情景设定 + 模拟的用户请求组成，
- * assistant 展示正确的工具调用方式，收到结果后进入下一个场景。
+ * 每个教学场景：
+ * 1. <system-reminder> 设定虚构的项目背景（文件结构、git 状态等）
+ * 2. 一个贴近真实的用户请求（不是直白的指令，而是需要 agent 判断的任务描述）
+ * 3. assistant 展示正确的工具调用模式
+ * 4. 以 submit 结束（遵守真实流程）
  *
  * 设计原则：
- * - 示例内容足够通用（不涉及真实项目文件），避免模型与后续任务混淆
- * - <system-reminder> 块明确标记教学边界，模型不会回复该块的内容
- * - 复用现有 DomainMessage 类型，不引入新的消息结构
+ * - 场景要有足够的上下文（虚构的项目状态），让模型学到"在什么条件下做什么"
+ * - 用户请求贴近真实（模糊、间接），而非直白的操作指令
+ * - 所有回合以 submit 结束，不用纯文本回复
+ * - 复用现有 DomainMessage 类型，不引入新结构
  */
 
 import type { DomainMessage } from "@n0n/types";
+// submit 在 schema 模式下 args 直接是 CodeResult 的字段（非 SubmitArgs），
+// 类型系统无法表达这种运行时多态，用 Record<string, unknown> 绕过。
+type SubmitCallArgs = Record<string, unknown>;
+
+/** 构造 submit 工具调用 + 结果的消息对 */
+function submitPair(
+	id: string,
+	args: SubmitCallArgs,
+): [DomainMessage, DomainMessage] {
+	const { report, ...cleanedResult } = args;
+	const call = { id, tool: "submit" as const, args: args as any };
+	return [
+		{
+			type: "assistant_tool_call",
+			content: null,
+			reasoning: null,
+			reasoningSignature: null,
+			toolCalls: [call],
+		},
+		{
+			type: "tool_result",
+			tool: "submit" as const,
+			call,
+			cleanedResult,
+			userResponse: undefined,
+		} as DomainMessage,
+	];
+}
 
 // ── 场景 1: 并行调用多个工具 ──
+// 教学重点: write/edit 是确定性工具，不需要等待结果，一次性发出所有调用
 
 function scenario1_parallelCalls(): DomainMessage[] {
 	return [
@@ -24,18 +57,24 @@ function scenario1_parallelCalls(): DomainMessage[] {
 			type: "user_text",
 			content: [
 				"<system-reminder>",
-				"Below is a practice scenario. Demonstrate the correct tool-calling pattern, then move on.",
+				"Below is a practice scenario. Demonstrate the correct tool-calling pattern, then submit the result.",
 				"",
-				"Scenario: The user asks you to do three independent things at once.",
-				"Key point: issue all tool calls in a single response — write and edit are deterministic and never need to be awaited.",
+				"Project context:",
+				"- TypeScript project with bun runtime",
+				"- src/config.ts has a typo on line 12: `enabled: treu` should be `enabled: true`",
+				"- src/utils/ directory exists but has no index.ts barrel file yet",
+				"- Tests are in src/__tests__/, runnable with `bun test`",
+				"",
+				"Scenario: The user reports a bug and asks for a quick fix. The task involves creating a file, editing another, and verifying — all independent of each other.",
+				"Key point: issue all independent tool calls in a single response. write and edit are deterministic — do not wait for their results.",
 				"</system-reminder>",
 				"",
-				"Create a hello.ts file, fix the typo in config.ts, and run the tests.",
+				"config.ts 里有个拼写错误导致测试挂了，顺便帮我给 utils 加个 barrel file。",
 			].join("\n"),
 		},
 		{
 			type: "assistant_tool_call",
-			content: "I'll handle all three at once.",
+			content: null,
 			reasoning: null,
 			reasoningSignature: null,
 			toolCalls: [
@@ -43,23 +82,27 @@ function scenario1_parallelCalls(): DomainMessage[] {
 					id: "fs_1",
 					tool: "write" as const,
 					args: {
-						path: "hello.ts",
-						content:
-							'export function hello() {\n  return "Hello, world!";\n}\n',
+						path: "src/utils/index.ts",
+						content: [
+							'export { formatDate } from "./format-date.ts";',
+							'export { parseConfig } from "./parse-config.ts";',
+							"",
+						].join("\n"),
 					},
 				},
 				{
 					id: "fs_2",
 					tool: "edit" as const,
 					args: {
-						path: "config.ts",
-						intent: "Fix the typo: change 'treu' to 'true'",
+						path: "src/config.ts",
+						intent:
+							"Fix typo on line 12: change `enabled: treu` to `enabled: true`",
 					},
 				},
 				{
 					id: "fs_3",
 					tool: "exec" as const,
-					args: { script: "bun test", runtime: "cmd" },
+					args: { script: "bun test" },
 				},
 			],
 		},
@@ -70,9 +113,12 @@ function scenario1_parallelCalls(): DomainMessage[] {
 				id: "fs_1",
 				tool: "write" as const,
 				args: {
-					path: "hello.ts",
-					content:
-						'export function hello() {\n  return "Hello, world!";\n}\n',
+					path: "src/utils/index.ts",
+					content: [
+						'export { formatDate } from "./format-date.ts";',
+						'export { parseConfig } from "./parse-config.ts";',
+						"",
+					].join("\n"),
 				},
 			},
 			status: "completed" as const,
@@ -84,17 +130,18 @@ function scenario1_parallelCalls(): DomainMessage[] {
 				id: "fs_2",
 				tool: "edit" as const,
 				args: {
-					path: "config.ts",
-					intent: "Fix the typo: change 'treu' to 'true'",
+					path: "src/config.ts",
+					intent:
+						"Fix typo on line 12: change `enabled: treu` to `enabled: true`",
 				},
 			},
 			diff: {
 				chunks: [
 					{
-						startLine: 3,
-						endLine: 3,
+						startLine: 12,
+						endLine: 12,
 						lines: [
-							{ line: 3, content: "  enabled: true,", changed: true },
+							{ line: 12, content: "  enabled: true,", changed: true },
 						],
 					},
 				],
@@ -113,23 +160,23 @@ function scenario1_parallelCalls(): DomainMessage[] {
 			call: {
 				id: "fs_3",
 				tool: "exec" as const,
-				args: { script: "bun test", runtime: "cmd" },
+				args: { script: "bun test" },
 			},
 			status: "completed" as const,
 			exitCode: 0,
-			stdout: "bun test v1.0\n3 tests passed",
+			stdout: "bun test v1.2\n  src/__tests__/config.test.ts:\n    (pass) loads default config [2.1ms]\n    (pass) validates required fields [0.8ms]\n  2 pass | 0 fail",
 			stderr: "",
-			durationMs: 450,
+			durationMs: 340,
 		} satisfies DomainMessage,
-		{
-			type: "assistant_text",
-			content:
-				"All done. Created hello.ts, fixed the typo in config.ts, and all 3 tests pass.",
-		},
+		...submitPair("fs_s1", {
+			type: "completed",
+			summary: "修复了 src/config.ts 第 12 行的拼写错误（treu → true），创建了 src/utils/index.ts barrel file 导出现有模块。测试全部通过。",
+		}),
 	];
 }
 
 // ── 场景 2: 用脚本替代多次 shell 调用 ──
+// 教学重点: 数据处理任务用一个脚本内聚完成，不要逐条发 shell 命令
 
 function scenario2_scriptOverShell(): DomainMessage[] {
 	return [
@@ -137,11 +184,15 @@ function scenario2_scriptOverShell(): DomainMessage[] {
 			type: "user_text",
 			content: [
 				"<system-reminder>",
-				"Scenario: The user asks for project analysis that would require reading many files.",
-				"Key point: write one script that does all the processing internally, instead of issuing many separate shell commands.",
+				"Project context:",
+				"- Monorepo with packages/ and apps/ directories, ~80 TypeScript source files",
+				"- No existing analysis scripts",
+				"",
+				"Scenario: The user wants to understand the codebase structure before starting work.",
+				"Key point: write one script that processes and summarizes data internally, instead of chaining many shell commands. Output should be pre-processed — do not dump raw output into context.",
 				"</system-reminder>",
 				"",
-				"Count the lines in each source file and show me the top 5 largest.",
+				"我刚接手这个项目，能帮我看看代码规模和结构吗？哪些文件比较大需要关注？",
 			].join("\n"),
 		},
 		{
@@ -172,7 +223,8 @@ function scenario2_scriptOverShell(): DomainMessage[] {
 							"}",
 							"await walk('.');",
 							"files.sort((a, b) => b.lines - a.lines);",
-							"console.log(`Total: ${files.length} files`);",
+							"console.log(`Total: ${files.length} files, ${files.reduce((s,f) => s + f.lines, 0)} lines`);",
+							"console.log('Top 5:');",
 							"for (const f of files.slice(0, 5)) console.log(`  ${f.lines} ${f.path}`);",
 						].join("\n"),
 					},
@@ -185,22 +237,19 @@ function scenario2_scriptOverShell(): DomainMessage[] {
 			call: {
 				id: "fs_4",
 				tool: "exec" as const,
-				args: {
-					runtime: "bun",
-					script: "...", // abbreviated in call record
-				},
+				args: { runtime: "bun", script: "..." },
 			},
 			status: "completed" as const,
 			exitCode: 0,
-			stdout: "Total: 42 files\n  310 src/index.ts\n  285 src/utils.ts\n  201 src/parser.ts\n  178 src/config.ts\n  145 src/types.ts",
+			stdout: "Total: 83 files, 12,450 lines\nTop 5:\n  310 packages/core/src/agent/loop.ts\n  285 packages/shared/src/format-prompt.ts\n  201 packages/tools/src/exec/executor.ts\n  178 apps/code/src/repl.ts\n  145 packages/types/src/domain.ts",
 			stderr: "",
 			durationMs: 120,
 		} satisfies DomainMessage,
-		{
-			type: "assistant_text",
-			content:
-				"The project has 42 source files. The largest five are src/index.ts (310 lines), src/utils.ts (285), src/parser.ts (201), src/config.ts (178), and src/types.ts (145).",
-		},
+		...submitPair("fs_s2", {
+			type: "completed",
+			summary: "项目共 83 个源文件，合计 12,450 行。最大的五个文件是 loop.ts（310 行）、format-prompt.ts（285 行）、executor.ts（201 行）、repl.ts（178 行）、domain.ts（145 行）。建议优先熟悉 loop.ts 和 format-prompt.ts，它们是核心编排和消息格式化逻辑所在。",
+			next_step: "如果需要更细粒度的分析（函数级别、依赖关系图），可以用 ts-morph 做进一步扫描。",
+		}),
 	];
 }
 
@@ -210,7 +259,7 @@ function scenario2_scriptOverShell(): DomainMessage[] {
  * 生成全部 fewshot 教学对话。
  *
  * 返回值插入到 system 消息之后、真实用户输入之前。
- * 最后一条消息后，紧跟真实 user_input，作为教学结束的天然边界。
+ * 最后一条 submit result 之后紧跟真实 user_input，天然标志教学结束。
  */
 export function buildFewshotMessages(): DomainMessage[] {
 	return [...scenario1_parallelCalls(), ...scenario2_scriptOverShell()];
