@@ -10,7 +10,7 @@
  * - ok/err（加粗）：最终结果
  */
 
-import type { Renderer, ToolCallRecord, ToolResult } from "@n0n/types";
+import type { Renderer, ToolCallRecord, ToolExecOutcome, ToolResult } from "@n0n/types";
 import type { FeishuConversation } from "./conversation.ts";
 
 /** 流式文本更新节流间隔（CardKit 限制 10次/秒，留余量） */
@@ -151,7 +151,11 @@ export class FeishuRenderer implements Renderer {
 		this.conv.startRound(`Round ${round}  ·  ${msgCount} msgs`);
 	}
 
+	roundEnd(): void {}
+
 	// ── LLM 流式输出 ──
+
+	thinkingStart(): void {}
 
 	thinkingChunk(token: string): void {
 		this.thinkBuf += token;
@@ -168,6 +172,8 @@ export class FeishuRenderer implements Renderer {
 			this.thinkBuf = "";
 		}
 	}
+
+	contentStart(): void {}
 
 	contentChunk(token: string): void {
 		this.contentBuf += token;
@@ -203,19 +209,21 @@ export class FeishuRenderer implements Renderer {
 
 	// ── 工具执行 ──
 
-	toolExecStart(tc: ToolCallRecord): void {
+	toolExecStart(_tcId: string, tc: ToolCallRecord): void {
 		this.curTool = tc.tool;
 		this.toolOutBuf = "";
 		const { summary, detail } = fmtToolCall(tc);
 		this.conv.appendLine({ kind: "tool", text: summary, detail });
 	}
 
-	toolExecChunk(_tool: string, chunk: string): void {
+	toolExecChunk(_tcId: string, _tool: string, chunk: string): void {
 		this.toolOutBuf += chunk;
 		this.scheduleFlush();
 	}
 
-	toolExecEnd(result: ToolResult): void {
+	toolExecEnd(_tcId: string, outcome: ToolExecOutcome): void {
+		if (outcome.status === "arg_error") return;
+		const result = outcome.result;
 		this.stopTimer();
 		const summary = fmtResult(result);
 		const isErr =

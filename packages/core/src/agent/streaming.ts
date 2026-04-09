@@ -14,8 +14,10 @@ import { isValidToolCall, parseToolCalls } from "./tool.ts";
 // ── 输出事件（判别联合） ──
 
 export type ParsedStreamEvent =
+	| { type: "thinking_start" }
 	| { type: "thinking_chunk"; text: string }
 	| { type: "thinking_end" }
+	| { type: "content_start" }
 	| { type: "content_chunk"; text: string }
 	| { type: "content_end" }
 	| { type: "tool_arg_start"; index: number; name: string }
@@ -66,7 +68,10 @@ export async function* parseStream(
 
 		switch (event.type) {
 			case "thinking":
-				if (phase !== "thinking") phase = "thinking";
+				if (phase !== "thinking") {
+					phase = "thinking";
+					yield { type: "thinking_start" };
+				}
 				yield { type: "thinking_chunk", text: event.text };
 				break;
 
@@ -74,7 +79,10 @@ export async function* parseStream(
 				if (phase === "thinking") {
 					yield { type: "thinking_end" };
 				}
-				phase = "content";
+				if (phase !== "content") {
+					phase = "content";
+					yield { type: "content_start" };
+				}
 				yield { type: "content_chunk", text: event.text };
 				break;
 

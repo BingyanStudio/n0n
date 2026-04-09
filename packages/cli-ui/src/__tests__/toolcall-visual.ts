@@ -34,14 +34,14 @@ async function scenario1() {
 	renderer.streamEnd();
 	await sleep(200);
 
-	renderer.toolExecStart({
+	renderer.toolExecStart("call_1", {
 		id: "call_1",
 		tool: "exec",
 		args: { script: "ls -la", runtime: "sh" },
 	});
 	await sleep(100);
 
-	renderer.toolExecEnd({
+	renderer.toolExecEnd("call_1", { status: "completed", result: {
 		type: "tool_result",
 		tool: "exec",
 		status: "completed" as const,
@@ -54,7 +54,7 @@ async function scenario1() {
 		stdout: "total 0\ndrwxr-xr-x  2 user staff  64 Jan  1 00:00 .",
 		stderr: "",
 		durationMs: 150,
-	});
+	} });
 }
 
 async function scenario2() {
@@ -86,14 +86,14 @@ async function scenario2() {
 	renderer.streamEnd();
 	await sleep(200);
 
-	renderer.toolExecStart({
+	renderer.toolExecStart("call_2", {
 		id: "call_2",
 		tool: "exec",
 		args: { script: "echo hello", runtime: "sh" },
 	});
 	await sleep(100);
 
-	renderer.toolExecEnd({
+	renderer.toolExecEnd("call_2", { status: "completed", result: {
 		type: "tool_result",
 		tool: "exec",
 		status: "completed" as const,
@@ -106,7 +106,7 @@ async function scenario2() {
 		stdout: "hello\n",
 		stderr: "",
 		durationMs: 50,
-	});
+	} });
 }
 
 async function scenario3() {
@@ -133,20 +133,20 @@ async function scenario3() {
 	renderer.streamEnd();
 	await sleep(200);
 
-	renderer.toolExecStart({
+	renderer.toolExecStart("call_3", {
 		id: "call_3",
 		tool: "exec",
 		args: { script: "ls" },
 	});
 
-	renderer.toolExecStart({
+	renderer.toolExecStart("call_4", {
 		id: "call_4",
 		tool: "write",
 		args: { path: "test.txt", content: "hello world" },
 	});
 	await sleep(100);
 
-	renderer.toolExecEnd({
+	renderer.toolExecEnd("call_3", { status: "completed", result: {
 		type: "tool_result",
 		tool: "exec",
 		status: "completed" as const,
@@ -155,11 +155,11 @@ async function scenario3() {
 		stdout: "file1.txt\nfile2.txt",
 		stderr: "",
 		durationMs: 80,
-	});
+	} });
 
 	await sleep(200);
 
-	renderer.toolExecEnd({
+	renderer.toolExecEnd("call_4", { status: "completed", result: {
 		type: "tool_result",
 		tool: "write",
 		call: {
@@ -168,7 +168,7 @@ async function scenario3() {
 			args: { path: "test.txt", content: "hello world" },
 		},
 		status: "completed" as const,
-	});
+	} });
 }
 
 async function scenario4() {
@@ -198,7 +198,7 @@ async function scenario4() {
 	renderer.streamEnd();
 	await sleep(200);
 
-	renderer.toolExecStart({
+	renderer.toolExecStart("call_5", {
 		id: "call_5",
 		tool: "edit",
 		args: { path: "src/index.ts", intent: "修复类型错误" },
@@ -206,12 +206,12 @@ async function scenario4() {
 	await sleep(100);
 
 	// 模拟 edit 执行过程中的流式输出
-	renderer.toolExecChunk("edit", "Analyzing file...\n");
+	renderer.toolExecChunk("call_5", "edit", "Analyzing file...\n");
 	await sleep(300);
-	renderer.toolExecChunk("edit", "Applying changes...\n");
+	renderer.toolExecChunk("call_5", "edit", "Applying changes...\n");
 	await sleep(300);
 
-	renderer.toolExecEnd({
+	renderer.toolExecEnd("call_5", { status: "completed", result: {
 		type: "tool_result",
 		tool: "edit",
 		call: {
@@ -225,7 +225,7 @@ async function scenario4() {
 		rounds: 1,
 		error: null,
 		feedback: null,
-	});
+	} });
 }
 
 console.error("🔍 RichRenderer 流式 Tool Call 渲染视觉测试");

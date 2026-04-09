@@ -90,12 +90,12 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		}
 		renderer.streamEnd();
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "exec",
 			args: { script: "echo hello", runtime: "cmd" },
 		});
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", { status: "completed", result: {
 			type: "tool_result" as const,
 			tool: "exec",
 			status: "completed" as const,
@@ -108,7 +108,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 			stderr: "",
 			exitCode: 0,
 			durationMs: 100,
-		});
+		} });
 
 		const lines = vt.getVisibleLines();
 		const cleanLines = lines.map((l) => stripAnsi(l));
@@ -148,17 +148,17 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		}
 		renderer.streamEnd();
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "submit",
 			args: JSON.parse(json),
 		});
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", { status: "completed", result: {
 			type: "tool_result" as const,
 			tool: "submit",
 			call: { id: "call_1", tool: "submit", args: JSON.parse(json) },
 			cleanedResult: null,
-		});
+		} });
 
 		const lines = vt.getVisibleLines();
 		const cleanLines = lines.map((l) => stripAnsi(l));
@@ -202,12 +202,12 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 			};
 			renderer.toolCallArgEnd(0, tc);
 			renderer.streamEnd();
-			renderer.toolExecStart({
+			renderer.toolExecStart("call_1", {
 				id: "call_1",
 				tool: "exec",
 				args: JSON.parse(json),
 			});
-			renderer.toolExecEnd({
+			renderer.toolExecEnd("call_1", { status: "completed", result: {
 				type: "tool_result" as const,
 				tool: "exec",
 				status: "completed" as const,
@@ -220,7 +220,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 				stderr: "",
 				exitCode: 0,
 				durationMs: 50,
-			});
+			} });
 
 			const cleanLines = vt.getVisibleLines().map((l) => stripAnsi(l));
 			finalScreens.push(cleanLines);
@@ -249,7 +249,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		}
 		renderer.streamEnd();
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "exec",
 			args: { script: "echo hi" },
@@ -279,17 +279,17 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		}
 		renderer.streamEnd();
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "submit",
 			args: JSON.parse(json),
 		});
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", { status: "completed", result: {
 			type: "tool_result" as const,
 			tool: "submit",
 			call: { id: "call_1", tool: "submit", args: JSON.parse(json) },
 			cleanedResult: null,
-		});
+		} });
 
 		const lines = vt.getVisibleLines();
 		const cleanLines = lines.map((l) => stripAnsi(l));

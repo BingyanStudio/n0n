@@ -51,9 +51,9 @@ async function scenarioA() {
 		args: { path: "src/app.ts", content: "hello world" },
 	};
 
-	renderer.toolExecStart(call);
+	renderer.toolExecStart(call.id, call);
 
-	renderer.toolExecEnd({
+	renderer.toolExecEnd(call.id, { status: "completed", result: {
 		type: "tool_result",
 		tool: "write",
 		call,
@@ -99,9 +99,9 @@ async function scenarioB() {
 		args: { path: "output.txt", content: contentStr },
 	};
 
-	renderer.toolExecStart(call);
+	renderer.toolExecStart(call.id, call);
 
-	renderer.toolExecEnd({
+	renderer.toolExecEnd(call.id, { status: "completed", result: {
 		type: "tool_result",
 		tool: "write",
 		call,
@@ -132,8 +132,8 @@ async function scenarioC() {
 		tool: "exec",
 		args: { script: "echo round1" },
 	};
-	renderer.toolExecStart(execCall);
-	renderer.toolExecEnd({
+	renderer.toolExecStart(execCall.id, execCall);
+	renderer.toolExecEnd(execCall.id, { status: "completed", result: {
 		type: "tool_result",
 		tool: "exec",
 		call: execCall,
@@ -172,8 +172,8 @@ async function scenarioC() {
 		tool: "write",
 		args: { path: "test.txt", content: "line1\nline2\nline3" },
 	};
-	renderer.toolExecStart(writeCall);
-	renderer.toolExecEnd({
+	renderer.toolExecStart(writeCall.id, writeCall);
+	renderer.toolExecEnd(writeCall.id, { status: "completed", result: {
 		type: "tool_result",
 		tool: "write",
 		call: writeCall,

@@ -1,17 +1,16 @@
 // biome-ignore-all lint/style/noNonNullAssertion: test assertions on known-shape results
 // biome-ignore-all lint/suspicious/noExplicitAny: test mocks use any for flexibility
 /**
- * ExecutionScheduler + RenderBuffer 单元测试
+ * ExecutionScheduler 单元测试
  *
  * 验证调度模型：有序队列 + 队首条件等待。
- * 验证渲染模型：FIFO 有序输出缓冲。
- * 使用 mock 工具执行器，验证并行性、顺序保证、渲染缓冲等。
+ * 验证事件回调：onRegister / onChunk / onEnd 按正确时机触发。
+ * 使用 mock 工具执行器，验证并行性、顺序保证等。
  */
 
 import { describe, expect, it } from "bun:test";
 import type { CanStartFn, ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
-import { RenderBuffer } from "../render-buffer.ts";
-import { ExecutionScheduler } from "../scheduler.ts";
+import { ExecutionScheduler, type SchedulerEvents } from "../scheduler.ts";
 
 // ── canStart 策略 ──
 
@@ -133,6 +132,19 @@ function createChunkExecutor() {
 				r();
 				resolvers.delete(id);
 			}
+		},
+	};
+}
+
+/** 创建事件记录器 */
+function createEventLog(): { events: SchedulerEvents; log: string[] } {
+	const log: string[] = [];
+	return {
+		log,
+		events: {
+			onRegister: (tc) => log.push(`register:${tc.id}`),
+			onChunk: (tcId, _tool, chunk) => log.push(`chunk:${tcId}:${chunk}`),
+			onEnd: (tcId, outcome) => log.push(`end:${tcId}:${outcome.status}`),
 		},
 	};
 }
@@ -313,106 +325,87 @@ describe("ExecutionScheduler", () => {
 			await runPromise;
 		});
 	});
-});
 
-describe("RenderBuffer", () => {
-	it("按入队顺序渲染，即使执行乱序完成", async () => {
-		const { executor, resolve } = createControllableExecutor();
-		const scheduler = new ExecutionScheduler(executor);
-		const renderBuffer = new RenderBuffer();
-		scheduler.attachRenderBuffer(renderBuffer);
+	describe("事件回调", () => {
+		it("按正确时机发射 onRegister / onEnd 事件", async () => {
+			const { executor, resolve } = createControllableExecutor();
+			const { events, log: eventLog } = createEventLog();
+			const scheduler = new ExecutionScheduler(executor, events);
 
-		scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
-		scheduler.enqueue(mockEditTC("e2", "b.ts"), pathExclusive);
-		scheduler.enqueue(mockWriteTC("w1", "c.ts"), pathExclusive);
-		scheduler.seal();
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
+			scheduler.enqueue(mockEditTC("e2", "b.ts"), pathExclusive);
+			scheduler.seal();
 
-		const renderLog: string[] = [];
-		const mockRenderer = {
-			toolExecStart: (tc: ToolCallRecord) => renderLog.push(`start:${tc.id}`),
-			toolExecChunk: (_tool: string, _chunk: string) => {},
-			toolExecEnd: (_result: ToolResult) => renderLog.push("end"),
-		};
+			const runPromise = scheduler.run();
+			await new Promise((r) => setTimeout(r, 10));
 
-		const runPromise = scheduler.run();
-		const drainPromise = renderBuffer.drain(mockRenderer as any, () => {});
+			// register 事件在 enqueue 时立即触发
+			expect(eventLog).toContain("register:e1");
+			expect(eventLog).toContain("register:e2");
 
-		await new Promise((r) => setTimeout(r, 10));
+			// e2 先完成
+			resolve("e2");
+			await new Promise((r) => setTimeout(r, 10));
+			expect(eventLog).toContain("end:e2:completed");
 
-		// e2 先完成，但 e1 是队首，e2 的事件应该被缓冲
-		resolve("e2");
-		await new Promise((r) => setTimeout(r, 10));
+			// e1 后完成
+			resolve("e1");
+			await runPromise;
+			expect(eventLog).toContain("end:e1:completed");
+		});
 
-		// e1 完成，应该先渲染 e1 再渲染 e2
-		resolve("e1");
-		resolve("w1");
-		await runPromise;
-		await drainPromise;
+		it("chunk 事件在执行过程中触发", async () => {
+			const { executor, resolve, setChunks } = createChunkExecutor();
+			const { events, log: eventLog } = createEventLog();
+			const scheduler = new ExecutionScheduler(executor, events);
 
-		expect(renderLog).toEqual([
-			"start:e1",
-			"end",
-			"start:e2",
-			"end",
-			"start:w1",
-			"end",
-		]);
-	});
+			setChunks("e1", ["hello", "world"]);
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
+			scheduler.seal();
 
-	it("队首工具的 chunk 实时流出，非队首的被缓冲", async () => {
-		const { executor, resolve, setChunks } = createChunkExecutor();
-		const scheduler = new ExecutionScheduler(executor);
-		const renderBuffer = new RenderBuffer();
-		scheduler.attachRenderBuffer(renderBuffer);
+			const runPromise = scheduler.run();
+			await new Promise((r) => setTimeout(r, 10));
 
-		setChunks("e1", ["chunk-a1", "chunk-a2"]);
-		setChunks("e2", ["chunk-b1"]);
+			expect(eventLog).toContain("chunk:e1:hello");
+			expect(eventLog).toContain("chunk:e1:world");
 
-		scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
-		scheduler.enqueue(mockEditTC("e2", "b.ts"), pathExclusive);
-		scheduler.seal();
+			resolve("e1");
+			await runPromise;
+		});
 
-		const renderLog: string[] = [];
-		const mockRenderer = {
-			toolExecStart: (tc: ToolCallRecord) => renderLog.push(`start:${tc.id}`),
-			toolExecChunk: (_tool: string, chunk: string) =>
-				renderLog.push(`chunk:${chunk}`),
-			toolExecEnd: (_result: ToolResult) => renderLog.push("end"),
-		};
+		it("事件无序到达（乱序完成）", async () => {
+			const { executor, resolve } = createControllableExecutor();
+			const { events, log: eventLog } = createEventLog();
+			const scheduler = new ExecutionScheduler(executor, events);
 
-		const runPromise = scheduler.run();
-		const drainPromise = renderBuffer.drain(mockRenderer as any, () => {});
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
+			scheduler.enqueue(mockEditTC("e2", "b.ts"), pathExclusive);
+			scheduler.enqueue(mockWriteTC("w1", "c.ts"), pathExclusive);
+			scheduler.seal();
 
-		await new Promise((r) => setTimeout(r, 10));
+			const runPromise = scheduler.run();
+			await new Promise((r) => setTimeout(r, 10));
 
-		// e1 的 chunks 应该已经流出（它是队首）
-		expect(renderLog).toContain("start:e1");
-		expect(renderLog).toContain("chunk:chunk-a1");
-		expect(renderLog).toContain("chunk:chunk-a2");
+			// 反向完成
+			resolve("w1");
+			await new Promise((r) => setTimeout(r, 10));
+			resolve("e2");
+			await new Promise((r) => setTimeout(r, 10));
+			resolve("e1");
+			await runPromise;
 
-		// e2 的事件应该被缓冲，不出现在 renderLog
-		expect(renderLog).not.toContain("start:e2");
+			// 所有 end 事件都应到达，顺序反映实际完成顺序（无序）
+			const endEvents = eventLog.filter((e) => e.startsWith("end:"));
+			expect(endEvents).toEqual(["end:w1:completed", "end:e2:completed", "end:e1:completed"]);
+		});
 
-		resolve("e1");
-		await new Promise((r) => setTimeout(r, 10));
-
-		// e1 完成后，e2 的缓冲应该被 flush
-		expect(renderLog).toContain("start:e2");
-		expect(renderLog).toContain("chunk:chunk-b1");
-
-		resolve("e2");
-		await runPromise;
-		await drainPromise;
-
-		// 最终顺序验证
-		expect(renderLog).toEqual([
-			"start:e1",
-			"chunk:chunk-a1",
-			"chunk:chunk-a2",
-			"end",
-			"start:e2",
-			"chunk:chunk-b1",
-			"end",
-		]);
+		it("无 events 时 scheduler 正常工作", async () => {
+			const { executor, log } = createInstantExecutor();
+			const scheduler = new ExecutionScheduler(executor);
+			scheduler.enqueue(mockWriteTC("w1", "a.ts"), pathExclusive);
+			scheduler.seal();
+			await scheduler.run();
+			expect(log).toEqual(["exec:w1"]);
+		});
 	});
 });

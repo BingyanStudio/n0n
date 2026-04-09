@@ -8,6 +8,7 @@ import type {
 	Renderer,
 	RoundTokenUsage,
 	ToolCallRecord,
+	ToolExecOutcome,
 	ToolResult,
 } from "@n0n/types";
 
@@ -26,8 +27,12 @@ export class PlainRenderer implements Renderer {
 		);
 	}
 
+	roundEnd(): void {}
+
+	thinkingStart(): void {}
 	thinkingChunk(_token: string): void {}
 	thinkingEnd(): void {}
+	contentStart(): void {}
 	contentChunk(_token: string): void {}
 	contentEnd(): void {}
 
@@ -42,14 +47,14 @@ export class PlainRenderer implements Renderer {
 		);
 	}
 
-	toolExecStart(tc: ToolCallRecord): void {
+	toolExecStart(_tcId: string, tc: ToolCallRecord): void {
 		const suffix =
 			tc.tool === "exec" ? ` → ${tc.args.script.slice(0, 80)}` : "";
 		console.error(`  [agent] tool: ${tc.tool}${suffix}`);
 	}
 
-	toolExecChunk(_tool: string, _chunk: string): void {}
-	toolExecEnd(_result: ToolResult): void {}
+	toolExecChunk(_tcId: string, _tool: string, _chunk: string): void {}
+	toolExecEnd(_tcId: string, _outcome: ToolExecOutcome): void {}
 
 	submitAccepted(): void {
 		console.error("  [agent] submit accepted ✓");
