@@ -11,7 +11,7 @@
  * 同时处理 openai-compatible provider（如 DeepSeek、litellm 代理）。
  */
 
-import { formatPrompt } from "@n0n/shared";
+import { detectTagStyle, formatPrompt } from "@n0n/shared";
 import type {
 	CompleteRequest,
 	CompleteResponse,
@@ -21,6 +21,7 @@ import type {
 	StreamRequest,
 	TokenUsage,
 	ToolDefinition,
+	TagStyle,
 } from "@n0n/types";
 import type { LLMConfig } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
@@ -173,12 +174,14 @@ function toOpenAITools(tools: ToolDefinition[]): OpenAIToolDef[] {
 
 export class OpenAIClient implements LLMClient {
 	readonly modelId: string;
+	readonly tagStyle: TagStyle;
 	private readonly config: LLMConfig;
 	private readonly apiUrl: string;
 
 	constructor(config: LLMConfig) {
 		this.config = config;
 		this.modelId = config.providerConfig.model;
+		this.tagStyle = config.providerConfig.tagStyle ?? detectTagStyle(this.modelId);
 
 		const pc = config.providerConfig;
 		const base =

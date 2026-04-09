@@ -16,13 +16,14 @@
  * - system 消息拆离（Anthropic 格式要求 system 在消息体外）
  */
 
-import { formatPrompt } from "@n0n/shared";
+import { detectTagStyle, formatPrompt } from "@n0n/shared";
 import {
 	type CompleteRequest,
 	type CompleteResponse,
 	FinishReason,
 	type LLMClient,
 	type PromptMessage,
+	type TagStyle,
 	type StreamEvent,
 	type StreamRequest,
 	type TokenUsage,
@@ -250,12 +251,14 @@ function toAnthropicTools(tools: ToolDefinition[]): AnthropicTool[] {
 
 export class AnthropicClient implements LLMClient {
 	readonly modelId: string;
+	readonly tagStyle: TagStyle;
 	private readonly config: LLMConfig;
 	private readonly apiUrl: string;
 
 	constructor(config: LLMConfig) {
 		this.config = config;
 		this.modelId = config.providerConfig.model;
+		this.tagStyle = config.providerConfig.tagStyle ?? detectTagStyle(this.modelId);
 
 		const pc = config.providerConfig;
 		const base =

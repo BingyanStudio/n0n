@@ -44,6 +44,9 @@ export const FinishReason = {
 } as const;
 export type FinishReason = (typeof FinishReason)[keyof typeof FinishReason];
 
+/** XML-like tag 风格，不同 LLM 模型训练时使用不同的标签格式 */
+export type TagStyle = "deepseek" | "glm" | "minimax" | "default";
+
 // ── StreamEvent ──
 
 export type StreamEvent =
@@ -158,6 +161,9 @@ export interface LLMClient {
 	 * 用途：makeToolkit 构建 exec 工具描述时需要 tag 风格
 	 */
 	readonly modelId: string;
+
+	/** XML tag 风格（由 provider 配置指定或从模型名推断） */
+	readonly tagStyle: TagStyle;
 }
 
 // ── StreamAccumulator ──

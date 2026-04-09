@@ -8,6 +8,8 @@
  * 使用 discriminated union 让 TS 编译器帮助检查字段有效性。
  */
 
+import type { TagStyle } from "@n0n/types";
+
 // ── 常量 ──
 
 /** thinking 模式默认 token 预算 — SSOT：common-specs.ts 和各 Client 共用此值 */
@@ -21,6 +23,8 @@ export interface OpenAIProviderConfig {
 	apiKey: string;
 	baseUrl?: string;
 	model: string;
+	/** 覆盖基于模型名推断的 XML tag 风格 */
+	tagStyle?: TagStyle;
 }
 
 /**
@@ -39,6 +43,8 @@ export interface AnthropicProviderConfig {
 	/** 自定义 API 地址。留空则使用 Anthropic 官方 API。 */
 	baseUrl?: string;
 	model: string;
+	/** 覆盖基于模型名推断的 XML tag 风格 */
+	tagStyle?: TagStyle;
 }
 
 /** Google Gemini 原生 API 配置 */
@@ -46,6 +52,8 @@ export interface GoogleProviderConfig {
 	provider: "google";
 	apiKey: string;
 	model: string;
+	/** 覆盖基于模型名推断的 XML tag 风格 */
+	tagStyle?: TagStyle;
 }
 
 /** OpenAI 兼容 API 配置（第三方代理、本地模型等） */
@@ -67,6 +75,8 @@ export interface OpenAICompatibleProviderConfig {
 	 * - undefined / 其他：不注入额外字段
 	 */
 	backendProvider?: "anthropic" | "google" | "openai";
+	/** 覆盖基于模型名推断的 XML tag 风格 */
+	tagStyle?: TagStyle;
 }
 
 /**
