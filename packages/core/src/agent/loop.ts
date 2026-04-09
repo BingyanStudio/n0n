@@ -153,6 +153,15 @@ export async function agentLoop<T = unknown>(
 				case "done":
 					streamResult = event.result;
 					break;
+
+				case "error":
+					// LLM stream errors are handled by streaming.ts interrupt detection
+					break;
+
+				default: {
+					const _exhaustive: never = event;
+					break;
+				}
 			}
 		}
 		renderer.streamEnd();

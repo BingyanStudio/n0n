@@ -268,6 +268,10 @@ export async function startRepl(
 				userInput = await prompt(`${label.user()} `);
 				break;
 			}
+			default: {
+				const _exhaustive: never = ir;
+				break;
+			}
 		}
 	}
 

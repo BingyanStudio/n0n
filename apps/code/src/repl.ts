@@ -133,6 +133,10 @@ function createStdinController(): StdinController {
 				break;
 			case "idle":
 				break;
+			default: {
+				const _exhaustive: never = ctrl.phase;
+				break;
+			}
 		}
 	}
 
@@ -415,6 +419,10 @@ export async function startCodeRepl(
 				}
 				writeln();
 				userInput = await promptUser();
+				break;
+			}
+			default: {
+				const _exhaustive: never = ir;
 				break;
 			}
 		}

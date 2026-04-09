@@ -91,6 +91,10 @@ function fmtResult(r: ToolResult): string {
 					return `exit=${r.exitCode} truncated  ${(r.durationMs / 1000).toFixed(1)}s`;
 				case "completed":
 					return `exit=${r.exitCode}  ${(r.durationMs / 1000).toFixed(1)}s`;
+				default: {
+					const _exhaustive: never = r;
+					return `unknown exec status`;
+				}
 			}
 			break;
 		case "write":

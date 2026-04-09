@@ -170,5 +170,12 @@ export async function runFeishuRound(
 				detail: `Error: ${result.result.error}\nWaiting for the next task or additional info from the user.`,
 			});
 			return;
+
+		default: {
+			const _exhaustive: never = result.result;
+			console.warn(
+				`[feishu] unhandled result type: ${(_exhaustive as any).type}`,
+			);
+		}
 	}
 }

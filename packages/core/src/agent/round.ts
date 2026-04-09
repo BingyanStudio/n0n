@@ -75,6 +75,13 @@ export function collectJobMessages(
 			case "failed":
 				msgs.push(job.argError);
 				break;
+			case "pending":
+			case "running":
+				break;
+			default: {
+				const _exhaustive: never = job;
+				break;
+			}
 		}
 	}
 	return msgs;

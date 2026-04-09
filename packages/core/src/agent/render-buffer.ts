@@ -109,6 +109,10 @@ export class RenderBuffer {
 						onToolDone(buf.tc, event.result);
 						this.headIdx++;
 						break;
+					default: {
+						const _exhaustive: never = event;
+						break;
+					}
 				}
 			}
 

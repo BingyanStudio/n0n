@@ -230,6 +230,11 @@ export function formatPrompt(
 					content: msg.content,
 				});
 				break;
+
+			default: {
+				const _exhaustive: never = msg;
+				throw new Error(`Unhandled message type: ${(_exhaustive as any).type}`);
+			}
 		}
 	}
 

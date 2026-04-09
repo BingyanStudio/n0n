@@ -263,6 +263,11 @@ export async function handleCommand(
 			}
 			return;
 		}
+
+		default: {
+			const _exhaustive: never = cmd;
+			console.warn(`[feishu] unhandled command type: ${(_exhaustive as any).type}`);
+		}
 	}
 }
 

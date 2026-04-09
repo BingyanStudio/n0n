@@ -231,6 +231,10 @@ export class StreamAccumulator {
 			case "error":
 				// error 事件不累积，由消费方直接处理
 				break;
+			default: {
+				const _exhaustive: never = event;
+				break;
+			}
 		}
 	}
 

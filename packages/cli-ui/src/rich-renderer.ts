@@ -357,6 +357,10 @@ export class RichRenderer implements Renderer {
 						const estTk = estimateTokens(result.stdout + result.stderr);
 						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${exit} ${style.gray(`${outLen} chars`)} ${style.dim(`~${estTk} tok`)}`;
 					}
+					default: {
+						const _exhaustive: never = result;
+						return `${style.dim("◂")} ${style.cyan("exec")} unknown status`;
+					}
 				}
 				break;
 			}

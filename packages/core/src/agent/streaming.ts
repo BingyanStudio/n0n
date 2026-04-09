@@ -123,6 +123,16 @@ export async function* parseStream(
 				interrupt = "error";
 				yield { type: "error", error: event.error };
 				break;
+
+			case "thinking_signature":
+			case "done":
+				// Handled by acc.push(event) above
+				break;
+
+			default: {
+				const _exhaustive: never = event;
+				break;
+			}
 		}
 	}
 

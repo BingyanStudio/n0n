@@ -143,6 +143,10 @@ function renderLine(line: LogLine): CardBodyElement {
 			return txt(`<text_tag color='green'>完成</text_tag> ${line.text}`);
 		case "err":
 			return txt(`<text_tag color='red'>错误</text_tag> ${line.text}`);
+		default: {
+			const _exhaustive: never = line.kind;
+			return txt(`Unknown: ${_exhaustive}`);
+		}
 	}
 }
 
