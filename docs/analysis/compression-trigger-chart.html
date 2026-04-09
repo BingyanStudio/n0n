@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>压缩触发时机 — 甜蜜点分析</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,'Helvetica Neue','PingFang SC',sans-serif;background:#0a0e14;color:#c5cdd9;min-height:100vh;padding:32px 24px}
+  h1{text-align:center;font-size:22px;font-weight:600;color:#7ee8a2;margin-bottom:6px}
+  .subtitle{text-align:center;font-size:13px;color:#6b7b8d;margin-bottom:28px}
+  .box{max-width:1000px;margin:0 auto 36px;background:#111820;border-radius:12px;padding:24px 16px 8px;border:1px solid #1e2a36}
+  .box h2{font-size:15px;font-weight:500;color:#8fa4b8;margin-bottom:4px;padding-left:8px}
+  .box .desc{font-size:12px;color:#556677;padding-left:8px;margin-bottom:12px}
+  .chart{width:100%;height:420px}
+  .formula{max-width:1000px;margin:0 auto 24px;padding:14px 20px;background:#111820;border-radius:8px;border:1px solid #1e2a36;font-family:'SF Mono','Fira Code',monospace;font-size:13px;color:#8fa4b8;line-height:1.8}
+  .formula .g{color:#7ee8a2} .formula .y{color:#fac858} .formula .p{color:#a855f7} .formula .dim{color:#556677}
+  .params{max-width:1000px;margin:0 auto 24px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+  .params label{display:flex;align-items:center;gap:6px;font-size:13px;color:#8fa4b8}
+  .params input[type="range"]{width:120px;accent-color:#7ee8a2}
+  .params input[type="number"]{width:64px;background:#0a0e14;border:1px solid #2a3a4a;border-radius:4px;color:#7ee8a2;padding:2px 6px;font-size:13px}
+  .params .val{min-width:40px;color:#7ee8a2;font-variant-numeric:tabular-nums}
+  .insight{max-width:1000px;margin:0 auto 28px;padding:16px 20px;background:#111820;border-left:3px solid #7ee8a2;border-radius:0 8px 8px 0;font-size:14px;line-height:1.7}
+  .insight strong{color:#7ee8a2} .insight .y{color:#fac858} .insight .p{color:#a855f7}
+</style>
+</head>
+<body>
+
+<h1>🐍 压缩触发时机分析</h1>
+<p class="subtitle">每 N 步压缩一次，最优 N 在哪里？Opus 原地 vs 便宜模型</p>
+
+<div class="formula">
+  <div><span class="dim">会话模型：</span>系统 <span class="g">30K</span> + 每步 <span class="g">+2.6K</span>（2K in + 0.6K out），压缩到 <span class="y">5K</span> 历史</div>
+  <div><span class="dim">每步可变成本：</span>context × $0.50/MTok（cache read）</div>
+  <div><span class="dim">压缩成本 Opus：</span>context × <span class="g">$0.50</span>/MTok + 5K × $25/MTok</div>
+  <div><span class="dim">压缩成本 Cheap：</span>r × (context × $5/MTok + 5K × $25/MTok)</div>
+  <div><span class="dim">隐性开销：</span>每次压缩 + <span class="y">C_overhead</span>（延迟 / 信息损失 / 打断对话流）</div>
+  <div><span class="dim">优化目标：</span>avg = (∑ cache_read + compression + <span class="y">C_overhead</span>) / N → <span class="y">min</span></div>
+</div>
+
+<div class="insight" id="insight">加载中…</div>
+
+<div class="params">
+  <label>系统提示词 <input type="range" id="baseSlider" min="5" max="100" step="5" value="30"><span class="val" id="baseVal">30K</span></label>
+  <label>步进 <input type="range" id="stepSlider" min="0.5" max="10" step="0.5" value="2.6"><span class="val" id="stepVal">2.6K</span></label>
+  <label>压缩目标 <input type="range" id="targetSlider" min="1" max="20" step="1" value="5"><span class="val" id="targetVal">5K</span></label>
+  <label>压缩开销 <input type="range" id="overheadSlider" min="0" max="1.0" step="0.01" value="0.05"><input type="number" id="overheadInput" min="0" max="10" step="0.01" value="0.05" style="width:56px;background:#0a0e14;border:1px solid #2a3a4a;border-radius:4px;color:#fac858;padding:2px 6px;font-size:13px"><span class="val" id="overheadVal" style="color:#fac858">$</span></label>
+  <label>r <input type="number" id="rInput" min="0.01" max="1" step="0.01" value="0.15" style="width:56px;background:#0a0e14;border:1px solid #2a3a4a;border-radius:4px;color:#7ee8a2;padding:2px 6px;font-size:13px"></label>
+  <label>会话步数 <input type="range" id="horizonSlider" min="10" max="200" step="10" value="50"><span class="val" id="horizonVal">50</span></label>
+</div>
+
+<div class="box">
+  <h2>图一：平均每步成本 vs 压缩间隔 N</h2>
+  <p class="desc">找到谷底 = 最优压缩频率。绿线 = Opus 原地，紫线 = 便宜模型</p>
+  <div class="chart" id="chart1"></div>
+</div>
+
+<div class="box">
+  <h2>图二：上下文大小随对话步数变化</h2>
+  <p class="desc">不压缩 vs 最优 Opus vs 最优 Cheap — 锯齿形为周期性压缩</p>
+  <div class="chart" id="chart2"></div>
+</div>
+
+<div class="box">
+  <h2>图三：累计成本对比</h2>
+  <p class="desc">三种方案的总支出随会话步数增长</p>
+  <div class="chart" id="chart3"></div>
+</div>
+
+<script>
+const c1 = echarts.init(document.getElementById('chart1'));
+const c2 = echarts.init(document.getElementById('chart2'));
+const c3 = echarts.init(document.getElementById('chart3'));
+
+const INPUT=5, OUTPUT=25, CACHE_READ=0.50, CACHE_WRITE=6.25;
+
+function render() {
+  const BASE = parseFloat(document.getElementById('baseSlider').value);
+  const STEP = parseFloat(document.getElementById('stepSlider').value);
+  const S = parseFloat(document.getElementById('targetSlider').value);
+  const r = parseFloat(document.getElementById('rInput').value) || 0.15;
+  const OVERHEAD = parseFloat(document.getElementById('overheadInput').value) || 0;
+  const HORIZON = parseInt(document.getElementById('horizonSlider').value);
+  const POST = BASE + S;
+
+  document.getElementById('baseVal').textContent = BASE+'K';
+  document.getElementById('stepVal').textContent = STEP+'K';
+  document.getElementById('targetVal').textContent = S+'K';
+  document.getElementById('overheadVal').textContent = '$';
+  document.getElementById('horizonVal').textContent = HORIZON;
+
+  function crc(ctxK) { return ctxK/1000*CACHE_READ; }
+  function compOpus(ctxK) { return ctxK/1000*CACHE_READ + S/1000*OUTPUT; }
+  function compCheap(ctxK) { return r*(ctxK/1000*INPUT + S/1000*OUTPUT); }
+
+  // === Chart 1: avg cost per turn vs N ===
+  const maxN = Math.min(200, Math.ceil((900-POST)/STEP));
+  const ns = []; for(let n=1;n<=maxN;n++) ns.push(n);
+
+  function avgCost(n, strat) {
+    let cyc = 0;
+    for(let i=0;i<n;i++) cyc += crc(POST + i*STEP);
+    const ctx = POST + n*STEP;
+    const comp = strat==='opus' ? compOpus(ctx) : compCheap(ctx);
+    return (cyc+comp+OVERHEAD)/n;
+  }
+
+  const opusAvg = ns.map(n=>+avgCost(n,'opus').toFixed(6));
+  const cheapAvg = ns.map(n=>+avgCost(n,'cheap').toFixed(6));
+
+  let bestOpusN=1, bestOpusC=Infinity, bestCheapN=1, bestCheapC=Infinity;
+  ns.forEach(n=>{
+    if(opusAvg[n-1]<bestOpusC){bestOpusC=opusAvg[n-1];bestOpusN=n;}
+    if(cheapAvg[n-1]<bestCheapC){bestCheapC=cheapAvg[n-1];bestCheapN=n;}
+  });
+
+  // crossover context
+  const denom = r*INPUT - CACHE_READ;
+  const crossCtx = denom>0 ? (S/1000*OUTPUT*(1-r))/denom*1000 : Infinity;
+  const crossTurns = crossCtx<Infinity ? Math.round((crossCtx-POST)/STEP) : '∞';
+
+  document.getElementById('insight').innerHTML =
+    `<strong>最优 Opus：</strong>每 ${bestOpusN} 步压缩（上下文 ${(POST+bestOpusN*STEP).toFixed(0)}K），平均 $${bestOpusC.toFixed(5)}/步<br>`+
+    `<strong class="p">最优 Cheap (r=${r})：</strong>每 ${bestCheapN} 步压缩（上下文 ${(POST+bestCheapN*STEP).toFixed(0)}K），平均 $${bestCheapC.toFixed(5)}/步<br>`+
+    `<span class="y">策略交叉点：</span>上下文 ≥ ${crossCtx<Infinity?Math.round(crossCtx)+'K':'∞'}（≈ ${crossTurns} 步积累）时 Opus 原地更划算<br>`+
+    `全局胜者：<strong>${bestCheapC<bestOpusC?'Cheap模型':'Opus原地'}</strong>，省 $${Math.abs(bestOpusC-bestCheapC).toFixed(5)}/步`;
+
+  c1.setOption({
+    tooltip:{trigger:'axis',backgroundColor:'#1a2332',borderColor:'#2a3a4a',textStyle:{color:'#c5cdd9',fontSize:12},
+      formatter:ps=>{
+        const n=parseInt(ps[0].axisValue);
+        const ctx=(POST+n*STEP).toFixed(0);
+        let s=`每 ${n} 步压缩（上下文 ${ctx}K）<br>`;
+        ps.forEach(p=>s+=`${p.marker} ${p.seriesName}: <b>$${p.value.toFixed(5)}</b>/步<br>`);
+        return s;
+      }},
+    legend:{top:4,textStyle:{color:'#8fa4b8',fontSize:12}},
+    grid:{left:72,right:32,bottom:48,top:48},
+    xAxis:{type:'category',data:ns,name:'压缩间隔 N (步)',nameLocation:'center',nameGap:30,
+      axisLabel:{color:'#6b7b8d',interval:n=>ns[n]%5===0},nameTextStyle:{color:'#8fa4b8'}},
+    yAxis:{type:'value',name:'平均每步成本 ($)',axisLabel:{color:'#6b7b8d',formatter:'${value}'},
+      splitLine:{lineStyle:{color:'#1e2a36'}},nameTextStyle:{color:'#8fa4b8'}},
+    series:[
+      {name:'Opus 原地',type:'line',data:opusAvg,smooth:true,symbol:'none',
+        lineStyle:{width:2.5,color:'#7ee8a2'},itemStyle:{color:'#7ee8a2'},
+        markPoint:{data:[{coord:[bestOpusN-1,bestOpusC],symbol:'diamond',symbolSize:14,
+          itemStyle:{color:'#7ee8a2'},label:{show:true,formatter:`N=${bestOpusN}`,color:'#7ee8a2',fontSize:11,position:'top',distance:12}}]}},
+      {name:`Cheap (r=${r})`,type:'line',data:cheapAvg,smooth:true,symbol:'none',
+        lineStyle:{width:2.5,color:'#a855f7'},itemStyle:{color:'#a855f7'},
+        markPoint:{data:[{coord:[bestCheapN-1,bestCheapC],symbol:'diamond',symbolSize:14,
+          itemStyle:{color:'#a855f7'},label:{show:true,formatter:`N=${bestCheapN}`,color:'#a855f7',fontSize:11,position:'top',distance:12}}]}}
+    ]
+  },true);
+
+  // === Chart 2: context over time ===
+  const steps=[]; for(let i=0;i<=HORIZON;i++) steps.push(i);
+  const noComp = steps.map(i=>BASE+i*STEP);
+
+  function simContext(bestN) {
+    const res=[POST]; let cyc=0;
+    for(let i=1;i<=HORIZON;i++){
+      cyc++;
+      if(cyc>=bestN){res.push(POST);cyc=0;}
+      else{res.push(POST+cyc*STEP);}
+    }
+    return res;
+  }
+  const opusCtx = simContext(bestOpusN);
+  const cheapCtx = simContext(bestCheapN);
+
+  c2.setOption({
+    tooltip:{trigger:'axis',backgroundColor:'#1a2332',borderColor:'#2a3a4a',textStyle:{color:'#c5cdd9',fontSize:12},
+      formatter:ps=>{let s=`Step ${ps[0].axisValue}<br>`;ps.forEach(p=>s+=`${p.marker} ${p.seriesName}: <b>${p.value.toFixed(1)}K</b><br>`);return s;}},
+    legend:{top:4,textStyle:{color:'#8fa4b8',fontSize:12}},
+    grid:{left:64,right:32,bottom:48,top:48},
+    xAxis:{type:'category',data:steps,name:'对话步数',nameLocation:'center',nameGap:30,
+      axisLabel:{color:'#6b7b8d',interval:n=>steps[n]%10===0},nameTextStyle:{color:'#8fa4b8'}},
+    yAxis:{type:'value',name:'上下文 (K tokens)',axisLabel:{color:'#6b7b8d',formatter:'{value}K'},
+      splitLine:{lineStyle:{color:'#1e2a36'}},nameTextStyle:{color:'#8fa4b8'}},
+    series:[
+      {name:'不压缩',type:'line',data:noComp,symbol:'none',lineStyle:{width:2,color:'#ee6666',type:'dashed'},itemStyle:{color:'#ee6666'}},
+      {name:`Opus (每${bestOpusN}步)`,type:'line',data:opusCtx,symbol:'none',lineStyle:{width:2,color:'#7ee8a2'},itemStyle:{color:'#7ee8a2'},step:'end'},
+      {name:`Cheap (每${bestCheapN}步)`,type:'line',data:cheapCtx,symbol:'none',lineStyle:{width:2,color:'#a855f7'},itemStyle:{color:'#a855f7'},step:'end'}
+    ]
+  },true);
+
+  // === Chart 3: cumulative cost ===
+  let cumNo=0, cumOpus=0, cumCheap=0, opusCyc=0, cheapCyc=0;
+  const cumNoArr=[0], cumOpusArr=[0], cumCheapArr=[0];
+
+  for(let i=1;i<=HORIZON;i++){
+    // no compress
+    cumNo += crc(BASE+(i-1)*STEP);
+    // opus
+    opusCyc++;
+    cumOpus += crc(POST+(opusCyc-1)*STEP);
+    if(opusCyc>=bestOpusN){cumOpus+=compOpus(POST+bestOpusN*STEP)+OVERHEAD;opusCyc=0;}
+    // cheap
+    cheapCyc++;
+    cumCheap += crc(POST+(cheapCyc-1)*STEP);
+    if(cheapCyc>=bestCheapN){cumCheap+=compCheap(POST+bestCheapN*STEP)+OVERHEAD;cheapCyc=0;}
+
+    cumNoArr.push(+cumNo.toFixed(5));
+    cumOpusArr.push(+cumOpus.toFixed(5));
+    cumCheapArr.push(+cumCheap.toFixed(5));
+  }
+
+  c3.setOption({
+    tooltip:{trigger:'axis',backgroundColor:'#1a2332',borderColor:'#2a3a4a',textStyle:{color:'#c5cdd9',fontSize:12},
+      formatter:ps=>{
+        let s=`Step ${ps[0].axisValue}<br>`;
+        ps.forEach(p=>s+=`${p.marker} ${p.seriesName}: <b>$${p.value.toFixed(4)}</b><br>`);
+        const saving=ps[0].value-ps[2].value;
+        if(saving>0)s+=`<br>Cheap 比不压缩省 $${saving.toFixed(4)}`;
+        return s;}},
+    legend:{top:4,textStyle:{color:'#8fa4b8',fontSize:12}},
+    grid:{left:64,right:32,bottom:48,top:48},
+    xAxis:{type:'category',data:steps,name:'对话步数',nameLocation:'center',nameGap:30,
+      axisLabel:{color:'#6b7b8d',interval:n=>steps[n]%10===0},nameTextStyle:{color:'#8fa4b8'}},
+    yAxis:{type:'value',name:'累计成本 ($)',axisLabel:{color:'#6b7b8d',formatter:'${value}'},
+      splitLine:{lineStyle:{color:'#1e2a36'}},nameTextStyle:{color:'#8fa4b8'}},
+    series:[
+      {name:'不压缩',type:'line',data:cumNoArr,symbol:'none',lineStyle:{width:2.5,color:'#ee6666',type:'dashed'},itemStyle:{color:'#ee6666'},
+        areaStyle:{color:'rgba(238,102,102,0.06)'}},
+      {name:`Opus (每${bestOpusN}步)`,type:'line',data:cumOpusArr,symbol:'none',lineStyle:{width:2.5,color:'#7ee8a2'},itemStyle:{color:'#7ee8a2'}},
+      {name:`Cheap (每${bestCheapN}步)`,type:'line',data:cumCheapArr,symbol:'none',lineStyle:{width:2.5,color:'#a855f7'},itemStyle:{color:'#a855f7'},
+        areaStyle:{color:'rgba(168,85,247,0.06)'}}
+    ]
+  },true);
+}
+
+render();
+const ohSlider = document.getElementById('overheadSlider');
+const ohInput = document.getElementById('overheadInput');
+ohSlider.addEventListener('input', () => { ohInput.value = ohSlider.value; render(); });
+ohInput.addEventListener('input', () => { ohSlider.value = Math.min(1.0, Math.max(0, parseFloat(ohInput.value)||0)); render(); });
+document.querySelectorAll('.params input:not(#overheadSlider):not(#overheadInput)').forEach(el=>el.addEventListener('input',render));
+window.addEventListener('resize',()=>{c1.resize();c2.resize();c3.resize();});
+</script>
+</body>
+</html>

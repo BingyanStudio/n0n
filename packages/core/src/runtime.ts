@@ -42,13 +42,9 @@ export interface RuntimeContext {
 export interface RuntimeOptions {
 	/** 主 LLM Client */
 	client: LLMClient;
-	/**
-	 * 编辑后端配置。
-	 * - 不传或 type="str-replace": 使用 Editor LLM 多轮 str_replace 循环
-	 * - type="freeform-patch": 使用 OpenAI Responses API + freeform patch 单次调用
-	 *
-	 * str-replace 模式下 editorClient 可省略，默认复用 client。
-	 */
+	// TODO: 取消 editorClient 的默认回退（当前省略时复用 client），改为要求调用方显式传入。
+	// 类型应统一为 EditBackendConfig（不再需要 optional editorClient 的联合分支），
+	// createRuntimeContext 中的 as 类型断言也可随之移除。
 	editBackend?: EditBackendConfig | { type: "str-replace"; editorClient?: LLMClient };
 	/** Agent 配置覆盖 */
 	agent?: Partial<AgentConfig>;
@@ -73,6 +69,7 @@ function parseBlockedCommands(): string[] {
  * Client 实例由调用方（app 入口）创建并注入，
  * 实现 @n0n/core 与 @n0n/llm 的依赖反转。
  */
+// TODO: 取消 editorClient 默认回退后，此处的 as 类型断言可移除，discriminated union 自然收窄。
 export function createRuntimeContext(options: RuntimeOptions): RuntimeContext {
 	let editBackend: EditBackendConfig;
 	if (options.editBackend?.type === "freeform-patch") {
@@ -101,6 +98,9 @@ export function createRuntimeContext(options: RuntimeOptions): RuntimeContext {
 
 // ── 运行时上下文全局单例 ──
 
+// TODO: review — getRuntime() 全局单例在多 agent 场景下可能成为瓶颈，
+// 考虑改为 RuntimeContext 参数透传。当前调用方仅 loop.ts 和 rag.ts，改动范围可控。
+// 等其他 TODO 解决后再具体讨论。
 let _runtime: RuntimeContext | null = null;
 
 /** 获取当前运行时上下文（必须先通过 initRuntime 初始化） */

@@ -13,6 +13,7 @@
 export type TagStyle = "deepseek" | "glm" | "minimax" | "default";
 
 /** 从模型名称推断 tag 风格 */
+// TODO: tag 风格基于模型名推断是脆弱的（代理可能改写模型名），考虑改为 ProviderConfig 的一部分。
 export function detectTagStyle(model: string): TagStyle {
 	const m = model.toLowerCase();
 	if (m.includes("deepseek")) return "deepseek";

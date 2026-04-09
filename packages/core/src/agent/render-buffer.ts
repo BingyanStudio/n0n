@@ -24,6 +24,8 @@ interface ToolBuffer {
 
 // ── RenderBuffer ──
 
+// TODO: 计划将 RenderBuffer 从 core 层抽离为独立工具模块（如 packages/render-buffer）。
+// core 层改为发射 raw 无序事件，RenderBuffer 作为可选的顺序化适配器供 CLI 等消费者使用。
 export class RenderBuffer {
 	/** 按入队顺序排列的工具缓冲 */
 	private readonly queue: ToolBuffer[] = [];

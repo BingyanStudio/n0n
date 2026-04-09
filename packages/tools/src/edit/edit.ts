@@ -32,7 +32,6 @@ import { applySingleOp } from "./str-replace/loop.ts";
 export { EditArgsSchema } from "@n0n/types";
 
 // ── 主模型工具定义（intent 驱动） ──
-
 export const EDIT_TOOL_DEFINITION: ToolDefinition = {
 	name: "edit",
 	description: editDescription,

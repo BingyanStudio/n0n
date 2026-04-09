@@ -1,13 +1,14 @@
 /**
- * Renderer — 指令式事件驱动的渲染抽象
- *
- * agentLoop（上游）产生明确的阶段开始/结束指令，Renderer（下游）只响应指令，不做推断。
- * 所有阶段转换由 loop.ts 驱动，Renderer 不需要维护内部状态来猜测当前处于什么阶段。
+ * Renderer — 事件驱动的渲染抽象
  *
  * 事件分三个阶段：
  * 1. LLM 流式输出：thinkingChunk → thinkingEnd → contentChunk → contentEnd → toolCallArg* → streamEnd
  * 2. 工具执行：toolExecStart → toolExecChunk → toolExecEnd
  * 3. 特殊事件：submitAccepted / submitRejected / agentTerminated / aborted
+ *
+ * TODO: 工具执行事件（阶段 2）当前经 RenderBuffer FIFO 排序后按序推送，隐含了顺序渲染假设。
+ * 计划改为 scheduler 直接发射带 tcId 的 raw 无序事件，各 Renderer 实现自行决定排序策略。
+ * toolExecChunk/toolExecEnd 需补充 tcId 参数以支持无序事件的消费端路由。
  */
 
 import type { ToolCallRecord, ToolResult } from "./domain.ts";

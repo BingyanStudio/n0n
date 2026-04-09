@@ -5,6 +5,7 @@
  * 保留供外部引用兼容。
  */
 
+// TODO: 确认无外部引用后彻底移除此 deprecated 代码。
 /** @deprecated 已被 Anthropic 自动缓存替代，不再被 client 调用。 */
 export function selectCacheBreakpoints(
 	messages: readonly { role: string }[],

@@ -199,8 +199,9 @@ export class OpenAIClient implements LLMClient {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const apiMessages = toOpenAIMessages(promptMessages);
 
-		// litellm + anthropic backend：在最后一条消息注入 cache_control
-		// 模拟 Anthropic 自动缓存行为，只在末尾设断点，利用 20 块回溯窗口自动匹配前缀
+		// litellm + anthropic backend：OpenAI 协议不会透传 cache_control，
+		// 这里在最后一条消息注入该字段，利用 litellm 透传机制让 Anthropic 后端看到缓存标记。
+		// 模拟 Anthropic 自动缓存行为，只在末尾设断点，利用 20 块回溯窗口自动匹配前缀。
 		if (
 			this.config.providerConfig.provider === "openai-compatible" &&
 			this.config.providerConfig.backendProvider === "anthropic"
@@ -286,8 +287,9 @@ export class OpenAIClient implements LLMClient {
 					u.prompt_cache_hit_tokens ??
 					0;
 				const cacheWriteTokens = u.prompt_cache_miss_tokens ?? 0;
-				// OpenAI prompt_tokens 包含 cached tokens，需扣除以对齐 Anthropic 语义
-				// （inputTokens 统一表示"新计算的输入 token"）
+				// OpenAI prompt_tokens 包含 cached tokens，Anthropic input_tokens 只算新计算的。
+				// 扣除 cacheReadTokens 以统一语义：inputTokens = 新计算的输入 token，
+				// 上层计费和监控逻辑不需要关心底层 provider 差异。
 				const rawInput = u.prompt_tokens ?? 0;
 				lastUsage = {
 					inputTokens: rawInput - cacheReadTokens,

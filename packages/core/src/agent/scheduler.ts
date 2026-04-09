@@ -8,8 +8,8 @@
  *   exec             → active 为空
  *   reminder/submit  → 无条件
  *
- * TODO 当前通过 attachRenderBuffer 与 RenderBuffer 耦合，且 startJob 直接推送渲染事件。
- * 后续应考虑通过事件回调接口进一步解耦调度与渲染，使两者可独立测试和替换。
+ * TODO: 移除 attachRenderBuffer 耦合，改为通过事件回调接口（onChunk、onEnd）发射 raw 事件。
+ * 排序职责下放给消费者，RenderBuffer 抽离为独立工具模块。
  */
 
 import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
@@ -93,11 +93,8 @@ export class ExecutionScheduler {
 		}
 	}
 
-	// ── 条件检查 ──
-	// TODO 基于约定的硬编码：canExecute 通过 switch(tc.tool) 硬编码了每种工具的并行策略。
-	// 应改为 ToolEntry 上声明 canExecute 回调：(self: ToolCallRecord, active: ToolCallRecord[]) => boolean，
-	// scheduler 直接调用回调，不再依赖工具名字符串。
-
+	// TODO: canExecute 通过 switch(tc.tool) 硬编码了每种工具的并行策略。
+	// 应改为 ToolEntry 上声明 canExecute 回调，scheduler 直接调用，不再依赖工具名字符串。
 	private canExecute(job: PipelineJob): boolean {
 		const tc = job.tc;
 		switch (tc.tool) {

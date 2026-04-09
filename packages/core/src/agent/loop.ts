@@ -4,10 +4,12 @@
  * 每一步都是一个清晰的函数调用：
  * 1. parseStream  → 流式解析，yield 语义事件
  * 2. scheduler    → 流水线并行执行（streaming 中工具就绪即入队）
- * 3. renderBuffer → FIFO 有序渲染
- * 4. round.*      → 纯函数后处理（截断恢复、消息构建、submit 检查）
+ * 3. round.*      → 纯函数后处理（截断恢复、消息构建、submit 检查）
  *
- * 本文件不包含 phase tracking、JSON 解析、截断恢复等细节。
+ * TODO: 当前 renderBuffer 在 core 层做 FIFO 排序后推给 Renderer，隐含了"顺序渲染"假设。
+ * 计划改为 scheduler 通过回调发射 raw 事件（带 tcId，无序），排序由各 UI 消费者自行决定。
+ * RenderBuffer 将抽离为独立工具模块供需要顺序渲染的消费者（如 CLI）使用。
+ * 届时此文件中的 RenderBuffer 相关代码（import、创建、drain）将被移除。
  */
 
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
@@ -109,6 +111,7 @@ export async function agentLoop<T = unknown>(
 		const renderBuffer = new RenderBuffer();
 		scheduler.attachRenderBuffer(renderBuffer);
 		const runPromise = scheduler.run(options?.signal);
+		// TODO: renderBuffer 将移除，scheduler 改为通过回调发射 raw 事件，Renderer 直接消费无序事件。
 
 		let streamResult: StreamingResult | null = null;
 

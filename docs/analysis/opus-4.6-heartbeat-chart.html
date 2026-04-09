@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>命题1 策略A × Opus 4.6 — 心跳刷新甜蜜点</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Helvetica Neue', 'PingFang SC', sans-serif;
+    background: #0a0e14;
+    color: #c5cdd9;
+    min-height: 100vh;
+    padding: 32px 24px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 600;
+    color: #7ee8a2;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #6b7b8d;
+    margin-bottom: 32px;
+  }
+  .chart-container {
+    max-width: 960px;
+    margin: 0 auto 40px;
+    background: #111820;
+    border-radius: 12px;
+    padding: 24px 16px 8px;
+    border: 1px solid #1e2a36;
+  }
+  .chart-container h2 {
+    font-size: 15px;
+    font-weight: 500;
+    color: #8fa4b8;
+    margin-bottom: 4px;
+    padding-left: 8px;
+  }
+  .chart-container .desc {
+    font-size: 12px;
+    color: #556677;
+    padding-left: 8px;
+    margin-bottom: 12px;
+  }
+  .chart { width: 100%; height: 420px; }
+  .params {
+    max-width: 960px;
+    margin: 0 auto 24px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .params label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #8fa4b8;
+  }
+  .params input[type="range"] {
+    width: 140px;
+    accent-color: #7ee8a2;
+  }
+  .params .val {
+    min-width: 64px;
+    color: #7ee8a2;
+    font-variant-numeric: tabular-nums;
+  }
+  .insight {
+    max-width: 960px;
+    margin: 0 auto 32px;
+    padding: 16px 20px;
+    background: #111820;
+    border-left: 3px solid #7ee8a2;
+    border-radius: 0 8px 8px 0;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .insight strong { color: #7ee8a2; }
+  .formula {
+    max-width: 960px;
+    margin: 0 auto 24px;
+    padding: 14px 20px;
+    background: #111820;
+    border-radius: 8px;
+    border: 1px solid #1e2a36;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    color: #8fa4b8;
+    line-height: 1.8;
+  }
+  .formula .highlight { color: #fac858; }
+  .formula .green { color: #7ee8a2; }
+</style>
+</head>
+<body>
+
+<h1>🐍 命题1 策略A × Opus 4.6</h1>
+<p class="subtitle">心跳刷新甜蜜点可视化 — Cache TTL 5min</p>
+
+<div class="formula">
+  <div>心跳成本 = prefix × <span class="green">$0.50/MTok</span> + <span class="highlight">C_fixed</span></div>
+  <div>Miss额外 = prefix × ($5.00 + $6.25 − $0.50)/MTok = prefix × $10.75/MTok</div>
+  <div>盈亏平衡 N = prefix × 10.75 / (prefix × 0.50 + <span class="highlight">C_fixed</span>)</div>
+  <div style="margin-top:6px;color:#6b7b8d;">当 C_fixed = 0 时 prefix 约掉，N = 21.5（与前缀无关）</div>
+  <div style="color:#6b7b8d;">当 C_fixed > 0 时，小前缀的心跳相对更贵，甜蜜点更早到来</div>
+</div>
+
+<div class="insight" id="insight">加载中…</div>
+
+<div class="params">
+  <label>
+    心跳间隔
+    <input type="range" id="intervalSlider" min="1" max="4.5" step="0.5" value="4">
+    <span class="val" id="intervalVal">4 min</span>
+  </label>
+  <label>
+    非缓存开销
+    <input type="range" id="overheadSlider" min="0" max="2000" step="100" value="500">
+    <span class="val" id="overheadVal">500 tok</span>
+  </label>
+</div>
+
+<div class="chart-container">
+  <h2>图一：甜蜜点随前缀大小的变化</h2>
+  <p class="desc">X 轴为前缀长度，Y 轴为盈亏平衡时间——曲线越低说明心跳越快亏本</p>
+  <div class="chart" id="chart1"></div>
+</div>
+
+<div class="chart-container">
+  <h2>图二：累计额外成本对比 — 心跳 vs 无心跳</h2>
+  <p class="desc">多条前缀对比：虚线为 cache miss 一次性成本，实线为心跳累计成本</p>
+  <div class="chart" id="chart2"></div>
+</div>
+
+<div class="chart-container">
+  <h2>图三：绝对节省金额 — 前缀越大，收益（或亏损）越显著</h2>
+  <p class="desc">正值 = 心跳比不做心跳省钱，负值 = 亏本</p>
+  <div class="chart" id="chart3"></div>
+</div>
+
+<script>
+const INPUT = 5.0;
+const OUTPUT = 25.0;
+const CACHE_WRITE = 6.25;
+const CACHE_READ = 0.50;
+const MISS_EXTRA_PER_MTOK = INPUT + CACHE_WRITE - CACHE_READ; // 10.75
+
+const chart1 = echarts.init(document.getElementById('chart1'));
+const chart2 = echarts.init(document.getElementById('chart2'));
+const chart3 = echarts.init(document.getElementById('chart3'));
+
+const prefixSizes = [5, 10, 30, 50, 80, 100, 150, 200]; // K tokens
+const prefixColors = ['#a855f7','#5470c6','#91cc75','#fac858','#ee6666','#73c0de','#fc8452','#9a60b4'];
+
+function hbCostOnce(prefixK, overheadTok) {
+  return (prefixK / 1000) * CACHE_READ + (overheadTok / 1_000_000) * INPUT + (1 / 1_000_000) * OUTPUT;
+}
+function missCostExtra(prefixK) {
+  return (prefixK / 1000) * MISS_EXTRA_PER_MTOK;
+}
+function breakevenN(prefixK, overheadTok) {
+  const hb1 = hbCostOnce(prefixK, overheadTok);
+  const miss = missCostExtra(prefixK);
+  return miss / hb1;
+}
+
+function render(interval, overheadTok) {
+  // === Insight text ===
+  const n100k = breakevenN(100, overheadTok);
+  const n10k = breakevenN(10, overheadTok);
+  const n200k = breakevenN(200, overheadTok);
+  document.getElementById('insight').innerHTML =
+    `固定开销 ${overheadTok} tok 时：` +
+    `<strong>10K 前缀甜蜜点 ≈ ${(n10k * interval).toFixed(0)}min</strong>，` +
+    `<strong>100K ≈ ${(n100k * interval).toFixed(0)}min</strong>，` +
+    `<strong>200K ≈ ${(n200k * interval).toFixed(0)}min</strong>。` +
+    `<br>前缀越小，固定开销占比越大，心跳越快变得不划算。` +
+    (overheadTok === 0
+      ? ' 当固定开销 = 0 时所有前缀收敛到 86min（纯线性模型）。'
+      : '');
+
+  // === Chart 1: breakeven time vs prefix size (continuous curve) ===
+  const prefixRange = [];
+  for (let p = 1; p <= 200; p += 1) prefixRange.push(p);
+
+  const breakevenData = prefixRange.map(p => {
+    const n = breakevenN(p, overheadTok);
+    return +(n * interval).toFixed(1);
+  });
+  // theoretical limit (no overhead)
+  const theoreticalMin = +(MISS_EXTRA_PER_MTOK / CACHE_READ * interval).toFixed(1);
+
+  chart1.setOption({
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1a2332',
+      borderColor: '#2a3a4a',
+      textStyle: { color: '#c5cdd9', fontSize: 12 },
+      formatter: params => {
+        const pk = params[0].axisValue;
+        const mins = params[0].value;
+        const n = breakevenN(pk, overheadTok);
+        return `前缀 ${pk}K tokens<br>` +
+          `盈亏平衡: <b>${mins} min</b>（${n.toFixed(1)} 次心跳）<br>` +
+          `单次心跳: $${hbCostOnce(pk, overheadTok).toFixed(4)}<br>` +
+          `Miss额外: $${missCostExtra(pk).toFixed(4)}`;
+      }
+    },
+    grid: { left: 64, right: 40, bottom: 48, top: 40 },
+    xAxis: {
+      type: 'category', data: prefixRange,
+      name: '前缀长度 (K tokens)', nameLocation: 'center', nameGap: 30,
+      axisLabel: {
+        color: '#6b7b8d',
+        interval: (_, v) => v % 20 === 0
+      },
+      axisLine: { lineStyle: { color: '#2a3a4a' } },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    yAxis: {
+      type: 'value', name: '盈亏平衡时间 (min)',
+      min: 0,
+      axisLabel: { color: '#6b7b8d', formatter: '{value}min' },
+      splitLine: { lineStyle: { color: '#1e2a36' } },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    series: [
+      {
+        name: '甜蜜点',
+        type: 'line', data: breakevenData, smooth: true,
+        lineStyle: { width: 3, color: '#7ee8a2' },
+        itemStyle: { color: '#7ee8a2' },
+        symbol: 'none',
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0,0,0,1,[
+            {offset:0, color:'rgba(126,232,162,0.2)'},
+            {offset:1, color:'rgba(126,232,162,0)'}
+          ])
+        },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          lineStyle: { color: '#fac858', type: 'dotted', width: 1.5 },
+          data: [{
+            yAxis: theoreticalMin,
+            label: {
+              formatter: `理论极限 ${theoreticalMin}min（无固定开销）`,
+              color: '#fac858', fontSize: 11, position: 'insideEndTop'
+            }
+          }]
+        }
+      }
+    ]
+  }, true);
+
+  // === Chart 2: cumulative cost comparison for multiple prefixes ===
+  const awayRange = [];
+  for (let m = 0; m <= 150; m += 1) awayRange.push(m);
+
+  const selectedPrefixes = [10, 50, 100, 200];
+  const selectedColors = ['#5470c6', '#fac858', '#73c0de', '#9a60b4'];
+
+  const series2 = [];
+  selectedPrefixes.forEach((pk, i) => {
+    // heartbeat cumulative
+    const hbData = awayRange.map(m => {
+      const n = m <= 5 ? 0 : Math.floor(m / interval);
+      return +(n * hbCostOnce(pk, overheadTok)).toFixed(4);
+    });
+    // miss (flat line after 5min)
+    const missData = awayRange.map(m => m <= 5 ? 0 : +missCostExtra(pk).toFixed(4));
+
+    series2.push({
+      name: `${pk}K 心跳`,
+      type: 'line', data: hbData, smooth: false,
+      lineStyle: { width: 2, color: selectedColors[i] },
+      itemStyle: { color: selectedColors[i] },
+      symbol: 'none'
+    });
+    series2.push({
+      name: `${pk}K miss`,
+      type: 'line', data: missData, smooth: false,
+      lineStyle: { width: 1.5, color: selectedColors[i], type: 'dashed' },
+      itemStyle: { color: selectedColors[i] },
+      symbol: 'none'
+    });
+  });
+
+  chart2.setOption({
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1a2332',
+      borderColor: '#2a3a4a',
+      textStyle: { color: '#c5cdd9', fontSize: 12 },
+      formatter: params => {
+        const min = params[0].axisValue;
+        let s = `离开 ${min} 分钟<br>`;
+        for (let i = 0; i < params.length; i += 2) {
+          const hb = params[i];
+          const miss = params[i + 1];
+          if (hb && miss) {
+            s += `${hb.marker} ${hb.seriesName.replace(' 心跳','')}: 心跳 $${hb.value.toFixed(3)} / miss $${miss.value.toFixed(3)}<br>`;
+          }
+        }
+        return s;
+      }
+    },
+    legend: {
+      top: 4,
+      textStyle: { color: '#8fa4b8', fontSize: 11 },
+      selector: [{ type: 'all', title: '全选' }, { type: 'inverse', title: '反选' }]
+    },
+    grid: { left: 64, right: 32, bottom: 48, top: 56 },
+    xAxis: {
+      type: 'category', data: awayRange,
+      name: '离开时长 (min)', nameLocation: 'center', nameGap: 30,
+      axisLabel: { color: '#6b7b8d', interval: 9 },
+      axisLine: { lineStyle: { color: '#2a3a4a' } },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    yAxis: {
+      type: 'value', name: '额外成本 ($)',
+      axisLabel: { color: '#6b7b8d', formatter: '${value}' },
+      splitLine: { lineStyle: { color: '#1e2a36' } },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    series: series2
+  }, true);
+
+  // === Chart 3: absolute saving by prefix ===
+  const absSeries = prefixSizes.map((pk, i) => {
+    const data = awayRange.map(m => {
+      if (m <= 5) return 0;
+      const n = Math.floor(m / interval);
+      const saved = missCostExtra(pk) - n * hbCostOnce(pk, overheadTok);
+      return +saved.toFixed(4);
+    });
+    return {
+      name: `${pk}K`,
+      type: 'line', data, smooth: false,
+      lineStyle: { width: 2 },
+      itemStyle: { color: prefixColors[i] },
+      symbol: 'none'
+    };
+  });
+
+  chart3.setOption({
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1a2332',
+      borderColor: '#2a3a4a',
+      textStyle: { color: '#c5cdd9', fontSize: 12 },
+      formatter: params => {
+        const m = params[0].axisValue;
+        let s = `离开 ${m} 分钟<br>`;
+        params.forEach(p => {
+          if (p.seriesName === '盈亏线') return;
+          const v = p.value;
+          const label = v >= 0 ? `省 $${v.toFixed(3)}` : `亏 $${Math.abs(v).toFixed(3)}`;
+          s += `${p.marker} ${p.seriesName}: <b>${label}</b><br>`;
+        });
+        return s;
+      }
+    },
+    legend: { top: 4, textStyle: { color: '#8fa4b8', fontSize: 12 } },
+    grid: { left: 64, right: 32, bottom: 48, top: 48 },
+    xAxis: {
+      type: 'category', data: awayRange,
+      name: '离开时长 (min)', nameLocation: 'center', nameGap: 30,
+      axisLabel: { color: '#6b7b8d', interval: 9 },
+      axisLine: { lineStyle: { color: '#2a3a4a' } },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    yAxis: {
+      type: 'value', name: '节省金额 ($)',
+      axisLabel: { color: '#6b7b8d', formatter: '${value}' },
+      splitLine: { lineStyle: { color: '#1e2a36' } },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    series: [
+      ...absSeries,
+      {
+        name: '盈亏线',
+        type: 'line',
+        data: awayRange.map(() => 0),
+        lineStyle: { color: '#fac858', type: 'dashed', width: 1.5 },
+        itemStyle: { color: 'transparent' },
+        symbol: 'none'
+      }
+    ]
+  }, true);
+}
+
+// initial render
+render(4, 500);
+
+// slider interactions
+const intervalSlider = document.getElementById('intervalSlider');
+const intervalVal = document.getElementById('intervalVal');
+const overheadSlider = document.getElementById('overheadSlider');
+const overheadVal = document.getElementById('overheadVal');
+
+function onSliderChange() {
+  const iv = parseFloat(intervalSlider.value);
+  const oh = parseInt(overheadSlider.value);
+  intervalVal.textContent = iv + ' min';
+  overheadVal.textContent = oh + ' tok';
+  render(iv, oh);
+}
+
+intervalSlider.addEventListener('input', onSliderChange);
+overheadSlider.addEventListener('input', onSliderChange);
+
+window.addEventListener('resize', () => {
+  chart1.resize();
+  chart2.resize();
+  chart3.resize();
+});
+</script>
+</body>
+</html>

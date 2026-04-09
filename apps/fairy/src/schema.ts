@@ -6,7 +6,6 @@
  */
 
 import { z } from "zod";
-
 export const FairyResponseSchema = z.object({
 	reply: z.string().describe("角色的回复内容"),
 });
