@@ -12,6 +12,23 @@ import { describe, expect, it } from "bun:test";
 import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
 import { RenderBuffer } from "../render-buffer.ts";
 import { ExecutionScheduler } from "../scheduler.ts";
+import type { CanStartFn } from "../scheduler.ts";
+
+// ── canStart 策略 ──
+
+/** write/edit: 同 path 互斥，且不能与无 path 的工具并行 */
+const pathExclusive: CanStartFn = (self, active) => {
+	const path = (self.args as { path?: string }).path;
+	for (const a of active) {
+		const aPath = (a.args as { path?: string }).path;
+		if (aPath === undefined) return false;
+		if (aPath === path) return false;
+	}
+	return true;
+};
+
+/** reminder/submit: 无条件并行 */
+const always: CanStartFn = () => true;
 
 // ── Mock 工具 ──
 
@@ -128,7 +145,7 @@ describe("ExecutionScheduler", () => {
 		it("单个工具正常执行", async () => {
 			const { executor, log } = createInstantExecutor();
 			const scheduler = new ExecutionScheduler(executor);
-			scheduler.enqueue(mockWriteTC("w1", "a.ts"));
+			scheduler.enqueue(mockWriteTC("w1", "a.ts"), pathExclusive);
 			scheduler.seal();
 			await scheduler.run();
 			expect(log).toEqual(["exec:w1"]);
@@ -142,9 +159,9 @@ describe("ExecutionScheduler", () => {
 			const { executor, log, resolve } = createControllableExecutor();
 			const scheduler = new ExecutionScheduler(executor);
 
-			scheduler.enqueue(mockEditTC("e1", "a.ts"));
-			scheduler.enqueue(mockEditTC("e2", "b.ts"));
-			scheduler.enqueue(mockWriteTC("w1", "c.ts"));
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
+			scheduler.enqueue(mockEditTC("e2", "b.ts"), pathExclusive);
+			scheduler.enqueue(mockWriteTC("w1", "c.ts"), pathExclusive);
 			scheduler.seal();
 
 			const runPromise = scheduler.run();
@@ -166,8 +183,8 @@ describe("ExecutionScheduler", () => {
 			const { executor, log, resolve } = createControllableExecutor();
 			const scheduler = new ExecutionScheduler(executor);
 
-			scheduler.enqueue(mockWriteTC("w1", "a.ts"));
-			scheduler.enqueue(mockEditTC("e1", "a.ts"));
+			scheduler.enqueue(mockWriteTC("w1", "a.ts"), pathExclusive);
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
 			scheduler.seal();
 
 			const runPromise = scheduler.run();
@@ -190,7 +207,7 @@ describe("ExecutionScheduler", () => {
 			const { executor, log, resolve } = createControllableExecutor();
 			const scheduler = new ExecutionScheduler(executor);
 
-			scheduler.enqueue(mockEditTC("e1", "a.ts"));
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
 			scheduler.enqueue(mockExecTC("x1"));
 			scheduler.seal();
 
@@ -213,7 +230,7 @@ describe("ExecutionScheduler", () => {
 			const scheduler = new ExecutionScheduler(executor);
 
 			scheduler.enqueue(mockExecTC("x1"));
-			scheduler.enqueue(mockEditTC("e1", "a.ts"));
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
 			scheduler.seal();
 
 			const runPromise = scheduler.run();
@@ -235,8 +252,8 @@ describe("ExecutionScheduler", () => {
 			const scheduler = new ExecutionScheduler(executor);
 
 			scheduler.enqueue(mockExecTC("x1"));
-			scheduler.enqueue(mockWriteTC("w1", "a.ts"));
-			scheduler.enqueue(mockEditTC("e1", "b.ts"));
+			scheduler.enqueue(mockWriteTC("w1", "a.ts"), pathExclusive);
+			scheduler.enqueue(mockEditTC("e1", "b.ts"), pathExclusive);
 			scheduler.seal();
 
 			const runPromise = scheduler.run();
@@ -261,8 +278,8 @@ describe("ExecutionScheduler", () => {
 			const { executor, log, resolve } = createControllableExecutor();
 			const scheduler = new ExecutionScheduler(executor);
 
-			scheduler.enqueue(mockEditTC("e1", "a.ts"));
-			scheduler.enqueue(mockReminderTC("r1"));
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
+			scheduler.enqueue(mockReminderTC("r1"), always);
 			scheduler.seal();
 
 			const runPromise = scheduler.run();
@@ -284,11 +301,11 @@ describe("ExecutionScheduler", () => {
 
 			const runPromise = scheduler.run();
 
-			scheduler.enqueue(mockEditTC("e1", "a.ts"));
+			scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
 			await new Promise((r) => setTimeout(r, 10));
 			expect(log).toContain("start:e1");
 
-			scheduler.enqueue(mockEditTC("e2", "b.ts"));
+			scheduler.enqueue(mockEditTC("e2", "b.ts"), pathExclusive);
 			await new Promise((r) => setTimeout(r, 10));
 			expect(log).toContain("start:e2");
 
@@ -307,9 +324,9 @@ describe("RenderBuffer", () => {
 		const renderBuffer = new RenderBuffer();
 		scheduler.attachRenderBuffer(renderBuffer);
 
-		scheduler.enqueue(mockEditTC("e1", "a.ts"));
-		scheduler.enqueue(mockEditTC("e2", "b.ts"));
-		scheduler.enqueue(mockWriteTC("w1", "c.ts"));
+		scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
+		scheduler.enqueue(mockEditTC("e2", "b.ts"), pathExclusive);
+		scheduler.enqueue(mockWriteTC("w1", "c.ts"), pathExclusive);
 		scheduler.seal();
 
 		const renderLog: string[] = [];
@@ -353,8 +370,8 @@ describe("RenderBuffer", () => {
 		setChunks("e1", ["chunk-a1", "chunk-a2"]);
 		setChunks("e2", ["chunk-b1"]);
 
-		scheduler.enqueue(mockEditTC("e1", "a.ts"));
-		scheduler.enqueue(mockEditTC("e2", "b.ts"));
+		scheduler.enqueue(mockEditTC("e1", "a.ts"), pathExclusive);
+		scheduler.enqueue(mockEditTC("e2", "b.ts"), pathExclusive);
 		scheduler.seal();
 
 		const renderLog: string[] = [];

@@ -72,6 +72,15 @@ type SyncExecutor = (
 	confirmFn?: (question: string) => Promise<string>,
 ) => Promise<ToolResult> | ToolResult;
 
+/**
+ * canStart 并行判断：(self, active) => 是否可以立即启动。
+ * 未声明时 scheduler 使用默认策略（等所有 active 完成）。
+ */
+export type CanStartFn = (
+	self: ToolCallRecord,
+	active: readonly ToolCallRecord[],
+) => boolean;
+
 /** 截断恢复结果：恢复后的工具调用 + 执行结果 */
 export interface RecoverResult {
 	call: ToolCallRecord;
@@ -95,12 +104,24 @@ export type RecoverFn = (
 export type ToolEntry = {
 	definition: ToolDefinition;
 	recoverAndExecute?: RecoverFn;
+	canStart?: CanStartFn;
 } & (
 	| { stream: true; execute: StreamExecutor }
 	| { stream: false; execute: SyncExecutor }
 );
 
 // ── 基础注册表构建 ──
+
+/** write/edit: 与相同 path 的工具互斥，且不能与无 path 的独占工具并行 */
+const pathExclusiveCanStart: CanStartFn = (self, active) => {
+	const path = (self.args as { path?: string }).path;
+	for (const a of active) {
+		const aPath = (a.args as { path?: string }).path;
+		if (aPath === undefined) return false;
+		if (aPath === path) return false;
+	}
+	return true;
+};
 
 /**
  * 构建基础工具注册表（不含 submit）。
@@ -139,6 +160,7 @@ function buildBaseRegistry(
 		write: {
 			definition: WRITE_TOOL_DEFINITION,
 			stream: false,
+			canStart: pathExclusiveCanStart,
 			execute: (tc) => {
 				const call: WriteToolCall = {
 					id: tc.id,
@@ -152,6 +174,7 @@ function buildBaseRegistry(
 		edit: {
 			definition: EDIT_TOOL_DEFINITION,
 			stream: true,
+			canStart: pathExclusiveCanStart,
 			execute: (tc) => {
 				const call: EditToolCall = {
 					id: tc.id,
@@ -168,6 +191,7 @@ function buildBaseRegistry(
 		reminder: {
 			definition: REMINDER_TOOL_DEFINITION,
 			stream: false,
+			canStart: () => true,
 			execute: (tc, reminders) => {
 				const call: ReminderToolCall = {
 					id: tc.id,
@@ -214,6 +238,7 @@ export async function makeToolkit(
 	const submitEntry: ToolEntry = {
 		definition: makeSubmitToolDefinition(schema),
 		stream: false,
+		canStart: () => true,
 		execute: (tc) => {
 			const call: SubmitToolCall = {
 				id: tc.id,

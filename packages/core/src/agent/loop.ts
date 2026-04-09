@@ -146,7 +146,7 @@ export async function agentLoop<T = unknown>(
 				// 工具就绪 → 渲染 + 入队调度
 				case "tool_ready":
 					renderer.toolCallArgEnd(event.index, event.tc);
-					scheduler.enqueue(event.tc);
+					scheduler.enqueue(event.tc, toolkit.getEntry(event.tc.tool)?.canStart);
 					break;
 
 				// streaming 完毕

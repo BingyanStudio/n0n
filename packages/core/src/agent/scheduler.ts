@@ -2,11 +2,7 @@
  * ExecutionScheduler — 流水线工具执行调度器
  *
  * 有序队列 + 队首条件等待，并行性自然涌现。
- *
- * 执行条件：
- *   write/edit(path) → active 中没有相同 path 且没有 exec
- *   exec             → active 为空
- *   reminder/submit  → 无条件
+ * 各工具通过 canStart 回调声明自己的并行条件，scheduler 不感知具体工具语义。
  *
  * TODO: 移除 attachRenderBuffer 耦合，改为通过事件回调接口（onChunk、onEnd）发射 raw 事件。
  * 排序职责下放给消费者，RenderBuffer 抽离为独立工具模块。
@@ -14,6 +10,24 @@
 
 import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
 import type { RenderBuffer } from "./render-buffer.ts";
+
+// ── 并行判断回调 ──
+
+/**
+ * 工具并行条件判断函数。
+ * scheduler 在决定是否启动队首工具时调用。
+ *
+ * @param self 待启动的工具调用
+ * @param active 当前正在执行的所有工具调用
+ * @returns true 表示可以立即启动，false 表示需要等待
+ */
+export type CanStartFn = (
+	self: ToolCallRecord,
+	active: readonly ToolCallRecord[],
+) => boolean;
+
+/** 默认策略：等所有 active 完成后才启动（最保守） */
+const defaultCanStart: CanStartFn = (_self, active) => active.length === 0;
 
 // ── PipelineJob ──
 
@@ -40,8 +54,8 @@ export type ToolExecutor = (
 // ── ExecutionScheduler ──
 
 export class ExecutionScheduler {
-	private readonly jobs: PipelineJob[] = [];
-	private readonly pending: PipelineJob[] = [];
+	private readonly jobs: Array<PipelineJob & { canStart: CanStartFn }> = [];
+	private readonly pending: Array<PipelineJob & { canStart: CanStartFn }> = [];
 	private readonly active = new Map<string, PipelineJob>();
 	private sealed = false;
 	private notify: (() => void) | null = null;
@@ -53,8 +67,14 @@ export class ExecutionScheduler {
 		this.renderBuffer = buf;
 	}
 
-	enqueue(tc: ToolCallRecord): void {
-		const job: PipelineJob = { tc, result: null, argError: null, done: false };
+	enqueue(tc: ToolCallRecord, canStart?: CanStartFn): void {
+		const job = {
+			tc,
+			result: null as ToolResult | null,
+			argError: null as PipelineJob["argError"],
+			done: false,
+			canStart: canStart ?? defaultCanStart,
+		};
 		this.jobs.push(job);
 		this.pending.push(job);
 		this.renderBuffer?.register(tc);
@@ -93,33 +113,9 @@ export class ExecutionScheduler {
 		}
 	}
 
-	// TODO: canExecute 通过 switch(tc.tool) 硬编码了每种工具的并行策略。
-	// 应改为 ToolEntry 上声明 canExecute 回调，scheduler 直接调用，不再依赖工具名字符串。
-	private canExecute(job: PipelineJob): boolean {
-		const tc = job.tc;
-		switch (tc.tool) {
-			case "write":
-			case "edit": {
-				const path = tc.args.path;
-				for (const active of this.active.values()) {
-					if (active.tc.tool === "exec") return false;
-					if (
-						(active.tc.tool === "write" || active.tc.tool === "edit") &&
-						active.tc.args.path === path
-					)
-						return false;
-				}
-				return true;
-			}
-			case "exec":
-				return this.active.size === 0;
-			case "reminder":
-			case "submit":
-				return true;
-			default:
-				// 未识别的工具按最保守策略执行：等所有 active 完成
-				return this.active.size === 0;
-		}
+	private canExecute(job: PipelineJob & { canStart: CanStartFn }): boolean {
+		const activeTCs = [...this.active.values()].map((j) => j.tc);
+		return job.canStart(job.tc, activeTCs);
 	}
 
 	// ── 执行启动 ──
