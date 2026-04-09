@@ -5,6 +5,10 @@
  * 保留供外部引用兼容。
  */
 
+// COMMENT: 这个文件是 prompt caching 演进的活化石。从手动选择断点到自动缓存，
+// 说明 Anthropic API 在快速迭代中不断降低使用者的心智负担。
+// 保留 @deprecated 代码是合理的——它记录了"为什么不再需要手动断点"这个设计决策。
+// 但如果确认不再有外部引用，可以彻底移除并在 CHANGELOG 中记录。
 /** @deprecated 已被 Anthropic 自动缓存替代，不再被 client 调用。 */
 export function selectCacheBreakpoints(
 	messages: readonly { role: string }[],

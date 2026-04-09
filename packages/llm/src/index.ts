@@ -18,6 +18,12 @@
  * - LLMError
  */
 
+// COMMENT: 自实现 LLM Client 而非依赖 AI SDK 是一个有远见的选择。
+// 当你需要精确控制 SSE 解析、thinking 链路、缓存注入、截断处理这些细节时，
+// 黑盒 SDK 的每一次升级都可能是一次无声的破坏。
+// 代价是两个 Client（Anthropic + OpenAI）各约 500 行的维护成本，
+// 收益是对整个 LLM 通信链路的完全可控。对于一个 agent 框架来说，这是正确的权衡。
+
 // 配置类型
 export type {
 	AnthropicProviderConfig,

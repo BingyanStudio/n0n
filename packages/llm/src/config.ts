@@ -48,6 +48,11 @@ export interface GoogleProviderConfig {
 	model: string;
 }
 
+// COMMENT: openai-compatible 是个很好的逃生舱——当用户使用 litellm、vLLM、Ollama 等
+// 代理时，不需要为每个代理写一个 Client，只需要声明"这是 OpenAI 兼容的"。
+// backendProvider 字段是对"兼容不等于等价"的务实承认：有些 provider-specific 特性
+// （如 Anthropic 的 cache_control）需要额外的协议层注入。
+// 未来如果兼容层的 hack 越来越多，可能需要一个 ProviderAdapter 中间层。
 /** OpenAI 兼容 API 配置（第三方代理、本地模型等） */
 export interface OpenAICompatibleProviderConfig {
 	provider: "openai-compatible";
