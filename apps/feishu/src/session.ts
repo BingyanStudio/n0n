@@ -21,15 +21,26 @@ export interface FeishuSession {
 		abortController: AbortController;
 		startedAt: number;
 	} | null;
+	lastActiveAt: number;
 }
 
 // ── 会话存储 ──
 
-// TODO: sessions Map 只增不减，无 TTL 清理。长期运行后内存持续增长。
-// 同时每个 session 的 history 随对话轮次膨胀，需要：
-// 1. session 过期自动清理（如 24h 无活动）
-// 2. history 滑动窗口或摘要压缩
 const sessions = new Map<string, FeishuSession>();
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const SESSION_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 每小时清理一次
+
+setInterval(() => {
+	const now = Date.now();
+	for (const [key, session] of sessions) {
+		if (now - session.lastActiveAt >= SESSION_TTL_MS) {
+			if (session.currentTask) {
+				session.currentTask.abortController.abort();
+			}
+			sessions.delete(key);
+		}
+	}
+}, SESSION_CLEANUP_INTERVAL_MS).unref();
 
 export function buildSessionKey(ctx: FeishuMessageContext): string {
 	return [
@@ -49,6 +60,7 @@ export function getOrCreateSession(
 	if (existing) {
 		existing.ctx = ctx;
 		existing.paths = paths;
+		existing.lastActiveAt = Date.now();
 		return existing;
 	}
 	const session: FeishuSession = {
@@ -57,6 +69,7 @@ export function getOrCreateSession(
 		paths: paths,
 		userInfo: userInfo ?? null,
 		currentTask: null,
+		lastActiveAt: Date.now(),
 	};
 	sessions.set(sessionKey, session);
 	return session;
@@ -75,6 +88,7 @@ export function resetSession(
 		paths: paths,
 		userInfo: userInfo ?? null,
 		currentTask: null,
+		lastActiveAt: Date.now(),
 	};
 	sessions.set(sessionKey, session);
 	return session;
