@@ -130,7 +130,7 @@ sections.push(`## Tool Definitions (${toolDefs.length} tools)`);
 sections.push("");
 for (const t of toolDefs) {
 	const descPreview = t.description.slice(0, 120).replace(/\n/g, " ");
-	const paramKeys = Object.keys(t.parameters.properties);
+	const paramKeys = Object.keys(t.parameters.properties ?? {});
 	sections.push(`- **${t.name}**(${paramKeys.join(", ")}): ${descPreview}...`);
 }
 sections.push("");
