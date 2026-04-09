@@ -32,6 +32,13 @@ import { applySingleOp } from "./str-replace/loop.ts";
 export { EditArgsSchema } from "@n0n/types";
 
 // ── 主模型工具定义（intent 驱动） ──
+// COMMENT: 影子编辑（Shadow Edit）是这个项目最有创意的设计之一。
+// 传统的 AI 代码编辑要求模型输出精确的 search/replace 对，
+// 但这给模型带来了巨大的认知负担——它需要精确记忆文件内容才能定位修改位置。
+// 影子编辑把这个问题分解为两层：主模型只表达"意图"（自然语言），
+// 影子层（Editor LLM）负责理解意图并生成精确操作。
+// 这不仅降低了主模型的认知负担，还允许两个模型各自优化——
+// 主模型专注于"做什么"，影子模型专注于"怎么做"。
 
 export const EDIT_TOOL_DEFINITION: ToolDefinition = {
 	name: "edit",
@@ -189,6 +196,10 @@ function failResult(call: EditToolCall, error: string): EditToolResult {
 	};
 }
 
+// COMMENT: editTool 的返回值包含 diff 和 feedback 两个关键字段。
+// diff 让主模型看到"实际改了什么"（而不是"我让它改什么"），
+// feedback 让影子层可以反向引导主模型（如"意图不够具体，请描述精确位置"）。
+// 这形成了一个有趣的双向通信：主模型→意图→影子层→操作+反馈→主模型。
 export async function editTool(
 	call: EditToolCall,
 	workspace: string,
