@@ -42,10 +42,8 @@ export interface RuntimeContext {
 export interface RuntimeOptions {
 	/** 主 LLM Client */
 	client: LLMClient;
-	// TODO: 取消 editorClient 的默认回退（当前省略时复用 client），改为要求调用方显式传入。
-	// 类型应统一为 EditBackendConfig（不再需要 optional editorClient 的联合分支），
-	// createRuntimeContext 中的 as 类型断言也可随之移除。
-	editBackend?: EditBackendConfig | { type: "str-replace"; editorClient?: LLMClient };
+	/** 编辑后端配置 */
+	editBackend: EditBackendConfig;
 	/** Agent 配置覆盖 */
 	agent?: Partial<AgentConfig>;
 	/** 安全配置覆盖 */
@@ -63,27 +61,10 @@ function parseBlockedCommands(): string[] {
 		.filter((c) => c.length > 0);
 }
 
-/**
- * 构造 RuntimeContext
- *
- * Client 实例由调用方（app 入口）创建并注入，
- * 实现 @n0n/core 与 @n0n/llm 的依赖反转。
- */
-// TODO: 取消 editorClient 默认回退后，此处的 as 类型断言可移除，discriminated union 自然收窄。
 export function createRuntimeContext(options: RuntimeOptions): RuntimeContext {
-	let editBackend: EditBackendConfig;
-	if (options.editBackend?.type === "freeform-patch") {
-		editBackend = options.editBackend as EditBackendConfig;
-	} else {
-		const editorClient =
-			(options.editBackend as { editorClient?: LLMClient } | undefined)?.editorClient
-			?? options.client;
-		editBackend = { type: "str-replace", editorClient };
-	}
-
 	return {
 		client: options.client,
-		editBackend,
+		editBackend: options.editBackend,
 		agent: {
 			maxIterations: options.agent?.maxIterations ?? 50,
 			maxIdleRounds: options.agent?.maxIdleRounds ?? 5,
