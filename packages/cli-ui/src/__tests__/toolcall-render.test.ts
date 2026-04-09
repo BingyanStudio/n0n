@@ -72,14 +72,14 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.streamEnd();
 
 		// agentLoop 解析完成后调用 toolCallStart
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "exec",
 			args: { script: "ls -la", runtime: "sh" },
 		});
 
 		// 工具执行完成
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", {
 			type: "tool_result",
 			tool: "exec",
 			status: "completed" as const,
@@ -126,13 +126,13 @@ describe("RichRenderer tool call streaming", () => {
 		// 流结束
 		renderer.streamEnd();
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "exec",
 			args: { script: "echo hello" },
 		});
 
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", {
 			type: "tool_result",
 			tool: "exec",
 			status: "completed" as const,
@@ -170,20 +170,20 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.streamEnd();
 
 		// 两个 toolCallStart
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "exec",
 			args: { script: "ls" },
 		});
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_2", {
 			id: "call_2",
 			tool: "write",
 			args: { path: "test.txt", content: "hello" },
 		});
 
 		// 两个 toolCallEnd
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", {
 			type: "tool_result",
 			tool: "exec",
 			status: "completed" as const,
@@ -194,7 +194,7 @@ describe("RichRenderer tool call streaming", () => {
 			durationMs: 50,
 		});
 
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_2", {
 			type: "tool_result",
 			tool: "write",
 			call: {
@@ -257,12 +257,12 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolCallArgStart(0, "exec");
 		renderer.toolCallArgChunk(0, '{"script":"ls"}');
 		renderer.streamEnd();
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "exec",
 			args: { script: "ls" },
 		});
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", {
 			type: "tool_result",
 			tool: "exec",
 			status: "completed" as const,
@@ -278,12 +278,12 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.toolCallArgStart(0, "write");
 		renderer.toolCallArgChunk(0, '{"path":"out.txt","content":"data"}');
 		renderer.streamEnd();
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_2", {
 			id: "call_2",
 			tool: "write",
 			args: { path: "out.txt", content: "data" },
 		});
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_2", {
 			type: "tool_result",
 			tool: "write",
 			call: {
@@ -319,13 +319,13 @@ describe("RichRenderer tool call streaming", () => {
 		renderer.streamEnd();
 
 		// edit 的 toolCallStart 有特殊渲染（只显示 path + intent）
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "edit",
 			args: { path: "src/index.ts", intent: "fix bug" },
 		});
 
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", {
 			type: "tool_result",
 			tool: "edit",
 			call: {

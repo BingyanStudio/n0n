@@ -161,12 +161,12 @@ describe("精确宽度边界", () => {
 		}
 		renderer.streamEnd();
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "submit",
 			args: JSON.parse(realJson),
 		});
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", {
 			type: "tool_result" as const,
 			tool: "submit",
 			call: { id: "call_1", tool: "submit", args: JSON.parse(realJson) },

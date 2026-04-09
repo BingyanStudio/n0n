@@ -42,14 +42,14 @@ export class PlainRenderer implements Renderer {
 		);
 	}
 
-	toolExecStart(tc: ToolCallRecord): void {
+	toolExecStart(_tcId: string, tc: ToolCallRecord): void {
 		const suffix =
 			tc.tool === "exec" ? ` → ${tc.args.script.slice(0, 80)}` : "";
 		console.error(`  [agent] tool: ${tc.tool}${suffix}`);
 	}
 
-	toolExecChunk(_tool: string, _chunk: string): void {}
-	toolExecEnd(_result: ToolResult): void {}
+	toolExecChunk(_tcId: string, _tool: string, _chunk: string): void {}
+	toolExecEnd(_tcId: string, _result: ToolResult | null): void {}
 
 	submitAccepted(): void {
 		console.error("  [agent] submit accepted ✓");

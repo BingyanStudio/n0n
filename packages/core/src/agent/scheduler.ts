@@ -4,8 +4,7 @@
  * 有序队列 + 队首条件等待，并行性自然涌现。
  * 各工具通过 canStart 回调声明自己的并行条件，scheduler 不感知具体工具语义。
  *
- * TODO: 移除 attachRenderBuffer 耦合，改为通过事件回调接口（onChunk、onEnd）发射 raw 事件。
- * 排序职责下放给消费者，RenderBuffer 抽离为独立工具模块。
+ * 通过 SchedulerEvents 回调发射 raw 无序事件，排序职责由消费者（Renderer）自行决定。
  */
 
 import type {
@@ -15,7 +14,14 @@ import type {
 	ToolResult,
 	ToolStreamEvent,
 } from "@n0n/types";
-import type { RenderBuffer } from "./render-buffer.ts";
+
+// ── 事件回调接口 ──
+
+export interface SchedulerEvents {
+	onRegister(tc: ToolCallRecord): void;
+	onChunk(tcId: string, tool: string, chunk: string): void;
+	onEnd(tcId: string, result: ToolResult | null): void;
+}
 
 // ── 默认并行策略 ──
 
@@ -72,12 +78,13 @@ export class ExecutionScheduler {
 	private readonly activeSet = new Set<JobSlot>();
 	private sealed = false;
 	private notify: (() => void) | null = null;
-	private renderBuffer: RenderBuffer | null = null;
+	private readonly events: SchedulerEvents | null;
 
-	constructor(private readonly executor: ToolExecutor) {}
-
-	attachRenderBuffer(buf: RenderBuffer): void {
-		this.renderBuffer = buf;
+	constructor(
+		private readonly executor: ToolExecutor,
+		events?: SchedulerEvents,
+	) {
+		this.events = events ?? null;
 	}
 
 	enqueue(tc: ToolCallRecord, canStart?: CanStartFn): void {
@@ -88,13 +95,12 @@ export class ExecutionScheduler {
 		});
 		this.slots.push(slot);
 		this.pendingQueue.push(slot);
-		this.renderBuffer?.register(tc);
+		this.events?.onRegister(tc);
 		this.notify?.();
 	}
 
 	seal(): void {
 		this.sealed = true;
-		this.renderBuffer?.seal();
 		this.notify?.();
 	}
 
@@ -149,7 +155,7 @@ export class ExecutionScheduler {
 			try {
 				for await (const event of this.executor(tc)) {
 					if (event.type === "tool_output_chunk") {
-						this.renderBuffer?.pushChunk(tc.id, event.tool, event.chunk);
+						this.events?.onChunk(tc.id, event.tool, event.chunk);
 					} else if (event.type === "tool_arg_error") {
 						argError = event;
 					} else {
@@ -177,7 +183,7 @@ export class ExecutionScheduler {
 					};
 				}
 				this.activeSet.delete(slot);
-				this.renderBuffer?.pushEnd(tc.id, result);
+				this.events?.onEnd(tc.id, result);
 				this.notify?.();
 			}
 		};

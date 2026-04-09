@@ -216,7 +216,7 @@ describe("滚动导致旧行残留", () => {
 		renderer.toolCallArgChunk(0, json1);
 		renderer.streamEnd();
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_1", {
 			id: "call_1",
 			tool: "exec",
 			args: JSON.parse(json1),
@@ -224,10 +224,10 @@ describe("滚动导致旧行残留", () => {
 
 		// 模拟工具执行输出 15 行
 		for (let i = 0; i < 15; i++) {
-			renderer.toolExecChunk("exec", `  ${100 + i} ./src/file${i}.ts\n`);
+			renderer.toolExecChunk("call_1", "exec", `  ${100 + i} ./src/file${i}.ts\n`);
 		}
 
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_1", {
 			type: "tool_result" as const,
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: JSON.parse(json1) },
@@ -253,17 +253,17 @@ describe("滚动导致旧行残留", () => {
 		renderer.toolCallArgChunk(0, json2);
 		renderer.streamEnd();
 
-		renderer.toolExecStart({
+		renderer.toolExecStart("call_2", {
 			id: "call_2",
 			tool: "exec",
 			args: JSON.parse(json2),
 		});
 
 		for (let i = 0; i < 10; i++) {
-			renderer.toolExecChunk("exec", `readme line ${i}\n`);
+			renderer.toolExecChunk("call_2", "exec", `readme line ${i}\n`);
 		}
 
-		renderer.toolExecEnd({
+		renderer.toolExecEnd("call_2", {
 			type: "tool_result" as const,
 			tool: "exec",
 			call: { id: "call_2", tool: "exec", args: JSON.parse(json2) },

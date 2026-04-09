@@ -3,12 +3,8 @@
  *
  * 事件分三个阶段：
  * 1. LLM 流式输出：thinkingChunk → thinkingEnd → contentChunk → contentEnd → toolCallArg* → streamEnd
- * 2. 工具执行：toolExecStart → toolExecChunk → toolExecEnd
+ * 2. 工具执行：toolExecStart → toolExecChunk → toolExecEnd（带 tcId，无序到达，排序由实现决定）
  * 3. 特殊事件：submitAccepted / submitRejected / agentTerminated / aborted
- *
- * TODO: 工具执行事件（阶段 2）当前经 RenderBuffer FIFO 排序后按序推送，隐含了顺序渲染假设。
- * 计划改为 scheduler 直接发射带 tcId 的 raw 无序事件，各 Renderer 实现自行决定排序策略。
- * toolExecChunk/toolExecEnd 需补充 tcId 参数以支持无序事件的消费端路由。
  */
 
 import type { ToolCallRecord, ToolResult } from "./domain.ts";
@@ -70,16 +66,16 @@ export interface Renderer {
 	 */
 	streamEnd(): void;
 
-	// ── 工具执行（上游：本地顺序驱动） ──
+	// ── 工具执行（无序到达，排序由 Renderer 实现自行决定） ──
 
 	/** 工具开始执行 */
-	toolExecStart(tc: ToolCallRecord): void;
+	toolExecStart(tcId: string, tc: ToolCallRecord): void;
 
 	/** 工具执行过程中的流式输出 chunk */
-	toolExecChunk(tool: string, chunk: string): void;
+	toolExecChunk(tcId: string, tool: string, chunk: string): void;
 
-	/** 工具执行完成 */
-	toolExecEnd(result: ToolResult): void;
+	/** 工具执行完成（result 为 null 表示参数解析失败，不渲染但需推进内部状态） */
+	toolExecEnd(tcId: string, result: ToolResult | null): void;
 
 	// ── 特殊事件 ──
 

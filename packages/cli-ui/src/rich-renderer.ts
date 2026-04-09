@@ -4,6 +4,7 @@
  * 彩色角色标签、流式 thinking/content、结构化工具参数显示、
  * 流式工具输出（exec stdout/stderr 实时）、LiveRegion 行替换。
  *
+ * 工具执行事件无序到达（带 tcId），通过内部 RenderBuffer 实现 FIFO 有序渲染。
  * 所有阶段转换由 loop.ts 指令驱动，不维护推断状态。
  */
 
@@ -17,6 +18,7 @@ import type {
 import { parse as parsePartialJSON } from "partial-json";
 import { isTTY, label, style, write, writeln } from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
+import { RenderBuffer } from "./render-buffer.ts";
 
 // ── token 数值人类友好格式化 ──
 
@@ -160,6 +162,13 @@ export class RichRenderer implements Renderer {
 	/** 本轮是否有流式工具参数（有则 toolExecStart 不重复渲染） */
 	private hadStreamingArgs = false;
 
+	// ── FIFO 工具执行缓冲（CLI 终端是线性的，需要按序输出） ──
+	private renderBuffer = new RenderBuffer({
+		onStart: (tc) => this.renderExecStart(tc),
+		onChunk: (_tool, chunk) => this.renderExecChunk(chunk),
+		onEnd: (result) => this.renderExecEnd(result),
+	});
+
 	userMessage(content: string): void {
 		writeln();
 		writeln(label.user());
@@ -173,6 +182,7 @@ export class RichRenderer implements Renderer {
 		lastUsage?: RoundTokenUsage | null,
 	): void {
 		this.hadStreamingArgs = false;
+		this.renderBuffer.reset();
 		writeln();
 		write(label.agent());
 
@@ -263,31 +273,21 @@ export class RichRenderer implements Renderer {
 			this.streamingToolCalls.clear();
 		}
 		this.streamRegion.reset();
+		this.renderBuffer.resume();
 	}
 
-	// ── 工具执行（语义清晰：不与参数流混淆）──
+	// ── 工具执行（FIFO 有序渲染，事件无序到达）──
 
-	toolExecStart(tc: ToolCallRecord): void {
-		this.toolRegion.reset();
-		// 流式模式下参数已由 toolCallArgEnd/streamEnd 渲染，不重复
-		if (this.hadStreamingArgs) return;
-		// 非流式回退：渲染结构化参数
-		for (const line of renderToolArgs(tc.tool, tc.args)) {
-			this.toolRegion.writeln(line);
-		}
+	toolExecStart(tcId: string, tc: ToolCallRecord): void {
+		this.renderBuffer.register(tc);
 	}
 
-	toolExecChunk(_tool: string, chunk: string): void {
-		for (const line of chunk.split("\n")) {
-			if (line) {
-				this.toolRegion.writeln(`  ${style.dim("│")} ${style.dim(line)}`);
-			}
-		}
+	toolExecChunk(tcId: string, _tool: string, chunk: string): void {
+		this.renderBuffer.pushChunk(tcId, _tool, chunk);
 	}
 
-	toolExecEnd(result: ToolResult): void {
-		const summary = this.formatToolResult(result);
-		writeln(summary);
+	toolExecEnd(tcId: string, result: ToolResult | null): void {
+		this.renderBuffer.pushEnd(tcId, result);
 	}
 
 	// ── 特殊事件 ──
@@ -326,8 +326,37 @@ export class RichRenderer implements Renderer {
 		this.streamingToolCalls.clear();
 		this.streamRegion.reset();
 		this.toolRegion.reset();
+		this.renderBuffer.reset();
 		writeln();
 		writeln(`${style.yellow("⚡")} ${style.gray("已中断输出")}`);
+	}
+
+	// ── FIFO 内部渲染方法（由 RenderBuffer 按序调用）──
+
+	/** 渲染单个工具的 execStart */
+	private renderExecStart(tc: ToolCallRecord): void {
+		this.toolRegion.reset();
+		// 流式模式下参数已由 toolCallArgEnd/streamEnd 渲染，不重复
+		if (this.hadStreamingArgs) return;
+		// 非流式回退：渲染结构化参数
+		for (const line of renderToolArgs(tc.tool, tc.args)) {
+			this.toolRegion.writeln(line);
+		}
+	}
+
+	/** 渲染工具执行的 chunk 输出 */
+	private renderExecChunk(chunk: string): void {
+		for (const line of chunk.split("\n")) {
+			if (line) {
+				this.toolRegion.writeln(`  ${style.dim("│")} ${style.dim(line)}`);
+			}
+		}
+	}
+
+	/** 渲染工具执行结束 */
+	private renderExecEnd(result: ToolResult): void {
+		const summary = this.formatToolResult(result);
+		writeln(summary);
 	}
 
 	// ── 工具结果格式化（紧凑摘要行） ──

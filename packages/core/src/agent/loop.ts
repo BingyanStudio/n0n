@@ -6,10 +6,7 @@
  * 2. scheduler    → 流水线并行执行（streaming 中工具就绪即入队）
  * 3. round.*      → 纯函数后处理（截断恢复、消息构建、submit 检查）
  *
- * TODO: 当前 renderBuffer 在 core 层做 FIFO 排序后推给 Renderer，隐含了"顺序渲染"假设。
- * 计划改为 scheduler 通过回调发射 raw 事件（带 tcId，无序），排序由各 UI 消费者自行决定。
- * RenderBuffer 将抽离为独立工具模块供需要顺序渲染的消费者（如 CLI）使用。
- * 届时此文件中的 RenderBuffer 相关代码（import、创建、drain）将被移除。
+ * scheduler 通过回调发射 raw 无序事件，排序由各 Renderer 实现自行决定。
  */
 
 import type { PendingReminder, ToolsConfig } from "@n0n/tools";
@@ -25,7 +22,6 @@ import { FinishReason } from "@n0n/types";
 import type { ZodType } from "zod";
 import { getRuntime } from "../runtime.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
-import { RenderBuffer } from "./render-buffer.ts";
 import {
 	buildToolCallMessage,
 	checkSubmit,
@@ -105,13 +101,15 @@ export async function agentLoop<T = unknown>(
 		renderer.roundStart(iter + 1, maxIter, messages.length, lastUsage);
 
 		// ── 1. 流式解析 + 并行执行（交织进行） ──
-		const scheduler = new ExecutionScheduler((tc) =>
-			executeToolStream(tc, reminders, options?.confirmFn, toolkit.getEntry),
+		const scheduler = new ExecutionScheduler(
+			(tc) => executeToolStream(tc, reminders, options?.confirmFn, toolkit.getEntry),
+			{
+				onRegister: (tc) => renderer.toolExecStart(tc.id, tc),
+				onChunk: (tcId, tool, chunk) => renderer.toolExecChunk(tcId, tool, chunk),
+				onEnd: (tcId, result) => renderer.toolExecEnd(tcId, result),
+			},
 		);
-		const renderBuffer = new RenderBuffer();
-		scheduler.attachRenderBuffer(renderBuffer);
 		const runPromise = scheduler.run(options?.signal);
-		// TODO: renderBuffer 将移除，scheduler 改为通过回调发射 raw 事件，Renderer 直接消费无序事件。
 
 		let streamResult: StreamingResult | null = null;
 
@@ -241,10 +239,7 @@ export async function agentLoop<T = unknown>(
 		messages.push(buildToolCallMessage(streamResult!.accumulator, allCalls));
 
 		// ── 5. 等待执行 + 渲染完成 ──
-		await Promise.all([
-			runPromise,
-			renderBuffer.drain(renderer, () => {}, options?.signal),
-		]);
+		await runPromise;
 
 		// ── 6. 收集结果消息 ──
 		messages.push(...collectJobMessages(scheduler.orderedJobs()));

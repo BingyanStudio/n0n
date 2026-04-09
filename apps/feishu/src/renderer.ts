@@ -203,19 +203,20 @@ export class FeishuRenderer implements Renderer {
 
 	// ── 工具执行 ──
 
-	toolExecStart(tc: ToolCallRecord): void {
+	toolExecStart(_tcId: string, tc: ToolCallRecord): void {
 		this.curTool = tc.tool;
 		this.toolOutBuf = "";
 		const { summary, detail } = fmtToolCall(tc);
 		this.conv.appendLine({ kind: "tool", text: summary, detail });
 	}
 
-	toolExecChunk(_tool: string, chunk: string): void {
+	toolExecChunk(_tcId: string, _tool: string, chunk: string): void {
 		this.toolOutBuf += chunk;
 		this.scheduleFlush();
 	}
 
-	toolExecEnd(result: ToolResult): void {
+	toolExecEnd(_tcId: string, result: ToolResult | null): void {
+		if (!result) return;
 		this.stopTimer();
 		const summary = fmtResult(result);
 		const isErr =
