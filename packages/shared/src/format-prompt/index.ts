@@ -78,6 +78,9 @@ function buildUserInputContent(
 
 // ── 连续 system 消息合并 ──
 
+// COMMENT: 连续 system 消息合并是为了适配 Anthropic API 的约束——
+// Anthropic 不允许连续出现多条 system 消息。但合并后会丢失消息边界信息。
+// 如果未来需要在 system 消息之间插入 cache 断点，可能需要保留边界。
 function mergeConsecutiveSystem(messages: PromptMessage[]): PromptMessage[] {
 	const merged: PromptMessage[] = [];
 	for (const msg of messages) {
@@ -100,6 +103,11 @@ function mergeConsecutiveSystem(messages: PromptMessage[]): PromptMessage[] {
  * DomainMessage[] → PromptMessage[]
  *
  * @param messages 领域消息历史
+// COMMENT: formatPrompt 是整个消息系统的桥梁——DomainMessage（纯领域数据）到
+// PromptMessage（LLM 可消费的格式）的单向映射。这个分层很关键：
+// DomainMessage 不包含任何提示词措辞，所以可以安全地持久化、回放、跨模型复用；
+// PromptMessage 包含模型特定的标签风格和 anti-few-shot 变体，所以每次都是新鲜构建的。
+// 如果这两层混在一起，换模型就意味着历史记录失效。
  * @param modelId 模型标识，用于 XML tag 风格选择
  */
 export function formatPrompt(

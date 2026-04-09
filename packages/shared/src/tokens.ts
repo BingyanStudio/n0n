@@ -24,6 +24,10 @@ export function estimateTokens(text: string): number {
 }
 
 /** 从字符串末尾截取约 maxTokens 个 token 的内容（二分法定位） */
+// COMMENT: 二分法按 token 截断——比按字符截断精确，比完整分词便宜。
+// O(log n) 次 estimateTokens 调用，每次 O(n) 扫描，总体 O(n log n)。
+// 对于 exec 输出截断（通常几十 KB），这个开销可以接受。
+// 如果需要处理 MB 级输出，可以先按字符数粗切（4:1 估算），再二分精修。
 export function tailByTokens(text: string, maxTokens: number): string {
 	if (estimateTokens(text) <= maxTokens) return text;
 	let lo = 0;

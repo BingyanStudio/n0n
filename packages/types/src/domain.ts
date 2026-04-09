@@ -104,6 +104,10 @@ export type SubmitToolCall = ToolCallBase & {
  * 参数类型来自 tool-args.ts 中的 Zod schema（z.infer），
  * 修改 schema 字段时 tsc 会在所有消费方报错。
  */
+// COMMENT: ToolCallRecord 的判别联合设计让 TypeScript 成为了工具系统的守卫——
+// 当你 switch(tc.tool) 时，args 会自动窄化为对应工具的参数类型。
+// 新增工具时，忘记处理的 case 会被 exhaustive check 捕获。
+// 参数类型从 Zod schema 推断（z.infer），保证了运行时校验和编译时类型的一致性。
 export type ToolCallRecord =
 	| ExecToolCall
 	| WriteToolCall
@@ -355,6 +359,11 @@ export interface GenericToolResultMessage {
 }
 
 // ── 联合类型 ──
+// COMMENT: DomainMessage 是整个系统的脊椎——所有状态变化都表达为消息的追加。
+// 不可变的纯数据记录 + discriminated union = 天然的事件溯源。
+// 重要的设计约束：DomainMessage 不包含任何提示词措辞（"REMINDER:"、"⏰" 等），
+// 这些属于 formatPrompt 的职责。违反这个约束会导致历史记录被提示词污染，
+// 换模型或改措辞时需要迁移所有历史数据。
 export type DomainMessage =
 	| GenericSystemMessage
 	| GenericUserTextMessage

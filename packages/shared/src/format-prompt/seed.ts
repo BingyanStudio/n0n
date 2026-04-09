@@ -16,6 +16,10 @@ const BASE_SEED = 42;
  * 双轮 murmur3 finalize — 先充分混合 index，再混入 seed。
  * 对连续和等差数列输入均有良好的雪崩特性。
  */
+// COMMENT: 用 murmur3 finalize 做确定性随机选择——这是 anti-few-shot 的基础设施。
+// 关键不变量：同一个 msgIndex 永远选到同一个变体。这保证了 prompt cache 安全性——
+// 如果 pick 结果随机变化，即使消息内容不变，格式化后的 PromptMessage 也会变化，
+// 导致 KV-cache 前缀失效。确定性 + 均匀分布，两个约束缺一不可。
 function hash(seed: number, index: number): number {
 	let h = Math.imul(index, 0x9e3779b9); // golden ratio
 	h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
