@@ -155,10 +155,8 @@ export async function startFeishuService(): Promise<void> {
 				return;
 			}
 
-			const text = FeishuBot.readText(data);
-			if (!text) {
-				// TODO readText 返回空字符串不一定是非文本消息（也可能是空白文本、JSON解析失败等），
-				// 应改为通过 message_type 字段判断，而非依赖 readText 返回值
+			const messageType = data?.message?.message_type;
+			if (messageType !== "text") {
 				if (ctx.senderOpenId) {
 					const card = buildTextCard(
 						"暂不支持",
@@ -169,6 +167,9 @@ export async function startFeishuService(): Promise<void> {
 				}
 				return;
 			}
+
+			const text = FeishuBot.readText(data);
+			if (!text) return;
 
 			if (!ctx.senderOpenId) {
 				console.warn("[feishu] message with empty senderOpenId, skipping");
