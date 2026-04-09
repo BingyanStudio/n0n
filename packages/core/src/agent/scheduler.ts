@@ -8,7 +8,12 @@
  * 排序职责下放给消费者，RenderBuffer 抽离为独立工具模块。
  */
 
-import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
+import type {
+	ToolArgErrorMessage,
+	ToolCallRecord,
+	ToolResult,
+	ToolStreamEvent,
+} from "@n0n/types";
 import type { RenderBuffer } from "./render-buffer.ts";
 
 // ── 并行判断回调 ──
@@ -29,22 +34,32 @@ export type CanStartFn = (
 /** 默认策略：等所有 active 完成后才启动（最保守） */
 const defaultCanStart: CanStartFn = (_self, active) => active.length === 0;
 
-// ── PipelineJob ──
+// ── PipelineJob — discriminated union ──
 
-/** 单个工具执行的状态 */
-export interface PipelineJob {
+interface JobBase {
 	tc: ToolCallRecord;
 	canStart: CanStartFn;
-	result: ToolResult | null;
-	argError: {
-		type: "tool_arg_error";
-		callId: string;
-		tool: string;
-		error: string;
-		schema?: Record<string, unknown>;
-	} | null;
-	done: boolean;
 }
+
+export interface PendingJob extends JobBase {
+	status: "pending";
+}
+
+export interface RunningJob extends JobBase {
+	status: "running";
+}
+
+export interface CompletedJob extends JobBase {
+	status: "completed";
+	result: ToolResult;
+}
+
+export interface FailedJob extends JobBase {
+	status: "failed";
+	argError: ToolArgErrorMessage;
+}
+
+export type PipelineJob = PendingJob | RunningJob | CompletedJob | FailedJob;
 
 // ── 工具执行函数类型 ──
 
@@ -56,8 +71,8 @@ export type ToolExecutor = (
 
 export class ExecutionScheduler {
 	private readonly jobs: PipelineJob[] = [];
-	private readonly pending: PipelineJob[] = [];
-	private readonly active = new Map<string, PipelineJob>();
+	private readonly pendingIndices: number[] = [];
+	private readonly activeIndices = new Map<string, number>();
 	private sealed = false;
 	private notify: (() => void) | null = null;
 	private renderBuffer: RenderBuffer | null = null;
@@ -69,15 +84,13 @@ export class ExecutionScheduler {
 	}
 
 	enqueue(tc: ToolCallRecord, canStart?: CanStartFn): void {
-		const job: PipelineJob = {
+		const idx = this.jobs.length;
+		this.jobs.push({
+			status: "pending",
 			tc,
 			canStart: canStart ?? defaultCanStart,
-			result: null,
-			argError: null,
-			done: false,
-		};
-		this.jobs.push(job);
-		this.pending.push(job);
+		});
+		this.pendingIndices.push(idx);
 		this.renderBuffer?.register(tc);
 		this.notify?.();
 	}
@@ -94,14 +107,21 @@ export class ExecutionScheduler {
 
 	async run(signal?: AbortSignal): Promise<void> {
 		while (!signal?.aborted) {
-			const head = this.pending[0];
-			if (head && this.canExecute(head)) {
-				this.pending.shift();
-				this.startJob(head);
-				continue;
+			const headIdx = this.pendingIndices[0];
+			if (headIdx !== undefined) {
+				const head = this.jobs[headIdx]!;
+				if (head.canStart(head.tc, this.activeTCs())) {
+					this.pendingIndices.shift();
+					this.startJob(headIdx);
+					continue;
+				}
 			}
 
-			if (this.sealed && this.pending.length === 0 && this.active.size === 0) {
+			if (
+				this.sealed &&
+				this.pendingIndices.length === 0 &&
+				this.activeIndices.size === 0
+			) {
 				break;
 			}
 
@@ -114,30 +134,34 @@ export class ExecutionScheduler {
 		}
 	}
 
-	private canExecute(job: PipelineJob): boolean {
-		const activeTCs = [...this.active.values()].map((j) => j.tc);
-		return job.canStart(job.tc, activeTCs);
+	private activeTCs(): ToolCallRecord[] {
+		return [...this.activeIndices.values()].map((i) => this.jobs[i]!.tc);
 	}
 
 	// ── 执行启动 ──
 
-	private startJob(job: PipelineJob): void {
-		this.active.set(job.tc.id, job);
+	private startJob(idx: number): void {
+		const job = this.jobs[idx]!;
+		this.jobs[idx] = { ...job, status: "running" };
+		this.activeIndices.set(job.tc.id, idx);
 
 		const run = async () => {
+			let result: ToolResult | null = null;
+			let argError: ToolArgErrorMessage | null = null;
+
 			try {
 				for await (const event of this.executor(job.tc)) {
 					if (event.type === "tool_output_chunk") {
 						this.renderBuffer?.pushChunk(job.tc.id, event.tool, event.chunk);
 					} else if (event.type === "tool_arg_error") {
-						job.argError = event;
+						argError = event;
 					} else {
-						job.result = event;
+						result = event;
 					}
 				}
 			} catch (err) {
-				if (!job.result && !job.argError) {
-					job.argError = {
+				if (!result && !argError) {
+					argError = {
 						type: "tool_arg_error",
 						callId: job.tc.id,
 						tool: job.tc.tool,
@@ -145,9 +169,23 @@ export class ExecutionScheduler {
 					};
 				}
 			} finally {
-				job.done = true;
-				this.active.delete(job.tc.id);
-				this.renderBuffer?.pushEnd(job.tc.id, job.result);
+				if (argError) {
+					this.jobs[idx] = {
+						status: "failed",
+						tc: job.tc,
+						canStart: job.canStart,
+						argError,
+					};
+				} else {
+					this.jobs[idx] = {
+						status: "completed",
+						tc: job.tc,
+						canStart: job.canStart,
+						result: result!,
+					};
+				}
+				this.activeIndices.delete(job.tc.id);
+				this.renderBuffer?.pushEnd(job.tc.id, result);
 				this.notify?.();
 			}
 		};

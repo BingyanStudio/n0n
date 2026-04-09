@@ -68,8 +68,14 @@ export function collectJobMessages(
 ): DomainMessage[] {
 	const msgs: DomainMessage[] = [];
 	for (const job of jobs) {
-		if (job.argError) msgs.push(job.argError);
-		else if (job.result) msgs.push(job.result);
+		switch (job.status) {
+			case "completed":
+				msgs.push(job.result);
+				break;
+			case "failed":
+				msgs.push(job.argError);
+				break;
+		}
 	}
 	return msgs;
 }
@@ -95,7 +101,7 @@ export function checkSubmit<T>(
 	maxRetries: number,
 ): SubmitCheckResult {
 	for (const job of jobs) {
-		if (!job.result || job.result.tool !== "submit") continue;
+		if (job.status !== "completed" || job.result.tool !== "submit") continue;
 
 		if (!schema) {
 			return { accepted: { value: job.result.cleanedResult } };

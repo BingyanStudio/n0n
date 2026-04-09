@@ -45,18 +45,15 @@ function makeAccWithToolCalls(
 	return acc;
 }
 
-function mockJob(
+function mockCompletedJob(
 	tc: ToolCallRecord,
-	result: ToolResult | null,
-	argError?: any,
+	result: ToolResult,
 ): PipelineJob {
-	return {
-		tc,
-		done: true,
-		result: result,
-		argError: argError ?? null,
-		events: [],
-	} as unknown as PipelineJob;
+	return { status: "completed", tc, canStart: () => true, result } as PipelineJob;
+}
+
+function mockFailedJob(tc: ToolCallRecord, argError: any): PipelineJob {
+	return { status: "failed", tc, canStart: () => true, argError } as PipelineJob;
 }
 
 function mockSubmitResult(
@@ -209,7 +206,7 @@ describe("collectJobMessages", () => {
 	it("收集正常结果", () => {
 		const tc = mockExecTC("tc_1");
 		const result = mockExecResult(tc);
-		const jobs = [mockJob(tc, result)];
+		const jobs = [mockCompletedJob(tc, result)];
 
 		const msgs = collectJobMessages(jobs);
 		expect(msgs).toHaveLength(1);
@@ -224,7 +221,7 @@ describe("collectJobMessages", () => {
 			tool: "exec",
 			error: "bad args",
 		};
-		const jobs = [mockJob(tc, null, argError)];
+		const jobs = [mockFailedJob(tc, argError)];
 
 		const msgs = collectJobMessages(jobs);
 		expect(msgs).toHaveLength(1);
@@ -239,8 +236,8 @@ describe("collectJobMessages", () => {
 		const tc1 = mockExecTC("tc_1");
 		const tc2 = mockExecTC("tc_2");
 		const jobs = [
-			mockJob(tc1, mockExecResult(tc1)),
-			mockJob(tc2, mockExecResult(tc2)),
+			mockCompletedJob(tc1, mockExecResult(tc1)),
+			mockCompletedJob(tc2, mockExecResult(tc2)),
 		];
 
 		const msgs = collectJobMessages(jobs);
@@ -253,7 +250,7 @@ describe("collectJobMessages", () => {
 describe("checkSubmit", () => {
 	it("无 submit 调用 → 空结果", () => {
 		const tc = mockExecTC("tc_1");
-		const jobs = [mockJob(tc, mockExecResult(tc))];
+		const jobs = [mockCompletedJob(tc, mockExecResult(tc))];
 		const result = checkSubmit(jobs, undefined, 0, 4);
 		expect(result.accepted).toBeUndefined();
 		expect(result.rejected).toBeUndefined();
@@ -267,7 +264,7 @@ describe("checkSubmit", () => {
 			args: { answer: 42 },
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: 42 });
-		const jobs = [mockJob(submitTc, submitResult)];
+		const jobs = [mockCompletedJob(submitTc, submitResult)];
 
 		const result = checkSubmit(jobs, undefined, 0, 4);
 		expect(result.accepted).toBeDefined();
@@ -282,7 +279,7 @@ describe("checkSubmit", () => {
 			args: { answer: 42 },
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: 42 });
-		const jobs = [mockJob(submitTc, submitResult)];
+		const jobs = [mockCompletedJob(submitTc, submitResult)];
 
 		const result = checkSubmit(jobs, schema, 0, 4);
 		expect(result.accepted).toBeDefined();
@@ -297,7 +294,7 @@ describe("checkSubmit", () => {
 			args: { answer: "not a number" },
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: "not a number" });
-		const jobs = [mockJob(submitTc, submitResult)];
+		const jobs = [mockCompletedJob(submitTc, submitResult)];
 
 		const result = checkSubmit(jobs, schema, 0, 4);
 		expect(result.rejected).toBeDefined();
@@ -313,7 +310,7 @@ describe("checkSubmit", () => {
 			args: { answer: "bad" },
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult({ answer: "bad" });
-		const jobs = [mockJob(submitTc, submitResult)];
+		const jobs = [mockCompletedJob(submitTc, submitResult)];
 
 		const result = checkSubmit(jobs, schema, 3, 4);
 		expect(result.gaveUp).toBeDefined();
@@ -340,7 +337,7 @@ describe("checkSubmit", () => {
 			args: raw,
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult(raw);
-		const jobs = [mockJob(submitTc, submitResult)];
+		const jobs = [mockCompletedJob(submitTc, submitResult)];
 
 		const result = checkSubmit(jobs, schema, 0, 4);
 		expect(result.accepted).toBeDefined();
@@ -368,7 +365,7 @@ describe("checkSubmit", () => {
 			args: raw,
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult(raw);
-		const jobs = [mockJob(submitTc, submitResult)];
+		const jobs = [mockCompletedJob(submitTc, submitResult)];
 
 		const result = checkSubmit(jobs, schema, 0, 4);
 		expect(result.accepted).toBeDefined();
@@ -384,7 +381,7 @@ describe("checkSubmit", () => {
 			args: raw,
 		} as ToolCallRecord;
 		const submitResult = mockSubmitResult(raw);
-		const jobs = [mockJob(submitTc, submitResult)];
+		const jobs = [mockCompletedJob(submitTc, submitResult)];
 
 		const result = checkSubmit(jobs, schema, 0, 4);
 		expect(result.accepted).toBeDefined();

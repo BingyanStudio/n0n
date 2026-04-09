@@ -151,8 +151,7 @@ describe("ExecutionScheduler", () => {
 			expect(log).toEqual(["exec:w1"]);
 			const jobs = scheduler.orderedJobs();
 			expect(jobs).toHaveLength(1);
-			expect(jobs[0]!.done).toBe(true);
-			expect(jobs[0]!.result).not.toBeNull();
+			expect(jobs[0]!.status).toBe("completed");
 		});
 
 		it("多个不冲突的 write/edit 并行执行", async () => {
@@ -176,7 +175,7 @@ describe("ExecutionScheduler", () => {
 			resolve("w1");
 			await runPromise;
 
-			expect(scheduler.orderedJobs().every((j) => j.done)).toBe(true);
+			expect(scheduler.orderedJobs().every((j) => j.status === "completed")).toBe(true);
 		});
 
 		it("相同路径的 write/edit 串行执行", async () => {
