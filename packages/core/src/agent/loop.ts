@@ -93,6 +93,9 @@ export async function agentLoop<T = unknown>(
 	let submitRetries = 0;
 	let lastUsage = null as TokenUsage | null;
 
+	// COMMENT: 主循环的 maxIter 既是安全阀也是资源上限。但当前 maxIter 的含义其实是"最大 LLM 请求次数"
+	// 而非"最大工具执行轮次"——idle 轮也算在内。对于长对话场景，idle 消耗的额度是否应该从 maxIter 中
+	// 扣除值得讨论。可以考虑分离为 maxRounds 和 maxIdleRounds 两个独立计数器。
 	for (let iter = 0; iter < maxIter; iter++) {
 		if (options?.signal?.aborted) {
 			renderer.aborted();
@@ -109,6 +112,10 @@ export async function agentLoop<T = unknown>(
 		const renderBuffer = new RenderBuffer();
 		scheduler.attachRenderBuffer(renderBuffer);
 		const runPromise = scheduler.run(options?.signal);
+		// COMMENT: parseStream → scheduler → renderBuffer 三者的编排关系是这个 loop 的精髓。
+		// stream 事件驱动 scheduler 入队，scheduler 并行执行驱动 renderBuffer 事件推送，
+		// renderBuffer 按入队顺序串行输出到 renderer。三层管道，各自只关心自己的输入输出。
+		// 这种设计让流式解析、并行执行、有序渲染三个关注点彻底解耦——很漂亮的架构。
 
 		let streamResult: StreamingResult | null = null;
 
@@ -211,6 +218,11 @@ export async function agentLoop<T = unknown>(
 				(await entry?.recoverAndExecute?.(toolCallId, partialJson)) ?? null
 			);
 		};
+		// COMMENT: 截断恢复是个很好的容错设计——模型输出被 max_tokens 截断时，已经 stream 过的
+		// 完整工具调用照常执行，只有不完整的才走恢复流程。这意味着即使截断发生，用户也不会完全
+		// 丢失本轮工作。不过目前 recoverAndExecute 的实现依赖各工具自行实现——如果某个工具
+		// 没有提供 recover，就只能返回 arg_error 让模型重试。是否可以在框架层提供一个通用的
+		// JSON 修复策略（比如用 LLM 补全截断的 JSON）作为 fallback？
 		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 		const truncation = await recoverTruncatedCalls(streamResult!, tryRecover);
 		scheduler.seal();

@@ -73,6 +73,11 @@ function parseBlockedCommands(): string[] {
  * Client 实例由调用方（app 入口）创建并注入，
  * 实现 @n0n/core 与 @n0n/llm 的依赖反转。
  */
+// COMMENT: EditBackendConfig 的 discriminated union 设计是对的——用 type 字段区分
+// str-replace 和 freeform-patch 两种策略，比用 boolean flag 清晰得多。
+// 但 createRuntimeContext 中的类型断言 `as EditBackendConfig` 和
+// `as { editorClient?: LLMClient }` 暗示 RuntimeOptions 的类型定义还可以更精确，
+// 让 TypeScript 自己推导出正确的类型而不需要手动 assert。
 export function createRuntimeContext(options: RuntimeOptions): RuntimeContext {
 	let editBackend: EditBackendConfig;
 	if (options.editBackend?.type === "freeform-patch") {
@@ -101,6 +106,11 @@ export function createRuntimeContext(options: RuntimeOptions): RuntimeContext {
 
 // ── 运行时上下文全局单例 ──
 
+// COMMENT: 依赖注入 + 全局单例的混合模式。createRuntimeContext 是纯函数（DI 风格），
+// 但 initRuntime/getRuntime 又引入了全局可变状态。这在单进程、单 agent 场景下没问题，
+// 但如果未来需要在同一进程中运行多个 agent（比如 fairy 模式的多角色），
+// 全局单例会成为瓶颈。届时可以考虑将 RuntimeContext 作为参数透传到 agentLoop，
+// 而非通过 getRuntime() 隐式获取。
 let _runtime: RuntimeContext | null = null;
 
 /** 获取当前运行时上下文（必须先通过 initRuntime 初始化） */

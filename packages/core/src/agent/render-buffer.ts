@@ -24,6 +24,12 @@ interface ToolBuffer {
 
 // ── RenderBuffer ──
 
+// COMMENT: RenderBuffer 解决了一个经典的并发输出排序问题：多个工具并行执行，
+// 各自产生 chunk 流，但用户看到的输出必须按工具调用顺序排列。
+// 实现方式是每个工具一个事件队列，只有队首工具的事件实时输出，其余暂存。
+// 这和 HTTP/2 的流多路复用 + 有序响应有异曲同工之妙。
+// 一个潜在的改进：当非队首工具已经执行完毕且队首工具还在运行时，
+// 可以考虑向用户展示"后续工具已完成，等待排队输出"的提示，避免用户误以为卡住了。
 export class RenderBuffer {
 	/** 按入队顺序排列的工具缓冲 */
 	private readonly queue: ToolBuffer[] = [];
