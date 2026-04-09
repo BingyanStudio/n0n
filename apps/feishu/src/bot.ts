@@ -133,14 +133,13 @@ export class FeishuBot {
 		};
 	}
 
-	// TODO 群聊消息中的 @mention 占位符（如 @_user_1）未清理，
-	// 应在返回前用正则去除，避免下游收到原始占位符文本
 	static readText(data: FeishuMessageEventData): string {
 		const raw = data?.message?.content;
 		if (!raw || typeof raw !== "string") return "";
 		try {
 			const parsed = JSON.parse(raw) as { text?: unknown };
-			return typeof parsed.text === "string" ? parsed.text.trim() : "";
+			if (typeof parsed.text !== "string") return "";
+			return parsed.text.replace(/@_user_\d+/g, "").trim();
 		} catch {
 			return "";
 		}
