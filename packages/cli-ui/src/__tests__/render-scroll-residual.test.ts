@@ -7,57 +7,16 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import { saveStderr, restoreStderr, setupVT, stripAnsi } from "./test-helpers.ts";
 
-const origWrite = process.stderr.write;
-const origCols = process.stderr.columns;
-const origTTY = process.stderr.isTTY;
-
-function setupVT(cols: number, viewportHeight: number): VirtualTerminal {
-	const vt = new VirtualTerminal(cols, 500, viewportHeight);
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: true,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "columns", {
-		value: cols,
-		writable: true,
-		configurable: true,
-	});
-	process.stderr.write = (chunk: string | Uint8Array) => {
-		if (typeof chunk === "string") vt.feed(chunk);
-		return true;
-	};
-	return vt;
-}
-
-function teardown(): void {
-	process.stderr.write = origWrite;
-	Object.defineProperty(process.stderr, "columns", {
-		value: origCols,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: origTTY,
-		writable: true,
-		configurable: true,
-	});
-}
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: needed
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9;]*[a-zA-Z]/g;
-function stripAnsi(s: string): string {
-	return s.replace(ANSI_RE, "");
-}
+const saved = saveStderr();
 
 describe("滚动导致旧行残留", () => {
-	afterEach(teardown);
+	afterEach(() => restoreStderr(saved));
 
 	test("基础验证：cursorUp 被 viewport 顶部 clamp", () => {
 		// 10 行高的 viewport
-		const vt = new VirtualTerminal(40, 100, 10);
+		const vt = setupVT(40, { viewportHeight: 10 });
 
 		// 写入 15 行，超出 viewport 5 行
 		for (let i = 0; i < 15; i++) {
@@ -98,7 +57,7 @@ describe("滚动导致旧行残留", () => {
 	});
 
 	test("LiveRegion 在小 viewport 中的 clear 残留", async () => {
-		const vt = setupVT(80, 15); // 只有 15 行高的终端
+		const vt = setupVT(80, { viewportHeight: 15 }); // 只有 15 行高的终端
 		const { LiveRegion } = await import("../live-region.ts");
 		const region = new LiveRegion();
 
@@ -134,7 +93,7 @@ describe("滚动导致旧行残留", () => {
 
 	test("RichRenderer 流式渲染超出 viewport — 残留复现", async () => {
 		// 模拟一个只有 12 行高的终端窗口
-		const vt = setupVT(80, 12);
+		const vt = setupVT(80, { viewportHeight: 12 });
 		const { RichRenderer } = await import("../rich-renderer.ts");
 		const renderer = new RichRenderer();
 
@@ -203,7 +162,7 @@ describe("滚动导致旧行残留", () => {
 
 	test("多次 toolCall 累积高度超出 viewport — 复现真实场景", async () => {
 		// 25 行终端 — 日常笔记本终端高度
-		const vt = setupVT(80, 25);
+		const vt = setupVT(80, { viewportHeight: 25 });
 		const { RichRenderer } = await import("../rich-renderer.ts");
 		const renderer = new RichRenderer();
 

@@ -8,10 +8,9 @@
  */
 
 import { afterEach, describe, test } from "bun:test";
+import { saveStderr, restoreStderr } from "./test-helpers.ts";
 
-const origWrite = process.stderr.write;
-const origCols = process.stderr.columns;
-const origTTY = process.stderr.isTTY;
+const saved = saveStderr();
 
 interface WriteEvent {
 	data: string;
@@ -37,20 +36,6 @@ function setupCapture(cols: number): WriteEvent[] {
 		return true;
 	};
 	return events;
-}
-
-function teardown(): void {
-	process.stderr.write = origWrite;
-	Object.defineProperty(process.stderr, "columns", {
-		value: origCols,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: origTTY,
-		writable: true,
-		configurable: true,
-	});
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: needed
@@ -83,7 +68,7 @@ function analyzeEvents(events: WriteEvent[]) {
 }
 
 describe("渲染诊断", () => {
-	afterEach(teardown);
+	afterEach(() => restoreStderr(saved));
 
 	test("单字符 chunk：每个字符触发一次完整 clear+rewrite", async () => {
 		const events = setupCapture(80);

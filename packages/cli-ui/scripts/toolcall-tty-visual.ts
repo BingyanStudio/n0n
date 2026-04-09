@@ -8,7 +8,7 @@
  */
 
 import type { ToolCallRecord, ToolResult } from "@n0n/types";
-import { RichRenderer } from "../rich-renderer.ts";
+import { RichRenderer } from "../src/rich-renderer.ts";
 
 function sleep(ms: number) {
 	return new Promise((r) => setTimeout(r, ms));

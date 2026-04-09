@@ -9,54 +9,30 @@
  *   4. tool call 参数逐字到达：JSON 从不完整到完整的解析过程
  */
 
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { RichRenderer } from "../rich-renderer.ts";
+import {
+	captureStderr,
+	saveStderr,
+	restoreStderr,
+	stripAnsi,
+} from "./test-helpers.ts";
 
-// 捕获所有 stderr 输出用于断言
-let output: string;
-const originalWrite = process.stderr.write;
-
-function captureStart() {
-	output = "";
-	process.stderr.write = (chunk: string | Uint8Array) => {
-		if (typeof chunk === "string") {
-			output += chunk;
-		} else {
-			output += new TextDecoder().decode(chunk);
-		}
-		return true;
-	};
-}
-
-function captureStop(): string {
-	process.stderr.write = originalWrite;
-	return output;
-}
-
-// 辅助函数：去除 ANSI 转义序列
-// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape stripping requires control chars
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]/g;
-// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape stripping requires control chars
-const ANSI_RE2 = /\x1b\[\?[0-9;]*[a-zA-Z]/g;
-
-function stripAnsi(s: string): string {
-	return s.replace(ANSI_RE, "").replace(ANSI_RE2, "");
-}
-
-function _sleep(ms: number) {
-	return new Promise((r) => setTimeout(r, ms));
-}
+const saved = saveStderr();
 
 describe("RichRenderer tool call streaming", () => {
 	let renderer: RichRenderer;
+	let getOutput: () => string;
 
 	beforeEach(() => {
 		renderer = new RichRenderer();
+		restoreStderr(saved);
+		getOutput = captureStderr();
 	});
 
-	test("场景1: 纯 tool call（无 content token）— contentEnd 应正确处理 streamRegion", () => {
-		captureStart();
+	afterEach(() => restoreStderr(saved));
 
+	test("场景1: 纯 tool call（无 content token）— contentEnd 应正确处理 streamRegion", () => {
 		// 模拟 agentLoop 事件序列：roundStart → tool_call_delta × N → contentEnd → toolCallStart → toolCallEnd
 		renderer.roundStart(1, 10, 3);
 
@@ -94,8 +70,7 @@ describe("RichRenderer tool call streaming", () => {
 			durationMs: 150,
 		} });
 
-		const result = captureStop();
-		const clean = stripAnsi(result);
+		const clean = stripAnsi(getOutput());
 
 		console.log("=== 场景1 输出 ===");
 		console.log(clean);
@@ -109,8 +84,6 @@ describe("RichRenderer tool call streaming", () => {
 	});
 
 	test("场景2: content token + tool call — 换行分隔是否正确", () => {
-		captureStart();
-
 		renderer.roundStart(1, 10, 3);
 
 		// 先输出一些 content
@@ -143,8 +116,7 @@ describe("RichRenderer tool call streaming", () => {
 			durationMs: 50,
 		} });
 
-		const result = captureStop();
-		const clean = stripAnsi(result);
+		const clean = stripAnsi(getOutput());
 
 		console.log("=== 场景2 输出 ===");
 		console.log(clean);
@@ -155,8 +127,6 @@ describe("RichRenderer tool call streaming", () => {
 	});
 
 	test("场景3: 多个并发 tool call — 所有工具参数都应该渲染", () => {
-		captureStart();
-
 		renderer.roundStart(1, 10, 3);
 
 		// 两个工具调用交替流式输出
@@ -205,8 +175,7 @@ describe("RichRenderer tool call streaming", () => {
 			status: "completed",
 		} });
 
-		const result = captureStop();
-		const clean = stripAnsi(result);
+		const clean = stripAnsi(getOutput());
 
 		console.log("=== 场景3 输出 ===");
 		console.log(clean);
@@ -220,8 +189,6 @@ describe("RichRenderer tool call streaming", () => {
 	});
 
 	test("场景4: tool call 参数不完整时的渐进式渲染", () => {
-		captureStart();
-
 		renderer.roundStart(1, 10, 3);
 
 		// 逐字到达，JSON 逐步从不完整到完整
@@ -237,8 +204,7 @@ describe("RichRenderer tool call streaming", () => {
 
 		renderer.streamEnd();
 
-		const result = captureStop();
-		const clean = stripAnsi(result);
+		const clean = stripAnsi(getOutput());
 
 		console.log("=== 场景4 输出 ===");
 		console.log(clean);
@@ -249,8 +215,6 @@ describe("RichRenderer tool call streaming", () => {
 	});
 
 	test("场景5: toolCallEnd 时 streamRegion 状态清理", () => {
-		captureStart();
-
 		renderer.roundStart(1, 10, 3);
 
 		// 第一轮：tool call
@@ -294,8 +258,7 @@ describe("RichRenderer tool call streaming", () => {
 			status: "completed",
 		} });
 
-		const result = captureStop();
-		const clean = stripAnsi(result);
+		const clean = stripAnsi(getOutput());
 
 		console.log("=== 场景5 输出 ===");
 		console.log(clean);
@@ -306,8 +269,6 @@ describe("RichRenderer tool call streaming", () => {
 	});
 
 	test("场景6: edit 工具的特殊渲染路径", () => {
-		captureStart();
-
 		renderer.roundStart(1, 10, 3);
 
 		// edit 工具流式参数
@@ -341,8 +302,7 @@ describe("RichRenderer tool call streaming", () => {
 			feedback: null,
 		} });
 
-		const result = captureStop();
-		const clean = stripAnsi(result);
+		const clean = stripAnsi(getOutput());
 
 		console.log("=== 场景6 输出 ===");
 		console.log(clean);

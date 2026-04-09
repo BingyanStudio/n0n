@@ -11,7 +11,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DomainMessage, PromptMessage } from "@n0n/types";
-import { formatPrompt } from "../format-prompt/index.ts";
+import { formatPrompt } from "../src/format-prompt/index.ts";
 
 const MODEL = "claude-sonnet-4-20250514";
 const SNAPSHOT_DIR = join(import.meta.dir, "__snapshots__");

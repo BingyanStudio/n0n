@@ -6,67 +6,18 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import {
+	randomChunks,
+	restoreStderr,
+	saveStderr,
+	setupVT,
+	stripAnsi,
+} from "./test-helpers.ts";
 
-const origWrite = process.stderr.write;
-const origCols = process.stderr.columns;
-const origTTY = process.stderr.isTTY;
-
-function setupVT(cols: number): VirtualTerminal {
-	const vt = new VirtualTerminal(cols, 500);
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: true,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "columns", {
-		value: cols,
-		writable: true,
-		configurable: true,
-	});
-	process.stderr.write = (chunk: string | Uint8Array) => {
-		if (typeof chunk === "string") vt.feed(chunk);
-		return true;
-	};
-	return vt;
-}
-
-function teardown(): void {
-	process.stderr.write = origWrite;
-	Object.defineProperty(process.stderr, "columns", {
-		value: origCols,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: origTTY,
-		writable: true,
-		configurable: true,
-	});
-}
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: needed
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9;]*[a-zA-Z]/g;
-function stripAnsi(s: string): string {
-	return s.replace(ANSI_RE, "");
-}
-
-/** 将完整 JSON 按随机粒度切分 */
-function randomChunks(json: string, seed: number): string[] {
-	const chunks: string[] = [];
-	let pos = 0;
-	let s = seed;
-	while (pos < json.length) {
-		s = (s * 1103515245 + 12345) & 0x7fffffff;
-		const size = (s % 3) + 1; // 1-3 字符，更细碎
-		chunks.push(json.slice(pos, pos + size));
-		pos += size;
-	}
-	return chunks;
-}
+const saved = saveStderr();
 
 describe("流式渲染逐帧检查", () => {
-	afterEach(teardown);
+	afterEach(() => restoreStderr(saved));
 
 	test("每次 chunk 后 streamRegion 不应有前一帧的残留行", async () => {
 		const vt = setupVT(80);
@@ -203,7 +154,7 @@ describe("流式渲染逐帧检查", () => {
 			if (issues.length > 0) {
 				allIssues.push({ seed, issues });
 			}
-			teardown();
+			restoreStderr(saved);
 		}
 
 		if (allIssues.length > 0) {

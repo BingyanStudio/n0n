@@ -10,53 +10,12 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import { saveStderr, restoreStderr, setupVT, stripAnsi } from "./test-helpers.ts";
 
-const origWrite = process.stderr.write;
-const origCols = process.stderr.columns;
-const origTTY = process.stderr.isTTY;
-
-function setupVT(cols: number): VirtualTerminal {
-	const vt = new VirtualTerminal(cols, 500);
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: true,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "columns", {
-		value: cols,
-		writable: true,
-		configurable: true,
-	});
-	process.stderr.write = (chunk: string | Uint8Array) => {
-		if (typeof chunk === "string") vt.feed(chunk);
-		return true;
-	};
-	return vt;
-}
-
-function teardown(): void {
-	process.stderr.write = origWrite;
-	Object.defineProperty(process.stderr, "columns", {
-		value: origCols,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: origTTY,
-		writable: true,
-		configurable: true,
-	});
-}
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: needed
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9;]*[a-zA-Z]/g;
-function stripAnsi(s: string): string {
-	return s.replace(ANSI_RE, "");
-}
+const saved = saveStderr();
 
 describe("终端边界行为", () => {
-	afterEach(teardown);
+	afterEach(() => restoreStderr(saved));
 
 	test("恰好填满行宽 + \\n：LiveRegion 行计数是否正确", async () => {
 		// 在真实终端中，写入恰好 cols 个字符后再写 \n：

@@ -7,7 +7,7 @@
  * 每个场景之间有分隔线和暂停。
  */
 
-import { RichRenderer } from "../rich-renderer.ts";
+import { RichRenderer } from "../src/rich-renderer.ts";
 
 function sleep(ms: number) {
 	return new Promise((r) => setTimeout(r, ms));

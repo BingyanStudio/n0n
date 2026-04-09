@@ -26,6 +26,12 @@ import {
 	recoverTruncatedCalls,
 } from "../round.ts";
 import type { PipelineJob } from "../scheduler.ts";
+import {
+	mockCompletedJob,
+	mockExecResult,
+	mockExecTC,
+	mockFailedJob,
+} from "./test-helpers.ts";
 
 // ── 辅助 ──
 
@@ -45,17 +51,6 @@ function makeAccWithToolCalls(
 	return acc;
 }
 
-function mockCompletedJob(
-	tc: ToolCallRecord,
-	result: ToolResult,
-): PipelineJob {
-	return { status: "completed", tc, canStart: () => true, result } as PipelineJob;
-}
-
-function mockFailedJob(tc: ToolCallRecord, argError: any): PipelineJob {
-	return { status: "failed", tc, canStart: () => true, argError } as PipelineJob;
-}
-
 function mockSubmitResult(
 	cleanedResult: Record<string, unknown>,
 ): SubmitToolResult {
@@ -69,23 +64,6 @@ function mockSubmitResult(
 		},
 		cleanedResult,
 	} as SubmitToolResult;
-}
-
-function mockExecTC(id: string): ToolCallRecord {
-	return { id, tool: "exec", args: { script: "ls" } } as ToolCallRecord;
-}
-
-function mockExecResult(tc: ToolCallRecord): ToolResult {
-	return {
-		type: "tool_result",
-		tool: "exec",
-		call: tc,
-		status: "completed",
-		exitCode: 0,
-		stdout: "output",
-		stderr: "",
-		durationMs: 100,
-	} as ToolResult;
 }
 
 // ── recoverTruncatedCalls ──

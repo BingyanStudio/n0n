@@ -11,8 +11,8 @@ Object.defineProperty(process.stderr, "isTTY", {
 	configurable: true,
 });
 
-const { LiveRegion } = await import("../live-region.ts");
-const { RichRenderer } = await import("../rich-renderer.ts");
+const { LiveRegion } = await import("../src/live-region.ts");
+const { RichRenderer } = await import("../src/rich-renderer.ts");
 
 // 恢复 TTY
 if (wasTTY !== undefined) {

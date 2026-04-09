@@ -9,70 +9,18 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import type { ExecArgs, ToolCallRecord } from "@n0n/types";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import {
+	randomChunks,
+	restoreStderr,
+	saveStderr,
+	setupVT,
+	stripAnsi,
+} from "./test-helpers.ts";
 
-// 保存原始值用于恢复
-const origWrite = process.stderr.write;
-const origCols = process.stderr.columns;
-const origTTY = process.stderr.isTTY;
-
-function setupVT(cols: number): VirtualTerminal {
-	const vt = new VirtualTerminal(cols, 500);
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: true,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "columns", {
-		value: cols,
-		writable: true,
-		configurable: true,
-	});
-	process.stderr.write = (chunk: string | Uint8Array) => {
-		if (typeof chunk === "string") vt.feed(chunk);
-		return true;
-	};
-	return vt;
-}
-
-function teardown(): void {
-	process.stderr.write = origWrite;
-	Object.defineProperty(process.stderr, "columns", {
-		value: origCols,
-		writable: true,
-		configurable: true,
-	});
-	Object.defineProperty(process.stderr, "isTTY", {
-		value: origTTY,
-		writable: true,
-		configurable: true,
-	});
-}
-
-/** 将完整 JSON 字符串按随机位置切分为 chunks */
-function randomChunks(json: string, seed: number): string[] {
-	const chunks: string[] = [];
-	let pos = 0;
-	let s = seed;
-	while (pos < json.length) {
-		// 简易 PRNG
-		s = (s * 1103515245 + 12345) & 0x7fffffff;
-		const size = (s % 5) + 1; // 1-5 字符
-		chunks.push(json.slice(pos, pos + size));
-		pos += size;
-	}
-	return chunks;
-}
-
-/** 去除 ANSI 控制序列，只保留可见文本 */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: needed for ANSI
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\[\?[0-9;]*[a-zA-Z]/g;
-function stripAnsi(s: string): string {
-	return s.replace(ANSI_RE, "");
-}
+const saved = saveStderr();
 
 describe("RichRenderer 虚拟终端保真测试", () => {
-	afterEach(teardown);
+	afterEach(() => restoreStderr(saved));
 
 	test("基础流式渲染 — 最终画面不应有残留", async () => {
 		const vt = setupVT(80);
@@ -178,7 +126,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 	test("随机 chunk 分割 fuzz（多种子）— 最终画面一致", async () => {
 		const _vt0 = setupVT(80);
 		await import("../rich-renderer.ts");
-		teardown();
+		restoreStderr(saved);
 
 		// 用不同种子跑同一场景，收集最终画面
 		const json = '{"script":"ls -la","runtime":"cmd","timeout":"30"}';
@@ -224,7 +172,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 			const cleanLines = vt.getVisibleLines().map((l) => stripAnsi(l));
 			finalScreens.push(cleanLines);
-			teardown();
+			restoreStderr(saved);
 		}
 
 		// 所有种子的最终画面应该相同

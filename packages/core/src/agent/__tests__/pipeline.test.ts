@@ -11,6 +11,7 @@
 import { describe, expect, it } from "bun:test";
 import type { CanStartFn, ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
 import { ExecutionScheduler, type SchedulerEvents } from "../scheduler.ts";
+import { mockExecTC, mockWriteTC, mockEditTC, mockReminderTC, mockResult } from "./test-helpers.ts";
 
 // ── canStart 策略 ──
 
@@ -27,38 +28,6 @@ const pathExclusive: CanStartFn = (self, active) => {
 
 /** reminder/submit: 无条件并行 */
 const always: CanStartFn = () => true;
-
-// ── Mock 工具 ──
-
-function mockWriteTC(id: string, path: string): ToolCallRecord {
-	return {
-		id,
-		tool: "write",
-		args: { path, content: "test" },
-	} as ToolCallRecord;
-}
-
-function mockEditTC(id: string, path: string): ToolCallRecord {
-	return { id, tool: "edit", args: { path, intent: "test" } } as ToolCallRecord;
-}
-
-function mockExecTC(id: string): ToolCallRecord {
-	return { id, tool: "exec", args: { script: "echo hi" } } as ToolCallRecord;
-}
-
-function mockReminderTC(id: string): ToolCallRecord {
-	return { id, tool: "reminder", args: { content: "test" } } as ToolCallRecord;
-}
-
-function mockResult(tc: ToolCallRecord): ToolResult {
-	return {
-		type: "tool_result",
-		tool: tc.tool,
-		call: tc,
-		success: true,
-		error: null,
-	} as unknown as ToolResult;
-}
 
 /** 创建一个可控的异步执行器：通过 resolve 回调手动控制完成时机 */
 function createControllableExecutor() {
