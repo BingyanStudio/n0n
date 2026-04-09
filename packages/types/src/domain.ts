@@ -370,3 +370,18 @@ export type DomainMessage =
 	| ReminderDueMessage
 	| SubmitRejectedMessage
 	| ToolArgErrorMessage;
+
+// ── 工具并行条件判断 ──
+
+/**
+ * 工具并行条件判断函数。
+ * scheduler 在决定是否启动队首工具时调用。
+ *
+ * @param self 待启动的工具调用
+ * @param active 当前正在执行的所有工具调用
+ * @returns true 表示可以立即启动，false 表示需要等待
+ */
+export type CanStartFn = (
+	self: ToolCallRecord,
+	active: readonly ToolCallRecord[],
+) => boolean;

@@ -9,10 +9,9 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
+import type { CanStartFn, ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
 import { RenderBuffer } from "../render-buffer.ts";
 import { ExecutionScheduler } from "../scheduler.ts";
-import type { CanStartFn } from "../scheduler.ts";
 
 // ── canStart 策略 ──
 

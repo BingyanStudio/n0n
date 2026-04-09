@@ -9,6 +9,7 @@
  */
 
 import type {
+	CanStartFn,
 	ToolArgErrorMessage,
 	ToolCallRecord,
 	ToolResult,
@@ -16,20 +17,7 @@ import type {
 } from "@n0n/types";
 import type { RenderBuffer } from "./render-buffer.ts";
 
-// ── 并行判断回调 ──
-
-/**
- * 工具并行条件判断函数。
- * scheduler 在决定是否启动队首工具时调用。
- *
- * @param self 待启动的工具调用
- * @param active 当前正在执行的所有工具调用
- * @returns true 表示可以立即启动，false 表示需要等待
- */
-export type CanStartFn = (
-	self: ToolCallRecord,
-	active: readonly ToolCallRecord[],
-) => boolean;
+// ── 默认并行策略 ──
 
 /** 默认策略：等所有 active 完成后才启动（最保守） */
 const defaultCanStart: CanStartFn = (_self, active) => active.length === 0;
@@ -61,6 +49,15 @@ export interface FailedJob extends JobBase {
 
 export type PipelineJob = PendingJob | RunningJob | CompletedJob | FailedJob;
 
+// ── JobSlot — mutable wrapper，避免 index 间接寻址 ──
+
+class JobSlot {
+	state: PipelineJob;
+	constructor(state: PipelineJob) {
+		this.state = state;
+	}
+}
+
 // ── 工具执行函数类型 ──
 
 export type ToolExecutor = (
@@ -70,9 +67,9 @@ export type ToolExecutor = (
 // ── ExecutionScheduler ──
 
 export class ExecutionScheduler {
-	private readonly jobs: PipelineJob[] = [];
-	private readonly pendingIndices: number[] = [];
-	private readonly activeIndices = new Map<string, number>();
+	private readonly slots: JobSlot[] = [];
+	private readonly pendingQueue: JobSlot[] = [];
+	private readonly activeSet = new Set<JobSlot>();
 	private sealed = false;
 	private notify: (() => void) | null = null;
 	private renderBuffer: RenderBuffer | null = null;
@@ -84,13 +81,13 @@ export class ExecutionScheduler {
 	}
 
 	enqueue(tc: ToolCallRecord, canStart?: CanStartFn): void {
-		const idx = this.jobs.length;
-		this.jobs.push({
+		const slot = new JobSlot({
 			status: "pending",
 			tc,
 			canStart: canStart ?? defaultCanStart,
 		});
-		this.pendingIndices.push(idx);
+		this.slots.push(slot);
+		this.pendingQueue.push(slot);
 		this.renderBuffer?.register(tc);
 		this.notify?.();
 	}
@@ -102,25 +99,25 @@ export class ExecutionScheduler {
 	}
 
 	orderedJobs(): readonly PipelineJob[] {
-		return this.jobs;
+		return this.slots.map((s) => s.state);
 	}
 
 	async run(signal?: AbortSignal): Promise<void> {
 		while (!signal?.aborted) {
-			const headIdx = this.pendingIndices[0];
-			if (headIdx !== undefined) {
-				const head = this.jobs[headIdx]!;
-				if (head.canStart(head.tc, this.activeTCs())) {
-					this.pendingIndices.shift();
-					this.startJob(headIdx);
+			const head = this.pendingQueue[0];
+			if (head) {
+				const job = head.state;
+				if (job.canStart(job.tc, this.activeTCs())) {
+					this.pendingQueue.shift();
+					this.startJob(head);
 					continue;
 				}
 			}
 
 			if (
 				this.sealed &&
-				this.pendingIndices.length === 0 &&
-				this.activeIndices.size === 0
+				this.pendingQueue.length === 0 &&
+				this.activeSet.size === 0
 			) {
 				break;
 			}
@@ -135,24 +132,24 @@ export class ExecutionScheduler {
 	}
 
 	private activeTCs(): ToolCallRecord[] {
-		return [...this.activeIndices.values()].map((i) => this.jobs[i]!.tc);
+		return [...this.activeSet].map((s) => s.state.tc);
 	}
 
 	// ── 执行启动 ──
 
-	private startJob(idx: number): void {
-		const job = this.jobs[idx]!;
-		this.jobs[idx] = { ...job, status: "running" };
-		this.activeIndices.set(job.tc.id, idx);
+	private startJob(slot: JobSlot): void {
+		const { tc, canStart } = slot.state;
+		slot.state = { status: "running", tc, canStart };
+		this.activeSet.add(slot);
 
 		const run = async () => {
 			let result: ToolResult | null = null;
 			let argError: ToolArgErrorMessage | null = null;
 
 			try {
-				for await (const event of this.executor(job.tc)) {
+				for await (const event of this.executor(tc)) {
 					if (event.type === "tool_output_chunk") {
-						this.renderBuffer?.pushChunk(job.tc.id, event.tool, event.chunk);
+						this.renderBuffer?.pushChunk(tc.id, event.tool, event.chunk);
 					} else if (event.type === "tool_arg_error") {
 						argError = event;
 					} else {
@@ -163,29 +160,24 @@ export class ExecutionScheduler {
 				if (!result && !argError) {
 					argError = {
 						type: "tool_arg_error",
-						callId: job.tc.id,
-						tool: job.tc.tool,
+						callId: tc.id,
+						tool: tc.tool,
 						error: `Internal execution error: ${err instanceof Error ? err.message : String(err)}`,
 					};
 				}
 			} finally {
 				if (argError) {
-					this.jobs[idx] = {
-						status: "failed",
-						tc: job.tc,
-						canStart: job.canStart,
-						argError,
-					};
+					slot.state = { status: "failed", tc, canStart, argError };
 				} else {
-					this.jobs[idx] = {
+					slot.state = {
 						status: "completed",
-						tc: job.tc,
-						canStart: job.canStart,
+						tc,
+						canStart,
 						result: result!,
 					};
 				}
-				this.activeIndices.delete(job.tc.id);
-				this.renderBuffer?.pushEnd(job.tc.id, result);
+				this.activeSet.delete(slot);
+				this.renderBuffer?.pushEnd(tc.id, result);
 				this.notify?.();
 			}
 		};

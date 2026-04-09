@@ -13,6 +13,7 @@
  */
 
 import type {
+	CanStartFn,
 	DomainMessage,
 	EditToolCall,
 	ExecToolCall,
@@ -71,15 +72,6 @@ type SyncExecutor = (
 	reminders: PendingReminder[],
 	confirmFn?: (question: string) => Promise<string>,
 ) => Promise<ToolResult> | ToolResult;
-
-/**
- * canStart 并行判断：(self, active) => 是否可以立即启动。
- * 未声明时 scheduler 使用默认策略（等所有 active 完成）。
- */
-export type CanStartFn = (
-	self: ToolCallRecord,
-	active: readonly ToolCallRecord[],
-) => boolean;
 
 /** 截断恢复结果：恢复后的工具调用 + 执行结果 */
 export interface RecoverResult {
@@ -270,3 +262,4 @@ export type { EnvSnapshot, RuntimeProbe } from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";
 export { DefaultSubmitSchema } from "./submit.ts";
+export type { CanStartFn } from "@n0n/types";
