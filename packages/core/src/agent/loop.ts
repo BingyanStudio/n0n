@@ -122,11 +122,17 @@ export async function agentLoop<T = unknown>(
 		)) {
 			switch (event.type) {
 				// 渲染分发
+				case "thinking_start":
+					renderer.thinkingStart();
+					break;
 				case "thinking_chunk":
 					renderer.thinkingChunk(event.text);
 					break;
 				case "thinking_end":
 					renderer.thinkingEnd();
+					break;
+				case "content_start":
+					renderer.contentStart();
 					break;
 				case "content_chunk":
 					renderer.contentChunk(event.text);
@@ -179,6 +185,7 @@ export async function agentLoop<T = unknown>(
 			scheduler.seal();
 			if (outcome.reason === "aborted") renderer.aborted();
 			else renderer.agentTerminated(outcome.reason);
+			renderer.roundEnd();
 			return { result: null, report: outcome.report, history: messages };
 		}
 
@@ -187,6 +194,7 @@ export async function agentLoop<T = unknown>(
 			idleCount++;
 			if (idleCount >= runtime.agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
+				renderer.roundEnd();
 				return {
 					result: null,
 					// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
@@ -199,11 +207,13 @@ export async function agentLoop<T = unknown>(
 				idleCount,
 				maxIdleRounds: runtime.agent.maxIdleRounds,
 			});
+			renderer.roundEnd();
 			continue;
 		}
 
 		if (outcome.action === "retry_truncated") {
 			scheduler.seal();
+			renderer.roundEnd();
 			continue;
 		}
 
@@ -232,7 +242,10 @@ export async function agentLoop<T = unknown>(
 			...truncation.pairs.map((p) => p.call),
 		];
 
-		if (allCalls.length === 0) continue;
+		if (allCalls.length === 0) {
+			renderer.roundEnd();
+			continue;
+		}
 
 		// ── 4. 构建 assistant 消息 ──
 		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
@@ -257,6 +270,7 @@ export async function agentLoop<T = unknown>(
 		);
 		if (submit.accepted) {
 			renderer.submitAccepted();
+			renderer.roundEnd();
 			return {
 				result: submit.accepted.value as T,
 				report: null,
@@ -269,6 +283,7 @@ export async function agentLoop<T = unknown>(
 				MAX_SUBMIT_RETRIES,
 				`giving up after ${submitRetries + 1} attempts`,
 			);
+			renderer.roundEnd();
 			return {
 				result: null,
 				report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${submit.gaveUp.error}`,
@@ -289,6 +304,7 @@ export async function agentLoop<T = unknown>(
 				maxAttempts: MAX_SUBMIT_RETRIES,
 			});
 		}
+		renderer.roundEnd();
 	}
 
 	return {

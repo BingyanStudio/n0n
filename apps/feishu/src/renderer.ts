@@ -151,7 +151,11 @@ export class FeishuRenderer implements Renderer {
 		this.conv.startRound(`Round ${round}  ·  ${msgCount} msgs`);
 	}
 
+	roundEnd(): void {}
+
 	// ── LLM 流式输出 ──
+
+	thinkingStart(): void {}
 
 	thinkingChunk(token: string): void {
 		this.thinkBuf += token;
@@ -168,6 +172,8 @@ export class FeishuRenderer implements Renderer {
 			this.thinkBuf = "";
 		}
 	}
+
+	contentStart(): void {}
 
 	contentChunk(token: string): void {
 		this.contentBuf += token;

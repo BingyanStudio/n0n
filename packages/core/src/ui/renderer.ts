@@ -27,8 +27,12 @@ export class PlainRenderer implements Renderer {
 		);
 	}
 
+	roundEnd(): void {}
+
+	thinkingStart(): void {}
 	thinkingChunk(_token: string): void {}
 	thinkingEnd(): void {}
+	contentStart(): void {}
 	contentChunk(_token: string): void {}
 	contentEnd(): void {}
 

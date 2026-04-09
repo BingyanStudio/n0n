@@ -195,7 +195,11 @@ export class RichRenderer implements Renderer {
 		}
 	}
 
+	roundEnd(): void {}
+
 	// ── LLM 流式输出（指令式：无推断状态）──
+
+	thinkingStart(): void {}
 
 	thinkingChunk(token: string): void {
 		write(style.gray(token));
@@ -204,6 +208,8 @@ export class RichRenderer implements Renderer {
 	thinkingEnd(): void {
 		writeln();
 	}
+
+	contentStart(): void {}
 
 	contentChunk(token: string): void {
 		write(token);

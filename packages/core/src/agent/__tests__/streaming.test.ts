@@ -52,6 +52,7 @@ describe("parseStream", () => {
 				{ type: "done", finishReason: "stop", usage: null },
 			]);
 
+			expect(ofType(events, "content_start")).toHaveLength(1);
 			expect(ofType(events, "content_chunk")).toHaveLength(2);
 			expect(ofType(events, "content_chunk")[0]!.text).toBe("Hello");
 			expect(ofType(events, "content_chunk")[1]!.text).toBe(" world");
@@ -69,9 +70,11 @@ describe("parseStream", () => {
 				{ type: "done", finishReason: "stop", usage: null },
 			]);
 
+			expect(ofType(events, "thinking_start")).toHaveLength(1);
 			expect(ofType(events, "thinking_chunk")).toHaveLength(2);
 			expect(ofType(events, "thinking_end")).toHaveLength(1);
 			expect(ofType(events, "content_chunk")).toHaveLength(0);
+			expect(ofType(events, "content_start")).toHaveLength(0);
 		});
 
 		it("thinking → content 转换：自动插入 thinking_end", async () => {
@@ -82,10 +85,14 @@ describe("parseStream", () => {
 			]);
 
 			const types = events.map((e) => e.type);
+			const thinkingStartIdx = types.indexOf("thinking_start");
 			const thinkingEndIdx = types.indexOf("thinking_end");
+			const contentStartIdx = types.indexOf("content_start");
 			const contentChunkIdx = types.indexOf("content_chunk");
-			expect(thinkingEndIdx).toBeGreaterThan(-1);
-			expect(contentChunkIdx).toBeGreaterThan(thinkingEndIdx);
+			expect(thinkingStartIdx).toBeGreaterThan(-1);
+			expect(thinkingEndIdx).toBeGreaterThan(thinkingStartIdx);
+			expect(contentStartIdx).toBeGreaterThan(thinkingEndIdx);
+			expect(contentChunkIdx).toBeGreaterThan(contentStartIdx);
 		});
 
 		it("thinking → tool_args 转换：自动插入 thinking_end", async () => {
@@ -102,9 +109,12 @@ describe("parseStream", () => {
 			]);
 
 			const types = events.map((e) => e.type);
+			const thinkingStartIdx = types.indexOf("thinking_start");
 			expect(types).toContain("thinking_end");
 			const thinkingEndIdx = types.indexOf("thinking_end");
 			const toolArgStartIdx = types.indexOf("tool_arg_start");
+			expect(thinkingStartIdx).toBeGreaterThan(-1);
+			expect(thinkingEndIdx).toBeGreaterThan(thinkingStartIdx);
 			expect(toolArgStartIdx).toBeGreaterThan(thinkingEndIdx);
 		});
 
@@ -122,9 +132,12 @@ describe("parseStream", () => {
 			]);
 
 			const types = events.map((e) => e.type);
+			const contentStartIdx = types.indexOf("content_start");
 			expect(types).toContain("content_end");
 			const contentEndIdx = types.indexOf("content_end");
 			const toolArgStartIdx = types.indexOf("tool_arg_start");
+			expect(contentStartIdx).toBeGreaterThan(-1);
+			expect(contentEndIdx).toBeGreaterThan(contentStartIdx);
 			expect(toolArgStartIdx).toBeGreaterThan(contentEndIdx);
 		});
 	});
@@ -276,8 +289,11 @@ describe("parseStream", () => {
 			]);
 
 			const types = events.map((e) => e.type);
+			const thinkingStartIdx = types.indexOf("thinking_start");
 			const thinkingEndIdx = types.indexOf("thinking_end");
 			const errorIdx = types.indexOf("error");
+			expect(thinkingStartIdx).toBeGreaterThan(-1);
+			expect(thinkingEndIdx).toBeGreaterThan(thinkingStartIdx);
 			expect(thinkingEndIdx).toBeGreaterThan(-1);
 			expect(errorIdx).toBeGreaterThan(thinkingEndIdx);
 		});

@@ -1,13 +1,20 @@
 /**
  * Renderer — 事件驱动的渲染抽象
  *
- * 事件分三个阶段：
- * 1. LLM 流式输出：thinkingChunk → thinkingEnd → contentChunk → contentEnd → toolCallArg* → streamEnd
- * 2. 工具执行：toolExecStart → toolExecChunk → toolExecEnd（带 tcId，无序到达，排序由实现决定）
- * 3. 特殊事件：submitAccepted / submitRejected / agentTerminated / aborted
+ * 按 block 拆分为独立子接口，每个 block 有完整的 start/chunk/end 生命周期。
+ * 实现方可逐模块实现，按需组合。
+ *
+ * 一轮的事件流：
+ *   roundStart
+ *     thinking  { start → chunk* → end }
+ *     content   { start → chunk* → end }
+ *     toolCallArg* { start → chunk* → end }   (per tool, within stream)
+ *   streamEnd
+ *     toolExec* { start → chunk* → end }      (per tool, 无序到达)
+ *   roundEnd
  */
 
-import type { ToolCallRecord, ToolExecOutcome, ToolResult } from "./domain.ts";
+import type { ToolCallRecord, ToolExecOutcome } from "./domain.ts";
 
 /** 单轮 LLM 调用的 token 用量统计 */
 export interface RoundTokenUsage {
@@ -23,11 +30,47 @@ export interface RoundTokenUsage {
 	cacheWriteTokens: number;
 }
 
-export interface Renderer {
+// ── Block 子接口 ──
+
+/** thinking 块：LLM 推理过程的流式输出 */
+export interface ThinkingRenderer {
+	thinkingStart(): void;
+	thinkingChunk(token: string): void;
+	thinkingEnd(): void;
+}
+
+/** content 块：LLM 正文内容的流式输出 */
+export interface ContentRenderer {
+	contentStart(): void;
+	contentChunk(token: string): void;
+	contentEnd(): void;
+}
+
+/** 工具参数块：单个工具调用参数的流式输出（stream 阶段，按 index 区分） */
+export interface ToolCallArgRenderer {
+	toolCallArgStart(index: number, name: string): void;
+	toolCallArgChunk(index: number, chunk: string): void;
+	toolCallArgEnd(index: number, tc: ToolCallRecord): void;
+}
+
+/** 工具执行块：单个工具执行过程的流式输出（无序到达，按 tcId 区分） */
+export interface ToolExecRenderer {
+	toolExecStart(tcId: string, tc: ToolCallRecord): void;
+	toolExecChunk(tcId: string, tool: string, chunk: string): void;
+	toolExecEnd(tcId: string, outcome: ToolExecOutcome): void;
+}
+
+// ── 完整 Renderer ──
+
+export interface Renderer
+	extends ThinkingRenderer,
+		ContentRenderer,
+		ToolCallArgRenderer,
+		ToolExecRenderer {
 	/** 用户输入展示 */
 	userMessage(content: string): void;
 
-	/** 新一轮 LLM 调用开始 */
+	/** 新一轮开始 */
 	roundStart(
 		round: number,
 		maxRounds: number,
@@ -35,49 +78,17 @@ export interface Renderer {
 		lastUsage?: RoundTokenUsage | null,
 	): void;
 
-	// ── LLM 流式输出（上游：SSE 流驱动） ──
-
-	/** thinking token chunk */
-	thinkingChunk(token: string): void;
-
-	/** thinking 阶段结束（仅在有 thinking 输出时由上游触发） */
-	thinkingEnd(): void;
-
-	/** content token chunk */
-	contentChunk(token: string): void;
-
-	/** content 阶段结束（仅在有 content 输出时由上游触发） */
-	contentEnd(): void;
-
-	/** 某个工具调用的参数流开始（上游首次遇到该 index 时触发） */
-	toolCallArgStart(index: number, name: string): void;
-
-	/** 某个工具调用的参数 chunk */
-	toolCallArgChunk(index: number, chunk: string): void;
-
-	/** 某个工具调用的参数流结束（上游检测到 JSON 完整时触发） */
-	toolCallArgEnd(index: number, tc: ToolCallRecord): void;
+	/** 本轮结束 */
+	roundEnd(): void;
 
 	/**
 	 * LLM 流式输出全部结束（阶段终结信号）
 	 *
-	 * 无论正常完成还是异常中断都会触发，Renderer 应清理所有 streaming 状态。
+	 * thinking/content/toolCallArg 各 block 均已通过自身的 end 关闭。
+	 * streamEnd 标记整个 LLM 响应接收完毕，执行阶段可以开始渲染。
 	 * 异常原因由后续事件（agentTerminated 等）传达。
 	 */
 	streamEnd(): void;
-
-	// ── 工具执行（无序到达，排序由 Renderer 实现自行决定） ──
-
-	/** 工具开始执行 */
-	toolExecStart(tcId: string, tc: ToolCallRecord): void;
-
-	/** 工具执行过程中的流式输出 chunk */
-	toolExecChunk(tcId: string, tool: string, chunk: string): void;
-
-	/** 工具执行完成 */
-	toolExecEnd(tcId: string, outcome: ToolExecOutcome): void;
-
-	// ── 特殊事件 ──
 
 	/** LLM 纯文本回复（非流式回退） */
 	textResponse(content: string, idleCount: number): void;
