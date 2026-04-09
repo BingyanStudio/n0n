@@ -79,19 +79,6 @@ export function muteStderr(): void {
 	process.stderr.write = () => true;
 }
 
-// ── 输出捕获 ──
-
-/** 将 stderr 重定向到字符串，返回获取结果的函数 */
-export function captureStderr(): () => string {
-	let buf = "";
-	process.stderr.write = (chunk: string | Uint8Array) => {
-		if (typeof chunk === "string") buf += chunk;
-		else buf += new TextDecoder().decode(chunk);
-		return true;
-	};
-	return () => buf;
-}
-
 // ── 杂项 ──
 
 /** 将字符串按随机长度切成 chunks（确定性 PRNG） */

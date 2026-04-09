@@ -58,7 +58,7 @@ describe("exec 输出截断", () => {
 		if (result.status === "truncated") {
 			// stdoutTail 应包含末尾内容
 			expect(result.stdoutTail).toContain("line_500");
-			expect(result.stdoutTail.length).toBeLessThanOrEqual(4200); // ~TAIL_TOKENS(1000) 对应的字符数 + 余量
+			expect(result.stdoutTail.length).toBeLessThanOrEqual(8500); // ~TAIL_TOKENS(2000) 对应的字符数 + 余量
 
 			// outputFile 应存在
 			expect(existsSync(result.outputFile)).toBe(true);

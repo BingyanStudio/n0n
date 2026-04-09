@@ -13,8 +13,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formatPrompt } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
-import type { FairyPaths } from "../state.ts";
-import { buildView } from "../view.ts";
+import type { FairyPaths } from "../src/state.ts";
+import { buildView } from "../src/view.ts";
 
 // ── 测试用 workspace ──
 
