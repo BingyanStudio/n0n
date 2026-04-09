@@ -37,6 +37,7 @@ export class FeishuConversation {
 	private cardEntityId: string | null = null;
 	/** 操作序列号（CardKit API 要求递增） */
 	private seq = 0;
+	private degraded = false;
 
 	private constructor(
 		private readonly bot: FeishuBot,
@@ -99,7 +100,16 @@ export class FeishuConversation {
 		this.summary = summary;
 		this.activity = "";
 		for (const r of this.rounds) r.active = false;
-		this.closeStreamingAndFlush();
+		if (this.degraded && !this.cardEntityId) {
+			this.enqueue(async () => {
+				await this.bot.createCardMessage(
+					this.ctx,
+					buildTextCard(title, summary, template),
+				);
+			});
+		} else {
+			this.closeStreamingAndFlush();
+		}
 	}
 
 	/** 发送独立卡片（不影响主过程卡片） */
@@ -113,25 +123,29 @@ export class FeishuConversation {
 
 	/** 初始化：创建流式卡片实体并发送 */
 	private async initStreamingCard(): Promise<void> {
-		const card = buildProcessCard({
-			title: this.title,
-			template: this.template,
-			rounds: [],
-			activity: "初始化...",
-			streamElementId: STREAM_ELEMENT_ID,
-		});
-		// 开启流式模式
-		card.config.streaming_mode = true;
-		card.config.summary = { content: "" };
-		card.config.streaming_config = {
-			print_frequency_ms: { default: 50 },
-			print_step: { default: 2 },
-			print_strategy: "fast",
-		};
+		try {
+			const card = buildProcessCard({
+				title: this.title,
+				template: this.template,
+				rounds: [],
+				activity: "初始化...",
+				streamElementId: STREAM_ELEMENT_ID,
+			});
+			card.config.streaming_mode = true;
+			card.config.summary = { content: "" };
+			card.config.streaming_config = {
+				print_frequency_ms: { default: 50 },
+				print_step: { default: 2 },
+				print_strategy: "fast",
+			};
 
-		const cardEntityId = await this.bot.createCardEntity(card);
-		await this.bot.sendCardEntity(this.ctx, cardEntityId);
-		this.cardEntityId = cardEntityId;
+			const cardEntityId = await this.bot.createCardEntity(card);
+			await this.bot.sendCardEntity(this.ctx, cardEntityId);
+			this.cardEntityId = cardEntityId;
+		} catch (err) {
+			console.error("[feishu] initStreamingCard failed, degrading to plain card:", err);
+			this.degraded = true;
+		}
 	}
 
 	/** 流式更新文本元素（打字机效果） */
@@ -190,13 +204,13 @@ export class FeishuConversation {
 	}
 
 	private enqueue(task: () => Promise<void>): void {
-		this.queue = this.queue.then(task).catch((err) => {
-			// TODO: 卡片 API 错误被静默吞噬。initStreamingCard 失败后 cardEntityId=null，
-			// 后续所有更新都变为空操作，用户看不到任何输出。需要：
-			// 1. 添加重试机制（飞书 API 有 rate limit）
-			// 2. 降级为普通消息（CardKit 流式卡片不可用时）
-			// 3. 结构化错误追踪
-			console.error("[feishu] card update failed:", err);
+		this.queue = this.queue.then(task).catch(async (err) => {
+			console.error("[feishu] card API error, retrying once:", err);
+			try {
+				await task();
+			} catch (retryErr) {
+				console.error("[feishu] card API retry failed:", retryErr);
+			}
 		});
 	}
 }
