@@ -24,13 +24,6 @@ import interactivePromptText from "./prompts/interactive.md" with {
 };
 
 /** CLI 交互模式的用户输入行为引导 — 含 chat 类型 */
-// TODO 这里的行为引导需要与 reminder estimate 语义对齐，并重新审视是否仍需要 hint 机制
-const USER_INPUT_HINT = [
-	"First, ask yourself: can I answer this by calling `exec`, `write`, or `edit`? If yes — do it, then submit as `completed`.",
-	"If this is a pure social greeting with nothing actionable (e.g. 你好, 谢谢), submit a `chat` response.",
-	"Otherwise, reason out what the user needs — start by calling `reminder` with your OKR breakdown, then proceed step by step.",
-].join("\n");
-
 type ReplContextPaths = Pick<
 	WorkflowPaths,
 	"workspace" | "tasks" | "skills" | "schedules" | "temp"
@@ -103,7 +96,7 @@ async function makeUserInput(
 		type: "user_input",
 		content,
 		context: await gatherContext(paths),
-		hint: USER_INPUT_HINT,
+		hint: null,
 	};
 }
 
