@@ -34,6 +34,7 @@ const defaultCanStart: CanStartFn = (_self, active) => active.length === 0;
 /** 单个工具执行的状态 */
 export interface PipelineJob {
 	tc: ToolCallRecord;
+	canStart: CanStartFn;
 	result: ToolResult | null;
 	argError: {
 		type: "tool_arg_error";
@@ -54,8 +55,8 @@ export type ToolExecutor = (
 // ── ExecutionScheduler ──
 
 export class ExecutionScheduler {
-	private readonly jobs: Array<PipelineJob & { canStart: CanStartFn }> = [];
-	private readonly pending: Array<PipelineJob & { canStart: CanStartFn }> = [];
+	private readonly jobs: PipelineJob[] = [];
+	private readonly pending: PipelineJob[] = [];
 	private readonly active = new Map<string, PipelineJob>();
 	private sealed = false;
 	private notify: (() => void) | null = null;
@@ -68,12 +69,12 @@ export class ExecutionScheduler {
 	}
 
 	enqueue(tc: ToolCallRecord, canStart?: CanStartFn): void {
-		const job = {
+		const job: PipelineJob = {
 			tc,
-			result: null as ToolResult | null,
-			argError: null as PipelineJob["argError"],
-			done: false,
 			canStart: canStart ?? defaultCanStart,
+			result: null,
+			argError: null,
+			done: false,
 		};
 		this.jobs.push(job);
 		this.pending.push(job);
@@ -113,7 +114,7 @@ export class ExecutionScheduler {
 		}
 	}
 
-	private canExecute(job: PipelineJob & { canStart: CanStartFn }): boolean {
+	private canExecute(job: PipelineJob): boolean {
 		const activeTCs = [...this.active.values()].map((j) => j.tc);
 		return job.canStart(job.tc, activeTCs);
 	}
