@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>压缩策略对比 — Opus 原地总结 vs 便宜模型</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts-gl@2/dist/echarts-gl.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Helvetica Neue', 'PingFang SC', sans-serif;
+    background: #0a0e14;
+    color: #c5cdd9;
+    min-height: 100vh;
+    padding: 32px 24px;
+  }
+  h1 { text-align: center; font-size: 22px; font-weight: 600; color: #7ee8a2; margin-bottom: 6px; }
+  .subtitle { text-align: center; font-size: 13px; color: #6b7b8d; margin-bottom: 28px; }
+  .chart-container {
+    max-width: 1000px;
+    margin: 0 auto 36px;
+    background: #111820;
+    border-radius: 12px;
+    padding: 24px 16px 8px;
+    border: 1px solid #1e2a36;
+  }
+  .chart-container h2 { font-size: 15px; font-weight: 500; color: #8fa4b8; margin-bottom: 4px; padding-left: 8px; }
+  .chart-container .desc { font-size: 12px; color: #556677; padding-left: 8px; margin-bottom: 12px; }
+  .chart { width: 100%; height: 520px; }
+  .chart-2d { height: 420px; }
+  .formula-box {
+    max-width: 1000px; margin: 0 auto 24px; padding: 16px 20px;
+    background: #111820; border-radius: 8px; border: 1px solid #1e2a36;
+    font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; color: #8fa4b8; line-height: 1.9;
+  }
+  .formula-box .g { color: #7ee8a2; }
+  .formula-box .y { color: #fac858; }
+  .formula-box .r { color: #ee6666; }
+  .formula-box .dim { color: #556677; }
+  .params {
+    max-width: 1000px; margin: 0 auto 24px;
+    display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+  }
+  .params label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8fa4b8; }
+  .params input[type="range"] { width: 140px; accent-color: #7ee8a2; }
+  .params .val { min-width: 72px; color: #7ee8a2; font-variant-numeric: tabular-nums; }
+  .insight {
+    max-width: 1000px; margin: 0 auto 28px; padding: 16px 20px;
+    background: #111820; border-left: 3px solid #7ee8a2; border-radius: 0 8px 8px 0;
+    font-size: 14px; line-height: 1.7;
+  }
+  .insight strong { color: #7ee8a2; }
+  .insight .warn { color: #fac858; }
+  .model-tags {
+    max-width: 1000px; margin: 0 auto 24px;
+    display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+  }
+  .model-tags .tag {
+    padding: 4px 14px; border-radius: 20px; font-size: 12px; cursor: pointer;
+    border: 1px solid; transition: all 0.2s;
+  }
+  .model-tags .tag:hover { filter: brightness(1.3); }
+</style>
+</head>
+<body>
+
+<h1>🐍 压缩策略对比</h1>
+<p class="subtitle">Opus 4.6 原地总结（吃缓存）vs 便宜模型总结（全量输入）</p>
+
+<div class="formula-box">
+  <div>策略1（Opus）: cost = P × <span class="g">$0.50</span> + S × $25 <span class="dim">← 缓存命中 + Opus 输出</span></div>
+  <div>策略2（便宜）: cost = P × $5r + S × $25r <span class="dim">← 全量输入 + 便宜输出</span></div>
+  <div style="margin-top:6px;">盈亏平衡: <span class="y">r*</span> = (P×0.50 + S×25) / (P×5 + S×25)</div>
+  <div><span class="dim">r < r* → 便宜模型胜 &nbsp;|&nbsp; r > r* → Opus 原地胜</span></div>
+</div>
+
+<div class="insight" id="insight">加载中…</div>
+
+<div class="model-tags" id="modelTags"></div>
+
+<div class="chart-container">
+  <h2>图一：盈亏平衡面 r*（3D）</h2>
+  <p class="desc">X = 前缀长度 · Y = 摘要长度 · Z = 盈亏平衡价格系数 r* — 曲面以下用便宜模型，以上用 Opus</p>
+  <div class="chart" id="chart3d"></div>
+</div>
+
+<div class="chart-container">
+  <h2>图二：盈亏平衡 r* 热力图</h2>
+  <p class="desc">颜色越深 = r* 越低 = Opus 缓存优势越强，便宜模型需要更便宜才能竞争</p>
+  <div class="chart chart-2d" id="chartHeat"></div>
+</div>
+
+<div class="chart-container">
+  <h2>图三：实际成本对比</h2>
+  <p class="desc">固定前缀大小，不同摘要长度下两种策略的成本曲线</p>
+  <div class="chart chart-2d" id="chartCost"></div>
+</div>
+
+<div class="params">
+  <label>前缀长度 <input type="range" id="prefixSlider" min="10" max="900" step="10" value="100"><span class="val" id="prefixVal">100K</span></label>
+  <label>价格系数 r
+    <input type="range" id="ratioSlider" min="0.01" max="1.0" step="0.01" value="0.05">
+    <input type="number" id="ratioInput" min="0.001" max="10" step="0.001" value="0.05" style="width:72px;background:#0a0e14;border:1px solid #2a3a4a;border-radius:4px;color:#7ee8a2;padding:2px 6px;font-size:13px;font-variant-numeric:tabular-nums;">
+    <span class="val" id="ratioVal" style="min-width:auto;"></span>
+  </label>
+</div>
+
+<script>
+const INPUT = 5, OUTPUT = 25, CACHE_READ = 0.50;
+
+const models = [
+  { name: 'Gemini Flash 2', r: 0.015, color: '#4285f4' },
+  { name: 'Haiku 3.5', r: 0.05, color: '#a855f7' },
+  { name: 'GPT-4o mini', r: 0.03, color: '#10a37f' },
+  { name: 'Sonnet 4', r: 0.60, color: '#fc8452' },
+];
+
+// populate model tags
+const tagsEl = document.getElementById('modelTags');
+models.forEach(m => {
+  const tag = document.createElement('span');
+  tag.className = 'tag';
+  tag.style.borderColor = m.color;
+  tag.style.color = m.color;
+  tag.textContent = `${m.name} (r=${m.r})`;
+  tag.onclick = () => {
+    document.getElementById('ratioSlider').value = m.r;
+    document.getElementById('ratioInput').value = m.r;
+    onParamChange();
+  };
+  tagsEl.appendChild(tag);
+});
+
+function rStar(pK, sK) {
+  const pM = pK/1000, sM = sK/1000;
+  return (pM*CACHE_READ + sM*OUTPUT) / (pM*INPUT + sM*OUTPUT);
+}
+function cost1(pK, sK) { return (pK/1000)*CACHE_READ + (sK/1000)*OUTPUT; }
+function cost2(pK, sK, r) { return r*((pK/1000)*INPUT + (sK/1000)*OUTPUT); }
+
+const chart3d = echarts.init(document.getElementById('chart3d'));
+const chartHeat = echarts.init(document.getElementById('chartHeat'));
+const chartCost = echarts.init(document.getElementById('chartCost'));
+
+function render3D() {
+  const data = [];
+  const prefixes = []; for (let p = 10; p <= 900; p += 10) prefixes.push(p);
+  const summaries = []; for (let s = 0.5; s <= 10; s += 0.5) summaries.push(s);
+
+  prefixes.forEach((p, pi) => {
+    summaries.forEach((s, si) => {
+      data.push([pi, si, rStar(p, s)]);
+    });
+  });
+
+  chart3d.setOption({
+    tooltip: {
+      formatter: params => {
+        const d = params.data;
+        const p = prefixes[d[0]], s = summaries[d[1]], r = d[2];
+        return `前缀 ${p}K · 摘要 ${s}K<br>r* = <b>${r.toFixed(3)}</b><br>` +
+          `Opus 成本: $${cost1(p,s).toFixed(4)}<br>` +
+          models.map(m => `${m.name}: ${m.r < r ? '✅ 更便宜' : '❌ 更贵'}`).join('<br>');
+      }
+    },
+    visualMap: {
+      show: true, min: 0.08, max: 0.6, inRange: {
+        color: ['#0b3d1a', '#1a6b3c', '#7ee8a2', '#fac858', '#ee6666']
+      },
+      textStyle: { color: '#8fa4b8' },
+      orient: 'horizontal', left: 'center', bottom: 10,
+      text: ['r*高 (Opus更优)', 'r*低 (便宜模型更优)']
+    },
+    xAxis3D: {
+      type: 'category', data: prefixes.map(p => p + 'K'),
+      name: '前缀 (K tok)', nameTextStyle: { color: '#8fa4b8' },
+      axisLabel: { color: '#6b7b8d', interval: 3 }
+    },
+    yAxis3D: {
+      type: 'category', data: summaries.map(s => s + 'K'),
+      name: '摘要 (K tok)', nameTextStyle: { color: '#8fa4b8' },
+      axisLabel: { color: '#6b7b8d', interval: 3 }
+    },
+    zAxis3D: {
+      type: 'value', name: 'r*',
+      min: 0, max: 0.7,
+      axisLabel: { color: '#6b7b8d' },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    grid3D: {
+      viewControl: { beta: 35, alpha: 25, distance: 240 },
+      boxWidth: 120, boxHeight: 60, boxDepth: 100,
+      environment: '#0a0e14',
+      light: { main: { intensity: 1.2 }, ambient: { intensity: 0.4 } }
+    },
+    series: [{
+      type: 'surface',
+      wireframe: { show: true, lineStyle: { color: 'rgba(255,255,255,0.06)', width: 0.5 } },
+      shading: 'realistic',
+      realisticMaterial: { roughness: 0.6, metalness: 0 },
+      data: data,
+      itemStyle: { opacity: 0.92 }
+    }]
+  }, true);
+}
+
+function renderHeatAndCost(fixedPrefix, fixedR) {
+  // === Heatmap ===
+  const prefixes = []; for (let p = 10; p <= 900; p += 50) prefixes.push(p);
+  const summaries = []; for (let s = 0.5; s <= 10; s += 0.5) summaries.push(s);
+  const heatData = [];
+
+  prefixes.forEach((p, pi) => {
+    summaries.forEach((s, si) => {
+      heatData.push([pi, si, +rStar(p, s).toFixed(4)]);
+    });
+  });
+
+  chartHeat.setOption({
+    tooltip: {
+      formatter: params => {
+        const [pi, si, r] = params.data;
+        return `前缀 ${prefixes[pi]}K · 摘要 ${summaries[si]}K<br>r* = <b>${r.toFixed(3)}</b><br>` +
+          `当前选择 r=${fixedR}: ${fixedR < r ? '✅ 便宜模型胜' : '❌ Opus 原地胜'}`;
+      }
+    },
+    grid: { left: 80, right: 80, bottom: 56, top: 24 },
+    xAxis: {
+      type: 'category', data: prefixes.map(p => p+'K'),
+      name: '前缀长度', nameLocation: 'center', nameGap: 30,
+      axisLabel: { color: '#6b7b8d' },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    yAxis: {
+      type: 'category', data: summaries.map(s => s+'K'),
+      name: '摘要长度', nameLocation: 'center', nameGap: 50,
+      axisLabel: { color: '#6b7b8d' },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    visualMap: {
+      min: 0.08, max: 0.5, calculable: true,
+      orient: 'vertical', right: 10, top: 'center',
+      inRange: { color: ['#0b3d1a', '#1a6b3c', '#7ee8a2', '#fac858', '#ee6666'] },
+      textStyle: { color: '#8fa4b8' },
+      text: ['r* 高', 'r* 低']
+    },
+    series: [{
+      type: 'heatmap', data: heatData,
+      emphasis: { itemStyle: { borderColor: '#fff', borderWidth: 1 } },
+      label: { show: false }
+    }]
+  }, true);
+
+  // === Cost comparison (fixed prefix, varying summary) ===
+  const sRange = []; for (let s = 0.5; s <= 10; s += 0.5) sRange.push(s);
+  const c1 = sRange.map(s => +cost1(fixedPrefix, s).toFixed(5));
+  const c2 = sRange.map(s => +cost2(fixedPrefix, s, fixedR).toFixed(5));
+  const rStarLine = sRange.map(s => +rStar(fixedPrefix, s).toFixed(4));
+
+  chartCost.setOption({
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1a2332', borderColor: '#2a3a4a',
+      textStyle: { color: '#c5cdd9', fontSize: 12 },
+      formatter: params => {
+        const sK = params[0].axisValue;
+        let s = `前缀 ${fixedPrefix}K · 摘要 ${sK}<br>`;
+        params.forEach(p => {
+          s += `${p.marker} ${p.seriesName}: <b>${p.seriesName === 'r*' ? p.value.toFixed(3) : '$'+p.value.toFixed(4)}</b><br>`;
+        });
+        const rs = rStar(fixedPrefix, parseFloat(sK));
+        s += fixedR < rs ? '<br>→ ✅ 便宜模型更划算' : '<br>→ ❌ Opus 原地更划算';
+        return s;
+      }
+    },
+    legend: { top: 4, textStyle: { color: '#8fa4b8', fontSize: 12 } },
+    grid: { left: 64, right: 64, bottom: 48, top: 48 },
+    xAxis: {
+      type: 'category', data: sRange.map(s => s+'K'),
+      name: '摘要长度 (K tokens)', nameLocation: 'center', nameGap: 30,
+      axisLabel: { color: '#6b7b8d' },
+      nameTextStyle: { color: '#8fa4b8' }
+    },
+    yAxis: [
+      {
+        type: 'value', name: '成本 ($)',
+        axisLabel: { color: '#6b7b8d', formatter: '${value}' },
+        splitLine: { lineStyle: { color: '#1e2a36' } },
+        nameTextStyle: { color: '#8fa4b8' }
+      },
+      {
+        type: 'value', name: 'r*',
+        min: 0, max: 1,
+        axisLabel: { color: '#6b7b8d' },
+        splitLine: { show: false },
+        nameTextStyle: { color: '#8fa4b8' }
+      }
+    ],
+    series: [
+      {
+        name: 'Opus 原地总结', type: 'line', data: c1, smooth: true,
+        lineStyle: { width: 2.5, color: '#7ee8a2' },
+        itemStyle: { color: '#7ee8a2' }, symbol: 'none',
+        areaStyle: { color: 'rgba(126,232,162,0.08)' }
+      },
+      {
+        name: `便宜模型 (r=${fixedR})`, type: 'line', data: c2, smooth: true,
+        lineStyle: { width: 2.5, color: '#a855f7' },
+        itemStyle: { color: '#a855f7' }, symbol: 'none',
+        areaStyle: { color: 'rgba(168,85,247,0.08)' }
+      },
+      {
+        name: 'r*', type: 'line', data: rStarLine, smooth: true, yAxisIndex: 1,
+        lineStyle: { width: 1.5, color: '#fac858', type: 'dotted' },
+        itemStyle: { color: '#fac858' }, symbol: 'none'
+      }
+    ]
+  }, true);
+
+  // === Insight ===
+  const typicalS = 2;
+  const rs = rStar(fixedPrefix, typicalS);
+  const c1v = cost1(fixedPrefix, typicalS);
+  const c2v = cost2(fixedPrefix, typicalS, fixedR);
+  const winner = fixedR < rs ? '便宜模型' : 'Opus 原地';
+  const saving = Math.abs(c1v - c2v);
+
+  document.getElementById('insight').innerHTML =
+    `<strong>当前参数：</strong>前缀 ${fixedPrefix}K，便宜模型 r=${fixedR}<br>` +
+    `典型场景（压缩到 2K）：r* = ${rs.toFixed(3)}，Opus $${c1v.toFixed(4)} vs 便宜模型 $${c2v.toFixed(4)}<br>` +
+    `→ <strong>${winner}胜</strong>，省 $${saving.toFixed(4)} 每次压缩<br>` +
+    `<span class="warn">极限：前缀极大 + 摘要极小时 r* → 0.10，仅比 Opus 便宜 90% 以上的模型才值得用</span>`;
+}
+
+render3D();
+renderHeatAndCost(100, 0.05);
+
+const prefixSlider = document.getElementById('prefixSlider');
+const prefixVal = document.getElementById('prefixVal');
+const ratioSlider = document.getElementById('ratioSlider');
+const ratioInput = document.getElementById('ratioInput');
+const ratioVal = document.getElementById('ratioVal');
+
+function getRatioLabel(r) {
+  const m = models.find(m => Math.abs(m.r - r) < 0.005);
+  return m ? `${r} (${m.name})` : String(r);
+}
+
+function onParamChange(fromSlider) {
+  const p = parseInt(prefixSlider.value);
+  let r;
+  if (fromSlider) {
+    r = parseFloat(ratioSlider.value);
+    ratioInput.value = r;
+  } else {
+    r = parseFloat(ratioInput.value);
+    if (isNaN(r) || r <= 0) return;
+    ratioSlider.value = Math.min(1.0, Math.max(0.01, r));
+  }
+  prefixVal.textContent = p + 'K';
+  const m = models.find(m => Math.abs(m.r - r) < 0.005);
+  ratioVal.textContent = m ? m.name : '';
+  renderHeatAndCost(p, r);
+}
+
+prefixSlider.addEventListener('input', () => onParamChange(true));
+ratioSlider.addEventListener('input', () => onParamChange(true));
+ratioInput.addEventListener('input', () => onParamChange(false));
+
+window.addEventListener('resize', () => {
+  chart3d.resize(); chartHeat.resize(); chartCost.resize();
+});
+</script>
+</body>
+</html>
