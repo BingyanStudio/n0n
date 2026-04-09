@@ -13,6 +13,7 @@ import type {
 	Renderer,
 	RoundTokenUsage,
 	ToolCallRecord,
+	ToolExecOutcome,
 	ToolResult,
 } from "@n0n/types";
 import { parse as parsePartialJSON } from "partial-json";
@@ -286,8 +287,8 @@ export class RichRenderer implements Renderer {
 		this.renderBuffer.pushChunk(tcId, _tool, chunk);
 	}
 
-	toolExecEnd(tcId: string, result: ToolResult | null): void {
-		this.renderBuffer.pushEnd(tcId, result);
+	toolExecEnd(tcId: string, outcome: ToolExecOutcome): void {
+		this.renderBuffer.pushEnd(tcId, outcome);
 	}
 
 	// ── 特殊事件 ──

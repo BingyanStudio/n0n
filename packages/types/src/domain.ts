@@ -281,6 +281,15 @@ export type ToolResult =
 	| ReminderToolResult
 	| SubmitToolResult;
 
+/**
+ * 工具执行结局 — scheduler 向消费者报告单个工具执行完成时的判别联合。
+ * completed: 正常执行完毕，携带结果。
+ * arg_error: 参数解析失败，无结果。
+ */
+export type ToolExecOutcome =
+	| { status: "completed"; result: ToolResult }
+	| { status: "arg_error" };
+
 /** 工具执行过程中的流式输出 chunk（目前仅 exec 使用） */
 export interface ToolOutputChunk {
 	type: "tool_output_chunk";

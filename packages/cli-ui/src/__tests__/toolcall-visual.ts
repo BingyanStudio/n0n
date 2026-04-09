@@ -41,7 +41,7 @@ async function scenario1() {
 	});
 	await sleep(100);
 
-	renderer.toolExecEnd("call_1", {
+	renderer.toolExecEnd("call_1", { status: "completed", result: {
 		type: "tool_result",
 		tool: "exec",
 		status: "completed" as const,
@@ -54,7 +54,7 @@ async function scenario1() {
 		stdout: "total 0\ndrwxr-xr-x  2 user staff  64 Jan  1 00:00 .",
 		stderr: "",
 		durationMs: 150,
-	});
+	} });
 }
 
 async function scenario2() {
@@ -93,7 +93,7 @@ async function scenario2() {
 	});
 	await sleep(100);
 
-	renderer.toolExecEnd("call_2", {
+	renderer.toolExecEnd("call_2", { status: "completed", result: {
 		type: "tool_result",
 		tool: "exec",
 		status: "completed" as const,
@@ -106,7 +106,7 @@ async function scenario2() {
 		stdout: "hello\n",
 		stderr: "",
 		durationMs: 50,
-	});
+	} });
 }
 
 async function scenario3() {
@@ -146,7 +146,7 @@ async function scenario3() {
 	});
 	await sleep(100);
 
-	renderer.toolExecEnd("call_3", {
+	renderer.toolExecEnd("call_3", { status: "completed", result: {
 		type: "tool_result",
 		tool: "exec",
 		status: "completed" as const,
@@ -155,11 +155,11 @@ async function scenario3() {
 		stdout: "file1.txt\nfile2.txt",
 		stderr: "",
 		durationMs: 80,
-	});
+	} });
 
 	await sleep(200);
 
-	renderer.toolExecEnd("call_4", {
+	renderer.toolExecEnd("call_4", { status: "completed", result: {
 		type: "tool_result",
 		tool: "write",
 		call: {
@@ -168,7 +168,7 @@ async function scenario3() {
 			args: { path: "test.txt", content: "hello world" },
 		},
 		status: "completed" as const,
-	});
+	} });
 }
 
 async function scenario4() {
@@ -211,7 +211,7 @@ async function scenario4() {
 	renderer.toolExecChunk("call_5", "edit", "Applying changes...\n");
 	await sleep(300);
 
-	renderer.toolExecEnd("call_5", {
+	renderer.toolExecEnd("call_5", { status: "completed", result: {
 		type: "tool_result",
 		tool: "edit",
 		call: {
@@ -225,7 +225,7 @@ async function scenario4() {
 		rounds: 1,
 		error: null,
 		feedback: null,
-	});
+	} });
 }
 
 console.error("🔍 RichRenderer 流式 Tool Call 渲染视觉测试");

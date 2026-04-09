@@ -171,7 +171,7 @@ describe("终端边界行为", () => {
 		renderer.toolExecChunk("call_1", "exec", "文件2.ts\n");
 		renderer.toolExecChunk("call_1", "exec", "目录/子文件.ts\n");
 
-		renderer.toolExecEnd("call_1", {
+		renderer.toolExecEnd("call_1", { status: "completed", result: {
 			type: "tool_result" as const,
 			tool: "exec",
 			status: "completed" as const,
@@ -180,7 +180,7 @@ describe("终端边界行为", () => {
 			stderr: "",
 			exitCode: 0,
 			durationMs: 50,
-		});
+		} });
 
 		const finalLines = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("toolResultChunk 最终屏幕:");

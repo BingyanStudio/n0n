@@ -9,7 +9,7 @@
  * 用于 LLM 流式阶段暂缓工具执行渲染，流式结束后再开始输出。
  */
 
-import type { ToolCallRecord, ToolResult } from "@n0n/types";
+import type { ToolCallRecord, ToolExecOutcome, ToolResult } from "@n0n/types";
 
 // ── 渲染回调接口 ──
 
@@ -31,6 +31,7 @@ interface ToolEntry {
 	done: boolean;
 	/** 是否已向 sink 发射过 onStart */
 	started: boolean;
+	argError: boolean;
 }
 
 // ── RenderBuffer ──
@@ -45,7 +46,7 @@ export class RenderBuffer {
 
 	/** 注册一个新工具（按调用顺序） */
 	register(tc: ToolCallRecord): void {
-		const entry: ToolEntry = { tc, events: [], done: false, started: false };
+		const entry: ToolEntry = { tc, events: [], done: false, started: false, argError: false };
 		this.queue.push(entry);
 		this.entryMap.set(tc.id, entry);
 
@@ -72,29 +73,31 @@ export class RenderBuffer {
 	}
 
 	/** 推入完成事件（result 为 null 表示 argError，仅推进队列不渲染） */
-	pushEnd(tcId: string, result: ToolResult | null): void {
+	pushEnd(tcId: string, outcome: ToolExecOutcome): void {
 		const entry = this.entryMap.get(tcId);
 		if (!entry) return;
 		entry.done = true;
 
-		if (result) {
+		if (outcome.status === "arg_error") {
+			entry.argError = true;
 			if (!this.paused && this.isHead(entry)) {
-				if (!entry.started) {
-					entry.started = true;
-					this.sink.onStart(entry.tc);
-				}
-				this.sink.onEnd(result);
 				this.headIdx++;
 				this.flushHead();
-			} else {
-				entry.events.push({ kind: "end", result });
 			}
+			return;
+		}
+
+		const result = outcome.result;
+		if (!this.paused && this.isHead(entry)) {
+			if (!entry.started) {
+				entry.started = true;
+				this.sink.onStart(entry.tc);
+			}
+			this.sink.onEnd(result);
+			this.headIdx++;
+			this.flushHead();
 		} else {
-			// argError: 无 result，推进队列但不渲染
-			if (!this.paused && this.isHead(entry)) {
-				this.headIdx++;
-				this.flushHead();
-			}
+			entry.events.push({ kind: "end", result });
 		}
 	}
 
@@ -121,8 +124,8 @@ export class RenderBuffer {
 		while (this.headIdx < this.queue.length) {
 			const entry = this.queue[this.headIdx]!;
 
-			// argError 的 entry：done 但无 events，跳过不渲染
-			if (entry.done && entry.events.length === 0 && !entry.started) {
+			// argError 的 entry：跳过不渲染
+			if (entry.argError) {
 				this.headIdx++;
 				continue;
 			}

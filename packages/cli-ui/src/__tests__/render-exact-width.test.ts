@@ -166,12 +166,12 @@ describe("精确宽度边界", () => {
 			tool: "submit",
 			args: JSON.parse(realJson),
 		});
-		renderer.toolExecEnd("call_1", {
+		renderer.toolExecEnd("call_1", { status: "completed", result: {
 			type: "tool_result" as const,
 			tool: "submit",
 			call: { id: "call_1", tool: "submit", args: JSON.parse(realJson) },
 			cleanedResult: null,
-		});
+		} });
 
 		const finalLines = vt.getVisibleLines().map((l) => stripAnsi(l));
 		console.log("=== 真实 submit 最终屏幕 ===");

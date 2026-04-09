@@ -7,7 +7,7 @@
  * 3. 特殊事件：submitAccepted / submitRejected / agentTerminated / aborted
  */
 
-import type { ToolCallRecord, ToolResult } from "./domain.ts";
+import type { ToolCallRecord, ToolExecOutcome, ToolResult } from "./domain.ts";
 
 /** 单轮 LLM 调用的 token 用量统计 */
 export interface RoundTokenUsage {
@@ -74,8 +74,8 @@ export interface Renderer {
 	/** 工具执行过程中的流式输出 chunk */
 	toolExecChunk(tcId: string, tool: string, chunk: string): void;
 
-	/** 工具执行完成（result 为 null 表示参数解析失败，不渲染但需推进内部状态） */
-	toolExecEnd(tcId: string, result: ToolResult | null): void;
+	/** 工具执行完成 */
+	toolExecEnd(tcId: string, outcome: ToolExecOutcome): void;
 
 	// ── 特殊事件 ──
 

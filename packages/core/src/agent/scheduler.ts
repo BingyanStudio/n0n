@@ -11,6 +11,7 @@ import type {
 	CanStartFn,
 	ToolArgErrorMessage,
 	ToolCallRecord,
+	ToolExecOutcome,
 	ToolResult,
 	ToolStreamEvent,
 } from "@n0n/types";
@@ -20,7 +21,7 @@ import type {
 export interface SchedulerEvents {
 	onRegister(tc: ToolCallRecord): void;
 	onChunk(tcId: string, tool: string, chunk: string): void;
-	onEnd(tcId: string, result: ToolResult | null): void;
+	onEnd(tcId: string, outcome: ToolExecOutcome): void;
 }
 
 // ── 默认并行策略 ──
@@ -183,7 +184,10 @@ export class ExecutionScheduler {
 					};
 				}
 				this.activeSet.delete(slot);
-				this.events?.onEnd(tc.id, result);
+				this.events?.onEnd(
+					tc.id,
+					argError ? { status: "arg_error" } : { status: "completed", result: result! },
+				);
 				this.notify?.();
 			}
 		};

@@ -144,7 +144,7 @@ function createEventLog(): { events: SchedulerEvents; log: string[] } {
 		events: {
 			onRegister: (tc) => log.push(`register:${tc.id}`),
 			onChunk: (tcId, _tool, chunk) => log.push(`chunk:${tcId}:${chunk}`),
-			onEnd: (tcId, result) => log.push(`end:${tcId}:${result ? "ok" : "null"}`),
+			onEnd: (tcId, outcome) => log.push(`end:${tcId}:${outcome.status}`),
 		},
 	};
 }
@@ -346,12 +346,12 @@ describe("ExecutionScheduler", () => {
 			// e2 先完成
 			resolve("e2");
 			await new Promise((r) => setTimeout(r, 10));
-			expect(eventLog).toContain("end:e2:ok");
+			expect(eventLog).toContain("end:e2:completed");
 
 			// e1 后完成
 			resolve("e1");
 			await runPromise;
-			expect(eventLog).toContain("end:e1:ok");
+			expect(eventLog).toContain("end:e1:completed");
 		});
 
 		it("chunk 事件在执行过程中触发", async () => {
@@ -396,7 +396,7 @@ describe("ExecutionScheduler", () => {
 
 			// 所有 end 事件都应到达，顺序反映实际完成顺序（无序）
 			const endEvents = eventLog.filter((e) => e.startsWith("end:"));
-			expect(endEvents).toEqual(["end:w1:ok", "end:e2:ok", "end:e1:ok"]);
+			expect(endEvents).toEqual(["end:w1:completed", "end:e2:completed", "end:e1:completed"]);
 		});
 
 		it("无 events 时 scheduler 正常工作", async () => {

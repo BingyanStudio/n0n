@@ -53,7 +53,7 @@ async function scenarioA() {
 
 	renderer.toolExecStart(call.id, call);
 
-	renderer.toolExecEnd(call.id, {
+	renderer.toolExecEnd(call.id, { status: "completed", result: {
 		type: "tool_result",
 		tool: "write",
 		call,
@@ -101,7 +101,7 @@ async function scenarioB() {
 
 	renderer.toolExecStart(call.id, call);
 
-	renderer.toolExecEnd(call.id, {
+	renderer.toolExecEnd(call.id, { status: "completed", result: {
 		type: "tool_result",
 		tool: "write",
 		call,
@@ -133,7 +133,7 @@ async function scenarioC() {
 		args: { script: "echo round1" },
 	};
 	renderer.toolExecStart(execCall.id, execCall);
-	renderer.toolExecEnd(execCall.id, {
+	renderer.toolExecEnd(execCall.id, { status: "completed", result: {
 		type: "tool_result",
 		tool: "exec",
 		call: execCall,
@@ -173,7 +173,7 @@ async function scenarioC() {
 		args: { path: "test.txt", content: "line1\nline2\nline3" },
 	};
 	renderer.toolExecStart(writeCall.id, writeCall);
-	renderer.toolExecEnd(writeCall.id, {
+	renderer.toolExecEnd(writeCall.id, { status: "completed", result: {
 		type: "tool_result",
 		tool: "write",
 		call: writeCall,

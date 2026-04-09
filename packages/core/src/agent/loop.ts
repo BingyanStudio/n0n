@@ -106,7 +106,7 @@ export async function agentLoop<T = unknown>(
 			{
 				onRegister: (tc) => renderer.toolExecStart(tc.id, tc),
 				onChunk: (tcId, tool, chunk) => renderer.toolExecChunk(tcId, tool, chunk),
-				onEnd: (tcId, result) => renderer.toolExecEnd(tcId, result),
+				onEnd: (tcId, outcome) => renderer.toolExecEnd(tcId, outcome),
 			},
 		);
 		const runPromise = scheduler.run(options?.signal);

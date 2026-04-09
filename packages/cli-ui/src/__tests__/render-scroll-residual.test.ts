@@ -227,7 +227,7 @@ describe("滚动导致旧行残留", () => {
 			renderer.toolExecChunk("call_1", "exec", `  ${100 + i} ./src/file${i}.ts\n`);
 		}
 
-		renderer.toolExecEnd("call_1", {
+		renderer.toolExecEnd("call_1", { status: "completed", result: {
 			type: "tool_result" as const,
 			tool: "exec",
 			call: { id: "call_1", tool: "exec", args: JSON.parse(json1) },
@@ -236,7 +236,7 @@ describe("滚动导致旧行残留", () => {
 			status: "completed" as const,
 			exitCode: 0,
 			durationMs: 200,
-		});
+		} });
 
 		const scrollbackAfterTool1 = vt
 			.getScrollbackLines()
@@ -263,7 +263,7 @@ describe("滚动导致旧行残留", () => {
 			renderer.toolExecChunk("call_2", "exec", `readme line ${i}\n`);
 		}
 
-		renderer.toolExecEnd("call_2", {
+		renderer.toolExecEnd("call_2", { status: "completed", result: {
 			type: "tool_result" as const,
 			tool: "exec",
 			call: { id: "call_2", tool: "exec", args: JSON.parse(json2) },
@@ -272,7 +272,7 @@ describe("滚动导致旧行残留", () => {
 			status: "completed" as const,
 			exitCode: 0,
 			durationMs: 100,
-		});
+		} });
 
 		const scrollbackFinal = vt.getScrollbackLines().filter((l) => l.length > 0);
 		const totalLines = vt.getVisibleLines().filter((l) => l.length > 0).length;
