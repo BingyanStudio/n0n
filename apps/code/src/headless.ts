@@ -18,6 +18,11 @@ import codePromptText from "./prompts/code.md" with { type: "text" };
 import { buildFewshotMessages } from "./fewshot.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
+// COMMENT: headless 模式是 agent 可测试性的关键——相同的 agentLoop 核心，
+// 不同的入口（REPL 交互 vs headless 单次执行）。
+// ask_user 自动回复 "proceed with your best judgment" 是个有趣的设计选择：
+// 在评测场景下，agent 不应该因为"需要确认"就停下来，而应该做出自己的判断。
+// 这也暗示了一个更深的问题：如果 agent 足够好，它在交互模式下也不应该频繁 ask_user。
 export interface HeadlessOptions {
 	/** 任务指令 */
 	instruction: string;
