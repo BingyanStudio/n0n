@@ -48,11 +48,6 @@ function submitPair(
 }
 
 // ── 场景 1: 并行调用多个工具 ──
-// COMMENT: fewshot 是对 anti-few-shot 策略的补充——先给模型"正确的"few-shot 示例，
-// 然后用 anti-few-shot 变体防止模型机械复制。两者配合形成"学会模式，但不陷入模式"的效果。
-// 场景设计的关键是"有足够上下文的模糊请求"——如果请求太直白，模型学不到判断能力；
-// 如果请求太模糊而没有上下文，模型学不到"在什么条件下做什么"。
-// 目前所有 fewshot 场景都用 DomainMessage 构造，这保证了它们和真实对话在格式上完全一致。
 // 教学重点: write/edit 是确定性工具，不需要等待结果，一次性发出所有调用
 
 function scenario1_parallelCalls(): DomainMessage[] {

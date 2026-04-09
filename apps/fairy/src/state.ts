@@ -35,12 +35,6 @@ export function resolveFairyPaths(workspace: string): FairyPaths {
 }
 
 /** 确保所有必要目录和文件存在 */
-// COMMENT: 默认的 identity.md 模板是个很好的起步点，但它也暴露了 fairy 的定位模糊：
-// "helpful fairy companion" 既不是一个鲜明的角色（不像梅比乌斯那样有故事和性格），
-// 也不是一个功能化的助手描述。对于陪伴场景，用户希望的是一个"有个性的存在"；
-// 对于工程场景，用户希望的是一个"高效的执行者"。
-// 建议：提供几个预设模板（角色扮演模板、工程助手模板、日记伙伴模板），
-// 让用户在首次启动时选择，而非给一个折中的默认值。
 export function ensureFairyFiles(paths: FairyPaths): void {
 	// 确保目录
 	for (const dir of [paths.workspace, paths.temp]) {

@@ -104,10 +104,6 @@ function splitRounds(history: DomainMessage[]): ConversationRound[] {
  * 从一段对话历史中提取路径摘要行。
  * 提取 user_input、submit 回复、reminder 进度。
  */
-// COMMENT: "对话路径摘要 = reminder 提取"是 design.md 中提到的设计决策之一。
-// 但目前的实现还提取了 user_input 和 submit.reply，这比纯 reminder 提取更丰富。
-// 关键洞察：reminder 是 agent 对自身进度的结构化记录，天然就是好的摘要素材。
-// 这比让 LLM 重新总结对话历史更便宜、更可控、更不容易丢失关键信息。
 function extractPathLines(messages: DomainMessage[]): string[] {
 	const lines: string[] = [];
 
@@ -136,11 +132,6 @@ function extractPathLines(messages: DomainMessage[]): string[] {
 /**
  * 从状态 + 刺激源组装 DomainMessage[]，供 agentLoop 消费。
  */
-// COMMENT: buildView 的消息排列顺序（身份→摘要→历史→记忆→环境→刺激）
-// 不是随意的——它按变化频率从低到高排列，让 KV-cache 前缀命中率最大化。
-// 但记忆（memory.md）被放在了历史之后，这意味着每次历史变化都会导致记忆的
-// cache 位置偏移。如果记忆很大且变化不频繁，可以考虑把它提到历史之前。
-// 不过这需要权衡：记忆可能引用历史中的事件，放在历史之后更符合阅读顺序。
 export function buildView(
 	history: DomainMessage[],
 	paths: FairyPaths,
@@ -214,13 +205,6 @@ export function buildView(
  * 摘要覆盖 [0, snapEnd) 轮，尾部保留 [snapEnd, total) 轮原始对话。
  * snapEnd 按 step 跳变：只有当新轮次积累到 step 的整数倍时才前进。
  */
-// COMMENT: 跳变窗口是一个精妙的缓存优化——摘要不是每轮都更新，而是每 STEP 轮
-// 才跳变一次。这意味着连续 STEP 轮对话中，发送给 LLM 的消息前缀完全不变，
-// KV-cache 命中率最大化。这直接呼应了用户提出的 cache TTL 问题：
-// 如果 5 分钟内有新对话，前缀稳定保证了缓存自然续期；
-// 如果超过 5 分钟没有新对话，缓存会过期，下一次需要全量重算。
-// 配合 anthropic-client.ts 中讨论的"心跳刷新"策略，可以在 TTL 即将到期时
-// 发送一个只含 system prompt 的轻量请求，保住最稳定的前缀缓存。
 export function computeSnapshotEnd(totalRounds: number, step: number): number {
 	// 至少保留 step 轮作为尾部
 	const available = totalRounds - step;

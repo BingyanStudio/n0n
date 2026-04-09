@@ -95,10 +95,6 @@ async function main(): Promise<void> {
 	let userInput = initialInput ?? (await prompt(`${label.user()} `));
 
 	while (userInput.trim().toLowerCase() !== "exit") {
-		// COMMENT: 这就是 design.md 里说的 fairyRound(state, stimulus) → { response, newState }。
-		// 每次用户输入都触发完整的"加载状态 → 重建视图 → 执行 → 更新状态"流程。
-		// 没有持久的内存中状态——所有状态都在文件系统上。
-		// 这让 fairy 可以被安全地 kill 和重启，不会丢失任何信息。
 		// 每轮从状态重建上下文
 		const history = loadHistory(paths);
 		const viewMessages = buildView(history, paths, userInput);
@@ -170,10 +166,6 @@ async function main(): Promise<void> {
  * - 本轮的 stimulus（user_input，即 viewMessages 的最后一条）
  * - agent 新产生的所有消息
  */
-// COMMENT: appendNewMessages 实现了 fairy 的核心不变量：
-// 全局 history 是所有对话的完整记录，而 agentLoop 看到的是从状态重建的"视图"。
-// 每轮只追加新产生的消息（stimulus + agent 响应），不保存中间的系统消息和摘要。
-// 这保证了 history.json 是纯粹的对话记录，不被视图层的压缩策略污染。
 function appendNewMessages(
 	paths: FairyPaths,
 	oldHistory: DomainMessage[],

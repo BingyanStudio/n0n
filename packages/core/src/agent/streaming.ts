@@ -102,10 +102,6 @@ export async function* parseStream(
 					const tcAcc = acc.toolCalls.get(event.index);
 					if (tcAcc) {
 						try {
-					// COMMENT: 用 JSON.parse 试探完整性是巧妙的——不需要自己写括号匹配或 JSON 状态机，
-					// 直接利用运行时的 JSON 解析器做"是否完整"的判定。代价是每个 chunk 都会尝试一次 parse，
-					// 对于参数很长的工具调用（比如 write 大文件）可能会有性能问题。
-					// 一个可能的优化：维护一个简单的括号/引号栈，只在栈平衡时才尝试 JSON.parse。
 							JSON.parse(tcAcc.input);
 							completedIndices.add(event.index);
 							const parsed = parseToolCalls([tcAcc]);
@@ -129,10 +125,6 @@ export async function* parseStream(
 				break;
 		}
 	}
-
-	// COMMENT: 整个 parseStream 是一个纯粹的 async generator——不持有外部状态，不触发副作用，
-	// 只做 StreamEvent → ParsedStreamEvent 的映射。这让它天然可测试：给定一组 StreamEvent
-	// 序列，断言输出的 ParsedStreamEvent 序列即可，不需要 mock 任何依赖。
 
 	// 关闭未结束的 phase
 	if (phase === "content") yield { type: "content_end" };

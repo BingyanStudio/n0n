@@ -55,12 +55,6 @@ interface RuntimeDef {
 
 const IS_WINDOWS = process.platform === "win32";
 
-// COMMENT: runtime 探测按用途分组而非简单列举，是因为模型需要知道
-// "我能用什么来执行 TypeScript/Python/Shell"，而不是"系统上装了什么"。
-// 分组内有优先级（bun > node > deno），所以 exec 工具的 description 会
-// 推荐最优的 runtime，同时列出备选。
-// 如果模型选择了不存在的 runtime，exec 会直接报错而非静默降级——
-// 因为静默降级可能导致脚本在不兼容的 runtime 上执行，产生更难调试的错误。
 const RUNTIME_DEFS: RuntimeDef[] = [
 	// Shell runtimes — 使用可移植的探测方式，版本为可选信息
 	{

@@ -34,11 +34,6 @@ import { generateEnvTemplate } from "./template.ts";
  * 由上层（app 入口）注入，避免 shared 直接依赖 @n0n/llm
  * （打破 shared ↔ llm 循环依赖）。
  */
-// COMMENT: LLMConnectionTester 回调是依赖反转的典范——bootstrap（在 shared 包中）
-// 需要测试 LLM 连通性，但不能直接依赖 llm 包（那会造成循环依赖）。
-// 所以它定义一个回调类型，由 app 入口注入具体实现。
-// 这种模式在整个项目中反复出现：shared 和 core 定义接口，app 注入实现。
-// 唯一的"锚点"是 types 包——所有人都可以依赖它，但它不依赖任何人。
 export type LLMConnectionTester = () => Promise<{
 	ok: boolean;
 	error?: string;

@@ -92,12 +92,6 @@ export type RecoverFn = (
 ) => Promise<RecoverResult | null>;
 
 /** 工具注册表条目 — stream 字段决定 execute 类型，recoverAndExecute 与 stream 无关 */
-// COMMENT: ToolEntry 的 stream 字段决定执行方式（流式 vs 同步），
-// 而 recoverAndExecute 始终是非流式的——这是有意的。截断恢复发生在 streaming 结束之后，
-// 结果直接追加到 history 而不经过 scheduler/renderBuffer 管线。
-// 这意味着截断恢复的工具执行不会有实时输出——用户看不到进度。
-// 对于 write（主要的截断恢复场景），这没问题，因为写文件本身很快。
-// 但如果 exec 也需要截断恢复（比如 script 被截断），可能需要重新考虑。
 export type ToolEntry = {
 	definition: ToolDefinition;
 	recoverAndExecute?: RecoverFn;
@@ -210,10 +204,6 @@ export const REGISTERED_TOOLS = new Set([
  * @param toolsConfig 工具配置，包含 workspace、tempDir、security、editorClient 等。
  * @param model LLM 模型名称，用于选择 XML tag 风格（可选）。
  */
-// COMMENT: makeToolkit 是异步的，因为 detectEnv 需要探测系统可用的 runtime。
-// 探测结果会被缓存，所以只有首次调用有延迟（~1-2s 探测 bun/node/python 等）。
-// 这个探测结果用于生成 exec 工具的 description——告诉模型有哪些 runtime 可用。
-// 如果探测结果缓存在进程生命周期内，用户在运行中安装新的 runtime 不会被感知到。
 export async function makeToolkit(
 	schema: ZodType | undefined,
 	toolsConfig: ToolsConfig,

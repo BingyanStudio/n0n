@@ -49,10 +49,6 @@ function buildEnvironmentSection(workspace: string): string {
 	].join("\n");
 }
 
-// COMMENT: gatherContext 在每轮对话前收集项目的"瞬时状态"（git status、branch），
-// 注入到 user_input 的 context 字段中。这让模型知道"现在项目是什么状态"，
-// 而不是依赖历史对话中可能已经过时的信息。
-// 但 git status 只是冰山一角——未来可以注入更多上下文（最近修改的文件、测试状态等）。
 async function gatherContext(workspace: string): Promise<string | null> {
 	const parts: string[] = [];
 	try {

@@ -35,10 +35,6 @@ import { codeEnvSpec } from "./env-spec.ts";
  * 
  * 支持在 .env 中定义多组配置，通过修改 N0N_PREFIX 快速切换，免去反复注释的麻烦。
  */
-// COMMENT: 配置前缀切换是个实用的工程细节——同一个 .env 文件中可以定义多组 LLM 配置
-// （如 DEEPSEEK_LLM_*、CLAUDE_LLM_*），通过 N0N_PREFIX 一键切换。
-// 这比维护多个 .env 文件或频繁注释/取消注释要优雅得多。
-// 但手动解析 .env 而非复用 dotenv 库是因为 bootstrap 还没运行——经典的鸡生蛋问题。
 function applyConfigPrefix(configDir: string): void {
 	// 解析全局 .env（此时 bootstrap 尚未加载它，需要手动读取）
 	const globalEnvPath = resolve(configDir, ".env");

@@ -109,10 +109,6 @@ export async function* execToolStream(
 			? call.args.cwd
 			: resolve(workspace, call.args.cwd)
 		: workspace;
-		// COMMENT: MAX_TIMEOUT_S = 240 的设计考量：cache TTL 为 5 分钟（300s），
-		// 如果 exec 耗时超过这个窗口，下一轮 LLM 请求就一定会 cache miss。
-		// 240s 比 300s 留了 60s 余量，给 LLM 响应和工具结果处理留出时间。
-		// 这是一个微妙但重要的系统级约束——单个工具的超时上限被全局缓存策略限制。
 	// prompt cache 的 TTL 为 5 分钟，超时过长会导致缓存失效
 	const MAX_TIMEOUT_S = 240;
 	const timeoutS = Math.min(call.args.timeout ?? toolsConfig.defaultExecTimeout, MAX_TIMEOUT_S);
@@ -199,11 +195,6 @@ export async function* execToolStream(
 		pumpStream(proc.stdout, stdoutChunks);
 		pumpStream(proc.stderr, stderrChunks);
 
-		// COMMENT: Promise.race 超时是对传统 kill 方案的根本性改进。
-		// 传统方案：setTimeout → proc.kill() → 期望流关闭 → 读取循环退出。
-		// 但这依赖"kill 信号能传播到所有子进程"这个不可靠的假设。
-		// 新方案：超时 Promise 直接赢得 race，读取循环被放弃，进程转入后台。
-		// "不杀进程，只放弃等待"——这个思路比试图优雅地杀进程简洁得多。
 		// ── 超时机制：Promise.race 确定性中断 ──
 		let timedOut = false;
 		const timeoutPromise = new Promise<"timeout">((resolve) => {

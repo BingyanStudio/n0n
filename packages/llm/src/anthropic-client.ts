@@ -239,11 +239,6 @@ function toAnthropicTools(tools: ToolDefinition[]): AnthropicTool[] {
 		name: t.name,
 		description: t.description,
 		input_schema: t.parameters,
-		// COMMENT: eager_input_streaming 是对 Anthropic 一个重要行为差异的修复。
-		// 默认情况下 Anthropic 会在服务端缓冲完整的工具参数 JSON 后才发送 SSE 事件，
-		// 对于 write 工具写入大文件时，用户会看到 10s+ 的"假卡顿"。
-		// 这个标志让服务端跳过缓冲直接流式发送——配合 streaming.ts 的 JSON.parse 试探，
-		// 实现了"边接收边检测完整性"的流水线。两个设计互相成就。
 		// Anthropic 默认会缓冲工具参数 JSON 直到验证完整后才发送 SSE 事件，
 		// 导致长参数（如 write 的 content）出现 10s+ 的等待后一次性涌出。
 		// 启用 eager_input_streaming 跳过服务端缓冲，实现真正的逐 token 流式传输。
@@ -285,13 +280,6 @@ export class AnthropicClient implements LLMClient {
 			system,
 			messages,
 			stream: true,
-			// COMMENT: Anthropic 的自动缓存策略很优雅——只需在请求顶层声明 cache_control，
-			// 服务端就会自动在最后一个可缓存块设断点，配合 20 块回溯窗口匹配前缀。
-			// 这意味着只要对话前缀不变，新增的消息只产生增量计算。
-			// 回到用户提出的问题：cache TTL 是 5 分钟，如果用户超时回来，前缀缓存会失效。
-			// 一个可能的策略：在接近 TTL 到期时（如 4 分钟），发送一个轻量级的"心跳"请求
-			// （比如只带 system prompt + 最近几条消息的 partial 请求），刷新缓存前缀。
-			// 代价是少量 API 费用，收益是避免下次全量 input 重算。
 			cache_control: { type: "ephemeral" },
 		};
 
@@ -384,11 +372,6 @@ export class AnthropicClient implements LLMClient {
 			};
 		};
 
-		// COMMENT: 手写 SSE 解析器而非使用 eventsource-parser 之类的库，
-		// 是因为 SSE 协议本身非常简单（双换行分隔，data: 前缀），
-		// 而且需要精确控制 reader 的生命周期（finally 中 releaseLock）。
-		// 两个 Client 有完全相同的 SSE 解析模式（buffer + \n\n 分割 + data: 提取），
-		// 如果未来新增第三个 Client，可以考虑提取为共享的 parseSSE async generator。
 		const reader = res.body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";

@@ -199,13 +199,9 @@ export class OpenAIClient implements LLMClient {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const apiMessages = toOpenAIMessages(promptMessages);
 
-		// COMMENT: 通过 litellm 代理访问 Anthropic 时，OpenAI 协议不会自动传递
-		// cache_control。这里的 hack 在最后一条消息上注入 cache_control 字段，
-		// 利用 litellm 的透传机制让 Anthropic 后端看到缓存标记。
-		// 这是 OpenAI 兼容协议的固有局限——当你需要 provider-specific 特性时，
-		// "兼容"就变成了"有限兼容"。backendProvider 字段的存在就是对这个妥协的坦诚。
-		// litellm + anthropic backend：在最后一条消息注入 cache_control
-		// 模拟 Anthropic 自动缓存行为，只在末尾设断点，利用 20 块回溯窗口自动匹配前缀
+		// litellm + anthropic backend：OpenAI 协议不会透传 cache_control，
+		// 这里在最后一条消息注入该字段，利用 litellm 透传机制让 Anthropic 后端看到缓存标记。
+		// 模拟 Anthropic 自动缓存行为，只在末尾设断点，利用 20 块回溯窗口自动匹配前缀。
 		if (
 			this.config.providerConfig.provider === "openai-compatible" &&
 			this.config.providerConfig.backendProvider === "anthropic"
@@ -290,13 +286,10 @@ export class OpenAIClient implements LLMClient {
 					u.prompt_tokens_details?.cached_tokens ??
 					u.prompt_cache_hit_tokens ??
 					0;
-				// COMMENT: 这段 token 统计的归一化逻辑很关键。OpenAI 和 Anthropic 对"输入 token"
-				// 的语义不同：OpenAI 的 prompt_tokens 包含缓存命中的 token，而 Anthropic 的
-				// input_tokens 只算新计算的。统一为"新计算的输入 token"后，上层计费和监控逻辑
-				// 不需要关心底层 provider 差异——这是协议适配层应该做的事。
 				const cacheWriteTokens = u.prompt_cache_miss_tokens ?? 0;
-				// OpenAI prompt_tokens 包含 cached tokens，需扣除以对齐 Anthropic 语义
-				// （inputTokens 统一表示"新计算的输入 token"）
+				// OpenAI prompt_tokens 包含 cached tokens，Anthropic input_tokens 只算新计算的。
+				// 扣除 cacheReadTokens 以统一语义：inputTokens = 新计算的输入 token，
+				// 上层计费和监控逻辑不需要关心底层 provider 差异。
 				const rawInput = u.prompt_tokens ?? 0;
 				lastUsage = {
 					inputTokens: rawInput - cacheReadTokens,

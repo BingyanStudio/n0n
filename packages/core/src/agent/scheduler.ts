@@ -8,8 +8,8 @@
  *   exec             → active 为空
  *   reminder/submit  → 无条件
  *
- * TODO 当前通过 attachRenderBuffer 与 RenderBuffer 耦合，且 startJob 直接推送渲染事件。
- * 后续应考虑通过事件回调接口进一步解耦调度与渲染，使两者可独立测试和替换。
+ * TODO: 移除 attachRenderBuffer 耦合，改为通过事件回调接口（onChunk、onEnd）发射 raw 事件。
+ * 排序职责下放给消费者，RenderBuffer 抽离为独立工具模块。
  */
 
 import type { ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
@@ -77,10 +77,6 @@ export class ExecutionScheduler {
 			if (head && this.canExecute(head)) {
 				this.pending.shift();
 				this.startJob(head);
-				// COMMENT: 这里的调度模式是"贪心队首"——每次只检查队首任务是否可执行。
-				// 这意味着如果队首是 exec（需要独占），即使后面有不冲突的 write 也会被阻塞。
-				// 对于当前的工具集这是合理的（exec 通常是验证步骤，应该等前面的写入完成），
-				// 但如果工具集扩展，可能需要考虑"跳过队首"的策略。
 				continue;
 			}
 
@@ -97,16 +93,8 @@ export class ExecutionScheduler {
 		}
 	}
 
-	// ── 条件检查 ──
-	// TODO 基于约定的硬编码：canExecute 通过 switch(tc.tool) 硬编码了每种工具的并行策略。
-	// COMMENT: 并行策略的设计很务实——write/edit 只要路径不冲突就并行，exec 独占，
-	// reminder/submit 无条件执行。这其实编码了文件系统操作的一个关键不变量：
-	// 同路径的写操作必须串行，不同路径的写操作天然可并行。
-	// 但有一个隐含假设：edit 操作不会产生跨文件的副作用。如果未来引入了"重命名"或
-	// "移动文件"类的操作，这个并行策略需要重新审视。
-	// 应改为 ToolEntry 上声明 canExecute 回调：(self: ToolCallRecord, active: ToolCallRecord[]) => boolean，
-	// scheduler 直接调用回调，不再依赖工具名字符串。
-
+	// TODO: canExecute 通过 switch(tc.tool) 硬编码了每种工具的并行策略。
+	// 应改为 ToolEntry 上声明 canExecute 回调，scheduler 直接调用，不再依赖工具名字符串。
 	private canExecute(job: PipelineJob): boolean {
 		const tc = job.tc;
 		switch (tc.tool) {

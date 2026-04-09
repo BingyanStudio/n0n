@@ -72,11 +72,6 @@ export type TryRecoverFn = (
  * @param partials 未完整的工具调用列表
  * @param tryRecover 可选的恢复函数，由工具注册表提供
  */
-// COMMENT: 恢复策略的优先级设计很合理：有 recover 就用 recover，没有就降级为 arg_error。
-// 但"占位 call"的设计暗示了一个更深层的问题——LLM API 的 tool_use / tool_result
-// 消息结构要求每个 tool_use 必须有对应的 tool_result。这个协议约束迫使我们即使恢复失败，
-// 也必须生成一个"假的"调用记录来保持配对。这是 API 设计的历史包袱，不是我们能改变的，
-// 但 placeholderCall 的命名和注释已经很好地传达了这个意图。
 export async function recoverPartialCalls(
 	partials: PartialToolCall[],
 	tryRecover?: TryRecoverFn,
