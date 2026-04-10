@@ -233,6 +233,9 @@ export class RichRenderer implements Renderer {
 		if (!isTTY) return;
 
 		// TTY：重绘整个流式区域（LiveRegion clear+rewrite 实现原地刷新）
+		// TODO: 当 LiveRegion 实现差量更新后，这里的 clear+redraw 全量刷新
+		// 会自动降级为按行 diff，高频 chunk 场景下性能和视觉效果都会显著改善。
+		// 届时也应在 clear+redraw 外层包裹同步输出协议的 begin/end。
 		this.streamRegion.clear();
 		this.redrawStreamingRegion();
 	}

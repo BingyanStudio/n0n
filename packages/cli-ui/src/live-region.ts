@@ -17,6 +17,18 @@ const WRAP_OPTIONS = { trim: false, hard: true, wordWrap: false } as const;
 
 export class LiveRegion {
 	private lineCount = 0;
+	// TODO: 差量更新（Diff Rendering）— 减少闪烁的核心优化
+	// 当前策略是 clear 整个区域再 rewrite 全部内容（cursorUp + clearDown + 重写）。
+	// 在高频刷新场景（如流式工具参数逐 chunk 刷新）下，即使有 wrap-ansi 精确计数，
+	// 仍存在理论上的撕裂窗口（clear 和 rewrite 之间终端可能刷新一帧空白）。
+	//
+	// 优化方案：维护上一帧的行内容缓冲区（string[]），新帧写入时逐行对比：
+	//   - 相同的行：跳过（光标下移）
+	//   - 不同的行：光标定位到该行，clearLine + 写入新内容
+	//   - 多出的行：追加
+	//   - 减少的行：clearDown 清除尾部
+	// 这样大部分帧只需要更新 1-2 行，避免整屏擦写。
+	// 配合 ansi.ts 中的同步输出协议，可以做到零闪烁。
 
 	/** 写入一行（含换行）— LiveRegion 的主要 API */
 	writeln(text = ""): void {

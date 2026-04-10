@@ -161,6 +161,9 @@ export function readMultilineInput(
 				w("\r");
 			}
 
+			// TODO: 同 LiveRegion 的优化思路——当前是 clearDown(\x1b[J]) 后全量重写，
+			// 可以改为逐行 diff 只更新变化的行，减少每次按键的渲染量。
+			// 对于多行输入场景（几十行代码粘贴后编辑），差量更新会明显减少闪烁。
 			w("\x1b[J");
 			for (let i = 0; i < buf.lines.length; i++) {
 				if (i > 0) w("\n");
