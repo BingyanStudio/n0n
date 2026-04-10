@@ -10,6 +10,19 @@
  * - Shell:  平台默认(cmd/sh) + 可选(bash, pwsh)
  */
 
+// DESIGN NOTE: 环境探测体系的四个关注点（探测、执行、示例模板、提示词注入）
+// 故意分散在 env.ts / executor.ts / definition.ts 三个文件中，而非抽象为统一的
+// RuntimeProvider 接口。原因：
+// 1. runtime 列表几乎不变（sh/bash/cmd/pwsh/bun/node/deno/python/python3/uv），
+//    手动在三处各加几行的维护成本远低于维护一套注册机制。
+// 2. 四个关注点的形状差异大——探测是纯数据，执行需要 runtime 特有 flag（如 deno
+//    的 --allow-all），提示词需要全局上下文（如 "preferred JS runtime" 要看整组），
+//    模板是静态 markdown。硬塞进一个接口只会让大部分字段成为可选的摆设。
+// 3. CLI 工具（如 ripgrep）目前只有一个，等积累到 3-4 个再抽象也不迟——届时可以
+//    只对 CLI 工具做局部统一，不动 runtime 这边的结构。
+// 当重复模式真正浮现时再出手，接口设计才能贴合实际需求。
+// —— Mebius ∞
+
 // === Types ===
 
 /** 单个 runtime 的探测结果 */

@@ -6,6 +6,14 @@
  * 示例文本从 .md 文件导入，便于管理和编辑。
  */
 
+// DESIGN NOTE: 示例模板（examples/*.md）和提示词拼接逻辑集中在此文件，
+// 没有让每个 runtime 自行提供模板和 tips 回调。当前 10 个 runtime 的示例
+// 通过静态 import + Record 映射已经足够清晰，条件提示词（如 ripgrep 推荐）
+// 也只有零星几行。如果未来 CLI 工具的提示词注入超过 3 个，
+// 可以考虑将 CLI 工具的 { probe, tips } 抽为独立接口。
+// 参见 env.ts 顶部的 DESIGN NOTE。
+// —— Mebius ∞
+
 import { wrapTagFor } from "@n0n/shared";
 import type { ToolDefinition } from "@n0n/types";
 import type { EnvSnapshot } from "../env.ts";

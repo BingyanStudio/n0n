@@ -15,6 +15,13 @@
  * 超时后进程转入后台继续执行，已捕获输出 + 后续输出写入 .temp/ 日志文件。
  */
 
+// DESIGN NOTE: buildSpawnCmd 用 switch 硬编码每个 runtime 的执行命令，
+// 而非从某个 RuntimeProvider.spawnCmd() 动态获取。理由同 env.ts 顶部的
+// DESIGN NOTE——runtime 列表稳定，且各 runtime 的 spawn 参数差异大
+//（如 deno 需要 --allow-all，pwsh 需要 -NoProfile -File），
+// 一个 switch 比一套接口 + 10 个实现文件更容易一眼看全。
+// —— Mebius ∞
+
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { estimateTokens, tailByTokens } from "@n0n/shared";
