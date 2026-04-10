@@ -29,6 +29,7 @@ import { CodeRenderer } from "./code-renderer.ts";
 import codePromptText from "./prompts/code.md" with { type: "text" };
 import { buildFewshotMessages } from "./fewshot.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
+import { playNotifySound } from "./notify-sound.ts";
 
 export interface CodeReplOptions {
 	initialInput?: string;
@@ -453,6 +454,7 @@ export async function startCodeRepl(
 					writeln(`     ${style.gray(opt.affect)}`);
 				}
 				writeln();
+				playNotifySound();
 				userInput = await promptUser();
 				if (userInput !== null) {
 					injectUserResponse(history, userInput);
@@ -468,6 +470,7 @@ export async function startCodeRepl(
 					}
 				}
 				writeln();
+				playNotifySound();
 				userInput = await promptUser();
 				if (userInput !== null) {
 					injectUserResponse(history, userInput);
@@ -483,6 +486,7 @@ export async function startCodeRepl(
 					writeln(style.gray(`  ${agentResult.report}`));
 				}
 				writeln();
+				playNotifySound();
 				userInput = await promptUser();
 				break;
 			}

@@ -35,5 +35,22 @@ export const codeEnvSpec: EnvSpec = {
 				},
 			],
 		},
+		{
+			title: "提示音",
+			vars: [
+				{
+					key: "N0N_NOTIFY_SOUND",
+					desc: "Submit 完成后播放提示音（1 或 true 开启）",
+					example: "1",
+					default: "",
+				},
+				{
+					key: "N0N_NOTIFY_SOUND_PATH",
+					desc: "自定义提示音文件路径（WAV 格式），留空使用内置电子音",
+					example: "/path/to/notify.wav",
+					default: "",
+				},
+			],
+		},
 	],
 };
