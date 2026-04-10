@@ -9,7 +9,13 @@
 
 import { createInterface } from "node:readline";
 import { isTTY, label, style, writeln } from "@n0n/cli-ui";
-import { agentLoop, PlainRenderer } from "@n0n/core";
+import {
+	agentLoop,
+	getRuntime,
+	HeartbeatKeeper,
+	HeartbeatState,
+	PlainRenderer,
+} from "@n0n/core";
 import { readMultilineInput } from "@n0n/multiline-input";
 import {
 	type BaseWorkspacePaths,
@@ -107,6 +113,8 @@ interface StdinController {
 	phase: StdinPhase;
 	dataHandler: ((data: string) => void) | null;
 	abortController: AbortController;
+	/** Ctrl+P 按下时调用（心跳暂停） */
+	onPause: (() => void) | null;
 	dispose: () => void;
 }
 
@@ -115,6 +123,7 @@ function createStdinController(): StdinController {
 		phase: "idle",
 		dataHandler: null,
 		abortController: new AbortController(),
+		onPause: null,
 		dispose: () => {
 			process.stdin.removeListener("data", onData);
 			process.stdin.setRawMode(false);
@@ -124,6 +133,10 @@ function createStdinController(): StdinController {
 	function onData(data: string) {
 		switch (ctrl.phase) {
 			case "input":
+				if (data.includes("\x10")) {
+					ctrl.onPause?.();
+					break;
+				}
 				ctrl.dataHandler?.(data);
 				break;
 			case "agent":
@@ -166,6 +179,41 @@ export async function startCodeRepl(
 
 	// ── stdin 控制器（仅 TTY 模式） ──
 	const stdin = isTTY ? createStdinController() : null;
+
+	// ── 心跳保活（仅 Anthropic 等支持 prompt caching 的 provider） ──
+	const client = getRuntime().client;
+	const keeper = client.heartbeat
+		? new HeartbeatKeeper({
+				sendHeartbeat: async (request) => {
+					const usage = await client.heartbeat!(request);
+					return usage !== null;
+				},
+				onTick: (count, maxCount) => {
+					if (isTTY) {
+						writeln(style.gray(`  ⏳ 缓存保活 (${count}/${maxCount})`));
+					}
+				},
+				onExpired: (reason) => {
+					if (isTTY) {
+						const msg =
+							reason === "max_count"
+								? "达到上限"
+								: reason === "error"
+									? "请求失败"
+									: "缓存已过期";
+						writeln(style.gray(`  ⏸ 缓存保活已停止（${msg}）`));
+					}
+				},
+			})
+		: null;
+	if (stdin && keeper) {
+		stdin.onPause = () => {
+			if (keeper.state === HeartbeatState.TICKING) {
+				keeper.stop();
+				writeln(style.gray("⏸ 缓存保活已停止。下次提交消息后会自动恢复。"));
+			}
+		};
+	}
 
 	// ── promptUser ──
 	async function promptUser(): Promise<string | null> {
@@ -315,7 +363,22 @@ export async function startCodeRepl(
 			continue;
 		}
 
+		// ── `pause` 命令：停止心跳保活 ──
+		if (userInput.trim().toLowerCase() === "pause") {
+			if (keeper && keeper.state === HeartbeatState.TICKING) {
+				keeper.stop();
+				writeln(style.gray("⏸ 缓存保活已停止。下次提交消息后会自动恢复。"));
+			} else {
+				writeln(style.gray("当前没有活跃的缓存保活。"));
+			}
+			writeln();
+			userInput = await promptUser();
+			continue;
+		}
+
 		// ── 将用户输入推入 history ──
+		// ── 停止心跳（agent 执行期间由 stream 自行刷新缓存） ──
+		keeper?.stop();
 		history.push(await makeUserInput(userInput, paths.workspace));
 
 		// ── Agent 运行阶段：切换到 agent phase ──
@@ -347,6 +410,8 @@ export async function startCodeRepl(
 			if (stdin) stdin.phase = "idle";
 		}
 		history = agentResult.history;
+		// agent 结束，启动心跳保活（使用相同的 messages + tools 确保缓存前缀一致）
+		keeper?.start({ messages: history, tools: agentResult.tools, toolChoice: "auto" });
 
 		// ── --save-every-loop ──
 		if (saveEveryLoop) {

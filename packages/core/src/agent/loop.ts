@@ -15,6 +15,7 @@ import type {
 	DomainMessage,
 	PartialToolCallRecord,
 	Renderer,
+	ToolDefinition,
 	TokenUsage,
 	ToolCallRecord,
 } from "@n0n/types";
@@ -38,6 +39,8 @@ export interface AgentResult<T = unknown> {
 	result: T | null;
 	report: string | null;
 	history: DomainMessage[];
+	/** 本轮使用的工具定义列表（供 heartbeat 重建缓存前缀） */
+	tools: ToolDefinition[];
 }
 
 export interface AgentOptions<T = unknown> {
@@ -94,7 +97,7 @@ export async function agentLoop<T = unknown>(
 	for (let iter = 0; iter < maxIter; iter++) {
 		if (options?.signal?.aborted) {
 			renderer.aborted();
-			return { result: null, report: null, history: messages };
+			return { result: null, report: null, history: messages, tools: toolkit.tools };
 		}
 
 		injectReminders(messages, reminders);
@@ -186,7 +189,7 @@ export async function agentLoop<T = unknown>(
 			if (outcome.reason === "aborted") renderer.aborted();
 			else renderer.agentTerminated(outcome.reason);
 			renderer.roundEnd();
-			return { result: null, report: outcome.report, history: messages };
+			return { result: null, report: outcome.report, history: messages, tools: toolkit.tools };
 		}
 
 		if (outcome.action === "idle") {
@@ -200,6 +203,7 @@ export async function agentLoop<T = unknown>(
 					// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 					report: `Agent terminated: max idle rounds exceeded. Last content: ${(streamResult!.accumulator.content || "").slice(0, 200)}`,
 					history: messages,
+					tools: toolkit.tools,
 				};
 			}
 			messages.push({
@@ -275,6 +279,7 @@ export async function agentLoop<T = unknown>(
 				result: submit.accepted.value as T,
 				report: null,
 				history: messages,
+				tools: toolkit.tools,
 			};
 		}
 		if (submit.gaveUp) {
@@ -288,6 +293,7 @@ export async function agentLoop<T = unknown>(
 				result: null,
 				report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${submit.gaveUp.error}`,
 				history: messages,
+				tools: toolkit.tools,
 			};
 		}
 		if (submit.rejected) {
@@ -311,6 +317,7 @@ export async function agentLoop<T = unknown>(
 		result: null,
 		report: `Agent terminated: max iterations (${maxIter}) exceeded`,
 		history: messages,
+		tools: toolkit.tools,
 	};
 }
 
