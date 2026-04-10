@@ -49,7 +49,7 @@ export const SUBMIT_TOOL = {
 	type: "custom" as const,
 	name: "submit",
 	description:
-		"Submit when done (or immediately if intent is unexecutable). FREEFORM — output your [score/4] deduction-based feedback as plain text.",
+		"Submit when done (or immediately if intent is unexecutable). FREEFORM — output deduction-based feedback. Start at 4, subtract: −1 line-number ref, −1 trivially describable, −1 ambiguous target, −1 missing change spec, −2 unexecutable, −1 multi-concern. Format: '[score/4] Verdict. {tags}\\nRewrite: ...' — Rewrite is mandatory when score < 4.",
 	format: { type: "grammar", syntax: "lark", definition: SUBMIT_GRAMMAR },
 };
 
