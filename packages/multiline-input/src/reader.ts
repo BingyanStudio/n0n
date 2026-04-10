@@ -58,7 +58,10 @@ function cursorTerminalRow(
 	cols: number,
 ): number {
 	const w = displayCol(line, cursorCol);
-	return Math.floor(w / cols);
+	if (w === 0) return 0;
+	// w>0 且 w 为 cols 整数倍时，终端光标处于 pending wrap 状态，
+	// 仍在当前行而非下一行，因此用 (w-1) 避免多算一行。
+	return Math.floor((w - 1) / cols);
 }
 
 function cursorTerminalCol(
@@ -67,7 +70,9 @@ function cursorTerminalCol(
 	cols: number,
 ): number {
 	const w = displayCol(line, cursorCol);
-	return w % cols;
+	if (w === 0) return 0;
+	// pending wrap 时 w%cols===0，返回 cols 使 cursorForward 将光标移到行末
+	return ((w - 1) % cols) + 1;
 }
 
 export function readMultilineInput(
