@@ -602,4 +602,71 @@ export class AnthropicClient implements LLMClient {
 
 		throw lastError ?? new Error("Anthropic request failed after retries");
 	}
+
+	async heartbeat(request: StreamRequest): Promise<TokenUsage | null> {
+		const promptMessages = formatPrompt(request.messages, this.modelId);
+		const { system, messages: anthropicMessages } =
+			toAnthropicFormat(promptMessages);
+
+		// 构造与 stream() 完全一致的请求体，只覆盖 max_tokens 和 stream
+		const body: AnthropicRequest = {
+			model: this.modelId,
+			max_tokens: 1,
+			system,
+			messages: anthropicMessages,
+			stream: false,
+			cache_control: { type: "ephemeral" },
+		};
+
+		if (request.tools?.length) {
+			body.tools = toAnthropicTools(request.tools);
+			const tc = request.toolChoice ?? "auto";
+			body.tool_choice = { type: tc === "required" ? "any" : tc };
+		}
+
+		if (this.config.enableThinking) {
+			const budget =
+				this.config.thinkingBudgetTokens ?? DEFAULT_THINKING_BUDGET_TOKENS;
+			body.thinking = { type: "enabled", budget_tokens: budget };
+			// thinking 模式下 max_tokens 必须 > budget_tokens
+			body.max_tokens = budget + 1;
+			body.temperature = 1;
+		}
+
+		try {
+			const res = await fetch(this.apiUrl, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-api-key": this.config.providerConfig.apiKey,
+					"anthropic-version": "2023-06-01",
+				},
+				body: JSON.stringify(body),
+			});
+
+			if (!res.ok) return null;
+
+			const json = (await res.json()) as {
+				usage?: {
+					input_tokens?: number;
+					output_tokens?: number;
+					cache_creation_input_tokens?: number;
+					cache_read_input_tokens?: number;
+				};
+			};
+
+			const u = json?.usage;
+			if (!u) return null;
+
+			return {
+				inputTokens: u.input_tokens ?? 0,
+				outputTokens: u.output_tokens ?? 0,
+				totalTokens: (u.input_tokens ?? 0) + (u.output_tokens ?? 0),
+				cacheReadTokens: u.cache_read_input_tokens ?? 0,
+				cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+			};
+		} catch {
+			return null;
+		}
+	}
 }

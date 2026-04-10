@@ -164,6 +164,20 @@ export interface LLMClient {
 
 	/** XML tag 风格（由 provider 配置指定或从模型名推断） */
 	readonly tagStyle: TagStyle;
+
+	/**
+	 * 缓存保活心跳（可选）
+	 *
+	 * 发送轻量请求（max_tokens=1）刷新 prompt cache 前缀。
+	 * 仅支持 prompt caching 的 provider 实现此方法。
+	 * 调用方通过 `client.heartbeat` 是否存在判断能力。
+	 *
+	 * 使用与 stream() 相同的请求结构（messages + tools），确保缓存前缀一致
+	 *
+	 * @param request 当前请求
+	 * @returns 本次心跳的 token 用量，失败时返回 null
+	 */
+	heartbeat?(request: StreamRequest): Promise<TokenUsage | null>;
 }
 
 // ── StreamAccumulator ──
