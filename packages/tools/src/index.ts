@@ -258,7 +258,7 @@ export async function makeToolkit(
 // ── Re-exports ──
 
 export type { ToolsConfig, ResponsesClient } from "./config.ts";
-export type { EnvSnapshot, RuntimeProbe } from "./env.ts";
+export type { EnvSnapshot, RuntimeProbe, CliToolProbe } from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";
 export { DefaultSubmitSchema } from "./submit.ts";

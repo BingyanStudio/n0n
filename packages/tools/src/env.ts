@@ -26,12 +26,23 @@ export interface RuntimeProbe {
 	priority: number;
 }
 
+/** 独立 CLI 工具的探测结果 */
+export interface CliToolProbe {
+	/** 工具名称（即命令名） */
+	name: string;
+	/** 是否在 PATH 中可用 */
+	available: boolean;
+	/** 版本号（探测成功时） */
+	version: string | null;
+}
+
 /** 完整的环境信息快照 */
 export interface EnvSnapshot {
 	os: "windows" | "macos" | "linux" | string;
 	platform: string;
 	defaultShell: string;
 	runtimes: RuntimeProbe[];
+	cliTools: CliToolProbe[];
 }
 
 // === Runtime 定义 ===
@@ -159,6 +170,24 @@ const RUNTIME_DEFS: RuntimeDef[] = [
 	},
 ];
 
+// === CLI 工具定义 ===
+
+interface CliToolDef {
+	name: string;
+	cmd: string;
+	versionArgs: string[];
+	versionPattern: RegExp;
+}
+
+const CLI_TOOL_DEFS: CliToolDef[] = [
+	{
+		name: "rg",
+		cmd: "rg",
+		versionArgs: ["--version"],
+		versionPattern: /ripgrep\s+(\d+\.\d+[\w.]*)/,
+	},
+];
+
 // === Detection ===
 
 async function probeRuntime(def: RuntimeDef): Promise<RuntimeProbe> {
@@ -215,6 +244,31 @@ async function probeRuntime(def: RuntimeDef): Promise<RuntimeProbe> {
 	}
 }
 
+async function probeCliTool(def: CliToolDef): Promise<CliToolProbe> {
+	const base: CliToolProbe = { name: def.name, available: false, version: null };
+	try {
+		const proc = Bun.spawn([def.cmd, ...def.versionArgs], {
+			stdout: "pipe",
+			stderr: "pipe",
+			env: { ...process.env },
+		});
+		const timer = setTimeout(() => proc.kill(), 5000);
+		try {
+			const stdout = await new Response(proc.stdout).text();
+			const stderr = await new Response(proc.stderr).text();
+			const exitCode = await proc.exited;
+			if (exitCode !== 0) return base;
+			const output = stdout + stderr;
+			const match = output.match(def.versionPattern);
+			return { ...base, available: true, version: match?.[1] ?? null };
+		} finally {
+			clearTimeout(timer);
+		}
+	} catch {
+		return base;
+	}
+}
+
 // === Cache & Public API ===
 
 let cachedSnapshot: EnvSnapshot | null = null;
@@ -239,13 +293,17 @@ function buildOsName(): EnvSnapshot["os"] {
 export async function detectEnv(): Promise<EnvSnapshot> {
 	if (cachedSnapshot) return cachedSnapshot;
 
-	const probes = await Promise.all(RUNTIME_DEFS.map(probeRuntime));
+	const [probes, cliProbes] = await Promise.all([
+		Promise.all(RUNTIME_DEFS.map(probeRuntime)),
+		Promise.all(CLI_TOOL_DEFS.map(probeCliTool)),
+	]);
 
 	cachedSnapshot = {
 		os: buildOsName(),
 		platform: process.platform,
 		defaultShell: IS_WINDOWS ? "cmd" : "sh",
 		runtimes: probes,
+		cliTools: cliProbes,
 	};
 
 	return cachedSnapshot;

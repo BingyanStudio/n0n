@@ -74,6 +74,7 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 	const parts: string[] = [
 		`Execute a script on ${env.os} (default shell: ${env.defaultShell}). Content is written to a temp file and run with the specified runtime. Returns stdout, stderr, and exit code.`,
 	];
+	const hasRipgrep = env.cliTools?.some((t) => t.name === "rg" && t.available);
 
 	const groups: { label: string; key: "shell" | "js" | "python" }[] = [
 		{ label: "Shell runtimes", key: "shell" },
@@ -95,6 +96,9 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 		"- **Prefer `write` and `edit` for file operations** — they are more efficient and easier to review than shell commands. Use `exec` for batch operations (bulk renames, bulk replacements) or when you need shell-specific functionality.",
 		"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
 		"- **Output truncation** — stdout+stderr exceeding ~4 000 tokens is auto-truncated: only the **last ~1 000 tokens** are kept and the full output is saved to a file. To avoid losing important content, **assess first** (`wc -l`, `ls -la`) then read selectively (`head`, `grep`, `sed`) or split across parallel tool calls.",
+		...(hasRipgrep
+			? [`- **Prefer \`rg\` (ripgrep) over \`grep\`** — \`rg\` is faster, respects \`.gitignore\`, and supports recursive search by default. Use \`rg "pattern" path/\` instead of \`grep -r "pattern" path/\`.`]
+			: []),
 		`- **${jsHint}** — when you need to parse JSON, filter arrays, do math, or produce structured summaries, write a script instead of chaining shell commands.`,
 		`- **Simple commands use default shell (\`${env.defaultShell}\`)** — \`git status\`, \`ls\`/\`dir\` don't need a language runtime.`,
 		"- **Use libraries in isolation** — for deeper analysis, use proper libraries (e.g. AST/analysis tools) in a temporary or isolated environment (such as a throwaway directory or managed Python runner like `uv`). Avoid running `bun add` or `pip install` in the main project workspace unless you explicitly intend to update its dependencies.",
