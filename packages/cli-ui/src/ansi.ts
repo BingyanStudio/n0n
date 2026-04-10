@@ -35,13 +35,19 @@ export const style = {
 
 // ── 光标控制（写入 stderr） ──
 
-// TODO: 同步输出协议（Synchronized Output）
-// 现代终端（iTerm2, Kitty, Windows Terminal, foot 等）支持 DCS 序列：
-//   开始批量更新: "\x1b[?2026h"  (也称 Mode 2026, 或 "\x1bP=1s\x1b\\" DCS 形式)
-//   结束批量更新: "\x1b[?2026l"
-// 在 begin/end 之间，终端暂停屏幕渲染，收到 end 后一次性刷新。
-// 可以包裹 LiveRegion 的 clear+rewrite 周期，从协议层面彻底消除撕裂和闪烁。
-// 需要做终端能力检测（DECRPM 查询或 $TERM_PROGRAM 白名单），不支持的终端直接忽略即可。
+// ── 同步输出协议（Synchronized Output / Mode 2026）──
+// begin/end 之间终端暂停屏幕渲染，收到 end 后一次性刷新。
+// 不支持的终端会静默忽略这两个序列，无副作用。
+
+/** 开始批量更新（终端暂停渲染） */
+export function beginSyncUpdate(): void {
+	out.write("\x1b[?2026h");
+}
+
+/** 结束批量更新（终端一次性刷新） */
+export function endSyncUpdate(): void {
+	out.write("\x1b[?2026l");
+}
 
 /** 光标上移 n 行 */
 export function cursorUp(n: number): void {

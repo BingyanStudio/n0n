@@ -17,7 +17,15 @@ import type {
 	ToolResult,
 } from "@n0n/types";
 import { parse as parsePartialJSON } from "partial-json";
-import { isTTY, label, style, write, writeln } from "./ansi.ts";
+import {
+	beginSyncUpdate,
+	endSyncUpdate,
+	isTTY,
+	label,
+	style,
+	write,
+	writeln,
+} from "./ansi.ts";
 import { LiveRegion } from "./live-region.ts";
 import { RenderBuffer } from "./render-buffer.ts";
 
@@ -233,11 +241,10 @@ export class RichRenderer implements Renderer {
 		if (!isTTY) return;
 
 		// TTY：重绘整个流式区域（LiveRegion clear+rewrite 实现原地刷新）
-		// TODO: 当 LiveRegion 实现差量更新后，这里的 clear+redraw 全量刷新
-		// 会自动降级为按行 diff，高频 chunk 场景下性能和视觉效果都会显著改善。
-		// 届时也应在 clear+redraw 外层包裹同步输出协议的 begin/end。
+		beginSyncUpdate();
 		this.streamRegion.clear();
 		this.redrawStreamingRegion();
+		endSyncUpdate();
 	}
 
 	toolCallArgEnd(index: number, tc: ToolCallRecord): void {
@@ -245,6 +252,7 @@ export class RichRenderer implements Renderer {
 		this.streamingToolCalls.delete(index);
 
 		if (isTTY) {
+			beginSyncUpdate();
 			this.streamRegion.clear();
 		}
 		// 渲染该工具的最终形式
@@ -255,8 +263,10 @@ export class RichRenderer implements Renderer {
 		if (isTTY && this.streamingToolCalls.size > 0) {
 			this.streamRegion.reset();
 			this.redrawStreamingRegion();
+			endSyncUpdate();
 		} else {
 			this.streamRegion.reset();
+			if (isTTY) endSyncUpdate();
 		}
 	}
 
@@ -264,6 +274,7 @@ export class RichRenderer implements Renderer {
 		// 安全网：处理因截断而未触发 argEnd 的残留工具
 		if (this.streamingToolCalls.size > 0) {
 			if (isTTY) {
+				beginSyncUpdate();
 				this.streamRegion.clear();
 			}
 			for (const [, tc] of [...this.streamingToolCalls.entries()].sort(
@@ -281,6 +292,7 @@ export class RichRenderer implements Renderer {
 				}
 			}
 			this.streamingToolCalls.clear();
+			if (isTTY) endSyncUpdate();
 		}
 		this.streamRegion.reset();
 		this.renderBuffer.resume();
