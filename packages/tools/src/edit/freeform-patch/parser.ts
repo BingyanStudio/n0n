@@ -24,7 +24,7 @@ interface PatchHunk {
 // ── 解析 ──
 
 export function parsePatch(raw: string): PatchHunk | { error: string } {
-	const lines = raw.split("\n");
+	const lines = raw.split("\n").map((l) => l.replace(/\r$/, ""));
 	let i = 0;
 
 	while (i < lines.length && lines[i] !== "*** Begin Patch") i++;
@@ -90,7 +90,17 @@ export function applyPatchToSource(
 	source: string,
 	hunk: PatchHunk,
 ): string | { error: string } {
-	const sourceLines = source.split("\n");
+	// CRLF 归一化：LLM 生成的 patch 只含 \n，需要统一处理
+	const useCrlf = source.includes("\r\n");
+	const normSource = useCrlf ? source.replace(/\r\n/g, "\n") : source;
+
+	for (const section of hunk.sections) {
+		for (const line of section.lines) {
+			line.text = line.text.replace(/\r/g, "");
+		}
+	}
+
+	const sourceLines = normSource.split("\n");
 
 	for (const section of hunk.sections) {
 		const matchLines = section.lines.filter(
@@ -125,7 +135,8 @@ export function applyPatchToSource(
 		sourceLines.push(...before);
 	}
 
-	return sourceLines.join("\n");
+	const result = sourceLines.join("\n");
+	return useCrlf ? result.replace(/\n/g, "\r\n") : result;
 }
 
 function findMatch(
