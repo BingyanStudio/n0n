@@ -168,12 +168,16 @@ export async function startCodeRepl(
 ): Promise<void> {
 	const { initialInput, resumeFile, saveEveryLoop = false } = options;
 
-	let systemPrompt = codePromptText;
+	// 基础系统提示词（稳定前缀，不含 agents.md 和环境信息）
+	const baseSystemPrompt = codePromptText;
+	// agents.md 和环境信息放在 fewshot 之后、缓存断点之后，避免影响前缀稳定性
 	const agentsMd = await loadAgentsMd(paths.workspace);
+	const dynamicSystemParts: string[] = [];
 	if (agentsMd) {
-		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
+		dynamicSystemParts.push(formatAgentsMdPrompt(agentsMd));
 	}
-	systemPrompt += buildEnvironmentSection(paths.workspace);
+	dynamicSystemParts.push(buildEnvironmentSection(paths.workspace));
+	const dynamicSystemPrompt = dynamicSystemParts.join("\n\n");
 	const renderer = isTTY
 		? new CodeRenderer(paths.workspace)
 		: new PlainRenderer();
@@ -326,11 +330,21 @@ export async function startCodeRepl(
 			writeln(style.gray("  将以全新对话启动。"));
 			writeln();
 			userInput = initialInput ?? (await promptUser());
-			history = [{ type: "system", content: systemPrompt }, ...buildFewshotMessages()];
+			history = [
+				{ type: "system", content: baseSystemPrompt },
+				...buildFewshotMessages(),
+				{ type: "cache_breakpoint" },
+				{ type: "system", content: dynamicSystemPrompt },
+			];
 		}
 	} else {
 		userInput = initialInput ?? (await promptUser());
-		history = [{ type: "system", content: systemPrompt }, ...buildFewshotMessages()];
+		history = [
+				{ type: "system", content: baseSystemPrompt },
+				...buildFewshotMessages(),
+				{ type: "cache_breakpoint" },
+				{ type: "system", content: dynamicSystemPrompt },
+			];
 	}
 
 	while (true) {

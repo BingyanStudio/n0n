@@ -10,8 +10,9 @@
  * - message_delta(stop_reason) → StreamEvent.done
  *
  * 特性：
- * - Prompt caching：使用 Anthropic 自动缓存（请求顶层 cache_control），
- *   系统自动在最后一个可缓存块设断点，配合 20 块回溯窗口匹配前缀
+ * - Prompt caching：支持两种模式
+ *   - 显式断点：DomainMessage 中的 cache_breakpoint 标记转换为 content block 级 cache_control
+ *   - 自动缓存：请求顶层 cache_control（Anthropic 20 块回溯窗口），始终启用作为末尾兜底
  * - Thinking：构造请求时注入 thinking 参数
  * - system 消息拆离（Anthropic 格式要求 system 在消息体外）
  */
@@ -45,7 +46,7 @@ const THINKING_OUTPUT_BUFFER = 4096;
 // ── Anthropic API Types ──
 
 type AnthropicContent =
-	| { type: "text"; text: string }
+	| { type: "text"; text: string; cache_control?: { type: "ephemeral" } }
 	| { type: "thinking"; thinking: string; signature?: string }
 	| {
 			type: "tool_use";
@@ -53,7 +54,7 @@ type AnthropicContent =
 			name: string;
 			input: Record<string, unknown>;
 	  }
-	| { type: "tool_result"; tool_use_id: string; content: string };
+	| { type: "tool_result"; tool_use_id: string; content: string; cache_control?: { type: "ephemeral" } };
 
 interface AnthropicMessage {
 	role: "user" | "assistant";
@@ -76,6 +77,7 @@ interface AnthropicRequest {
 		| Array<{
 				type: "text";
 				text: string;
+				cache_control?: { type: "ephemeral" };
 		  }>;
 	messages: AnthropicMessage[];
 	tools?: AnthropicTool[];
@@ -152,9 +154,12 @@ interface AnthropicConversionResult {
 		| Array<{
 				type: "text";
 				text: string;
+				cache_control?: { type: "ephemeral" };
 		  }>
 		| undefined;
 	messages: AnthropicMessage[];
+	/** 消息中是否包含显式缓存断点标记 */
+	hasExplicitBreakpoints: boolean;
 }
 
 function toAnthropicFormat(
@@ -163,20 +168,36 @@ function toAnthropicFormat(
 	const systemParts: Array<{
 		type: "text";
 		text: string;
+		cache_control?: { type: "ephemeral" };
 	}> = [];
 	const messages: AnthropicMessage[] = [];
+	let hasBreakpoint = false;
 
 	for (const msg of promptMessages) {
 		switch (msg.role) {
-			case "system":
-				systemParts.push({ type: "text", text: msg.content });
+			case "system": {
+				const part: (typeof systemParts)[number] = { type: "text", text: msg.content };
+				if (msg.cacheBreakpoint) {
+					part.cache_control = { type: "ephemeral" };
+					hasBreakpoint = true;
+				}
+				systemParts.push(part);
 				break;
+			}
 
 			case "user":
-				messages.push({
-					role: "user",
-					content: msg.content,
-				});
+				if (msg.cacheBreakpoint) {
+					messages.push({
+						role: "user",
+						content: [{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } }],
+					});
+					hasBreakpoint = true;
+				} else {
+					messages.push({
+						role: "user",
+						content: msg.content,
+					});
+				}
 				break;
 
 			case "assistant": {
@@ -206,33 +227,46 @@ function toAnthropicFormat(
 				if (content.length === 0) {
 					content.push({ type: "text", text: "" });
 				}
+				if (msg.cacheBreakpoint) {
+					const last = content[content.length - 1];
+					if (last && "text" in last) {
+						last.cache_control = { type: "ephemeral" };
+					}
+					hasBreakpoint = true;
+				}
 				messages.push({ role: "assistant", content });
 				break;
 			}
 
-			case "tool":
+			case "tool": {
+				const toolResultBlock: AnthropicContent = {
+					type: "tool_result",
+					tool_use_id: msg.toolCallId,
+					content: msg.content,
+				};
+				if (msg.cacheBreakpoint) {
+					toolResultBlock.cache_control = { type: "ephemeral" };
+					hasBreakpoint = true;
+				}
 				messages.push({
 					role: "user",
-					content: [
-						{
-							type: "tool_result",
-							tool_use_id: msg.toolCallId,
-							content: msg.content,
-						},
-					],
+					content: [toolResultBlock],
 				});
 				break;
+			}
 		}
 	}
 
+	// 有 cache_control 标记时必须使用数组形式（字符串形式不支持 cache_control）
+	const hasSystemBreakpoint = systemParts.some(p => p.cache_control);
 	const system =
 		systemParts.length === 0
 			? undefined
-			: systemParts.length === 1
+			: systemParts.length === 1 && !hasSystemBreakpoint
 				? systemParts[0]?.text
 				: systemParts;
 
-	return { system, messages };
+	return { system, messages, hasExplicitBreakpoints: hasBreakpoint };
 }
 
 function toAnthropicTools(tools: ToolDefinition[]): AnthropicTool[] {
@@ -273,7 +307,7 @@ export class AnthropicClient implements LLMClient {
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
-		const { system, messages } = toAnthropicFormat(promptMessages);
+		const { system, messages, hasExplicitBreakpoints } = toAnthropicFormat(promptMessages);
 
 		const defaultMaxTokens =
 			this.config.maxOutputTokens ?? DEFAULT_STREAM_MAX_TOKENS;
@@ -283,6 +317,8 @@ export class AnthropicClient implements LLMClient {
 			system,
 			messages,
 			stream: true,
+			// 无显式缓存断点时使用自动缓存（请求顶层 cache_control），
+			// 有显式断点时断点已标记在具体 content block 上，末尾自动添加
 			cache_control: { type: "ephemeral" },
 		};
 

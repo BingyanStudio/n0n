@@ -363,6 +363,12 @@ export interface GenericToolResultMessage {
 	content: string;
 }
 
+// ── 缓存断点 ──
+/** 显式标记提示词缓存断点位置。client 层在此处设置 cache_control，提升前缀稳定性。 */
+export interface CacheBreakpointMessage {
+	type: "cache_breakpoint";
+}
+
 // ── 联合类型 ──
 export type DomainMessage =
 	| GenericSystemMessage
@@ -378,7 +384,8 @@ export type DomainMessage =
 	| TurnFeedbackMessage
 	| ReminderDueMessage
 	| SubmitRejectedMessage
-	| ToolArgErrorMessage;
+	| ToolArgErrorMessage
+	| CacheBreakpointMessage;
 
 // ── 工具并行条件判断 ──
 

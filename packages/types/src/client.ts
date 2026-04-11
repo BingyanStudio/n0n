@@ -81,16 +81,17 @@ export interface ToolDefinition {
 
 /** 提示词组织的输出格式。format-prompt 模块的产物，Client 内部消费。 */
 export type PromptMessage =
-	| { role: "system"; content: string }
-	| { role: "user"; content: string }
+	| { role: "system"; content: string; cacheBreakpoint?: boolean }
+	| { role: "user"; content: string; cacheBreakpoint?: boolean }
 	| {
 			role: "assistant";
 			content: string;
 			reasoning?: string;
 			reasoningSignature?: string;
 			toolCalls?: ToolCallPart[];
+			cacheBreakpoint?: boolean;
 	  }
-	| { role: "tool"; toolCallId: string; toolName: string; content: string };
+	| { role: "tool"; toolCallId: string; toolName: string; content: string; cacheBreakpoint?: boolean };
 
 export interface ToolCallPart {
 	id: string;

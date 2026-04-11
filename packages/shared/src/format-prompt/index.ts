@@ -231,6 +231,14 @@ export function formatPrompt(
 				});
 				break;
 
+			case "cache_breakpoint": {
+				const prev = result[result.length - 1];
+				if (prev) {
+					prev.cacheBreakpoint = true;
+				}
+				break;
+			}
+
 			default: {
 				const _exhaustive: never = msg;
 				throw new Error(`Unhandled message type: ${(_exhaustive as any).type}`);

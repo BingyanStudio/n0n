@@ -202,13 +202,24 @@ export class OpenAIClient implements LLMClient {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const apiMessages = toOpenAIMessages(promptMessages);
 
-		// litellm + anthropic backend：OpenAI 协议不会透传 cache_control，
-		// 这里在最后一条消息注入该字段，利用 litellm 透传机制让 Anthropic 后端看到缓存标记。
-		// 模拟 Anthropic 自动缓存行为，只在末尾设断点，利用 20 块回溯窗口自动匹配前缀。
+		// litellm + anthropic backend：将 cacheBreakpoint 标记透传为 cache_control，
+		// 利用 litellm 透传机制让 Anthropic 后端看到缓存标记。
+		// 末尾始终添加 cache_control，配合显式断点实现双重缓存。
 		if (
 			this.config.providerConfig.provider === "openai-compatible" &&
 			this.config.providerConfig.backendProvider === "anthropic"
 		) {
+			for (let i = 0; i < promptMessages.length; i++) {
+				if (promptMessages[i]?.cacheBreakpoint) {
+					const apiMsg = apiMessages[i];
+					if (apiMsg) {
+						(apiMsg as unknown as Record<string, unknown>).cache_control = {
+							type: "ephemeral",
+						};
+					}
+				}
+			}
+			// 末尾自动添加缓存标记
 			const last = apiMessages[apiMessages.length - 1];
 			if (last) {
 				(last as unknown as Record<string, unknown>).cache_control = {
