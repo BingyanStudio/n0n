@@ -46,13 +46,29 @@ const timeoutNoticeTemplates = [
 		`Background process started (PID: ${pid}).\nThe command timed out but is still running.\nMonitor via log: ${logFile}`,
 ];
 
+/** 格式化截断分块的读取建议 */
+function formatChunkGuide(
+	chunks: { startLine: number; endLine: number; tokens: number }[],
+	outputFile: string,
+): string {
+	if (chunks.length === 0) return "";
+	if (chunks.length === 1) {
+		const c = chunks[0]!;
+		return `Truncated part: lines ${c.startLine}-${c.endLine} (~${c.tokens} tokens) — small enough to read in one go if needed.`;
+	}
+	const lines = chunks.map(
+		(c, i) => `  chunk ${i + 1}: lines ${c.startLine}-${c.endLine} (~${c.tokens} tok)`,
+	);
+	return `Truncated part can be read in ${chunks.length} chunks:\n${lines.join("\n")}\nUse sed -n '<start>,<end>p' ${outputFile} to read a specific chunk.`;
+}
+
 const truncatedHintTemplates = [
-	(totalLines: number, outputFile: string) =>
-		`Full output (${totalLines} lines) written to: ${outputFile}\nUse exec to read specific parts: grep, sed, head, tail, or bun script.\nDo NOT re-cat the full file — it will be truncated again.`,
-	(totalLines: number, outputFile: string) =>
-		`Complete output saved to ${outputFile} (${totalLines} lines total).\nRead selectively with grep, head, tail, or a script — do not cat the whole file.`,
-	(totalLines: number, outputFile: string) =>
-		`${totalLines} lines captured in ${outputFile}.\nExtract what you need with targeted commands (grep/sed/head/tail).\nAvoid re-dumping the full file — it will truncate again.`,
+	(totalLines: number, outputFile: string, chunkGuide: string) =>
+		`Full output (${totalLines} lines) saved to: ${outputFile}\n${chunkGuide}\nOr write a script to extract key information — do NOT cat the full file.`,
+	(totalLines: number, outputFile: string, chunkGuide: string) =>
+		`${totalLines} lines captured in ${outputFile}.\n${chunkGuide}\nPrefer writing a script to extract what you need rather than reading raw output.`,
+	(totalLines: number, outputFile: string, chunkGuide: string) =>
+		`Complete output saved to ${outputFile} (${totalLines} lines).\n${chunkGuide}\nUse targeted reads (sed/head/tail) or a script — avoid re-dumping the full file.`,
 ];
 
 const diagnosticHintTemplates = [
@@ -109,7 +125,8 @@ export function formatExecResult(
 				);
 
 			const hintFn = pick(truncatedHintTemplates, msgIndex + 3);
-			parts.push(wrapTag("output_hint", hintFn(msg.totalLines, msg.outputFile), model));
+			const chunkGuide = formatChunkGuide(msg.truncatedChunks, msg.outputFile);
+			parts.push(wrapTag("output_hint", hintFn(msg.totalLines, msg.outputFile, chunkGuide), model));
 			return parts.join("\n");
 		}
 		case "completed": {

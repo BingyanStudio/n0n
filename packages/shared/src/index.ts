@@ -54,7 +54,8 @@ export {
 	type TagStyle,
 	wrapTagFor,
 } from "./tags.ts";
-export { estimateTokens, headByTokens, tailByTokens } from "./tokens.ts";
+export { estimateTokens, headByTokens, tailByTokens, splitLinesByTokenBudget } from "./tokens.ts";
+export type { LineChunkInfo } from "./tokens.ts";
 // Workspace
 export type { BaseWorkspacePaths } from "./workspace.ts";
 export {

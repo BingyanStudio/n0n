@@ -164,6 +164,8 @@ interface ExecTruncated extends ExecResultBase {
 	totalLines: number;
 	/** 截断展示内容起始行号（从第几行开始展示） */
 	tailStartLine: number;
+	/** 被截断前半部分按 token 预算分块的行号范围，帮助模型精确分块读取 */
+	truncatedChunks: { startLine: number; endLine: number; tokens: number }[];
 }
 
 /** exec 超时，进程转入后台继续执行 */
