@@ -1,0 +1,16 @@
+# 所有文本文件统一使用 LF，无论操作系统
+* text=auto eol=lf
+
+# 明确标记二进制文件，避免被误转换
+*.wav binary
+*.exe binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
