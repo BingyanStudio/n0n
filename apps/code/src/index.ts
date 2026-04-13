@@ -28,50 +28,7 @@ import {
 	resolveBasePaths,
 } from "@n0n/shared";
 
-import { codeEnvSpec } from "./env-spec.ts";
-
-/**
- * 配置前缀切换 — N0N_PREFIX=XXX 时，将 XXX_LLM_* 覆盖到 LLM_*，XXX_EDITOR_LLM_* 覆盖到 EDITOR_LLM_*
- * 
- * 支持在 .env 中定义多组配置，通过修改 N0N_PREFIX 快速切换，免去反复注释的麻烦。
- */
-function applyConfigPrefix(configDir: string): void {
-	// 解析全局 .env（此时 bootstrap 尚未加载它，需要手动读取）
-	const globalEnvPath = resolve(configDir, ".env");
-	let globalVars: Record<string, string> = {};
-	if (existsSync(globalEnvPath)) {
-		const content = readFileSync(globalEnvPath, "utf-8");
-		for (const line of content.split("\n")) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith("#")) continue;
-			const eqIdx = trimmed.indexOf("=");
-			if (eqIdx < 0) continue;
-			const key = trimmed.slice(0, eqIdx).trim();
-			const value = trimmed.slice(eqIdx + 1).trim();
-			if (key) globalVars[key] = value;
-		}
-	}
-
-	const prefix = process.env.N0N_PREFIX || globalVars.N0N_PREFIX;
-	if (!prefix) return;
-
-	const standardKeys = [
-		"LLM_PROVIDER", "LLM_BACKEND_PROVIDER", "LLM_BASE_URL",
-		"LLM_API_KEY", "LLM_MODEL", "LLM_ENABLE_THINKING", "LLM_THINKING_BUDGET_TOKENS",
-		"EDITOR_LLM_PROVIDER", "EDITOR_LLM_BACKEND_PROVIDER", "EDITOR_LLM_BASE_URL",
-		"EDITOR_LLM_API_KEY", "EDITOR_LLM_MODEL", "EDITOR_LLM_ENABLE_THINKING",
-		"EDITOR_LLM_THINKING_BUDGET_TOKENS",
-		"EDIT_BACKEND",
-	];
-
-	for (const key of standardKeys) {
-		const prefixedKey = `${prefix}_${key}`;
-		const value = process.env[prefixedKey] ?? globalVars[prefixedKey];
-		if (value !== undefined) {
-			process.env[key] = value;
-		}
-	}
-}
+import { buildCodeEnvSpec } from "./env-spec.ts";
 
 // ── Bootstrap ──
 // 配置文件存放在全局目录 ~/.n0n/，避免每个工作目录都需要重新配置
@@ -79,8 +36,6 @@ const globalConfigDir = resolve(homedir(), ".n0n");
 if (!existsSync(globalConfigDir)) {
 	mkdirSync(globalConfigDir, { recursive: true });
 }
-
-applyConfigPrefix(globalConfigDir);
 
 const setupUI = new CliSetupRenderer();
 
@@ -125,7 +80,7 @@ const testLLM = async () => {
 	}
 };
 
-const result = await bootstrap(codeEnvSpec, setupUI, globalConfigDir, testLLM);
+const result = await bootstrap(buildCodeEnvSpec, setupUI, globalConfigDir, testLLM);
 setupUI.dispose();
 
 if (!result.ok) {

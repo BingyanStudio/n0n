@@ -36,7 +36,7 @@ import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
 import { handleCommand, parseCommand, parseMenuCommand } from "./commands.ts";
-import { feishuEnvSpec } from "./env-spec.ts";
+import { buildFeishuEnvSpec } from "./env-spec.ts";
 import { discoverAllUserPaths, resolveFeishuPaths } from "./paths.ts";
 import feishuPromptText from "./prompts/feishu.md" with { type: "text" };
 import { runFeishuRound } from "./round.ts";
@@ -365,7 +365,7 @@ if (import.meta.main) {
 	};
 
 	const result = await bootstrap(
-		feishuEnvSpec,
+		buildFeishuEnvSpec,
 		setupUI,
 		globalConfigDir,
 		testLLM,

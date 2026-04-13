@@ -11,9 +11,9 @@ export type { LLMConnectionTester } from "./bootstrap/index.ts";
 // Bootstrap
 export {
 	bootstrap,
-	EDITOR_LLM_ENV_GROUP,
+	buildEditorLLMEnvGroup,
+	buildLLMEnvGroup,
 	generateEnvTemplate,
-	LLM_ENV_GROUP,
 } from "./bootstrap/index.ts";
 // Conversation Log
 export type {

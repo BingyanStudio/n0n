@@ -6,12 +6,15 @@
  *
  * 新增 provider 时只需修改：
  * 1. config.ts 中的 ProviderConfig union（类型）
- * 2. provider.ts 中的 createLanguageModel switch（实例化）
+ * 2. factory.ts 中的 createLLMClient switch（实例化）
  * 3. 本文件的 buildProviderConfigFromEnv switch（env 映射）
  * — TS exhaustive check 会在遗漏时编译报错。
  */
 
 import type { LLMConfig, ProviderConfig } from "./config.ts";
+
+/** Anthropic thinking 模式的默认 token 预算 */
+const DEFAULT_ANTHROPIC_THINKING_BUDGET = 1024;
 
 /** 所有合法的 provider 类型 — 从 ProviderConfig union 推导 */
 export const PROVIDER_TYPES: readonly ProviderConfig["provider"][] = [
@@ -48,6 +51,8 @@ export function resolveProvider(explicit?: string): ProviderConfig["provider"] {
 /**
  * 从环境变量前缀构造 ProviderConfig
  *
+ * 行为参数按 provider 分支组装——每个分支只读取自己有意义的环境变量。
+ *
  * @param prefix 环境变量前缀（如 "LLM" → 读 LLM_API_KEY、LLM_MODEL 等）
  * @param fallback 回退配置（如 EDITOR_LLM 回退到主 LLM）
  */
@@ -74,27 +79,64 @@ export function buildProviderConfigFromEnv(
 				model,
 				...(baseUrl ? { baseUrl } : {}),
 			};
-		case "anthropic":
+		case "anthropic": {
+			const budgetRaw = process.env[`${prefix}_THINKING_BUDGET_TOKENS`];
+			const parsedBudget = budgetRaw
+				? Number.parseInt(budgetRaw, 10)
+				: undefined;
+			// NaN → undefined: 归一化后只需判断 undefined
+			const validBudget =
+				parsedBudget !== undefined && !Number.isNaN(parsedBudget)
+					? parsedBudget
+					: undefined;
+			// 兼容：ENABLE_THINKING=true 但没设 budget 时，用默认 budget
+			const enableFlag =
+				process.env[`${prefix}_ENABLE_THINKING`] === "true";
+			const hasThinking = validBudget !== undefined || enableFlag;
 			return {
 				provider: "anthropic",
 				apiKey,
 				model,
 				...(baseUrl ? { baseUrl } : {}),
+				...(hasThinking
+					? {
+							thinking: {
+								budgetTokens:
+									validBudget ?? DEFAULT_ANTHROPIC_THINKING_BUDGET,
+							},
+						}
+					: {}),
 			};
-		case "google":
-			return { provider: "google", apiKey, model, ...(baseUrl ? { baseUrl } : {}) };
+		}
+		case "google": {
+			const effortRaw = process.env[`${prefix}_THINKING_EFFORT`];
+			const thinkingEffort =
+				effortRaw === "low" || effortRaw === "medium" || effortRaw === "high"
+					? effortRaw
+					: undefined;
+			return {
+				provider: "google",
+				apiKey,
+				model,
+				...(baseUrl ? { baseUrl } : {}),
+				...(thinkingEffort ? { thinkingEffort } : {}),
+			};
+		}
 		case "openai-compatible": {
 			const backendProvider = process.env[`${prefix}_BACKEND_PROVIDER`] as
 				| "anthropic"
 				| "google"
 				| "openai"
 				| undefined;
+			const enableThinking =
+				process.env[`${prefix}_ENABLE_THINKING`] === "true";
 			return {
 				provider: "openai-compatible",
 				apiKey,
 				model,
 				baseUrl: baseUrl ?? "",
 				...(backendProvider ? { backendProvider } : {}),
+				...(enableThinking ? { enableThinking } : {}),
 			};
 		}
 	}
@@ -110,20 +152,7 @@ export function buildLLMConfigFromEnv(
 	prefix: string,
 	fallbackProvider?: ProviderConfig,
 ): LLMConfig {
-	const providerConfig = buildProviderConfigFromEnv(prefix, fallbackProvider);
-	const effortRaw = process.env[`${prefix}_THINKING_EFFORT`];
-	const thinkingEffort =
-		effortRaw === "low" || effortRaw === "medium" || effortRaw === "high"
-			? effortRaw
-			: undefined;
-	const budgetRaw = process.env[`${prefix}_THINKING_BUDGET_TOKENS`];
-	const budgetTokens = budgetRaw ? Number.parseInt(budgetRaw, 10) : undefined;
 	return {
-		providerConfig,
-		enableThinking: process.env[`${prefix}_ENABLE_THINKING`] === "true",
-		...(thinkingEffort ? { thinkingEffort } : {}),
-		...(budgetTokens !== undefined && !Number.isNaN(budgetTokens)
-			? { thinkingBudgetTokens: budgetTokens }
-			: {}),
+		providerConfig: buildProviderConfigFromEnv(prefix, fallbackProvider),
 	};
 }

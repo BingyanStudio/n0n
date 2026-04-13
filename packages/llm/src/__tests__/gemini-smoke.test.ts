@@ -42,8 +42,8 @@ function makeGeminiConfig(thinkingEffort?: "low" | "medium" | "high"): LLMConfig
 			apiKey: process.env.LLM_API_KEY ?? "",
 			baseUrl: process.env.LLM_BASE_URL ?? "",
 			model: "gemini-3.1-pro-preview",
+			...(thinkingEffort ? { thinkingEffort } : {}),
 		},
-		...(thinkingEffort ? { enableThinking: true, thinkingEffort } : {}),
 	};
 }
 

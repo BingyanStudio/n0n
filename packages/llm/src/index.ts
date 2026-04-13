@@ -27,7 +27,6 @@ export type {
 	OpenAIProviderConfig,
 	ProviderConfig,
 } from "./config.ts";
-export { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
 // 环境变量 → 配置工厂（SSOT：runtime.ts 和 bootstrap 共用）
 export {
 	buildLLMConfigFromEnv,

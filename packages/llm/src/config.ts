@@ -1,30 +1,29 @@
 /**
  * LLM 配置类型 — Discriminated Union Provider Config
  *
- * 运行时依赖注入：通过 ProviderConfig 描述 provider 类型和凭据，
+ * 运行时依赖注入：通过 ProviderConfig 描述 provider 类型、凭据和行为参数，
  * 由 createLLMClient() 工厂函数构造 LLMClient 实例。
  *
- * 各 provider 配置语义不同（如 Google 不需要 baseUrl），
- * 使用 discriminated union 让 TS 编译器帮助检查字段有效性。
+ * 各 provider 的行为参数（thinking、effort 等）语义不同，
+ * 因此直接放在对应的 ProviderConfig 分支中，而非抽到公共层。
+ * 各 Client 只读取自己分支上的字段，不存在"这个字段对我有没有用"的歧义。
  */
 
 import type { TagStyle } from "@n0n/types";
 
-// ── 常量 ──
-
-/** thinking 模式默认 token 预算 — SSOT：common-specs.ts 和各 Client 共用此值 */
-export const DEFAULT_THINKING_BUDGET_TOKENS = 1024;
-
 // ── Provider 配置 ──
 
-/** OpenAI 原生 API 配置 */
-export interface OpenAIProviderConfig {
-	provider: "openai";
+interface ProviderConfigBase {
 	apiKey: string;
-	baseUrl?: string;
 	model: string;
+	baseUrl?: string;
 	/** 覆盖基于模型名推断的 XML tag 风格 */
 	tagStyle?: TagStyle;
+}
+
+/** OpenAI 原生 API 配置 */
+export interface OpenAIProviderConfig extends ProviderConfigBase {
+	provider: "openai";
 }
 
 /**
@@ -37,33 +36,31 @@ export interface OpenAIProviderConfig {
  * - prompt caching（cache_control 注入）
  * - 交替思考（thinking content block 回传）
  */
-export interface AnthropicProviderConfig {
+export interface AnthropicProviderConfig extends ProviderConfigBase {
 	provider: "anthropic";
-	apiKey: string;
-	/** 自定义 API 地址。留空则使用 Anthropic 官方 API。 */
-	baseUrl?: string;
-	model: string;
-	/** 覆盖基于模型名推断的 XML tag 风格 */
-	tagStyle?: TagStyle;
+	/**
+	 * 思考模式配置。设置即启用，不设置则不启用。
+	 * Anthropic 要求提供明确的 budget_tokens。
+	 */
+	thinking?: {
+		budgetTokens: number;
+	};
 }
 
-/** Google Gemini 原生 API 配置 */
-export interface GoogleProviderConfig {
+/** Google Gemini API 配置（通过 OpenAI 兼容端点） */
+export interface GoogleProviderConfig extends ProviderConfigBase {
 	provider: "google";
-	apiKey: string;
-	/** 自定义 API 地址。留空则使用 Google 官方 API。 */
-	baseUrl?: string;
-	model: string;
-	/** 覆盖基于模型名推断的 XML tag 风格 */
-	tagStyle?: TagStyle;
+	/**
+	 * 思考强度。Gemini 始终内部思考，此参数控制思考内容的独立流式传输。
+	 * 不设置时默认 "high"。
+	 */
+	thinkingEffort?: "low" | "medium" | "high";
 }
 
-/** OpenAI 兼容 API 配置（第三方代理、本地模型等） */
-export interface OpenAICompatibleProviderConfig {
+/** OpenAI 兼容 API 配置（第三方代理、国产模型等） */
+export interface OpenAICompatibleProviderConfig extends ProviderConfigBase {
 	provider: "openai-compatible";
-	apiKey: string;
 	baseUrl: string;
-	model: string;
 	/**
 	 * 代理后端的实际 provider 类型。
 	 *
@@ -71,20 +68,16 @@ export interface OpenAICompatibleProviderConfig {
 	 * OpenAI 兼容协议不会传递 provider-specific 字段
 	 * （如 Anthropic 的 cache_control）。设置此字段后，
 	 * 会在请求层自动注入对应 provider 的缓存控制标记。
-	 *
-	 * 值：
-	 * - "anthropic"：注入 message-level cache_control: { type: "ephemeral" }
-	 * - undefined / 其他：不注入额外字段
 	 */
 	backendProvider?: "anthropic" | "google" | "openai";
-	/** 覆盖基于模型名推断的 XML tag 风格 */
-	tagStyle?: TagStyle;
+	/** 启用思考模式（国产模型大多用 enable_thinking flag） */
+	enableThinking?: boolean;
 }
 
 /**
  * ProviderConfig — 统一的 LLM provider 配置
  *
- * 通过 `provider` 字段判别，各分支具有独立的字段约束。
+ * 通过 `provider` 字段判别，各分支具有独立的字段约束和行为参数。
  */
 export type ProviderConfig =
 	| OpenAIProviderConfig
@@ -97,23 +90,11 @@ export type ProviderConfig =
 /**
  * LLMConfig — 运行时完整配置
  *
- * 包含 provider 配置 + 行为开关。
- * 替代旧的 { baseUrl, apiKey, model } 扁平结构。
+ * 行为参数已下沉到各 ProviderConfig 分支。
+ * 保留此包装层，便于后续在不改动所有 Client 签名的情况下
+ * 添加跨 provider 的通用行为（如 retry 策略、超时、审计日志钩子等）。
  */
 export interface LLMConfig {
-	/** Provider 配置（决定使用哪个 Client） */
+	/** Provider 配置（决定使用哪个 Client，含行为参数） */
 	providerConfig: ProviderConfig;
-	/** 启用 thinking/reasoning 模式（deepseek、claude 等支持的模型） */
-	enableThinking?: boolean;
-	/** thinking 的 token 预算（默认 DEFAULT_THINKING_BUDGET_TOKENS） */
-	thinkingBudgetTokens?: number;
-	/**
-	 * Gemini thinking 强度（仅 google provider 有效）。
-	 * 对应 Gemini API 的 reasoning_effort 参数。
-	 * - "low" / "medium" / "high"：显式设定强度，思考内容独立流式传输
-	 * - undefined：默认强制设为 "high"，以分离思考和内容
-	 */
-	thinkingEffort?: "low" | "medium" | "high";
-	/** 最大输出 token 数。Anthropic 默认 8192（stream）/ 4096（complete）。 */
-	maxOutputTokens?: number;
 }
