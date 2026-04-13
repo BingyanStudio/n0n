@@ -44,7 +44,7 @@ const LLM_BASE_VARS: EnvVarDef[] = [
 const ANTHROPIC_VARS: EnvVarDef[] = [
 	{
 		key: "LLM_ENABLE_THINKING",
-		desc: "启用思考模式（设置 THINKING_BUDGET_TOKENS 时自动启用）",
+		desc: "启用思考模式（也可通过设置 THINKING_BUDGET_TOKENS 启用）",
 		example: "true",
 		default: "false",
 	},
@@ -112,13 +112,15 @@ export function buildLLMEnvGroup(provider: string): EnvGroup {
  */
 export function buildEditorLLMEnvGroup(provider: string): EnvGroup {
 	const mainGroup = buildLLMEnvGroup(provider);
-	const vars: EnvVarDef[] = mainGroup.vars.map((v) => ({
-		...v,
-		key: `EDITOR_${v.key}`,
-		desc: `Editor ${v.desc}`,
-		inheritFrom: v.key,
+	const vars: EnvVarDef[] = mainGroup.vars.map((v) => {
 		// 继承变量不保留 default——让 inheritFrom 机制生效
-		default: undefined,
-	}));
+		const { default: _, ...rest } = v;
+		return {
+			...rest,
+			key: `EDITOR_${v.key}`,
+			desc: `Editor ${v.desc}`,
+			inheritFrom: v.key,
+		};
+	});
 	return { title: "Editor LLM 配置（影子编辑层）", vars };
 }

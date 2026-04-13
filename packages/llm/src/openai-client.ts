@@ -110,7 +110,10 @@ function isSSEChunk(data: unknown): data is SSEChunk {
 
 // ── PromptMessage → OpenAI Message 转换 ──
 
-function toOpenAIMessages(promptMessages: PromptMessage[]): OpenAIMessage[] {
+function toOpenAIMessages(
+	promptMessages: PromptMessage[],
+	backendProvider?: string,
+): OpenAIMessage[] {
 	const result: OpenAIMessage[] = [];
 
 	for (const msg of promptMessages) {
@@ -157,6 +160,22 @@ function toOpenAIMessages(promptMessages: PromptMessage[]): OpenAIMessage[] {
 				});
 				break;
 		}
+
+		if (backendProvider === "anthropic" && msg.cacheBreakpoint && result[result.length - 1]) {
+			(result[result.length - 1] as unknown as Record<string, unknown>).cache_control = {
+				type: "ephemeral",
+			};
+		}
+	}
+
+	// litellm + anthropic backend：末尾自动添加缓存标记，配合显式断点实现双重缓存
+	if (backendProvider === "anthropic") {
+		const last = result[result.length - 1];
+		if (last) {
+			(last as unknown as Record<string, unknown>).cache_control = {
+				type: "ephemeral",
+			};
+		}
 	}
 
 	return result;
@@ -201,33 +220,12 @@ export class OpenAIClient implements LLMClient {
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
-		const apiMessages = toOpenAIMessages(promptMessages);
-
-		// litellm + anthropic backend：将 cacheBreakpoint 标记透传为 cache_control，
-		// 利用 litellm 透传机制让 Anthropic 后端看到缓存标记。
-		// 末尾始终添加 cache_control，配合显式断点实现双重缓存。
-		if (
-			this.pc.provider === "openai-compatible" &&
-			this.pc.backendProvider === "anthropic"
-		) {
-			for (let i = 0; i < promptMessages.length; i++) {
-				if (promptMessages[i]?.cacheBreakpoint) {
-					const apiMsg = apiMessages[i];
-					if (apiMsg) {
-						(apiMsg as unknown as Record<string, unknown>).cache_control = {
-							type: "ephemeral",
-						};
-					}
-				}
-			}
-			// 末尾自动添加缓存标记
-			const last = apiMessages[apiMessages.length - 1];
-			if (last) {
-				(last as unknown as Record<string, unknown>).cache_control = {
-					type: "ephemeral",
-				};
-			}
-		}
+		const apiMessages = toOpenAIMessages(
+			promptMessages,
+			this.pc.provider === "openai-compatible"
+				? this.pc.backendProvider
+				: undefined,
+		);
 
 		const body: OpenAIRequest = {
 			model: this.modelId,

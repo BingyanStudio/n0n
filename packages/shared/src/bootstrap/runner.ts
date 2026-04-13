@@ -118,6 +118,30 @@ function resolvePrefix(
 }
 
 /**
+ * 确定当前生效的 LLM provider（纯函数）。
+ *
+ * 优先级：前缀覆盖 > process.env > globalEnv > projectEnv > 默认 "openai"
+ */
+function resolveEffectiveProvider(
+	prefix: string | undefined,
+	globalEnv: Record<string, string>,
+	projectEnv: Record<string, string>,
+): string {
+	if (prefix) {
+		const providerKey = `${prefix}_LLM_PROVIDER`;
+		const override =
+			process.env[providerKey] ?? globalEnv[providerKey] ?? projectEnv[providerKey];
+		if (override) return override;
+	}
+	return (
+		process.env.LLM_PROVIDER ??
+		globalEnv.LLM_PROVIDER ??
+		projectEnv.LLM_PROVIDER ??
+		"openai"
+	);
+}
+
+/**
  * 计算配置前缀覆盖（纯函数）。
  *
  * 当 N0N_PREFIX=XXX 时，扫描所有 env 来源中的 XXX_<key> 变量，
@@ -287,21 +311,8 @@ export async function bootstrap(
 	}
 	// .env 不存在时延迟到 Phase 2 处理（需要 spec 来驱动交互式创建）
 
-	// 前缀切换 — 先对 LLM_PROVIDER 做前缀解析以确定 provider
 	const prefix = resolvePrefix(globalEnv, projectEnv);
-	let providerOverride: string | undefined;
-	if (prefix) {
-		const providerKey = `${prefix}_LLM_PROVIDER`;
-		providerOverride =
-			process.env[providerKey] ?? globalEnv[providerKey] ?? projectEnv[providerKey];
-	}
-
-	const provider =
-		providerOverride ??
-		process.env.LLM_PROVIDER ??
-		globalEnv.LLM_PROVIDER ??
-		projectEnv.LLM_PROVIDER ??
-		"openai";
+	const provider = resolveEffectiveProvider(prefix, globalEnv, projectEnv);
 
 	// ── Phase 2: 构建 EnvSpec，前缀切换剩余变量，验证 ──
 

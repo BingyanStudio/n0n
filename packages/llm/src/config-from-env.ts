@@ -13,6 +13,9 @@
 
 import type { LLMConfig, ProviderConfig } from "./config.ts";
 
+/** Anthropic thinking 模式的默认 token 预算 */
+const DEFAULT_ANTHROPIC_THINKING_BUDGET = 1024;
+
 /** 所有合法的 provider 类型 — 从 ProviderConfig union 推导 */
 export const PROVIDER_TYPES: readonly ProviderConfig["provider"][] = [
 	"openai",
@@ -78,15 +81,18 @@ export function buildProviderConfigFromEnv(
 			};
 		case "anthropic": {
 			const budgetRaw = process.env[`${prefix}_THINKING_BUDGET_TOKENS`];
-			const budgetTokens = budgetRaw
+			const parsedBudget = budgetRaw
 				? Number.parseInt(budgetRaw, 10)
 				: undefined;
+			// NaN → undefined: 归一化后只需判断 undefined
+			const validBudget =
+				parsedBudget !== undefined && !Number.isNaN(parsedBudget)
+					? parsedBudget
+					: undefined;
 			// 兼容：ENABLE_THINKING=true 但没设 budget 时，用默认 budget
 			const enableFlag =
 				process.env[`${prefix}_ENABLE_THINKING`] === "true";
-			const hasThinking =
-				(budgetTokens !== undefined && !Number.isNaN(budgetTokens)) ||
-				enableFlag;
+			const hasThinking = validBudget !== undefined || enableFlag;
 			return {
 				provider: "anthropic",
 				apiKey,
@@ -96,9 +102,7 @@ export function buildProviderConfigFromEnv(
 					? {
 							thinking: {
 								budgetTokens:
-									budgetTokens !== undefined && !Number.isNaN(budgetTokens)
-										? budgetTokens
-										: DEFAULT_ANTHROPIC_THINKING_BUDGET,
+									validBudget ?? DEFAULT_ANTHROPIC_THINKING_BUDGET,
 							},
 						}
 					: {}),
@@ -137,9 +141,6 @@ export function buildProviderConfigFromEnv(
 		}
 	}
 }
-
-/** Anthropic thinking 模式的默认 token 预算 */
-const DEFAULT_ANTHROPIC_THINKING_BUDGET = 1024;
 
 /**
  * 从环境变量前缀构造 LLMConfig

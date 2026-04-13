@@ -304,7 +304,7 @@ export class AnthropicClient implements LLMClient {
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
-		const { system, messages, hasExplicitBreakpoints } = toAnthropicFormat(promptMessages);
+		const { system, messages } = toAnthropicFormat(promptMessages);
 
 		const body: AnthropicRequest = {
 			model: this.modelId,
@@ -312,8 +312,8 @@ export class AnthropicClient implements LLMClient {
 			system,
 			messages,
 			stream: true,
-			// 无显式缓存断点时使用自动缓存（请求顶层 cache_control），
-			// 有显式断点时断点已标记在具体 content block 上，末尾自动添加
+			// 请求顶层自动缓存（20 块回溯窗口匹配前缀），
+			// 与 content block 上的显式断点标记共同生效
 			cache_control: { type: "ephemeral" },
 		};
 
