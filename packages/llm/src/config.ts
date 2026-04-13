@@ -51,6 +51,8 @@ export interface AnthropicProviderConfig {
 export interface GoogleProviderConfig {
 	provider: "google";
 	apiKey: string;
+	/** 自定义 API 地址。留空则使用 Google 官方 API。 */
+	baseUrl?: string;
 	model: string;
 	/** 覆盖基于模型名推断的 XML tag 风格 */
 	tagStyle?: TagStyle;
@@ -105,6 +107,13 @@ export interface LLMConfig {
 	enableThinking?: boolean;
 	/** thinking 的 token 预算（默认 DEFAULT_THINKING_BUDGET_TOKENS） */
 	thinkingBudgetTokens?: number;
+	/**
+	 * Gemini thinking 强度（仅 google provider 有效）。
+	 * 对应 Gemini API 的 reasoning_effort 参数。
+	 * - "low" / "medium" / "high"：显式设定强度，思考内容独立流式传输
+	 * - undefined：默认强制设为 "high"，以分离思考和内容
+	 */
+	thinkingEffort?: "low" | "medium" | "high";
 	/** 最大输出 token 数。Anthropic 默认 8192（stream）/ 4096（complete）。 */
 	maxOutputTokens?: number;
 }

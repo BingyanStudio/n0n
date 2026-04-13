@@ -8,6 +8,7 @@
 import type { LLMClient } from "@n0n/types";
 import { AnthropicClient } from "./anthropic-client.ts";
 import type { LLMConfig } from "./config.ts";
+import { GeminiClient } from "./gemini-client.ts";
 import { OpenAIClient } from "./openai-client.ts";
 
 /**
@@ -24,8 +25,6 @@ export function createLLMClient(config: LLMConfig): LLMClient {
 		case "anthropic":
 			return new AnthropicClient(config);
 		case "google":
-			throw new Error(
-				"Google provider not yet implemented. Use openai-compatible with a proxy instead.",
-			);
+			return new GeminiClient(config);
 	}
 }

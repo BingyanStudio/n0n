@@ -82,7 +82,7 @@ export function buildProviderConfigFromEnv(
 				...(baseUrl ? { baseUrl } : {}),
 			};
 		case "google":
-			return { provider: "google", apiKey, model };
+			return { provider: "google", apiKey, model, ...(baseUrl ? { baseUrl } : {}) };
 		case "openai-compatible": {
 			const backendProvider = process.env[`${prefix}_BACKEND_PROVIDER`] as
 				| "anthropic"
@@ -111,11 +111,17 @@ export function buildLLMConfigFromEnv(
 	fallbackProvider?: ProviderConfig,
 ): LLMConfig {
 	const providerConfig = buildProviderConfigFromEnv(prefix, fallbackProvider);
+	const effortRaw = process.env[`${prefix}_THINKING_EFFORT`];
+	const thinkingEffort =
+		effortRaw === "low" || effortRaw === "medium" || effortRaw === "high"
+			? effortRaw
+			: undefined;
 	const budgetRaw = process.env[`${prefix}_THINKING_BUDGET_TOKENS`];
 	const budgetTokens = budgetRaw ? Number.parseInt(budgetRaw, 10) : undefined;
 	return {
 		providerConfig,
 		enableThinking: process.env[`${prefix}_ENABLE_THINKING`] === "true",
+		...(thinkingEffort ? { thinkingEffort } : {}),
 		...(budgetTokens !== undefined && !Number.isNaN(budgetTokens)
 			? { thinkingBudgetTokens: budgetTokens }
 			: {}),
