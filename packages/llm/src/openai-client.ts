@@ -23,7 +23,7 @@ import type {
 	ToolDefinition,
 	TagStyle,
 } from "@n0n/types";
-import type { LLMConfig } from "./config.ts";
+import type { LLMConfig, ProviderConfig } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
 
 // ── OpenAI API Types ──
@@ -175,17 +175,15 @@ function toOpenAITools(tools: ToolDefinition[]): OpenAIToolDef[] {
 export class OpenAIClient implements LLMClient {
 	readonly modelId: string;
 	readonly tagStyle: TagStyle;
-	private readonly config: LLMConfig;
+	private readonly pc: ProviderConfig;
 	private readonly apiUrl: string;
 
 	constructor(config: LLMConfig) {
-		this.config = config;
-		this.modelId = config.providerConfig.model;
-		this.tagStyle = config.providerConfig.tagStyle ?? detectTagStyle(this.modelId);
+		this.pc = config.providerConfig;
+		this.modelId = this.pc.model;
+		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
 
-		const pc = config.providerConfig;
-		const base =
-			"baseUrl" in pc && pc.baseUrl ? pc.baseUrl : "https://api.openai.com";
+		const base = this.pc.baseUrl ?? "https://api.openai.com";
 		// 处理 baseUrl 可能已包含 /v1 或完整路径的情况
 		if (base.includes("/chat/completions")) {
 			this.apiUrl = base;
@@ -206,8 +204,8 @@ export class OpenAIClient implements LLMClient {
 		// 利用 litellm 透传机制让 Anthropic 后端看到缓存标记。
 		// 末尾始终添加 cache_control，配合显式断点实现双重缓存。
 		if (
-			this.config.providerConfig.provider === "openai-compatible" &&
-			this.config.providerConfig.backendProvider === "anthropic"
+			this.pc.provider === "openai-compatible" &&
+			this.pc.backendProvider === "anthropic"
 		) {
 			for (let i = 0; i < promptMessages.length; i++) {
 				if (promptMessages[i]?.cacheBreakpoint) {
@@ -240,7 +238,7 @@ export class OpenAIClient implements LLMClient {
 			body.tool_choice = request.toolChoice ?? "auto";
 		}
 
-		if (this.config.enableThinking) {
+		if (this.pc.provider === "openai-compatible" && this.pc.enableThinking) {
 			body.enable_thinking = true;
 		}
 
@@ -250,7 +248,7 @@ export class OpenAIClient implements LLMClient {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${this.config.providerConfig.apiKey}`,
+					Authorization: `Bearer ${this.pc.apiKey}`,
 				},
 				body: JSON.stringify(body),
 				signal,
@@ -438,7 +436,7 @@ export class OpenAIClient implements LLMClient {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
-						Authorization: `Bearer ${this.config.providerConfig.apiKey}`,
+						Authorization: `Bearer ${this.pc.apiKey}`,
 					},
 					body: JSON.stringify(body),
 				});

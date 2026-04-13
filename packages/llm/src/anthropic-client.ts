@@ -30,8 +30,7 @@ import {
 	type TokenUsage,
 	type ToolDefinition,
 } from "@n0n/types";
-import type { LLMConfig } from "./config.ts";
-import { DEFAULT_THINKING_BUDGET_TOKENS } from "./config.ts";
+import type { AnthropicProviderConfig, LLMConfig } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
 
 // ── Anthropic 默认常量 ──
@@ -286,17 +285,15 @@ function toAnthropicTools(tools: ToolDefinition[]): AnthropicTool[] {
 export class AnthropicClient implements LLMClient {
 	readonly modelId: string;
 	readonly tagStyle: TagStyle;
-	private readonly config: LLMConfig;
+	private readonly pc: AnthropicProviderConfig;
 	private readonly apiUrl: string;
 
 	constructor(config: LLMConfig) {
-		this.config = config;
-		this.modelId = config.providerConfig.model;
-		this.tagStyle = config.providerConfig.tagStyle ?? detectTagStyle(this.modelId);
+		this.pc = config.providerConfig as AnthropicProviderConfig;
+		this.modelId = this.pc.model;
+		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
 
-		const pc = config.providerConfig;
-		const base =
-			"baseUrl" in pc && pc.baseUrl ? pc.baseUrl : "https://api.anthropic.com";
+		const base = this.pc.baseUrl ?? "https://api.anthropic.com";
 		// 处理 baseUrl 可能已包含 /v1 的情况（如代理 URL）
 		const cleanBase = base.replace(/\/v1\/?$/, "").replace(/\/$/, "");
 		this.apiUrl = `${cleanBase}/v1/messages`;
@@ -309,11 +306,9 @@ export class AnthropicClient implements LLMClient {
 		const promptMessages = formatPrompt(request.messages, this.modelId);
 		const { system, messages, hasExplicitBreakpoints } = toAnthropicFormat(promptMessages);
 
-		const defaultMaxTokens =
-			this.config.maxOutputTokens ?? DEFAULT_STREAM_MAX_TOKENS;
 		const body: AnthropicRequest = {
 			model: this.modelId,
-			max_tokens: defaultMaxTokens,
+			max_tokens: DEFAULT_STREAM_MAX_TOKENS,
 			system,
 			messages,
 			stream: true,
@@ -328,12 +323,11 @@ export class AnthropicClient implements LLMClient {
 			body.tool_choice = { type: tc === "required" ? "any" : tc };
 		}
 
-		if (this.config.enableThinking) {
-			const budget =
-				this.config.thinkingBudgetTokens ?? DEFAULT_THINKING_BUDGET_TOKENS;
+		if (this.pc.thinking) {
+			const budget = this.pc.thinking.budgetTokens;
 			body.thinking = { type: "enabled", budget_tokens: budget };
 			body.max_tokens = Math.max(
-				defaultMaxTokens,
+				DEFAULT_STREAM_MAX_TOKENS,
 				budget + THINKING_OUTPUT_BUFFER,
 			);
 			// Anthropic requires temperature=1 when thinking is enabled
@@ -346,7 +340,7 @@ export class AnthropicClient implements LLMClient {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"x-api-key": this.config.providerConfig.apiKey,
+					"x-api-key": this.pc.apiKey,
 					"anthropic-version": "2023-06-01",
 				},
 				body: JSON.stringify(body),
@@ -578,7 +572,7 @@ export class AnthropicClient implements LLMClient {
 
 		const body: AnthropicRequest = {
 			model: this.modelId,
-			max_tokens: this.config.maxOutputTokens ?? DEFAULT_COMPLETE_MAX_TOKENS,
+			max_tokens: DEFAULT_COMPLETE_MAX_TOKENS,
 			system,
 			messages,
 			stream: false,
@@ -602,7 +596,7 @@ export class AnthropicClient implements LLMClient {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
-						"x-api-key": this.config.providerConfig.apiKey,
+						"x-api-key": this.pc.apiKey,
 						"anthropic-version": "2023-06-01",
 					},
 					body: JSON.stringify(body),
@@ -660,9 +654,8 @@ export class AnthropicClient implements LLMClient {
 			body.tool_choice = { type: tc === "required" ? "any" : tc };
 		}
 
-		if (this.config.enableThinking) {
-			const budget =
-				this.config.thinkingBudgetTokens ?? DEFAULT_THINKING_BUDGET_TOKENS;
+		if (this.pc.thinking) {
+			const budget = this.pc.thinking.budgetTokens;
 			body.thinking = { type: "enabled", budget_tokens: budget };
 			// thinking 模式下 max_tokens 必须 > budget_tokens
 			body.max_tokens = budget + 1;
@@ -674,7 +667,7 @@ export class AnthropicClient implements LLMClient {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"x-api-key": this.config.providerConfig.apiKey,
+					"x-api-key": this.pc.apiKey,
 					"anthropic-version": "2023-06-01",
 				},
 				body: JSON.stringify(body),

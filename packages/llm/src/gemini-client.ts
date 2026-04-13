@@ -28,7 +28,7 @@ import type {
 	TokenUsage,
 	ToolDefinition,
 } from "@n0n/types";
-import type { LLMConfig } from "./config.ts";
+import type { GoogleProviderConfig, LLMConfig } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
 
 // ── OpenAI-compatible API Types ──
@@ -185,34 +185,20 @@ function toGeminiTools(tools: ToolDefinition[]): GeminiToolDef[] {
 export class GeminiClient implements LLMClient {
 	readonly modelId: string;
 	readonly tagStyle: TagStyle;
-	private readonly config: LLMConfig;
+	private readonly pc: GoogleProviderConfig;
 	private readonly apiUrl: string;
 
 	constructor(config: LLMConfig) {
-		this.config = config;
-		this.modelId = config.providerConfig.model;
-		this.tagStyle =
-			config.providerConfig.tagStyle ?? detectTagStyle(this.modelId);
+		this.pc = config.providerConfig as GoogleProviderConfig;
+		this.modelId = this.pc.model;
+		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
 
-		const pc = config.providerConfig;
-		const base =
-			"baseUrl" in pc && pc.baseUrl
-				? pc.baseUrl
-				: "https://generativelanguage.googleapis.com";
+		const base = this.pc.baseUrl ?? "https://generativelanguage.googleapis.com";
 		if (base.includes("/chat/completions")) {
 			this.apiUrl = base;
 		} else {
 			const cleanBase = base.replace(/\/v1\/?$/, "").replace(/\/$/, "");
 			this.apiUrl = `${cleanBase}/v1/chat/completions`;
-		}
-
-		// Gemini 3.x 始终内部思考，enableThinking=false 不起作用。
-		// 未设 reasoning_effort 时思考内容混入 content 无法区分，强制默认 "high"。
-		if (!config.thinkingEffort && !config.enableThinking) {
-			console.warn(
-				"[GeminiClient] Gemini 模型始终启用思考，忽略 enableThinking=false。" +
-					" 已自动设置 reasoning_effort=high，可通过 LLM_THINKING_EFFORT 调整 (low/medium/high)。",
-			);
 		}
 	}
 
@@ -230,17 +216,13 @@ export class GeminiClient implements LLMClient {
 			stream_options: { include_usage: true },
 		};
 
-		if (this.config.maxOutputTokens !== undefined) {
-			body.max_tokens = this.config.maxOutputTokens;
-		}
-
 		if (request.tools?.length) {
 			body.tools = toGeminiTools(request.tools);
 			body.tool_choice = request.toolChoice ?? "auto";
 		}
 
 		// Gemini 始终思考，必须传 reasoning_effort 才能让 thinking 独立流式传输
-		body.reasoning_effort = this.config.thinkingEffort ?? "high";
+		body.reasoning_effort = this.pc.thinkingEffort ?? "high";
 
 		let res: Response;
 		try {
@@ -248,7 +230,7 @@ export class GeminiClient implements LLMClient {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${this.config.providerConfig.apiKey}`,
+					Authorization: `Bearer ${this.pc.apiKey}`,
 				},
 				body: JSON.stringify(body),
 				signal,
@@ -416,12 +398,8 @@ export class GeminiClient implements LLMClient {
 			model: this.modelId,
 			messages,
 			stream: false,
-			reasoning_effort: this.config.thinkingEffort ?? "high",
+			reasoning_effort: this.pc.thinkingEffort ?? "high",
 		};
-
-		if (this.config.maxOutputTokens !== undefined) {
-			body.max_tokens = this.config.maxOutputTokens;
-		}
 
 		if (request.temperature !== undefined) {
 			body.temperature = request.temperature;
@@ -441,7 +419,7 @@ export class GeminiClient implements LLMClient {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
-						Authorization: `Bearer ${this.config.providerConfig.apiKey}`,
+						Authorization: `Bearer ${this.pc.apiKey}`,
 					},
 					body: JSON.stringify(body),
 				});

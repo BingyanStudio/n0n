@@ -11,6 +11,8 @@ export type { LLMConnectionTester } from "./bootstrap/index.ts";
 // Bootstrap
 export {
 	bootstrap,
+	buildEditorLLMEnvGroup,
+	buildLLMEnvGroup,
 	EDITOR_LLM_ENV_GROUP,
 	generateEnvTemplate,
 	LLM_ENV_GROUP,

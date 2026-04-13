@@ -11,6 +11,11 @@
  */
 
 export type { BootstrapResult, EnvGroup, EnvSpec, EnvVarDef } from "@n0n/types";
-export { EDITOR_LLM_ENV_GROUP, LLM_ENV_GROUP } from "./common-specs.ts";
+export {
+	buildEditorLLMEnvGroup,
+	buildLLMEnvGroup,
+	EDITOR_LLM_ENV_GROUP,
+	LLM_ENV_GROUP,
+} from "./common-specs.ts";
 export { bootstrap, type LLMConnectionTester } from "./runner.ts";
 export { generateEnvTemplate } from "./template.ts";

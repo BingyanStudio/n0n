@@ -28,7 +28,7 @@ import {
 	resolveBasePaths,
 } from "@n0n/shared";
 
-import { codeEnvSpec } from "./env-spec.ts";
+import { buildCodeEnvSpec } from "./env-spec.ts";
 
 /**
  * 配置前缀切换 — N0N_PREFIX=XXX 时，将 XXX_LLM_* 覆盖到 LLM_*，XXX_EDITOR_LLM_* 覆盖到 EDITOR_LLM_*
@@ -57,10 +57,11 @@ function applyConfigPrefix(configDir: string): void {
 
 	const standardKeys = [
 		"LLM_PROVIDER", "LLM_BACKEND_PROVIDER", "LLM_BASE_URL",
-		"LLM_API_KEY", "LLM_MODEL", "LLM_ENABLE_THINKING", "LLM_THINKING_BUDGET_TOKENS",
+		"LLM_API_KEY", "LLM_MODEL", "LLM_ENABLE_THINKING",
+		"LLM_THINKING_BUDGET_TOKENS", "LLM_THINKING_EFFORT",
 		"EDITOR_LLM_PROVIDER", "EDITOR_LLM_BACKEND_PROVIDER", "EDITOR_LLM_BASE_URL",
 		"EDITOR_LLM_API_KEY", "EDITOR_LLM_MODEL", "EDITOR_LLM_ENABLE_THINKING",
-		"EDITOR_LLM_THINKING_BUDGET_TOKENS",
+		"EDITOR_LLM_THINKING_BUDGET_TOKENS", "EDITOR_LLM_THINKING_EFFORT",
 		"EDIT_BACKEND",
 	];
 
@@ -125,7 +126,9 @@ const testLLM = async () => {
 	}
 };
 
-const result = await bootstrap(codeEnvSpec, setupUI, globalConfigDir, testLLM);
+// provider 在 applyConfigPrefix 之后已经可以从 env 读取，用于动态构建 env spec
+const provider = process.env.LLM_PROVIDER ?? "openai";
+const result = await bootstrap(buildCodeEnvSpec(provider), setupUI, globalConfigDir, testLLM);
 setupUI.dispose();
 
 if (!result.ok) {
