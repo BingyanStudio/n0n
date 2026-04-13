@@ -23,7 +23,10 @@ import type {
 	ToolDefinition,
 	TagStyle,
 } from "@n0n/types";
-import type { LLMConfig, ProviderConfig } from "./config.ts";
+import type {
+	OpenAICompatibleProviderConfig,
+	OpenAIProviderConfig,
+} from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
 
 // ── OpenAI API Types ──
@@ -175,11 +178,11 @@ function toOpenAITools(tools: ToolDefinition[]): OpenAIToolDef[] {
 export class OpenAIClient implements LLMClient {
 	readonly modelId: string;
 	readonly tagStyle: TagStyle;
-	private readonly pc: ProviderConfig;
+	private readonly pc: OpenAIProviderConfig | OpenAICompatibleProviderConfig;
 	private readonly apiUrl: string;
 
-	constructor(config: LLMConfig) {
-		this.pc = config.providerConfig;
+	constructor(pc: OpenAIProviderConfig | OpenAICompatibleProviderConfig) {
+		this.pc = pc;
 		this.modelId = this.pc.model;
 		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
 

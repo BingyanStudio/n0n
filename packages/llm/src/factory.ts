@@ -3,6 +3,9 @@
  *
  * 根据 LLMConfig 中的 provider 类型创建对应的 LLMClient 实例。
  * 唯一的 Client 创建入口，各 app 通过此函数构造注入。
+ *
+ * switch 缩窄 ProviderConfig discriminated union，
+ * 将具体类型直接传入对应 Client 构造函数，避免 as 断言。
  */
 
 import type { LLMClient } from "@n0n/types";
@@ -18,13 +21,14 @@ import { OpenAIClient } from "./openai-client.ts";
  * @returns LLMClient 实例，闭包所有配置
  */
 export function createLLMClient(config: LLMConfig): LLMClient {
-	switch (config.providerConfig.provider) {
+	const pc = config.providerConfig;
+	switch (pc.provider) {
 		case "openai":
 		case "openai-compatible":
-			return new OpenAIClient(config);
+			return new OpenAIClient(pc);
 		case "anthropic":
-			return new AnthropicClient(config);
+			return new AnthropicClient(pc);
 		case "google":
-			return new GeminiClient(config);
+			return new GeminiClient(pc);
 	}
 }

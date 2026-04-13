@@ -91,7 +91,8 @@ export type ProviderConfig =
  * LLMConfig — 运行时完整配置
  *
  * 行为参数已下沉到各 ProviderConfig 分支。
- * 此层保留作为未来扩展点（如 retry 策略、超时等跨 provider 通用行为）。
+ * 保留此包装层，便于后续在不改动所有 Client 签名的情况下
+ * 添加跨 provider 的通用行为（如 retry 策略、超时、审计日志钩子等）。
  */
 export interface LLMConfig {
 	/** Provider 配置（决定使用哪个 Client，含行为参数） */

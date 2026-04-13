@@ -30,7 +30,7 @@ import {
 	type TokenUsage,
 	type ToolDefinition,
 } from "@n0n/types";
-import type { AnthropicProviderConfig, LLMConfig } from "./config.ts";
+import type { AnthropicProviderConfig } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
 
 // ── Anthropic 默认常量 ──
@@ -288,8 +288,8 @@ export class AnthropicClient implements LLMClient {
 	private readonly pc: AnthropicProviderConfig;
 	private readonly apiUrl: string;
 
-	constructor(config: LLMConfig) {
-		this.pc = config.providerConfig as AnthropicProviderConfig;
+	constructor(pc: AnthropicProviderConfig) {
+		this.pc = pc;
 		this.modelId = this.pc.model;
 		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
 

@@ -28,7 +28,7 @@ import type {
 	TokenUsage,
 	ToolDefinition,
 } from "@n0n/types";
-import type { GoogleProviderConfig, LLMConfig } from "./config.ts";
+import type { GoogleProviderConfig } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
 
 // ── OpenAI-compatible API Types ──
@@ -188,8 +188,8 @@ export class GeminiClient implements LLMClient {
 	private readonly pc: GoogleProviderConfig;
 	private readonly apiUrl: string;
 
-	constructor(config: LLMConfig) {
-		this.pc = config.providerConfig as GoogleProviderConfig;
+	constructor(pc: GoogleProviderConfig) {
+		this.pc = pc;
 		this.modelId = this.pc.model;
 		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
 
