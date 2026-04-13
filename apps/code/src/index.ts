@@ -26,7 +26,6 @@ import {
 	ensureDirs,
 	parseWorkspaceArg,
 	resolveBasePaths,
-	resolveConfigPrefix,
 } from "@n0n/shared";
 
 import { buildCodeEnvSpec } from "./env-spec.ts";
@@ -81,8 +80,7 @@ const testLLM = async () => {
 	}
 };
 
-const provider = resolveConfigPrefix("LLM_PROVIDER", globalConfigDir) ?? "openai";
-const result = await bootstrap(buildCodeEnvSpec(provider), setupUI, globalConfigDir, testLLM);
+const result = await bootstrap(buildCodeEnvSpec, setupUI, globalConfigDir, testLLM);
 setupUI.dispose();
 
 if (!result.ok) {

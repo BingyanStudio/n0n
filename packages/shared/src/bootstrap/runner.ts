@@ -1,13 +1,14 @@
 /**
  * runner — bootstrap 主流程
  *
+ * 两阶段设计：
+ * 1. 加载环境：.env 文件 + 配置前缀切换 → 确定 LLM_PROVIDER
+ * 2. 构建 EnvSpec + 验证：根据 provider 动态构建配置规格，检查必填变量，测试连通性
+ *
  * 配置加载优先级（高→低）：
  * 1. 项目根 .env（由 Bun 运行时自动加载）
  * 2. 全局 ~/.n0n/.env（由 bootstrap 加载，不覆盖已存在值）
  * 3. 环境变量默认值（EnvSpec 中的 default 字段）
- *
- * 检测顺序：.env 文件 → 必填变量 → LLM 连通性
- * 缺什么补什么，全部通过才继续运行。
  */
 
 import {
@@ -104,69 +105,61 @@ function detectProjectEnv(): Record<string, string> {
 	return {};
 }
 
-/**
- * 解析配置前缀并获取指定 key 的最终值。
- *
- * apps 在 bootstrap 前需要知道 LLM_PROVIDER 以构建正确的 EnvSpec，
- * 但完整的 prefix 应用在 bootstrap 内部。此函数允许 app 预先解析单个 key。
- *
- * @param key 要解析的环境变量名（如 "LLM_PROVIDER"）
- * @param envDir .env 文件所在目录
- * @returns prefix 覆盖后的值，如果没有 prefix 则返回 process.env[key]
- */
-export function resolveConfigPrefix(
-	key: string,
-	envDir: string,
-): string | undefined {
-	let envVars: Record<string, string> = {};
-	const envPath = resolve(envDir, ".env");
-	if (existsSync(envPath)) {
-		envVars = parseEnvFile(readFileSync(envPath, "utf-8"));
-	}
-	// 也检查项目 .env
-	const projectVars = detectProjectEnv();
+// ── 配置前缀切换 ──
 
-	const prefix =
-		process.env.N0N_PREFIX ?? envVars.N0N_PREFIX ?? projectVars.N0N_PREFIX;
-	if (prefix) {
-		const prefixedKey = `${prefix}_${key}`;
-		const prefixedValue =
-			process.env[prefixedKey] ?? envVars[prefixedKey] ?? projectVars[prefixedKey];
-		if (prefixedValue !== undefined) return prefixedValue;
-	}
-	return process.env[key] ?? envVars[key] ?? projectVars[key];
+/**
+ * 解析 N0N_PREFIX 值（从多个来源中取优先级最高的）。
+ */
+function resolvePrefix(
+	globalEnv: Record<string, string>,
+	projectEnv: Record<string, string>,
+): string | undefined {
+	return process.env.N0N_PREFIX ?? globalEnv.N0N_PREFIX ?? projectEnv.N0N_PREFIX;
 }
 
 /**
- * 分析每个配置项的最终值和来源。
+ * 计算配置前缀覆盖（纯函数）。
+ *
+ * 当 N0N_PREFIX=XXX 时，扫描所有 env 来源中的 XXX_<key> 变量，
+ * 返回 key→value 映射。调用方决定何时、如何应用这些覆盖。
+ *
+ * @param keys 需要检查的环境变量 key 列表
+ * @returns 被前缀覆盖的 key→value 映射
  */
-function applyConfigPrefix(
-	spec: EnvSpec,
+function computePrefixOverrides(
+	prefix: string,
+	keys: string[],
 	globalEnv: Record<string, string>,
 	projectEnv: Record<string, string>,
-): Set<string> {
-	const prefix =
-		process.env.N0N_PREFIX ?? globalEnv.N0N_PREFIX ?? projectEnv.N0N_PREFIX;
-	if (!prefix) return new Set();
-
-	const prefixedKeys = new Set<string>();
-	for (const v of allVars(spec)) {
-		const prefixedKey = `${prefix}_${v.key}`;
+): Record<string, string> {
+	const overrides: Record<string, string> = {};
+	for (const key of keys) {
+		const prefixedKey = `${prefix}_${key}`;
 		const value =
 			process.env[prefixedKey] ?? globalEnv[prefixedKey] ?? projectEnv[prefixedKey];
 		if (value !== undefined) {
-			process.env[v.key] = value;
-			prefixedKeys.add(v.key);
+			overrides[key] = value;
 		}
 	}
-	return prefixedKeys;
+	return overrides;
 }
+
+/**
+ * 将覆盖值应用到 process.env。
+ */
+function applyOverrides(overrides: Record<string, string>): void {
+	for (const [key, value] of Object.entries(overrides)) {
+		process.env[key] = value;
+	}
+}
+
+// ── 配置来源分析 ──
 
 function resolveConfigSources(
 	spec: EnvSpec,
 	projectEnv: Record<string, string>,
 	globalEnv: Record<string, string>,
-	prefixedKeys?: Set<string>,
+	prefixedKeys: Set<string>,
 ): ConfigEntry[] {
 	const secretKeys = new Set(
 		allVars(spec)
@@ -188,9 +181,8 @@ function resolveConfigSources(
 		const inProject = v.key in projectEnv;
 		const inGlobal = v.key in globalEnv;
 
-		if (prefixedKeys?.has(v.key)) {
+		if (prefixedKeys.has(v.key)) {
 			source = "prefix";
-			// 记录被 prefix 覆盖的原始值
 			if (inProject) {
 				overridden = { value: projectEnv[v.key] ?? "", source: "project" };
 			} else if (inGlobal) {
@@ -263,13 +255,16 @@ function formatConfigSummary(configs: ConfigEntry[], spec: EnvSpec): string {
 /**
  * 执行 bootstrap 引导流程
  *
- * @param spec 应用环境配置规格
+ * 两阶段：先加载环境和前缀切换确定 provider，再根据 provider 构建 EnvSpec 并验证。
+ * envSpecBuilder 接收 provider 字符串，返回该 provider 对应的完整配置规格。
+ *
+ * @param envSpecBuilder 根据 provider 构建 EnvSpec 的函数
  * @param ui SetupRenderer 实现
  * @param envDir .env 文件所在目录（默认 process.cwd()）
  * @param testLLM LLM 连通性测试回调（可选，由上层注入）
  */
 export async function bootstrap(
-	spec: EnvSpec,
+	envSpecBuilder: (provider: string) => EnvSpec,
 	ui: SetupRenderer,
 	envDir?: string,
 	testLLM?: LLMConnectionTester,
@@ -278,9 +273,7 @@ export async function bootstrap(
 	const dir = envDir ?? process.cwd();
 	const envPath = resolve(dir, ".env");
 
-	ui.info(`正在检查 ${spec.appName} 运行环境…`);
-
-	// ── Step 1: .env 文件加载 ──
+	// ── Phase 1: 加载环境，确定 provider ──
 
 	const projectEnv = detectProjectEnv();
 	if (Object.keys(projectEnv).length > 0) {
@@ -291,7 +284,33 @@ export async function bootstrap(
 	if (existsSync(envPath)) {
 		globalEnv = loadEnvFile(envPath);
 		ui.success(`.env 已加载 (${envPath})`);
-	} else {
+	}
+	// .env 不存在时延迟到 Phase 2 处理（需要 spec 来驱动交互式创建）
+
+	// 前缀切换 — 先对 LLM_PROVIDER 做前缀解析以确定 provider
+	const prefix = resolvePrefix(globalEnv, projectEnv);
+	let providerOverride: string | undefined;
+	if (prefix) {
+		const providerKey = `${prefix}_LLM_PROVIDER`;
+		providerOverride =
+			process.env[providerKey] ?? globalEnv[providerKey] ?? projectEnv[providerKey];
+	}
+
+	const provider =
+		providerOverride ??
+		process.env.LLM_PROVIDER ??
+		globalEnv.LLM_PROVIDER ??
+		projectEnv.LLM_PROVIDER ??
+		"openai";
+
+	// ── Phase 2: 构建 EnvSpec，前缀切换剩余变量，验证 ──
+
+	const spec = envSpecBuilder(provider);
+
+	ui.info(`正在检查 ${spec.appName} 运行环境…`);
+
+	// .env 不存在 — 现在有 spec 可以驱动交互式创建了
+	if (!existsSync(envPath) && Object.keys(globalEnv).length === 0) {
 		ui.warn("未找到 .env 文件");
 		const shouldCreate = await ui.confirm("是否创建 .env 配置文件？");
 		if (shouldCreate) {
@@ -305,15 +324,20 @@ export async function bootstrap(
 		}
 	}
 
-	// ── Step 1.5: 配置前缀切换 ──
+	// 应用完整的前缀切换
+	let prefixedKeys = new Set<string>();
+	if (prefix) {
+		const allKeys = allVars(spec).map((v) => v.key);
+		const overrides = computePrefixOverrides(prefix, allKeys, globalEnv, projectEnv);
+		applyOverrides(overrides);
+		prefixedKeys = new Set(Object.keys(overrides));
 
-	const prefixedKeys = applyConfigPrefix(spec, globalEnv, projectEnv);
-	if (prefixedKeys.size > 0) {
-		const prefix = process.env.N0N_PREFIX ?? globalEnv.N0N_PREFIX ?? projectEnv.N0N_PREFIX;
-		ui.info(`配置前缀切换: N0N_PREFIX=${prefix}（${prefixedKeys.size} 项被覆盖）`);
+		if (prefixedKeys.size > 0) {
+			ui.info(`配置前缀切换: N0N_PREFIX=${prefix}（${prefixedKeys.size} 项被覆盖）`);
+		}
 	}
 
-	// ── Step 2: 必填变量检查 ──
+	// ── 必填变量检查 ──
 
 	let missing = findMissing(spec);
 	if (missing.length > 0) {
@@ -344,7 +368,7 @@ export async function bootstrap(
 		}
 	}
 
-	// ── Step 2.5: 配置摘要 ──
+	// ── 配置摘要 ──
 
 	const configEntries = resolveConfigSources(spec, projectEnv, globalEnv, prefixedKeys);
 	const overrides = configEntries.filter((c) => c.overridden);
@@ -369,7 +393,7 @@ export async function bootstrap(
 
 	ui.success("配置检查通过");
 
-	// ── Step 3: LLM 连通性测试 ──
+	// ── LLM 连通性测试 ──
 
 	if (testLLM) {
 		ui.info("测试 LLM 连接…");
