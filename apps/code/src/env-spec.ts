@@ -65,9 +65,3 @@ export function buildCodeEnvSpec(provider: string): EnvSpec {
 		],
 	};
 }
-
-/**
- * @deprecated 使用 buildCodeEnvSpec(provider) 替代。
- * 保留供未迁移的代码过渡使用。
- */
-export const codeEnvSpec: EnvSpec = buildCodeEnvSpec("openai");

@@ -49,7 +49,3 @@ export function buildFeishuEnvSpec(provider: string): EnvSpec {
 	};
 }
 
-/**
- * @deprecated 使用 buildFeishuEnvSpec(provider) 替代
- */
-export const feishuEnvSpec: EnvSpec = buildFeishuEnvSpec("openai");

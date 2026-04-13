@@ -122,15 +122,3 @@ export function buildEditorLLMEnvGroup(provider: string): EnvGroup {
 	}));
 	return { title: "Editor LLM 配置（影子编辑层）", vars };
 }
-
-// ── 向后兼容：静态导出（已弃用，供未迁移的代码过渡使用） ──
-
-/**
- * @deprecated 使用 buildLLMEnvGroup(provider) 替代
- */
-export const LLM_ENV_GROUP: EnvGroup = buildLLMEnvGroup("openai");
-
-/**
- * @deprecated 使用 buildEditorLLMEnvGroup(provider) 替代
- */
-export const EDITOR_LLM_ENV_GROUP: EnvGroup = buildEditorLLMEnvGroup("openai");
