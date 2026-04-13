@@ -105,12 +105,68 @@ function detectProjectEnv(): Record<string, string> {
 }
 
 /**
+ * 解析配置前缀并获取指定 key 的最终值。
+ *
+ * apps 在 bootstrap 前需要知道 LLM_PROVIDER 以构建正确的 EnvSpec，
+ * 但完整的 prefix 应用在 bootstrap 内部。此函数允许 app 预先解析单个 key。
+ *
+ * @param key 要解析的环境变量名（如 "LLM_PROVIDER"）
+ * @param envDir .env 文件所在目录
+ * @returns prefix 覆盖后的值，如果没有 prefix 则返回 process.env[key]
+ */
+export function resolveConfigPrefix(
+	key: string,
+	envDir: string,
+): string | undefined {
+	let envVars: Record<string, string> = {};
+	const envPath = resolve(envDir, ".env");
+	if (existsSync(envPath)) {
+		envVars = parseEnvFile(readFileSync(envPath, "utf-8"));
+	}
+	// 也检查项目 .env
+	const projectVars = detectProjectEnv();
+
+	const prefix =
+		process.env.N0N_PREFIX ?? envVars.N0N_PREFIX ?? projectVars.N0N_PREFIX;
+	if (prefix) {
+		const prefixedKey = `${prefix}_${key}`;
+		const prefixedValue =
+			process.env[prefixedKey] ?? envVars[prefixedKey] ?? projectVars[prefixedKey];
+		if (prefixedValue !== undefined) return prefixedValue;
+	}
+	return process.env[key] ?? envVars[key] ?? projectVars[key];
+}
+
+/**
  * 分析每个配置项的最终值和来源。
  */
+function applyConfigPrefix(
+	spec: EnvSpec,
+	globalEnv: Record<string, string>,
+	projectEnv: Record<string, string>,
+): Set<string> {
+	const prefix =
+		process.env.N0N_PREFIX ?? globalEnv.N0N_PREFIX ?? projectEnv.N0N_PREFIX;
+	if (!prefix) return new Set();
+
+	const prefixedKeys = new Set<string>();
+	for (const v of allVars(spec)) {
+		const prefixedKey = `${prefix}_${v.key}`;
+		const value =
+			process.env[prefixedKey] ?? globalEnv[prefixedKey] ?? projectEnv[prefixedKey];
+		if (value !== undefined) {
+			process.env[v.key] = value;
+			prefixedKeys.add(v.key);
+		}
+	}
+	return prefixedKeys;
+}
+
 function resolveConfigSources(
 	spec: EnvSpec,
 	projectEnv: Record<string, string>,
 	globalEnv: Record<string, string>,
+	prefixedKeys?: Set<string>,
 ): ConfigEntry[] {
 	const secretKeys = new Set(
 		allVars(spec)
@@ -132,7 +188,15 @@ function resolveConfigSources(
 		const inProject = v.key in projectEnv;
 		const inGlobal = v.key in globalEnv;
 
-		if (inProject) {
+		if (prefixedKeys?.has(v.key)) {
+			source = "prefix";
+			// 记录被 prefix 覆盖的原始值
+			if (inProject) {
+				overridden = { value: projectEnv[v.key] ?? "", source: "project" };
+			} else if (inGlobal) {
+				overridden = { value: globalEnv[v.key] ?? "", source: "global" };
+			}
+		} else if (inProject) {
 			source = "project";
 			if (inGlobal && projectEnv[v.key] !== globalEnv[v.key]) {
 				overridden = { value: globalEnv[v.key] ?? "", source: "global" };
@@ -177,6 +241,7 @@ function formatConfigSummary(configs: ConfigEntry[], spec: EnvSpec): string {
 		env: "环境变量",
 		default: "默认",
 		inherit: "继承",
+		prefix: "前缀切换",
 	};
 
 	const lines: string[] = [];
@@ -240,6 +305,14 @@ export async function bootstrap(
 		}
 	}
 
+	// ── Step 1.5: 配置前缀切换 ──
+
+	const prefixedKeys = applyConfigPrefix(spec, globalEnv, projectEnv);
+	if (prefixedKeys.size > 0) {
+		const prefix = process.env.N0N_PREFIX ?? globalEnv.N0N_PREFIX ?? projectEnv.N0N_PREFIX;
+		ui.info(`配置前缀切换: N0N_PREFIX=${prefix}（${prefixedKeys.size} 项被覆盖）`);
+	}
+
 	// ── Step 2: 必填变量检查 ──
 
 	let missing = findMissing(spec);
@@ -273,7 +346,7 @@ export async function bootstrap(
 
 	// ── Step 2.5: 配置摘要 ──
 
-	const configEntries = resolveConfigSources(spec, projectEnv, globalEnv);
+	const configEntries = resolveConfigSources(spec, projectEnv, globalEnv, prefixedKeys);
 	const overrides = configEntries.filter((c) => c.overridden);
 
 	const configGroups: ConfigGroup[] = spec.groups

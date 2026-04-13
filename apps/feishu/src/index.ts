@@ -31,7 +31,7 @@ import {
 	type SchedulerHandle,
 	startScheduler,
 } from "@n0n/scheduler";
-import { bootstrap } from "@n0n/shared";
+import { bootstrap, resolveConfigPrefix } from "@n0n/shared";
 import { FeishuBot } from "./bot.ts";
 import { handleCardAction } from "./card-actions.ts";
 import { buildTextCard } from "./cards/index.ts";
@@ -364,7 +364,7 @@ if (import.meta.main) {
 		}
 	};
 
-	const provider = process.env.LLM_PROVIDER ?? "openai";
+	const provider = resolveConfigPrefix("LLM_PROVIDER", globalConfigDir) ?? "openai";
 	const result = await bootstrap(
 		buildFeishuEnvSpec(provider),
 		setupUI,

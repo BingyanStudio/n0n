@@ -16,6 +16,7 @@ export {
 	EDITOR_LLM_ENV_GROUP,
 	generateEnvTemplate,
 	LLM_ENV_GROUP,
+	resolveConfigPrefix,
 } from "./bootstrap/index.ts";
 // Conversation Log
 export type {

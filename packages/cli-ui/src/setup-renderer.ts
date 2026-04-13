@@ -194,6 +194,8 @@ export class CliSetupRenderer implements SetupRenderer {
 				return style.dim("[默认]");
 			case "env":
 				return style.yellow("[环境变量]");
+			case "prefix":
+				return style.bold(style.cyan("[前缀切换]"));
 			default:
 				return style.dim(`[${source}]`);
 		}
@@ -205,6 +207,8 @@ export class CliSetupRenderer implements SetupRenderer {
 				return "项目";
 			case "global":
 				return "全局";
+			case "prefix":
+				return "前缀切换";
 			default:
 				return source;
 		}

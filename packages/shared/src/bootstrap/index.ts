@@ -17,5 +17,5 @@ export {
 	EDITOR_LLM_ENV_GROUP,
 	LLM_ENV_GROUP,
 } from "./common-specs.ts";
-export { bootstrap, type LLMConnectionTester } from "./runner.ts";
+export { bootstrap, resolveConfigPrefix, type LLMConnectionTester } from "./runner.ts";
 export { generateEnvTemplate } from "./template.ts";
