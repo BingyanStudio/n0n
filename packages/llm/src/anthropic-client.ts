@@ -52,6 +52,7 @@ type AnthropicContent =
 			id: string;
 			name: string;
 			input: Record<string, unknown>;
+			cache_control?: { type: "ephemeral" };
 	  }
 	| { type: "tool_result"; tool_use_id: string; content: string; cache_control?: { type: "ephemeral" } };
 
@@ -84,7 +85,6 @@ interface AnthropicRequest {
 	stream?: boolean;
 	thinking?: { type: "enabled"; budget_tokens: number };
 	temperature?: number;
-	cache_control?: { type: "ephemeral" };
 }
 
 // ── SSE Event Types ──
@@ -227,9 +227,17 @@ function toAnthropicFormat(
 					content.push({ type: "text", text: "" });
 				}
 				if (msg.cacheBreakpoint) {
-					const last = content[content.length - 1];
-					if (last && "text" in last) {
-						last.cache_control = { type: "ephemeral" };
+					for (let i = content.length - 1; i >= 0; i--) {
+						const block = content[i];
+						if (
+							block &&
+							(block.type === "text" ||
+								block.type === "tool_result" ||
+								block.type === "tool_use")
+						) {
+							block.cache_control = { type: "ephemeral" };
+							break;
+						}
 					}
 					hasBreakpoint = true;
 				}
@@ -256,6 +264,53 @@ function toAnthropicFormat(
 		}
 	}
 
+	let autoBreakpointSet = false;
+	if (!autoBreakpointSet) {
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const msg = messages[i];
+			if (!msg) continue;
+
+			if (typeof msg.content === "string") {
+				msg.content = [
+					{
+						type: "text",
+						text: msg.content,
+						cache_control: { type: "ephemeral" },
+					},
+				];
+				autoBreakpointSet = true;
+				break;
+			}
+
+			if (Array.isArray(msg.content) && msg.content.length > 0) {
+				for (let j = msg.content.length - 1; j >= 0; j--) {
+					const block = msg.content[j];
+					if (
+						block &&
+						(block.type === "text" ||
+							block.type === "tool_result" ||
+							block.type === "tool_use")
+					) {
+						block.cache_control = { type: "ephemeral" };
+						autoBreakpointSet = true;
+						break;
+					}
+				}
+				if (autoBreakpointSet) break;
+			}
+		}
+
+		if (!autoBreakpointSet && messages.length === 0 && systemParts.length > 0) {
+			for (let i = systemParts.length - 1; i >= 0; i--) {
+				const part = systemParts[i];
+				if (part) {
+					part.cache_control = { type: "ephemeral" };
+					autoBreakpointSet = true;
+					break;
+				}
+			}
+		}
+	}
 	// 有 cache_control 标记时必须使用数组形式（字符串形式不支持 cache_control）
 	const hasSystemBreakpoint = systemParts.some(p => p.cache_control);
 	const system =
@@ -312,9 +367,6 @@ export class AnthropicClient implements LLMClient {
 			system,
 			messages,
 			stream: true,
-			// 请求顶层自动缓存（20 块回溯窗口匹配前缀），
-			// 与 content block 上的显式断点标记共同生效
-			cache_control: { type: "ephemeral" },
 		};
 
 		if (request.tools?.length) {
@@ -645,7 +697,6 @@ export class AnthropicClient implements LLMClient {
 			system,
 			messages: anthropicMessages,
 			stream: false,
-			cache_control: { type: "ephemeral" },
 		};
 
 		if (request.tools?.length) {
