@@ -173,6 +173,7 @@ function parseSelections(text: string): Selection[] {
 		const jsonMatch = text.match(/\[[\s\S]*\]/);
 		if (!jsonMatch) return [];
 
+		// 结构由下方 filter 运行时验证
 		const parsed = JSON.parse(jsonMatch[0]) as Array<{
 			index?: number;
 			relevance?: string;

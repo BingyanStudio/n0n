@@ -92,7 +92,13 @@ export async function agentLoop<T = unknown>(
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
 	let submitRetries = 0;
-	let lastUsage = null as TokenUsage | null;
+	let lastUsage: TokenUsage = {
+		inputTokens: 0,
+		outputTokens: 0,
+		totalTokens: 0,
+		cacheReadTokens: 0,
+		cacheWriteTokens: 0,
+	};
 
 	for (let iter = 0; iter < maxIter; iter++) {
 		if (options?.signal?.aborted) {
@@ -173,7 +179,7 @@ export async function agentLoop<T = unknown>(
 		}
 		renderer.streamEnd();
 		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
-		lastUsage = streamResult!.accumulator.usage;
+		lastUsage = streamResult!.accumulator.usage ?? lastUsage;
 
 		// ── 2. 分类本轮结果，决定后续动作 ──
 		const outcome = classifyRound(

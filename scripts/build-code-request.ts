@@ -63,7 +63,7 @@ const toolsConfig = {
 	security: { blockedCommands: [] as string[] },
 	agent: { defaultExecTimeout: 120 },
 	editBackendType: "str-replace" as const,
-	editorClient: null as any,
+	editorClient: { modelId: "", tagStyle: "default" as const, async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); } },
 };
 
 const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, modelId);

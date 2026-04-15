@@ -235,6 +235,7 @@ export async function makeToolkit(
 			const call: SubmitToolCall = {
 				id: tc.id,
 				tool: "submit" as const,
+				// tc 来自通用 execute 回调，tool 字段未窄化
 				args: tc.args as SubmitArgs,
 			};
 			return submitTool(call);

@@ -17,14 +17,9 @@
 
 import type {
 	DomainMessage,
-	ExecToolResult,
-	EditToolResult,
 	PromptMessage,
-	ReminderToolResult,
-	SubmitToolResult,
 	ToolCallPart,
 	ToolResult,
-	WriteToolResult,
 } from "@n0n/types";
 import { adaptTags, wrapTag } from "./utils.ts";
 import { formatExecResult } from "./format-exec.ts";
@@ -45,17 +40,17 @@ function toolResultToContent(
 	model: string,
 	msgIndex: number,
 ): string {
-	switch (msg.call.tool) {
+	switch (msg.tool) {
 		case "exec":
-			return formatExecResult(msg as ExecToolResult, model, msgIndex);
+			return formatExecResult(msg, model, msgIndex);
 		case "write":
-			return formatWriteResult(msg as WriteToolResult, model, msgIndex);
+			return formatWriteResult(msg, model, msgIndex);
 		case "edit":
-			return formatEditResult(msg as EditToolResult, model, msgIndex);
+			return formatEditResult(msg, model, msgIndex);
 		case "reminder":
-			return formatReminderResult(msg as ReminderToolResult, model, msgIndex);
+			return formatReminderResult(msg, model, msgIndex);
 		case "submit":
-			return formatSubmitResult(msg as SubmitToolResult, model, msgIndex);
+			return formatSubmitResult(msg, model, msgIndex);
 	}
 }
 

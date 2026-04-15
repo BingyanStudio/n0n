@@ -81,6 +81,9 @@ export class FreeformPatchBackend implements EditBackend {
 			}
 
 			let hasSubmit = false;
+			if (!json || typeof json !== "object" || !("output" in json) || !Array.isArray(json.output)) {
+				break;
+			}
 			const response = json as ResponsesResult;
 
 			for (const item of response.output) {

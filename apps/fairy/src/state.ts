@@ -89,7 +89,8 @@ export function loadHistory(paths: FairyPaths): DomainMessage[] {
 	if (!existsSync(paths.historyFile)) return [];
 	const raw = readFileSync(paths.historyFile, "utf-8");
 	try {
-		return JSON.parse(raw) as DomainMessage[];
+		const parsed: unknown = JSON.parse(raw);
+		return Array.isArray(parsed) ? (parsed as DomainMessage[]) : [];
 	} catch {
 		return [];
 	}

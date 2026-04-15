@@ -94,6 +94,7 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 	for (let i = history.length - 1; i >= 0; i--) {
 		const msg = history[i];
 		if (msg?.type === "tool_result" && "tool" in msg && msg.tool === "submit") {
+			// TS 无法通过 DomainMessage → type === "tool_result" → tool === "submit" 完成窄化
 			(msg as SubmitToolResult).userResponse = response;
 			return;
 		}

@@ -491,6 +491,7 @@ export class AnthropicClient implements LLMClient {
 
 					let event: AnthropicSSEEvent;
 					try {
+						// catch 处理解析失败，switch(event.type) 验证结构
 						event = JSON.parse(eventData) as AnthropicSSEEvent;
 					} catch {
 						boundary = buffer.indexOf("\n\n");

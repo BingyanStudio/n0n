@@ -42,6 +42,7 @@ export function parseToolCalls(raw: AssistantToolCallPart[]): ToolCallRecord[] {
 			id: tc.toolCallId,
 			tool: tc.toolName,
 			args,
+			// tool 是运行时 string，无法满足判别联合的字面量约束
 		} as ToolCallRecord;
 	});
 }
@@ -69,7 +70,7 @@ export async function* executeToolStream(
 				id: tc.id,
 				tool: "exec" as const,
 				args: { script: "" },
-			} as ExecToolCall,
+			} satisfies ExecToolCall,
 			status: "completed" as const,
 			exitCode: 1,
 			stdout: "",
@@ -96,7 +97,7 @@ export async function* executeToolStream(
 				error: err.issues
 					.map((i) => `${i.path.join(".")}: ${i.message}`)
 					.join("; "),
-				schema: toolDef?.parameters as Record<string, unknown> | undefined,
+				schema: toolDef?.parameters,
 			};
 			yield argError;
 			return;

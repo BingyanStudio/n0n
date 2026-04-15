@@ -95,5 +95,6 @@ export function loadConversation(filePath: string): ConversationLog {
 		throw new Error(`Invalid conversation log: missing history array`);
 	}
 
+	// history 数组存在性已在上方验证，其余字段为可选
 	return parsed as ConversationLog;
 }
