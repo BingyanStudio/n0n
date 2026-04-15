@@ -491,10 +491,7 @@ export class AnthropicClient implements LLMClient {
 
 					let event: AnthropicSSEEvent;
 					try {
-						// TODO
-						// JSON.parse(eventData) as AnthropicSSEEvent → SSE 数据来自外部 API，
-						// 建议至少检查 event.type 存在后再断言。下方的同类 JSON.parse cast 同理。
-						// ODOT
+						// catch 处理解析失败，switch(event.type) 验证结构
 						event = JSON.parse(eventData) as AnthropicSSEEvent;
 					} catch {
 						boundary = buffer.indexOf("\n\n");

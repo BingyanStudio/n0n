@@ -173,10 +173,7 @@ function parseSelections(text: string): Selection[] {
 		const jsonMatch = text.match(/\[[\s\S]*\]/);
 		if (!jsonMatch) return [];
 
-		// TODO
-		// JSON.parse(...) as Array<{...}> → LLM 输出的 JSON 结构不可信，应添加运行时验证
-		// 下方 item.index as number、item.relevance as "high" | "medium" | "low" 同理
-		// ODOT
+		// 结构由下方 filter 运行时验证
 		const parsed = JSON.parse(jsonMatch[0]) as Array<{
 			index?: number;
 			relevance?: string;

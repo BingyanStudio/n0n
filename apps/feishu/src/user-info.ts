@@ -26,14 +26,13 @@ export async function ensureUserInfo(
 	// 检查是否已有且未过期
 	if (existsSync(filePath)) {
 		try {
-			// TODO
-			// JSON.parse(...) as FeishuUserInfo → 磁盘文件可能损坏，应验证关键字段后再断言
-			// ODOT
-			const existing = JSON.parse(
+			const existing: unknown = JSON.parse(
 				await Bun.file(filePath).text(),
-			) as FeishuUserInfo;
-			const age = Date.now() - new Date(existing.updatedAt).getTime();
-			if (age < REFRESH_TTL_MS) return existing;
+			);
+			if (!existing || typeof existing !== "object" || !("openId" in existing) || !("updatedAt" in existing)) throw new Error("invalid");
+			const info = existing as FeishuUserInfo;
+			const age = Date.now() - new Date(info.updatedAt).getTime();
+			if (age < REFRESH_TTL_MS) return info;
 		} catch {
 			// 文件损坏，重新获取
 		}

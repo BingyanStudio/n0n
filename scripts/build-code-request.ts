@@ -63,10 +63,7 @@ const toolsConfig = {
 	security: { blockedCommands: [] as string[] },
 	agent: { defaultExecTimeout: 120 },
 	editBackendType: "str-replace" as const,
-	// TODO
-	// null as any → 应给 ToolsConfig 的 editorClient 一个允许 null 的类型，或用 undefined
-	// ODOT
-	editorClient: null as any,
+	editorClient: { modelId: "", tagStyle: "default" as const, async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); } },
 };
 
 const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, modelId);

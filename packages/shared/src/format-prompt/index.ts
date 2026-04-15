@@ -17,14 +17,9 @@
 
 import type {
 	DomainMessage,
-	ExecToolResult,
-	EditToolResult,
 	PromptMessage,
-	ReminderToolResult,
-	SubmitToolResult,
 	ToolCallPart,
 	ToolResult,
-	WriteToolResult,
 } from "@n0n/types";
 import { adaptTags, wrapTag } from "./utils.ts";
 import { formatExecResult } from "./format-exec.ts";
@@ -45,23 +40,17 @@ function toolResultToContent(
 	model: string,
 	msgIndex: number,
 ): string {
-	switch (msg.call.tool) {
+	switch (msg.tool) {
 		case "exec":
-			// TODO
-			// 这 5 个 as 断言应通过判别联合窄化消除。
-			// 如果 DomainMessage 的 tool_result 子类型以 tool 字段为判别字段，
-			// switch (msg.tool) 即可自动窄化，不需要手动 as。
-			// 需要检查 DomainMessage 联合定义是否正确设置了判别字段。
-			// ODOT
-			return formatExecResult(msg as ExecToolResult, model, msgIndex);
+			return formatExecResult(msg, model, msgIndex);
 		case "write":
-			return formatWriteResult(msg as WriteToolResult, model, msgIndex);
+			return formatWriteResult(msg, model, msgIndex);
 		case "edit":
-			return formatEditResult(msg as EditToolResult, model, msgIndex);
+			return formatEditResult(msg, model, msgIndex);
 		case "reminder":
-			return formatReminderResult(msg as ReminderToolResult, model, msgIndex);
+			return formatReminderResult(msg, model, msgIndex);
 		case "submit":
-			return formatSubmitResult(msg as SubmitToolResult, model, msgIndex);
+			return formatSubmitResult(msg, model, msgIndex);
 	}
 }
 

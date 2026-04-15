@@ -124,12 +124,8 @@ export async function handleCardAction(
 async function onWorkflowRun(
 	ctx: CardActionContext,
 ): Promise<CardActionResponse | undefined> {
-	// TODO
-	// ctx.value.name as string → CardActionValue 的索引签名返回 unknown，
-	// 应添加类型守卫或收紧 CardActionValue 类型定义。onCronToggle、onCronRun 的同类 cast 同理。
-	// ODOT
-	const name = ctx.value.name as string;
-	if (!name) return undefined;
+	const name = ctx.value.name;
+	if (typeof name !== "string" || !name) return undefined;
 
 	const workflows = await discoverWorkflows(false, ctx.paths);
 	const wf = workflows.find((w) => w.name === name);
@@ -153,9 +149,10 @@ async function onWorkflowRun(
 async function onCronToggle(
 	ctx: CardActionContext,
 ): Promise<CardActionResponse | undefined> {
-	const name = ctx.value.name as string;
-	const enabled = ctx.value.enabled as boolean;
-	if (!name || enabled === undefined) return undefined;
+	const name = ctx.value.name;
+	const enabled = ctx.value.enabled;
+	if (typeof name !== "string" || !name || typeof enabled !== "boolean")
+		return undefined;
 
 	const ok = await setScheduleEnabled(name, enabled, ctx.paths);
 	if (!ok) {
@@ -177,8 +174,8 @@ async function onCronToggle(
 async function onCronRun(
 	ctx: CardActionContext,
 ): Promise<CardActionResponse | undefined> {
-	const name = ctx.value.name as string;
-	if (!name) return undefined;
+	const name = ctx.value.name;
+	if (typeof name !== "string" || !name) return undefined;
 
 	const schedules = await loadSchedules(ctx.paths);
 	const schedule = schedules.find((s) => s.name === name);

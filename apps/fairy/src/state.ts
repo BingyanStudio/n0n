@@ -89,11 +89,8 @@ export function loadHistory(paths: FairyPaths): DomainMessage[] {
 	if (!existsSync(paths.historyFile)) return [];
 	const raw = readFileSync(paths.historyFile, "utf-8");
 	try {
-		// TODO
-		// JSON.parse(raw) as DomainMessage[] → 从磁盘读取的 JSON 未经验证直接断言。
-		// 文件可能损坏或格式变更，应至少检查 Array.isArray 后再断言。
-		// ODOT
-		return JSON.parse(raw) as DomainMessage[];
+		const parsed: unknown = JSON.parse(raw);
+		return Array.isArray(parsed) ? (parsed as DomainMessage[]) : [];
 	} catch {
 		return [];
 	}

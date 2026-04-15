@@ -81,10 +81,9 @@ export class FreeformPatchBackend implements EditBackend {
 			}
 
 			let hasSubmit = false;
-			// TODO
-			// json as ResponsesResult → JSON 解析结果未经运行时验证，直接断言为 ResponsesResult。
-			// 应添加基本的结构检查（如 Array.isArray(json.output)）后再断言。
-			// ODOT
+			if (!json || typeof json !== "object" || !("output" in json) || !Array.isArray(json.output)) {
+				break;
+			}
 			const response = json as ResponsesResult;
 
 			for (const item of response.output) {

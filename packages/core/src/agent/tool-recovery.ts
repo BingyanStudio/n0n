@@ -103,13 +103,10 @@ export async function recoverPartialCalls(
 			// recover 失败：生成占位 call + tool_arg_error result
 			// 占位 call 仅用于保持 assistant_tool_call 消息结构完整性。
 			// 对应的 tool_arg_error result 会告知模型此调用失败。
-			const placeholderCall = {
+			const placeholderCall: PartialToolCallRecord = {
 				id: partial.toolCallId,
 				tool: partial.toolName,
-				// TODO
-				// {} as Record<string, never> → 用类型注解: 给 placeholderCall 加显式类型标注
-				// ODOT
-				args: {} as Record<string, never>,
+				args: {},
 			};
 			pairs.push({
 				status: "unrecoverable",

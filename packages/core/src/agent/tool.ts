@@ -42,9 +42,7 @@ export function parseToolCalls(raw: AssistantToolCallPart[]): ToolCallRecord[] {
 			id: tc.toolCallId,
 			tool: tc.toolName,
 			args,
-			// TODO
-			// 对象字面量 as ToolCallRecord → 改用 satisfies ToolCallRecord 让编译器验证字段完整性
-			// ODOT
+			// tool 是运行时 string，无法满足判别联合的字面量约束
 		} as ToolCallRecord;
 	});
 }
@@ -72,10 +70,7 @@ export async function* executeToolStream(
 				id: tc.id,
 				tool: "exec" as const,
 				args: { script: "" },
-				// TODO
-				// as ExecToolCall → 改用 satisfies ExecToolCall
-				// ODOT
-			} as ExecToolCall,
+			} satisfies ExecToolCall,
 			status: "completed" as const,
 			exitCode: 1,
 			stdout: "",
@@ -102,10 +97,7 @@ export async function* executeToolStream(
 				error: err.issues
 					.map((i) => `${i.path.join(".")}: ${i.message}`)
 					.join("; "),
-				// TODO
-				// as Record<string, unknown> | undefined → 收紧 ToolDefinition.parameters 的类型定义
-				// ODOT
-				schema: toolDef?.parameters as Record<string, unknown> | undefined,
+				schema: toolDef?.parameters,
 			};
 			yield argError;
 			return;

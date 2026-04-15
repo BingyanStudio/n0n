@@ -18,20 +18,18 @@
  * - 复用现有 DomainMessage 类型，不引入新结构
  */
 
-import type { DomainMessage } from "@n0n/types";
-// submit 在 schema 模式下 args 直接是 CodeResult 的字段（非 SubmitArgs），
-// 类型系统无法表达这种运行时多态，用 Record<string, unknown> 绕过。
-type SubmitCallArgs = Record<string, unknown>;
+import type {
+	DomainMessage,
+	SubmitToolCall,
+	SubmitToolResult,
+} from "@n0n/types";
 
 /** 构造 submit 工具调用 + 结果的消息对 */
 function submitPair(
 	id: string,
-	args: SubmitCallArgs,
+	args: Record<string, unknown>,
 ): [DomainMessage, DomainMessage] {
-	// TODO
-	// args as any → 应给 call 一个更精确的类型，避免 as any 绕过类型检查
-	// ODOT
-	const call = { id, tool: "submit" as const, args: args as any };
+	const call: SubmitToolCall = { id, tool: "submit", args };
 	return [
 		{
 			type: "assistant_tool_call",
@@ -46,10 +44,7 @@ function submitPair(
 			call,
 			cleanedResult: args,
 			userResponse: undefined,
-			// TODO
-			// } as DomainMessage → 改用 satisfies DomainMessage 让编译器验证字段完整性
-			// ODOT
-		} as DomainMessage,
+		} satisfies SubmitToolResult as DomainMessage,
 	];
 }
 

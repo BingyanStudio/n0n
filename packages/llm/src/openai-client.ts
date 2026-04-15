@@ -161,12 +161,9 @@ function toOpenAIMessages(
 				break;
 		}
 
+		// Anthropic via litellm: 消息类型无 cache_control 字段，需 double cast
+		// TODO: 当 litellm/openai 类型支持 cache_control 时移除 double cast
 		if (backendProvider === "anthropic" && msg.cacheBreakpoint && result[result.length - 1]) {
-			// TODO
-			// double cast (as unknown as Record) 为 Anthropic cache_control 字段。
-			// 应扩展消息类型定义以包含可选 cache_control 字段，消除 double cast。
-			// 下方的同类 cast 同理。
-			// ODOT
 			(result[result.length - 1] as unknown as Record<string, unknown>).cache_control = {
 				type: "ephemeral",
 			};
