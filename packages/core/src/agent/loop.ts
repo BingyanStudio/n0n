@@ -83,6 +83,12 @@ export async function agentLoop<T = unknown>(
 			agent: runtime.agent,
 			...workspacePaths,
 		};
+	// TODO: toolkit 应改为依赖注入，由 app 层创建并持有。
+	// 当前 agentLoop 内部构造 toolkit，导致：
+	// 1. app 层无法复用 toolkit（context-fewshot 被迫单独创建临时 toolkit）
+	// 2. submit schema 必须通过 options 间接传入 makeToolkit，而非 app 层直接控制
+	// 3. 未来如需定制工具（增删/替换工具实现），必须侵入 core 层
+	// 改法：agentLoop 接收 Toolkit 实例，makeToolkit 调用上移到 app 层（repl/headless）。
 	const toolkit = await makeToolkit(
 		options?.schema,
 		toolsConfig,
