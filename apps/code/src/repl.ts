@@ -8,6 +8,9 @@
  */
 
 import { createInterface } from "node:readline";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { resolve } from "node:path";
 import { isTTY, label, style, writeln } from "@n0n/cli-ui";
 import {
 	agentLoop,
@@ -30,6 +33,7 @@ import codePromptText from "./prompts/code.md" with { type: "text" };
 import { buildFewshotMessages } from "./fewshot.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 import { playNotifySound } from "./notify-sound.ts";
+import { formatSubmitResult } from "./submit-formatter.ts";
 
 export interface CodeReplOptions {
 	initialInput?: string;
@@ -178,8 +182,11 @@ export async function startCodeRepl(
 	}
 	dynamicSystemParts.push(buildEnvironmentSection(paths.workspace));
 	const dynamicSystemPrompt = dynamicSystemParts.join("\n\n");
+	// submit 结果文件编号（进程级，不随 renderer 生命周期绑定）
+	const submitSessionId = randomBytes(2).toString("hex");
+	let submitSeq = 0;
 	const renderer = isTTY
-		? new CodeRenderer(paths.workspace)
+		? new CodeRenderer(paths)
 		: new PlainRenderer();
 
 	// ── stdin 控制器（仅 TTY 模式） ──
@@ -459,6 +466,16 @@ export async function startCodeRepl(
 			userInput = await promptUser();
 			continue;
 		}
+
+		// 将已验证的 submit 结果写入编号文件 + 固定文件
+		submitSeq++;
+		const submitFilename = `submit-${submitSessionId}-${String(submitSeq).padStart(4, "0")}.md`;
+		const formatted = formatSubmitResult(ir);
+		try {
+			if (!existsSync(paths.temp)) mkdirSync(paths.temp, { recursive: true });
+			writeFileSync(resolve(paths.temp, submitFilename), formatted, "utf-8");
+			writeFileSync(resolve(paths.temp, "submit-result.md"), formatted, "utf-8");
+		} catch {}
 
 		switch (ir.type) {
 			case "ask_user": {

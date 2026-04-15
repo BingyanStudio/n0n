@@ -8,12 +8,12 @@
  * 设计原则：
  * - 利用指令式事件模型，不新增 Renderer 接口
  * - 改动封闭在 code app 内，不影响核心包和其他 app
- * - 未来可扩展：如 edit 工具的实时 diff 预览（当前仅 write）
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { RichRenderer } from "@n0n/cli-ui";
+import type { BaseWorkspacePaths } from "@n0n/shared";
 import type { ToolCallRecord } from "@n0n/types";
 import { parse as parsePartialJSON } from "partial-json";
 
@@ -36,7 +36,7 @@ export class CodeRenderer extends RichRenderer {
 	/** 活跃的 write 预览（index → preview state） */
 	private previews = new Map<number, WritePreview>();
 
-	constructor(private readonly workspace: string) {
+	constructor(private readonly paths: BaseWorkspacePaths) {
 		super();
 	}
 
@@ -56,16 +56,15 @@ export class CodeRenderer extends RichRenderer {
 		super.toolCallArgChunk(index, chunk);
 
 		const preview = this.previews.get(index);
-		if (!preview) return;
-
-		preview.args += chunk;
-		this.flushPreview(preview, false);
+		if (preview) {
+			preview.args += chunk;
+			this.flushPreview(preview, false);
+		}
 	}
 
 	override toolCallArgEnd(index: number, tc: ToolCallRecord): void {
 		super.toolCallArgEnd(index, tc);
 
-		// 最终确认写入（绕过节流）
 		if (tc.tool === "write") {
 			const filePath = this.resolvePath(tc.args.path);
 			this.writeFile(filePath, tc.args.content);
@@ -75,7 +74,6 @@ export class CodeRenderer extends RichRenderer {
 
 	override streamEnd(): void {
 		// 安全网：清理所有未完成的预览（如流被截断）
-		// 对未完成的 write，做一次最终 flush
 		for (const preview of this.previews.values()) {
 			this.flushPreview(preview, true);
 		}
@@ -95,7 +93,6 @@ export class CodeRenderer extends RichRenderer {
 	 * @param force 是否强制写入（跳过节流，用于 streamEnd/argEnd）
 	 */
 	private flushPreview(preview: WritePreview, force: boolean): void {
-		// 节流：距上次写入不足阈值则跳过
 		const now = Date.now();
 		if (!force && now - preview.lastWriteTime < THROTTLE_MS) return;
 
@@ -112,14 +109,14 @@ export class CodeRenderer extends RichRenderer {
 
 		// 提取 path — 仅当 content key 已出现时才锁定
 		// partial-json 会为未闭合的字符串值补全引号，导致 path 值可能是截断的
-		// （如 {"path": "ts 被解析为 path:"ts"，实际应为 "tsconfig.json"）
-		// 当 content key 出现时，说明 path 值已完整传输，此时锁定是安全的
 		if (
 			!preview.targetPath &&
 			typeof parsed.path === "string" &&
 			parsed.path &&
 			"content" in parsed
 		) {
+			// （如 {"path": "ts 被解析为 path:"ts"，实际应为 "tsconfig.json"）
+			// 当 content key 出现时，说明 path 值已完整传输，此时锁定是安全的
 			preview.targetPath = this.resolvePath(parsed.path);
 		}
 
@@ -135,7 +132,7 @@ export class CodeRenderer extends RichRenderer {
 	}
 
 	private resolvePath(p: string): string {
-		return isAbsolute(p) ? p : resolve(this.workspace, p);
+		return isAbsolute(p) ? p : resolve(this.paths.workspace, p);
 	}
 
 	private writeFile(filePath: string, content: string): void {
