@@ -12,12 +12,12 @@
  */
 
 import { resolve } from "node:path";
-import { formatPrompt, formatAgentsMdPrompt, loadAgentsMd } from "@n0n/shared";
+import { formatPrompt } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage, PromptMessage, ToolDefinition } from "@n0n/types";
 
 import codePromptText from "../apps/code/src/prompts/code.md" with { type: "text" };
-import { buildFewshotMessages } from "../apps/code/src/fewshot.ts";
+import { buildContextFewshot } from "../apps/code/src/context-fewshot.ts";
 import { CodeResultSchema } from "../apps/code/src/schema.ts";
 
 // ── CLI 参数 ──
@@ -34,28 +34,7 @@ const outPath = resolve(getArg("--out", ".temp/preview-fewshot.md"));
 // ── 组装 system prompt（与 repl.ts 一致） ──
 
 const workspace = process.cwd();
-
-function buildEnvironmentSection(ws: string): string {
-	return [
-		"",
-		"# Environment",
-		"",
-		`- Working directory: \`${ws}\``,
-		"- All tool paths resolve relative to this directory:",
-		"  - `exec` scripts run with cwd = working directory",
-		"  - `write` / `edit` relative paths resolve against working directory",
-		"",
-		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
-		"Read existing code before modifying it to understand project structure.",
-	].join("\n");
-}
-
-let systemPrompt = codePromptText;
-const agentsMd = await loadAgentsMd(workspace);
-if (agentsMd) {
-	systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
-}
-systemPrompt += buildEnvironmentSection(workspace);
+const systemPrompt = codePromptText;
 
 // ── 构建工具定义 ──
 
@@ -71,30 +50,17 @@ const toolsConfig = {
 const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, modelId);
 const toolDefs: ToolDefinition[] = toolkit.tools;
 
-// ── 模拟 git context ──
-
-function gatherContextSync(): string | null {
-	const parts: string[] = [];
-	try {
-		const gitBranch = Bun.spawnSync(["git", "branch", "--show-current"], { cwd: workspace });
-		const branch = gitBranch.stdout.toString().trim();
-		if (branch) parts.push(`<git_branch>${branch}</git_branch>`);
-		const gitStatus = Bun.spawnSync(["git", "status", "--short"], { cwd: workspace });
-		const status = gitStatus.stdout.toString().trim();
-		if (status) parts.push(`<git_status>\n${status}\n</git_status>`);
-	} catch {}
-	return parts.length > 0 ? parts.join("\n") : null;
-}
-
 // ── 组装完整 DomainMessage 序列（与 repl.ts 首轮一致） ──
 
+const contextFewshot = await buildContextFewshot(toolkit, workspace, resolve(workspace, ".temp"));
 const domainMessages: DomainMessage[] = [
 	{ type: "system", content: systemPrompt },
-	...buildFewshotMessages(),
+	{ type: "cache_breakpoint" } as DomainMessage,
+	...contextFewshot,
 	{
 		type: "user_input",
 		content: userMessage,
-		context: gatherContextSync(),
+		context: null,
 		hint: null,
 	},
 ];
@@ -213,8 +179,7 @@ await Bun.write(outPath, output);
 // 摘要统计
 const toolDefChars = toolDefs.reduce((s, t) => s + t.description.length + JSON.stringify(t.parameters).length, 0);
 const systemChars = systemPrompt.length;
-const fewshotMsgs = buildFewshotMessages();
-const fewshotFormatted = formatPrompt(fewshotMsgs, modelId);
+const fewshotFormatted = formatPrompt(contextFewshot, modelId);
 const fewshotChars = fewshotFormatted.reduce((s, m) => {
 	let c = m.content.length;
 	if (m.role === "assistant" && "toolCalls" in m && m.toolCalls) c += JSON.stringify(m.toolCalls).length;
@@ -226,7 +191,7 @@ console.log("");
 console.log("Token budget breakdown (approx):");
 console.log(`  System prompt:    ~${Math.round(systemChars / 4).toLocaleString()} tokens (${systemChars.toLocaleString()} chars)`);
 console.log(`  Tool definitions: ~${Math.round(toolDefChars / 4).toLocaleString()} tokens (${toolDefs.length} tools)`);
-console.log(`  Fewshot examples: ~${Math.round(fewshotChars / 4).toLocaleString()} tokens (${fewshotMsgs.length} messages → ${fewshotFormatted.length} prompt messages)`);
+console.log(`  Fewshot examples: ~${Math.round(fewshotChars / 4).toLocaleString()} tokens (${contextFewshot.length} messages → ${fewshotFormatted.length} prompt messages)`);
 console.log(`  User input:       ~${Math.round(userMessage.length / 4)} tokens`);
 console.log(`  ────────────────────────────`);
 console.log(`  Total prefix:     ~${Math.round(totalChars / 4).toLocaleString()} tokens (${totalChars.toLocaleString()} chars)`);
