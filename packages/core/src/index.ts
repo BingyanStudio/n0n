@@ -18,7 +18,7 @@ export type {
 	RuntimeOptions,
 	SecurityConfig,
 } from "./runtime.ts";
-export { createRuntimeContext, getRuntime, initRuntime } from "./runtime.ts";
+export { buildToolsConfig, createRuntimeContext, getRuntime, initRuntime } from "./runtime.ts";
 
 // PlainRenderer（供需要默认渲染器的场景）
 export { PlainRenderer } from "./ui/renderer.ts";

@@ -9,7 +9,7 @@
  */
 
 import type { LLMClient } from "@n0n/types";
-import type { ResponsesClient } from "@n0n/tools";
+import type { ResponsesClient, ToolsConfig } from "@n0n/tools";
 
 // ── 类型 ──
 
@@ -97,4 +97,29 @@ export function getRuntime(): RuntimeContext {
 /** 设置运行时上下文。各 app 入口调用。 */
 export function initRuntime(runtime: RuntimeContext): void {
 	_runtime = runtime;
+}
+
+/** 从 RuntimeContext + 工作区路径构建 ToolsConfig — 供 app 层调用 makeToolkit 使用 */
+export function buildToolsConfig(
+	runtime: RuntimeContext,
+	paths: { workspace: string; tempDir: string },
+): ToolsConfig {
+	const base = {
+		security: runtime.security,
+		agent: runtime.agent,
+		workspace: paths.workspace,
+		tempDir: paths.tempDir,
+	};
+	if (runtime.editBackend.type === "freeform-patch") {
+		return {
+			...base,
+			editBackendType: "freeform-patch",
+			responsesClient: runtime.editBackend.responsesClient,
+		};
+	}
+	return {
+		...base,
+		editBackendType: "str-replace",
+		editorClient: runtime.editBackend.editorClient,
+	};
 }

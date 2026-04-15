@@ -9,11 +9,13 @@ import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
 import {
 	agentLoop,
+	buildToolsConfig,
 	createRuntimeContext,
 	initRuntime,
 	PlainRenderer,
 } from "@n0n/core";
 import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
+import { makeToolkit } from "@n0n/tools";
 import { parseWorkspaceArg } from "@n0n/shared";
 import type { DomainMessage } from "@n0n/types";
 import { type FairyResponse, FairyResponseSchema } from "./schema.ts";
@@ -60,6 +62,11 @@ async function main(): Promise<void> {
 		new Promise((resolve) => rl.question(query, resolve));
 
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
+	const toolsConfig = buildToolsConfig(runtime, {
+		workspace: paths.workspace,
+		tempDir: paths.temp,
+	});
+	const toolkit = await makeToolkit(FairyResponseSchema, toolsConfig, runtime.client.modelId);
 
 	let abortController = new AbortController();
 	let agentRunning = false;
@@ -106,14 +113,11 @@ async function main(): Promise<void> {
 		let agentResult: Awaited<ReturnType<typeof agentLoop<FairyResponse>>>;
 		try {
 			agentResult = await agentLoop<FairyResponse>(viewMessages, {
+				toolkit,
 				maxIterations: 30,
 				renderer,
 				schema: FairyResponseSchema,
 				signal: abortController.signal,
-				toolsWorkspace: {
-					workspace: paths.workspace,
-					tempDir: paths.temp,
-				},
 			});
 		} catch (err) {
 			writeln();

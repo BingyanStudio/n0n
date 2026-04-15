@@ -5,9 +5,10 @@
  * 仍走 agentLoop 路径，模型可自主使用工具。
  */
 
-import { agentLoop } from "@n0n/core";
+import { agentLoop, buildToolsConfig, getRuntime } from "@n0n/core";
 import type { BaseWorkspacePaths } from "@n0n/shared";
 import type { DomainMessage } from "@n0n/types";
+import { makeToolkit } from "@n0n/tools";
 import type { ZodType } from "zod";
 
 export interface GenerateOptions<T = unknown> {
@@ -43,13 +44,17 @@ export async function generate<T = unknown>(
 		},
 	];
 
+	const runtime = getRuntime();
+	const toolsConfig = buildToolsConfig(runtime, {
+		workspace: options.paths.workspace,
+		tempDir: options.paths.temp,
+	});
+	const toolkit = await makeToolkit(options?.schema, toolsConfig, runtime.client.modelId);
+
 	const result = await agentLoop<T>(history, {
+		toolkit,
 		schema: options?.schema,
 		maxIterations: options?.maxIterations ?? 15,
-		toolsWorkspace: {
-			workspace: options.paths.workspace,
-			tempDir: options.paths.temp,
-		},
 	});
 
 	return {

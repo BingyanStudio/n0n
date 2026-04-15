@@ -9,9 +9,10 @@
 
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
-import { agentLoop, PlainRenderer } from "@n0n/core";
+import { agentLoop, buildToolsConfig, getRuntime, PlainRenderer } from "@n0n/core";
 import { loadSchedules } from "@n0n/scheduler";
 import { formatAgentsMdPrompt, loadAgentsMd } from "@n0n/shared";
+import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import {
 	discoverWorkflows,
@@ -111,6 +112,16 @@ export async function startRepl(
 		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
 	}
 	const renderer = isTTY ? new RichRenderer() : new PlainRenderer();
+	const runtime = getRuntime();
+	const toolsConfig = buildToolsConfig(runtime, {
+		workspace: paths.workspace,
+		tempDir: paths.temp,
+	});
+	const toolkit = await makeToolkit(
+		InteractiveResultSchema,
+		toolsConfig,
+		runtime.client.modelId,
+	);
 
 	const rl = createInterface({
 		input: process.stdin,
@@ -188,12 +199,12 @@ export async function startRepl(
 		let agentResult: Awaited<ReturnType<typeof agentLoop<InteractiveResult>>>;
 		try {
 			agentResult = await agentLoop<InteractiveResult>(history, {
+				toolkit,
 				maxIterations: 30,
 				renderer,
 				confirmFn,
 				schema: InteractiveResultSchema,
 				signal: abortController.signal,
-				toolsWorkspace: { workspace: paths.workspace, tempDir: paths.temp },
 			});
 		} catch (err) {
 			writeln();

@@ -10,7 +10,7 @@
  * 4. 根据结果更新卡片和 session history
  */
 
-import { agentLoop } from "@n0n/core";
+import { agentLoop, buildToolsConfig, getRuntime } from "@n0n/core";
 import { loadSchedules } from "@n0n/scheduler";
 import {
 	discoverSkills,
@@ -18,6 +18,7 @@ import {
 	formatSkillSummaries,
 	loadAgentsMd,
 } from "@n0n/shared";
+import { makeToolkit } from "@n0n/tools";
 import {
 	discoverWorkflows,
 	type InteractiveResult,
@@ -89,15 +90,22 @@ export async function runFeishuRound(
 	});
 
 	// 3. 执行 agent loop（传入 per-user workspace 隔离 exec cwd/temp）
+	const runtime = getRuntime();
+	const toolsConfig = buildToolsConfig(runtime, {
+		workspace: session.paths.workspace,
+		tempDir: session.paths.temp,
+	});
+	const toolkit = await makeToolkit(
+		InteractiveResultSchema,
+		toolsConfig,
+		runtime.client.modelId,
+	);
 	const result = await agentLoop<InteractiveResult>(session.history, {
+		toolkit,
 		maxIterations: 30,
 		renderer,
 		schema: InteractiveResultSchema,
 		signal: abortController.signal,
-		toolsWorkspace: {
-			workspace: session.paths.workspace,
-			tempDir: session.paths.temp,
-		},
 	});
 
 	if (abortController.signal.aborted) {
