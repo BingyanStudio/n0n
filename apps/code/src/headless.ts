@@ -7,15 +7,12 @@
  * 输出 JSON 结果到 stdout，日志输出到 stderr。
  */
 
-import { agentLoop, PlainRenderer } from "@n0n/core";
-import {
-	type BaseWorkspacePaths,
-	formatAgentsMdPrompt,
-	loadAgentsMd,
-} from "@n0n/shared";
+import { agentLoop, getRuntime, PlainRenderer } from "@n0n/core";
+import { makeToolkit, type ToolsConfig } from "@n0n/tools";
+import { type BaseWorkspacePaths } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
-import { buildFewshotMessages } from "./fewshot.ts";
+import { buildContextFewshot } from "./context-fewshot.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
 export interface HeadlessOptions {
@@ -46,19 +43,6 @@ export interface HeadlessResult {
 	error: string | null;
 }
 
-function buildEnvironmentSection(workspace: string): string {
-	return [
-		"",
-		"# Environment",
-		"",
-		`- Working directory: \`${workspace}\``,
-		"- All tool paths resolve relative to this directory.",
-		"",
-		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
-		"Read existing code before modifying it to understand project structure.",
-	].join("\n");
-}
-
 function buildHeadlessHint(): string {
 	return [
 		"You are running in HEADLESS mode — there is no human to interact with.",
@@ -67,27 +51,6 @@ function buildHeadlessHint(): string {
 		"First, use `exec` to understand the codebase, then implement the fix, then verify.",
 		"Submit `completed` when done.",
 	].join("\n");
-}
-
-async function gatherContext(workspace: string): Promise<string | null> {
-	const parts: string[] = [];
-	try {
-		const gitStatus = Bun.spawnSync(["git", "status", "--short"], {
-			cwd: workspace,
-		});
-		const status = gitStatus.stdout.toString().trim();
-		if (status) {
-			parts.push(`<git_status>\n${status}\n</git_status>`);
-		}
-		const gitBranch = Bun.spawnSync(["git", "branch", "--show-current"], {
-			cwd: workspace,
-		});
-		const branch = gitBranch.stdout.toString().trim();
-		if (branch) {
-			parts.push(`<git_branch>${branch}</git_branch>`);
-		}
-	} catch {}
-	return parts.length > 0 ? parts.join("\n") : null;
 }
 
 function injectUserResponse(history: DomainMessage[], response: string): void {
@@ -119,11 +82,6 @@ export async function runHeadless(
 	if (systemPromptPrefix) {
 		systemPrompt = `${systemPromptPrefix}\n\n${systemPrompt}`;
 	}
-	const agentsMd = await loadAgentsMd(paths.workspace);
-	if (agentsMd) {
-		systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
-	}
-	systemPrompt += buildEnvironmentSection(paths.workspace);
 
 	const renderer = new PlainRenderer();
 	const abortController = new AbortController();
@@ -131,13 +89,40 @@ export async function runHeadless(
 	// 超时控制
 	const timer = setTimeout(() => abortController.abort(), timeoutMs);
 
+	// 构建动态 bootstrap fewshot
+	const runtime = getRuntime();
+	const bootstrapToolsConfig: ToolsConfig = runtime.editBackend.type === "freeform-patch"
+		? {
+				editBackendType: "freeform-patch",
+				responsesClient: runtime.editBackend.responsesClient,
+				security: runtime.security,
+				agent: runtime.agent,
+				workspace: paths.workspace,
+				tempDir: paths.temp,
+			}
+		: {
+				editBackendType: "str-replace",
+				editorClient: runtime.editBackend.editorClient,
+				security: runtime.security,
+				agent: runtime.agent,
+				workspace: paths.workspace,
+				tempDir: paths.temp,
+			};
+	const bootstrapToolkit = await makeToolkit(undefined, bootstrapToolsConfig);
+	const contextFewshot = await buildContextFewshot(
+		bootstrapToolkit,
+		paths.workspace,
+		paths.temp,
+	);
+
 	let history: DomainMessage[] = [
 		{ type: "system", content: systemPrompt },
-		...buildFewshotMessages(),
+		{ type: "cache_breakpoint" },
+		...contextFewshot,
 		{
 			type: "user_input",
 			content: instruction,
-			context: await gatherContext(paths.workspace),
+			context: null,
 			hint: buildHeadlessHint(),
 		},
 	];

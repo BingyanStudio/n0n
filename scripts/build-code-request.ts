@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 
 import codePromptText from "../apps/code/src/prompts/code.md" with { type: "text" };
 import { CodeResultSchema } from "../apps/code/src/schema.ts";
-import { buildFewshotMessages } from "../apps/code/src/fewshot.ts";
+import { buildContextFewshot } from "../apps/code/src/context-fewshot.ts";
 
 // ── 参数 ──
 
@@ -27,31 +27,7 @@ const userArg = (() => {
 // ── 构建 system prompt（与 repl.ts 一致） ──
 
 const workspace = process.cwd();
-
-function buildEnvironmentSection(ws: string): string {
-	return [
-		"",
-		"# Environment",
-		"",
-		`- Working directory: \`${ws}\``,
-		"- All tool paths resolve relative to this directory:",
-		"  - `exec` scripts run with cwd = working directory",
-		"  - `write` / `edit` relative paths resolve against working directory",
-		"",
-		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
-		"Read existing code before modifying it to understand project structure.",
-	].join("\n");
-}
-
-let systemPrompt = codePromptText;
-
-// 尝试加载 AGENTS.md
-import { formatAgentsMdPrompt, loadAgentsMd } from "@n0n/shared";
-const agentsMd = await loadAgentsMd(workspace);
-if (agentsMd) {
-	systemPrompt += `\n\n${formatAgentsMdPrompt(agentsMd)}`;
-}
-systemPrompt += buildEnvironmentSection(workspace);
+const systemPrompt = codePromptText;
 
 // ── 构建 tool definitions ──
 
@@ -71,28 +47,14 @@ const toolDefinitions: ToolDefinition[] = toolkit.tools;
 
 // ── 构建 messages（模拟首轮请求） ──
 
-// 模拟 gatherContext
-function gatherContextSync(): string | null {
-	const parts: string[] = [];
-	try {
-		const gitBranch = Bun.spawnSync(["git", "branch", "--show-current"], { cwd: workspace });
-		const branch = gitBranch.stdout.toString().trim();
-		if (branch) parts.push(`<git_branch>${branch}</git_branch>`);
-
-		const gitStatus = Bun.spawnSync(["git", "status", "--short"], { cwd: workspace });
-		const status = gitStatus.stdout.toString().trim();
-		if (status) parts.push(`<git_status>\n${status}\n</git_status>`);
-	} catch {}
-	return parts.length > 0 ? parts.join("\n") : null;
-}
-
 const domainMessages: DomainMessage[] = [
 	{ type: "system", content: systemPrompt },
-	...buildFewshotMessages(),
+	{ type: "cache_breakpoint" } as DomainMessage,
+	...(await buildContextFewshot(toolkit, workspace, resolve(workspace, ".temp"))),
 	{
 		type: "user_input",
 		content: userArg!,
-		context: gatherContextSync(),
+		context: null,
 		hint: null,
 	},
 ];
