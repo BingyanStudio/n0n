@@ -5,13 +5,14 @@
  */
 
 import { resolve } from "node:path";
-import { agentLoop } from "@n0n/core";
+import { agentLoop, buildToolsConfig, getRuntime } from "@n0n/core";
 import {
 	discoverSkills,
 	formatAgentsMdPrompt,
 	formatSkillSummaries,
 	loadAgentsMd,
 } from "@n0n/shared";
+import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 import delegatePromptText from "../prompts/delegate.md" with { type: "text" };
@@ -72,12 +73,19 @@ export async function delegateTask<T = unknown>(
 					].join("\n"),
 				},
 			];
+			const consultRuntime = getRuntime();
+			const consultToolsConfig = buildToolsConfig(consultRuntime, {
+				workspace: resolvedPaths.workspace,
+				tempDir: resolvedPaths.temp,
+			});
+			const consultToolkit = await makeToolkit(
+				undefined,
+				consultToolsConfig,
+				consultRuntime.client.modelId,
+			);
 			const consultResult = await agentLoop(consultHistory, {
+				toolkit: consultToolkit,
 				maxIterations: 15,
-				toolsWorkspace: {
-					workspace: resolvedPaths.workspace,
-					tempDir: resolvedPaths.temp,
-				},
 			});
 			consultAdvice =
 				typeof consultResult.result === "string"
@@ -137,13 +145,21 @@ export async function delegateTask<T = unknown>(
 		{ type: "generic_user_text", content: enrichedPrompt },
 	];
 
+	const runtime = getRuntime();
+	const mainToolsConfig = buildToolsConfig(runtime, {
+		workspace: resolvedPaths.workspace,
+		tempDir: resolvedPaths.temp,
+	});
+	const mainToolkit = await makeToolkit(
+		options?.schema,
+		mainToolsConfig,
+		runtime.client.modelId,
+	);
+
 	const result = await agentLoop(history, {
+		toolkit: mainToolkit,
 		schema: options?.schema,
 		maxIterations: options?.maxIterations,
-		toolsWorkspace: {
-			workspace: resolvedPaths.workspace,
-			tempDir: resolvedPaths.temp,
-		},
 	});
 
 	return {

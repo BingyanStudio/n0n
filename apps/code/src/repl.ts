@@ -14,12 +14,13 @@ import { resolve } from "node:path";
 import { isTTY, label, style, writeln } from "@n0n/cli-ui";
 import {
 	agentLoop,
+	buildToolsConfig,
 	getRuntime,
 	HeartbeatKeeper,
 	HeartbeatState,
 	PlainRenderer,
 } from "@n0n/core";
-import { makeToolkit, type ToolsConfig } from "@n0n/tools";
+import { makeToolkit } from "@n0n/tools";
 import { readMultilineInput } from "@n0n/multiline-input";
 import {
 	type BaseWorkspacePaths,
@@ -133,28 +134,16 @@ export async function startCodeRepl(
 
 	// 基础系统提示词（稳定前缀，不含 agents.md 和环境信息）
 	const baseSystemPrompt = codePromptText;
-	// 构建动态 bootstrap fewshot — 用临时 toolkit 真实执行环境扫描
+
+	// 构建 Toolkit — 含 CodeResultSchema，供 fewshot 和 agentLoop 共用
 	const runtime = getRuntime();
-	const bootstrapToolsConfig: ToolsConfig = runtime.editBackend.type === "freeform-patch"
-		? {
-				editBackendType: "freeform-patch",
-				responsesClient: runtime.editBackend.responsesClient,
-				security: runtime.security,
-				agent: runtime.agent,
-				workspace: paths.workspace,
-				tempDir: paths.temp,
-			}
-		: {
-				editBackendType: "str-replace",
-				editorClient: runtime.editBackend.editorClient,
-				security: runtime.security,
-				agent: runtime.agent,
-				workspace: paths.workspace,
-				tempDir: paths.temp,
-			};
-	const bootstrapToolkit = await makeToolkit(undefined, bootstrapToolsConfig);
+	const toolsConfig = buildToolsConfig(runtime, {
+		workspace: paths.workspace,
+		tempDir: paths.temp,
+	});
+	const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, runtime.client.modelId);
 	const contextFewshot = await buildContextFewshot(
-		bootstrapToolkit,
+		toolkit,
 		paths.workspace,
 		paths.temp,
 	);
@@ -386,12 +375,12 @@ export async function startCodeRepl(
 		let agentResult: Awaited<ReturnType<typeof agentLoop<CodeResult>>>;
 		try {
 			agentResult = await agentLoop<CodeResult>(history, {
+				toolkit,
+				schema: CodeResultSchema,
 				maxIterations: 100,
 				renderer,
 				confirmFn,
-				schema: CodeResultSchema,
 				signal: stdin?.abortController.signal,
-				toolsWorkspace: { workspace: paths.workspace, tempDir: paths.temp },
 			});
 		} catch (err) {
 			writeln();

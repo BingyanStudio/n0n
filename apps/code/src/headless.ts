@@ -7,8 +7,8 @@
  * 输出 JSON 结果到 stdout，日志输出到 stderr。
  */
 
-import { agentLoop, getRuntime, PlainRenderer } from "@n0n/core";
-import { makeToolkit, type ToolsConfig } from "@n0n/tools";
+import { agentLoop, buildToolsConfig, getRuntime, PlainRenderer } from "@n0n/core";
+import { makeToolkit } from "@n0n/tools";
 import { type BaseWorkspacePaths } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import codePromptText from "./prompts/code.md" with { type: "text" };
@@ -89,28 +89,15 @@ export async function runHeadless(
 	// 超时控制
 	const timer = setTimeout(() => abortController.abort(), timeoutMs);
 
-	// 构建动态 bootstrap fewshot
+	// 构建 Toolkit — 含 CodeResultSchema，供 fewshot 和 agentLoop 共用
 	const runtime = getRuntime();
-	const bootstrapToolsConfig: ToolsConfig = runtime.editBackend.type === "freeform-patch"
-		? {
-				editBackendType: "freeform-patch",
-				responsesClient: runtime.editBackend.responsesClient,
-				security: runtime.security,
-				agent: runtime.agent,
-				workspace: paths.workspace,
-				tempDir: paths.temp,
-			}
-		: {
-				editBackendType: "str-replace",
-				editorClient: runtime.editBackend.editorClient,
-				security: runtime.security,
-				agent: runtime.agent,
-				workspace: paths.workspace,
-				tempDir: paths.temp,
-			};
-	const bootstrapToolkit = await makeToolkit(undefined, bootstrapToolsConfig);
+	const toolsConfig = buildToolsConfig(runtime, {
+		workspace: paths.workspace,
+		tempDir: paths.temp,
+	});
+	const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, runtime.client.modelId);
 	const contextFewshot = await buildContextFewshot(
-		bootstrapToolkit,
+		toolkit,
 		paths.workspace,
 		paths.temp,
 	);
@@ -134,15 +121,12 @@ export async function runHeadless(
 	try {
 		while (true) {
 			const agentResult = await agentLoop<CodeResult>(history, {
+				toolkit,
+				schema: CodeResultSchema,
 				maxIterations,
 				renderer,
 				confirmFn: async () => "y",
-				schema: CodeResultSchema,
 				signal: abortController.signal,
-				toolsWorkspace: {
-					workspace: paths.workspace,
-					tempDir: paths.temp,
-				},
 			});
 
 			history = agentResult.history;

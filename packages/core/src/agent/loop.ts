@@ -9,8 +9,8 @@
  * scheduler 通过回调发射 raw 无序事件，排序由各 Renderer 实现自行决定。
  */
 
-import type { PendingReminder, ToolsConfig } from "@n0n/tools";
-import { makeToolkit } from "@n0n/tools";
+import type { PendingReminder } from "@n0n/tools";
+import type { Toolkit } from "@n0n/tools";
 import type {
 	DomainMessage,
 	PartialToolCallRecord,
@@ -44,12 +44,14 @@ export interface AgentResult<T = unknown> {
 }
 
 export interface AgentOptions<T = unknown> {
-	maxIterations?: number;
+	/** 工具集实例 — 由 app 层通过 makeToolkit 构造并注入 */
+	toolkit: Toolkit;
+	/** submit 结果的 Zod schema（用于 checkSubmit 后验证） */
 	schema?: ZodType<T>;
+	maxIterations?: number;
 	renderer?: Renderer;
 	confirmFn?: (question: string) => Promise<string>;
 	signal?: AbortSignal;
-	toolsWorkspace?: { workspace: string; tempDir: string };
 }
 
 const MAX_SUBMIT_RETRIES = 4;
@@ -58,42 +60,13 @@ const MAX_SUBMIT_RETRIES = 4;
 
 export async function agentLoop<T = unknown>(
 	history: DomainMessage[],
-	options?: AgentOptions<T>,
+	options: AgentOptions<T>,
 ): Promise<AgentResult<T>> {
 	const runtime = getRuntime();
-	const maxIter = options?.maxIterations ?? runtime.agent.maxIterations;
-	const renderer: Renderer = options?.renderer ?? new PlainRenderer();
+	const maxIter = options.maxIterations ?? runtime.agent.maxIterations;
+	const renderer: Renderer = options.renderer ?? new PlainRenderer();
 	const client = runtime.client;
-	const workspacePaths = options?.toolsWorkspace ?? {
-		workspace: process.cwd(),
-		tempDir: ".temp",
-	};
-	const toolsConfig: ToolsConfig = runtime.editBackend.type === "freeform-patch"
-		? {
-			editBackendType: "freeform-patch",
-			responsesClient: runtime.editBackend.responsesClient,
-			security: runtime.security,
-			agent: runtime.agent,
-			...workspacePaths,
-		}
-		: {
-			editBackendType: "str-replace",
-			editorClient: runtime.editBackend.editorClient,
-			security: runtime.security,
-			agent: runtime.agent,
-			...workspacePaths,
-		};
-	// TODO: toolkit 应改为依赖注入，由 app 层创建并持有。
-	// 当前 agentLoop 内部构造 toolkit，导致：
-	// 1. app 层无法复用 toolkit（context-fewshot 被迫单独创建临时 toolkit）
-	// 2. submit schema 必须通过 options 间接传入 makeToolkit，而非 app 层直接控制
-	// 3. 未来如需定制工具（增删/替换工具实现），必须侵入 core 层
-	// 改法：agentLoop 接收 Toolkit 实例，makeToolkit 调用上移到 app 层（repl/headless）。
-	const toolkit = await makeToolkit(
-		options?.schema,
-		toolsConfig,
-		client.modelId,
-	);
+	const toolkit = options.toolkit;
 	const messages: DomainMessage[] = [...history];
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
@@ -107,7 +80,7 @@ export async function agentLoop<T = unknown>(
 	};
 
 	for (let iter = 0; iter < maxIter; iter++) {
-		if (options?.signal?.aborted) {
+		if (options.signal?.aborted) {
 			renderer.aborted();
 			return { result: null, report: null, history: messages, tools: toolkit.tools };
 		}
@@ -117,23 +90,23 @@ export async function agentLoop<T = unknown>(
 
 		// ── 1. 流式解析 + 并行执行（交织进行） ──
 		const scheduler = new ExecutionScheduler(
-			(tc) => executeToolStream(tc, reminders, options?.confirmFn, toolkit.getEntry),
+			(tc) => executeToolStream(tc, reminders, options.confirmFn, toolkit.getEntry),
 			{
 				onRegister: (tc) => renderer.toolExecStart(tc.id, tc),
 				onChunk: (tcId, tool, chunk) => renderer.toolExecChunk(tcId, tool, chunk),
 				onEnd: (tcId, outcome) => renderer.toolExecEnd(tcId, outcome),
 			},
 		);
-		const runPromise = scheduler.run(options?.signal);
+		const runPromise = scheduler.run(options.signal);
 
 		let streamResult: StreamingResult | null = null;
 
 		for await (const event of parseStream(
 			client.stream(
 				{ messages, tools: toolkit.tools, toolChoice: "auto" },
-				options?.signal,
+				options.signal,
 			),
-			options?.signal,
+			options.signal,
 		)) {
 			switch (event.type) {
 				// 渲染分发
@@ -280,7 +253,7 @@ export async function agentLoop<T = unknown>(
 		// ── 7. Submit 检查 ──
 		const submit = checkSubmit(
 			scheduler.orderedJobs(),
-			options?.schema,
+			options.schema,
 			submitRetries,
 			MAX_SUBMIT_RETRIES,
 		);
