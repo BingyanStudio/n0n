@@ -282,6 +282,7 @@ export async function buildContextFewshot(
 		args: {
 			type: "completed",
 			summary: submitSummary,
+			next_step: "等待指令。如有需要可随时查看上述环境信息。",
 		},
 	};
 
