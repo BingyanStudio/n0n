@@ -28,6 +28,9 @@ function submitPair(
 	id: string,
 	args: SubmitCallArgs,
 ): [DomainMessage, DomainMessage] {
+	// TODO
+	// args as any → 应给 call 一个更精确的类型，避免 as any 绕过类型检查
+	// ODOT
 	const call = { id, tool: "submit" as const, args: args as any };
 	return [
 		{
@@ -43,6 +46,9 @@ function submitPair(
 			call,
 			cleanedResult: args,
 			userResponse: undefined,
+			// TODO
+			// } as DomainMessage → 改用 satisfies DomainMessage 让编译器验证字段完整性
+			// ODOT
 		} as DomainMessage,
 	];
 }

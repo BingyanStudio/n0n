@@ -92,6 +92,9 @@ export async function agentLoop<T = unknown>(
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
 	let submitRetries = 0;
+	// TODO
+	// null as TokenUsage | null → 直接用类型注解: let lastUsage: TokenUsage | null = null;
+	// ODOT
 	let lastUsage = null as TokenUsage | null;
 
 	for (let iter = 0; iter < maxIter; iter++) {

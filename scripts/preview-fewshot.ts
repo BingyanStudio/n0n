@@ -64,6 +64,9 @@ const toolsConfig = {
 	tempDir: resolve(workspace, ".temp"),
 	security: { blockedCommands: [] as string[] },
 	agent: { defaultExecTimeout: 120 },
+	// TODO
+	// null as any → 同 build-code-request.ts，应给 ToolsConfig 的 editorClient 一个允许 null 的类型
+	// ODOT
 	editBackendType: "str-replace" as const,
 	editorClient: null as any,
 };

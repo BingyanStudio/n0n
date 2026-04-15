@@ -95,5 +95,10 @@ export function loadConversation(filePath: string): ConversationLog {
 		throw new Error(`Invalid conversation log: missing history array`);
 	}
 
+	// TODO
+	// parsed as ConversationLog → JSON.parse 结果未经运行时验证。
+	// 上方仅检查了 history 数组存在，但未验证完整结构。
+	// 考虑用 zod 或手动检查关键字段后再断言。
+	// ODOT
 	return parsed as ConversationLog;
 }

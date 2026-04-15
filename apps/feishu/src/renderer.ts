@@ -56,6 +56,9 @@ function fmtToolCall(tc: ToolCallRecord): { summary: string; detail: string } {
 			summary = `▸ **edit**  ${compact(tc.args.path, 80)}  ${compact(tc.args.intent, 60)}`;
 			break;
 		default: {
+			// TODO
+			// tc as ToolCallRecord → tc 可能是 PartialToolCallRecord，应通过类型守卫或判别字段窄化
+			// ODOT
 			const unknown = tc as ToolCallRecord;
 			summary = `▸ **${unknown.tool}**`;
 		}

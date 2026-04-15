@@ -106,6 +106,9 @@ export async function recoverPartialCalls(
 			const placeholderCall = {
 				id: partial.toolCallId,
 				tool: partial.toolName,
+				// TODO
+				// {} as Record<string, never> → 用类型注解: 给 placeholderCall 加显式类型标注
+				// ODOT
 				args: {} as Record<string, never>,
 			};
 			pairs.push({

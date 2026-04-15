@@ -42,6 +42,9 @@ export function parseToolCalls(raw: AssistantToolCallPart[]): ToolCallRecord[] {
 			id: tc.toolCallId,
 			tool: tc.toolName,
 			args,
+			// TODO
+			// 对象字面量 as ToolCallRecord → 改用 satisfies ToolCallRecord 让编译器验证字段完整性
+			// ODOT
 		} as ToolCallRecord;
 	});
 }
@@ -69,6 +72,9 @@ export async function* executeToolStream(
 				id: tc.id,
 				tool: "exec" as const,
 				args: { script: "" },
+				// TODO
+				// as ExecToolCall → 改用 satisfies ExecToolCall
+				// ODOT
 			} as ExecToolCall,
 			status: "completed" as const,
 			exitCode: 1,
@@ -96,6 +102,9 @@ export async function* executeToolStream(
 				error: err.issues
 					.map((i) => `${i.path.join(".")}: ${i.message}`)
 					.join("; "),
+				// TODO
+				// as Record<string, unknown> | undefined → 收紧 ToolDefinition.parameters 的类型定义
+				// ODOT
 				schema: toolDef?.parameters as Record<string, unknown> | undefined,
 			};
 			yield argError;

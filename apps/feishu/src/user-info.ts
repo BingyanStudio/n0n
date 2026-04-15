@@ -26,6 +26,9 @@ export async function ensureUserInfo(
 	// 检查是否已有且未过期
 	if (existsSync(filePath)) {
 		try {
+			// TODO
+			// JSON.parse(...) as FeishuUserInfo → 磁盘文件可能损坏，应验证关键字段后再断言
+			// ODOT
 			const existing = JSON.parse(
 				await Bun.file(filePath).text(),
 			) as FeishuUserInfo;

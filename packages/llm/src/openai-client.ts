@@ -162,6 +162,11 @@ function toOpenAIMessages(
 		}
 
 		if (backendProvider === "anthropic" && msg.cacheBreakpoint && result[result.length - 1]) {
+			// TODO
+			// double cast (as unknown as Record) 为 Anthropic cache_control 字段。
+			// 应扩展消息类型定义以包含可选 cache_control 字段，消除 double cast。
+			// 下方的同类 cast 同理。
+			// ODOT
 			(result[result.length - 1] as unknown as Record<string, unknown>).cache_control = {
 				type: "ephemeral",
 			};

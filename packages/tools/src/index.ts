@@ -235,6 +235,9 @@ export async function makeToolkit(
 			const call: SubmitToolCall = {
 				id: tc.id,
 				tool: "submit" as const,
+				// TODO
+				// tc.args as SubmitArgs → 收紧 tc 的类型，或在 submit 分支前用类型守卫确认
+				// ODOT
 				args: tc.args as SubmitArgs,
 			};
 			return submitTool(call);

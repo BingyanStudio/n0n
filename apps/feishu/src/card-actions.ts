@@ -124,6 +124,10 @@ export async function handleCardAction(
 async function onWorkflowRun(
 	ctx: CardActionContext,
 ): Promise<CardActionResponse | undefined> {
+	// TODO
+	// ctx.value.name as string → CardActionValue 的索引签名返回 unknown，
+	// 应添加类型守卫或收紧 CardActionValue 类型定义。onCronToggle、onCronRun 的同类 cast 同理。
+	// ODOT
 	const name = ctx.value.name as string;
 	if (!name) return undefined;
 

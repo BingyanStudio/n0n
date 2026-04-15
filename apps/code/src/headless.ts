@@ -94,6 +94,9 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 	for (let i = history.length - 1; i >= 0; i--) {
 		const msg = history[i];
 		if (msg?.type === "tool_result" && "tool" in msg && msg.tool === "submit") {
+			// TODO
+			// msg as SubmitToolResult → 应通过判别联合窄化 (msg.tool === "submit") 自动收窄类型
+			// ODOT
 			(msg as SubmitToolResult).userResponse = response;
 			return;
 		}
