@@ -19,18 +19,17 @@ import {
 	HeartbeatState,
 	PlainRenderer,
 } from "@n0n/core";
+import { makeToolkit, type ToolsConfig } from "@n0n/tools";
 import { readMultilineInput } from "@n0n/multiline-input";
 import {
 	type BaseWorkspacePaths,
-	formatAgentsMdPrompt,
-	loadAgentsMd,
 	loadConversation,
 	saveConversation,
 } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { CodeRenderer } from "./code-renderer.ts";
 import codePromptText from "./prompts/code.md" with { type: "text" };
-import { buildFewshotMessages } from "./fewshot.ts";
+import { buildContextFewshot } from "./context-fewshot.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 import { playNotifySound } from "./notify-sound.ts";
 import { formatSubmitResult } from "./submit-formatter.ts";
@@ -42,44 +41,6 @@ export interface CodeReplOptions {
 }
 
 type CodeWorkspacePaths = BaseWorkspacePaths;
-
-// ── 辅助函数（无 stdin 交互） ──
-
-function buildEnvironmentSection(workspace: string): string {
-	return [
-		"",
-		"# Environment",
-		"",
-		`- Working directory: \`${workspace}\``,
-		"- All tool paths resolve relative to this directory:",
-		"  - `exec` scripts run with cwd = working directory",
-		"  - `write` / `edit` relative paths resolve against working directory",
-		"",
-		"Use relative paths (e.g. `src/utils.ts`) — they will resolve correctly.",
-		"Read existing code before modifying it to understand project structure.",
-	].join("\n");
-}
-
-async function gatherContext(workspace: string): Promise<string | null> {
-	const parts: string[] = [];
-	try {
-		const gitStatus = Bun.spawnSync(["git", "status", "--short"], {
-			cwd: workspace,
-		});
-		const status = gitStatus.stdout.toString().trim();
-		if (status) {
-			parts.push(`<git_status>\n${status}\n</git_status>`);
-		}
-		const gitBranch = Bun.spawnSync(["git", "branch", "--show-current"], {
-			cwd: workspace,
-		});
-		const branch = gitBranch.stdout.toString().trim();
-		if (branch) {
-			parts.push(`<git_branch>${branch}</git_branch>`);
-		}
-	} catch {}
-	return parts.length > 0 ? parts.join("\n") : null;
-}
 
 function injectUserResponse(history: DomainMessage[], response: string): void {
 	for (let i = history.length - 1; i >= 0; i--) {
@@ -97,14 +58,11 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 	}
 }
 
-async function makeUserInput(
-	content: string,
-	workspace: string,
-): Promise<DomainMessage> {
+function makeUserInput(content: string): DomainMessage {
 	return {
 		type: "user_input",
 		content,
-		context: await gatherContext(workspace),
+		context: null,
 		hint: null,
 	};
 }
@@ -175,14 +133,31 @@ export async function startCodeRepl(
 
 	// 基础系统提示词（稳定前缀，不含 agents.md 和环境信息）
 	const baseSystemPrompt = codePromptText;
-	// agents.md 和环境信息放在 fewshot 之后、缓存断点之后，避免影响前缀稳定性
-	const agentsMd = await loadAgentsMd(paths.workspace);
-	const dynamicSystemParts: string[] = [];
-	if (agentsMd) {
-		dynamicSystemParts.push(formatAgentsMdPrompt(agentsMd));
-	}
-	dynamicSystemParts.push(buildEnvironmentSection(paths.workspace));
-	const dynamicSystemPrompt = dynamicSystemParts.join("\n\n");
+	// 构建动态 bootstrap fewshot — 用临时 toolkit 真实执行环境扫描
+	const runtime = getRuntime();
+	const bootstrapToolsConfig: ToolsConfig = runtime.editBackend.type === "freeform-patch"
+		? {
+				editBackendType: "freeform-patch",
+				responsesClient: runtime.editBackend.responsesClient,
+				security: runtime.security,
+				agent: runtime.agent,
+				workspace: paths.workspace,
+				tempDir: paths.temp,
+			}
+		: {
+				editBackendType: "str-replace",
+				editorClient: runtime.editBackend.editorClient,
+				security: runtime.security,
+				agent: runtime.agent,
+				workspace: paths.workspace,
+				tempDir: paths.temp,
+			};
+	const bootstrapToolkit = await makeToolkit(undefined, bootstrapToolsConfig);
+	const contextFewshot = await buildContextFewshot(
+		bootstrapToolkit,
+		paths.workspace,
+		paths.temp,
+	);
 	// submit 结果文件编号（进程级，不随 renderer 生命周期绑定）
 	const submitSessionId = randomBytes(2).toString("hex");
 	let submitSeq = 0;
@@ -194,7 +169,7 @@ export async function startCodeRepl(
 	const stdin = isTTY ? createStdinController() : null;
 
 	// ── 心跳保活（仅 Anthropic 等支持 prompt caching 的 provider） ──
-	const client = getRuntime().client;
+	const client = runtime.client;
 	const keeper = client.heartbeat
 		? new HeartbeatKeeper({
 				sendHeartbeat: async (request) => {
@@ -340,19 +315,17 @@ export async function startCodeRepl(
 			userInput = initialInput ?? (await promptUser());
 			history = [
 				{ type: "system", content: baseSystemPrompt },
-				...buildFewshotMessages(),
 				{ type: "cache_breakpoint" },
-				{ type: "system", content: dynamicSystemPrompt },
+				...contextFewshot,
 			];
 		}
 	} else {
 		userInput = initialInput ?? (await promptUser());
 		history = [
-				{ type: "system", content: baseSystemPrompt },
-				...buildFewshotMessages(),
-				{ type: "cache_breakpoint" },
-				{ type: "system", content: dynamicSystemPrompt },
-			];
+			{ type: "system", content: baseSystemPrompt },
+			{ type: "cache_breakpoint" },
+			...contextFewshot,
+		];
 	}
 
 	while (true) {
@@ -402,7 +375,7 @@ export async function startCodeRepl(
 		// ── 将用户输入推入 history ──
 		// ── 停止心跳（agent 执行期间由 stream 自行刷新缓存） ──
 		keeper?.stop();
-		history.push(await makeUserInput(userInput, paths.workspace));
+		history.push(makeUserInput(userInput));
 
 		// ── Agent 运行阶段：切换到 agent phase ──
 		if (stdin) {
