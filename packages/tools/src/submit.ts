@@ -17,8 +17,7 @@ import type {
 	SubmitToolResult,
 	ToolDefinition,
 } from "@n0n/types";
-import { z, type ZodType } from "zod";
-import { toJSONSchema } from "zod";
+import { toJSONSchema, type ZodType, z } from "zod";
 
 // ── 默认 schema（无自定义 schema 时使用） ──
 

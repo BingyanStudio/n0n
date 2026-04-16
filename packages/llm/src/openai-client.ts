@@ -19,9 +19,9 @@ import type {
 	PromptMessage,
 	StreamEvent,
 	StreamRequest,
+	TagStyle,
 	TokenUsage,
 	ToolDefinition,
-	TagStyle,
 } from "@n0n/types";
 import type {
 	OpenAICompatibleProviderConfig,
@@ -163,8 +163,14 @@ function toOpenAIMessages(
 
 		// Anthropic via litellm: 消息类型无 cache_control 字段，需 double cast
 		// TODO: 当 litellm/openai 类型支持 cache_control 时移除 double cast
-		if (backendProvider === "anthropic" && msg.cacheBreakpoint && result[result.length - 1]) {
-			(result[result.length - 1] as unknown as Record<string, unknown>).cache_control = {
+		if (
+			backendProvider === "anthropic" &&
+			msg.cacheBreakpoint &&
+			result[result.length - 1]
+		) {
+			(
+				result[result.length - 1] as unknown as Record<string, unknown>
+			).cache_control = {
 				type: "ephemeral",
 			};
 		}

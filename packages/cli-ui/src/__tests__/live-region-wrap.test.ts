@@ -14,7 +14,11 @@ import wrapAnsi from "wrap-ansi";
 
 /** 模拟 LiveRegion.writeln 的 wrap 逻辑：wrap → 计数 \n */
 function countWrappedLines(text: string, cols: number): number {
-	const wrapped = wrapAnsi(text, cols, { trim: false, hard: true, wordWrap: false });
+	const wrapped = wrapAnsi(text, cols, {
+		trim: false,
+		hard: true,
+		wordWrap: false,
+	});
 	const output = `${wrapped}\n`;
 	let count = 0;
 	for (let i = 0; i < output.length; i++) {
@@ -51,7 +55,11 @@ describe("LiveRegion wrap line counting", () => {
 		const lines = [
 			{ text: "  │ 已完成清理", cols: 40, expected: 1 }, // 12 列
 			{ text: "这是二十个中文字符的测试内容来验证宽度", cols: 40, expected: 1 }, // 40 列
-			{ text: "这是二十一个中文字符的测试内容来验证宽度吧", cols: 40, expected: 2 }, // 42 列
+			{
+				text: "这是二十一个中文字符的测试内容来验证宽度吧",
+				cols: 40,
+				expected: 2,
+			}, // 42 列
 		];
 
 		let total = 0;

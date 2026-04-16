@@ -299,15 +299,18 @@ describe("checkSubmit", () => {
 		const schema = z.object({
 			type: z.literal("ask_user"),
 			question: z.string(),
-			options: z.array(z.object({
-				choice: z.string(),
-				affect: z.string(),
-			})),
+			options: z.array(
+				z.object({
+					choice: z.string(),
+					affect: z.string(),
+				}),
+			),
 		});
 		const raw = {
 			type: "ask_user",
 			question: "Pick one",
-			options: '[{"choice":"A","affect":"do A"},{"choice":"B","affect":"do B"}]',
+			options:
+				'[{"choice":"A","affect":"do A"},{"choice":"B","affect":"do B"}]',
 		};
 		const submitTc = {
 			id: "sub_1",
@@ -327,10 +330,12 @@ describe("checkSubmit", () => {
 		const schema = z.object({
 			type: z.literal("request_assist"),
 			content: z.string(),
-			checklist: z.array(z.object({
-				label: z.string(),
-				detail: z.string().optional(),
-			})),
+			checklist: z.array(
+				z.object({
+					label: z.string(),
+					detail: z.string().optional(),
+				}),
+			),
 		});
 		const raw = {
 			type: "request_assist",

@@ -80,7 +80,12 @@ const testLLM = async () => {
 	}
 };
 
-const result = await bootstrap(buildCodeEnvSpec, setupUI, globalConfigDir, testLLM);
+const result = await bootstrap(
+	buildCodeEnvSpec,
+	setupUI,
+	globalConfigDir,
+	testLLM,
+);
 setupUI.dispose();
 
 if (!result.ok) {
@@ -122,17 +127,13 @@ const runtime =
 					type: "freeform-patch",
 					responsesClient: createResponsesClient({
 						baseUrl:
-							process.env.EDITOR_LLM_BASE_URL ||
-							process.env.LLM_BASE_URL ||
-							"",
+							process.env.EDITOR_LLM_BASE_URL || process.env.LLM_BASE_URL || "",
 						apiKey:
-							process.env.EDITOR_LLM_API_KEY ||
-							process.env.LLM_API_KEY ||
-							"",
+							process.env.EDITOR_LLM_API_KEY || process.env.LLM_API_KEY || "",
 						model: process.env.EDITOR_LLM_MODEL || "gpt-5.4-mini",
 					}),
 				},
-		  })
+			})
 		: createRuntimeContext({
 				client: createLLMClient(llmConfig),
 				editBackend: {
@@ -141,7 +142,7 @@ const runtime =
 						buildLLMConfigFromEnv("EDITOR_LLM", llmConfig.providerConfig),
 					),
 				},
-		  });
+			});
 initRuntime(runtime);
 
 const { startCodeRepl } = await import("./repl.ts");

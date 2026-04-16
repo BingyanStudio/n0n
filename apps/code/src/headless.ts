@@ -7,12 +7,17 @@
  * 输出 JSON 结果到 stdout，日志输出到 stderr。
  */
 
-import { agentLoop, buildToolsConfig, getRuntime, PlainRenderer } from "@n0n/core";
+import {
+	agentLoop,
+	buildToolsConfig,
+	getRuntime,
+	PlainRenderer,
+} from "@n0n/core";
+import type { BaseWorkspacePaths } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
-import { type BaseWorkspacePaths } from "@n0n/shared";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
-import codePromptText from "./prompts/code.md" with { type: "text" };
 import { buildContextFewshot } from "./context-fewshot.ts";
+import codePromptText from "./prompts/code.md" with { type: "text" };
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
 export interface HeadlessOptions {
@@ -95,7 +100,11 @@ export async function runHeadless(
 		workspace: paths.workspace,
 		tempDir: paths.temp,
 	});
-	const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, runtime.client.modelId);
+	const toolkit = await makeToolkit(
+		CodeResultSchema,
+		toolsConfig,
+		runtime.client.modelId,
+	);
 	const contextFewshot = await buildContextFewshot(
 		toolkit,
 		paths.workspace,

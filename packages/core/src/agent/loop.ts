@@ -9,15 +9,14 @@
  * scheduler 通过回调发射 raw 无序事件，排序由各 Renderer 实现自行决定。
  */
 
-import type { PendingReminder } from "@n0n/tools";
-import type { Toolkit } from "@n0n/tools";
+import type { PendingReminder, Toolkit } from "@n0n/tools";
 import type {
 	DomainMessage,
 	PartialToolCallRecord,
 	Renderer,
-	ToolDefinition,
 	TokenUsage,
 	ToolCallRecord,
+	ToolDefinition,
 } from "@n0n/types";
 import { FinishReason } from "@n0n/types";
 import type { ZodType } from "zod";
@@ -82,7 +81,12 @@ export async function agentLoop<T = unknown>(
 	for (let iter = 0; iter < maxIter; iter++) {
 		if (options.signal?.aborted) {
 			renderer.aborted();
-			return { result: null, report: null, history: messages, tools: toolkit.tools };
+			return {
+				result: null,
+				report: null,
+				history: messages,
+				tools: toolkit.tools,
+			};
 		}
 
 		injectReminders(messages, reminders);
@@ -90,10 +94,12 @@ export async function agentLoop<T = unknown>(
 
 		// ── 1. 流式解析 + 并行执行（交织进行） ──
 		const scheduler = new ExecutionScheduler(
-			(tc) => executeToolStream(tc, reminders, options.confirmFn, toolkit.getEntry),
+			(tc) =>
+				executeToolStream(tc, reminders, options.confirmFn, toolkit.getEntry),
 			{
 				onRegister: (tc) => renderer.toolExecStart(tc.id, tc),
-				onChunk: (tcId, tool, chunk) => renderer.toolExecChunk(tcId, tool, chunk),
+				onChunk: (tcId, tool, chunk) =>
+					renderer.toolExecChunk(tcId, tool, chunk),
 				onEnd: (tcId, outcome) => renderer.toolExecEnd(tcId, outcome),
 			},
 		);
@@ -138,7 +144,10 @@ export async function agentLoop<T = unknown>(
 				// 工具就绪 → 渲染 + 入队调度
 				case "tool_ready":
 					renderer.toolCallArgEnd(event.index, event.tc);
-					scheduler.enqueue(event.tc, toolkit.getEntry(event.tc.tool)?.canStart);
+					scheduler.enqueue(
+						event.tc,
+						toolkit.getEntry(event.tc.tool)?.canStart,
+					);
 					break;
 
 				// streaming 完毕
@@ -174,7 +183,12 @@ export async function agentLoop<T = unknown>(
 			if (outcome.reason === "aborted") renderer.aborted();
 			else renderer.agentTerminated(outcome.reason);
 			renderer.roundEnd();
-			return { result: null, report: outcome.report, history: messages, tools: toolkit.tools };
+			return {
+				result: null,
+				report: outcome.report,
+				history: messages,
+				tools: toolkit.tools,
+			};
 		}
 
 		if (outcome.action === "idle") {

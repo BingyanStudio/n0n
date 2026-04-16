@@ -69,19 +69,37 @@ export class FreeformPatchBackend implements EditBackend {
 
 		for (let round = 0; round < MAX_ROUNDS; round++) {
 			if (signal?.aborted) {
-				return { content: current, feedback: null, error: "Aborted", rounds: round };
+				return {
+					content: current,
+					feedback: null,
+					error: "Aborted",
+					rounds: round,
+				};
 			}
 
-			callbacks?.onEvent?.(round, { type: "thinking", text: `round ${round + 1}...` });
+			callbacks?.onEvent?.(round, {
+				type: "thinking",
+				text: `round ${round + 1}...`,
+			});
 
 			const tools = round === 0 ? FIRST_ROUND_TOOLS : ALL_TOOLS;
 			const json = await this.client.create(conversation, tools, signal);
 			if ("error" in json && typeof json.error === "string") {
-				return { content: current, feedback, error: json.error, rounds: round + 1 };
+				return {
+					content: current,
+					feedback,
+					error: json.error,
+					rounds: round + 1,
+				};
 			}
 
 			let hasSubmit = false;
-			if (!json || typeof json !== "object" || !("output" in json) || !Array.isArray(json.output)) {
+			if (
+				!json ||
+				typeof json !== "object" ||
+				!("output" in json) ||
+				!Array.isArray(json.output)
+			) {
 				break;
 			}
 			const response = json as ResponsesResult;
@@ -92,7 +110,10 @@ export class FreeformPatchBackend implements EditBackend {
 
 				switch (item.name) {
 					case "apply_patch": {
-						callbacks?.onToolResult?.(round, `apply_patch (${raw.split("\n").length} lines)`);
+						callbacks?.onToolResult?.(
+							round,
+							`apply_patch (${raw.split("\n").length} lines)`,
+						);
 
 						const hunk = parsePatch(raw);
 						if ("error" in hunk) {
@@ -126,7 +147,10 @@ export class FreeformPatchBackend implements EditBackend {
 					case "submit": {
 						feedback = raw.trim() || null;
 						hasSubmit = true;
-						callbacks?.onToolResult?.(round, feedback ? `submit\n  ${feedback}` : "submit");
+						callbacks?.onToolResult?.(
+							round,
+							feedback ? `submit\n  ${feedback}` : "submit",
+						);
 						break;
 					}
 				}
@@ -136,7 +160,7 @@ export class FreeformPatchBackend implements EditBackend {
 				return {
 					content: current,
 					feedback,
-					error: patchApplied ? null : (feedback ? null : "No patch applied"),
+					error: patchApplied ? null : feedback ? null : "No patch applied",
 					rounds: round + 1,
 				};
 			}
@@ -150,7 +174,11 @@ export class FreeformPatchBackend implements EditBackend {
 		};
 	}
 
-	private pushResult(conversation: unknown[], item: ResponseItem, output: string) {
+	private pushResult(
+		conversation: unknown[],
+		item: ResponseItem,
+		output: string,
+	) {
 		conversation.push(item);
 		conversation.push({
 			type: "custom_tool_call_output",
@@ -159,7 +187,10 @@ export class FreeformPatchBackend implements EditBackend {
 		});
 	}
 
-	private parseRange(raw: string, totalLines: number): { start: number; end: number } {
+	private parseRange(
+		raw: string,
+		totalLines: number,
+	): { start: number; end: number } {
 		if (!raw) return { start: 1, end: totalLines };
 
 		const tailMatch = raw.match(/^-(\d+)$/);
@@ -168,7 +199,7 @@ export class FreeformPatchBackend implements EditBackend {
 			return { start: Math.max(1, totalLines - n + 1), end: totalLines };
 		}
 
-		const rangeMatch = raw.match(/^(\d+)[~\-](\d+)$/);
+		const rangeMatch = raw.match(/^(\d+)[~-](\d+)$/);
 		if (rangeMatch) {
 			const s = Number.parseInt(rangeMatch[1] as string, 10);
 			const e = Number.parseInt(rangeMatch[2] as string, 10);

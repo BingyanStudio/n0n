@@ -28,14 +28,14 @@ import type {
 } from "@n0n/types";
 import type { ZodType } from "zod";
 import type { ToolsConfig } from "./config.ts";
+import type { EditBackend } from "./edit/index.ts";
 import {
 	EDIT_TOOL_DEFINITION,
 	EditArgsSchema,
 	editToolStream,
-	StrReplaceBackend,
 	FreeformPatchBackend,
+	StrReplaceBackend,
 } from "./edit/index.ts";
-import type { EditBackend } from "./edit/index.ts";
 import { detectEnv } from "./env.ts";
 import {
 	ExecArgsSchema,
@@ -48,10 +48,7 @@ import {
 	ReminderArgsSchema,
 	reminderTool,
 } from "./reminder.ts";
-import {
-	makeSubmitToolDefinition,
-	submitTool,
-} from "./submit.ts";
+import { makeSubmitToolDefinition, submitTool } from "./submit.ts";
 import {
 	makeWriteRecover,
 	WRITE_TOOL_DEFINITION,
@@ -173,11 +170,7 @@ function buildBaseRegistry(
 					tool: "edit" as const,
 					args: EditArgsSchema.parse(tc.args),
 				};
-				return editToolStream(
-					call,
-					resolvedWorkspace,
-					editBackend,
-				);
+				return editToolStream(call, resolvedWorkspace, editBackend);
 			},
 		},
 		reminder: {
@@ -258,9 +251,9 @@ export async function makeToolkit(
 
 // ── Re-exports ──
 
-export type { ToolsConfig, ResponsesClient } from "./config.ts";
-export type { EnvSnapshot, RuntimeProbe, CliToolProbe } from "./env.ts";
+export type { CanStartFn } from "@n0n/types";
+export type { ResponsesClient, ToolsConfig } from "./config.ts";
+export type { CliToolProbe, EnvSnapshot, RuntimeProbe } from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";
 export { DefaultSubmitSchema } from "./submit.ts";
-export type { CanStartFn } from "@n0n/types";

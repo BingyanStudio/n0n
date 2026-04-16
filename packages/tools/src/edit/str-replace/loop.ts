@@ -211,7 +211,11 @@ export async function editorLoop(
 			const name = tc.toolName;
 			if (args === null) {
 				messages.push(
-					toolResult(tc.toolCallId, name, "Error: Failed to parse tool arguments as JSON."),
+					toolResult(
+						tc.toolCallId,
+						name,
+						"Error: Failed to parse tool arguments as JSON.",
+					),
 				);
 				onToolResult?.(round, "parse error");
 				continue;
@@ -222,37 +226,66 @@ export async function editorLoop(
 					const oldStr = String(args.old_string ?? "");
 					const newStr = String(args.new_string ?? "");
 					const expectedMatches =
-						typeof args.expected_matches === "number" ? args.expected_matches : 1;
+						typeof args.expected_matches === "number"
+							? args.expected_matches
+							: 1;
 
 					if (!oldStr) {
-						messages.push(toolResult(tc.toolCallId, name, "Error: old_string cannot be empty."));
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								"Error: old_string cannot be empty.",
+							),
+						);
 						onToolResult?.(round, "str_replace → old_string empty");
 						break;
 					}
 
-					const result = applySingleOp(current, oldStr, newStr, expectedMatches);
+					const result = applySingleOp(
+						current,
+						oldStr,
+						newStr,
+						expectedMatches,
+					);
 					if (result.ok) {
 						current = result.content;
 						editCount++;
 						const context = getReplacementContext(current, newStr);
 						messages.push(
-							toolResult(tc.toolCallId, name, `OK: Replacement applied (edit #${editCount}).\n${context}`),
+							toolResult(
+								tc.toolCallId,
+								name,
+								`OK: Replacement applied (edit #${editCount}).\n${context}`,
+							),
 						);
 						const oldLines = oldStr.split("\n").length;
 						const newLines = newStr.split("\n").length;
 						const addedLines = Math.max(0, newLines - oldLines);
 						const removedLines = Math.max(0, oldLines - newLines);
 						const lineStats =
-							[removedLines > 0 ? `-${removedLines}` : null, addedLines > 0 ? `+${addedLines}` : null]
-								.filter(Boolean).join(" ") || "±0";
-						onToolResult?.(round, `str_replace → edit #${editCount} (${lineStats} lines)`);
+							[
+								removedLines > 0 ? `-${removedLines}` : null,
+								addedLines > 0 ? `+${addedLines}` : null,
+							]
+								.filter(Boolean)
+								.join(" ") || "±0";
+						onToolResult?.(
+							round,
+							`str_replace → edit #${editCount} (${lineStats} lines)`,
+						);
 					} else {
 						messages.push(
-							toolResult(tc.toolCallId, name, [
-								`Error: ${result.error}`, "",
-								"Check whitespace, indentation, and character-for-character accuracy.",
-								"Call view_file to see the current file content.",
-							].join("\n")),
+							toolResult(
+								tc.toolCallId,
+								name,
+								[
+									`Error: ${result.error}`,
+									"",
+									"Check whitespace, indentation, and character-for-character accuracy.",
+									"Call view_file to see the current file content.",
+								].join("\n"),
+							),
 						);
 						onToolResult?.(round, `str_replace → ${result.error}`);
 					}
@@ -260,23 +293,49 @@ export async function editorLoop(
 				}
 
 				case "view_file": {
-					const startLine = typeof args.start_line === "number" ? args.start_line : undefined;
-					const endLine = typeof args.end_line === "number" ? args.end_line : undefined;
+					const startLine =
+						typeof args.start_line === "number" ? args.start_line : undefined;
+					const endLine =
+						typeof args.end_line === "number" ? args.end_line : undefined;
 					const lines = current.split("\n");
 
 					if (startLine !== undefined || endLine !== undefined) {
 						const start = Math.max(1, startLine ?? 1);
 						const end = Math.min(lines.length, endLine ?? lines.length);
 						if (start > end) {
-							messages.push(toolResult(tc.toolCallId, name, `Error: Invalid line range: start_line (${start}) > end_line (${end}).`));
+							messages.push(
+								toolResult(
+									tc.toolCallId,
+									name,
+									`Error: Invalid line range: start_line (${start}) > end_line (${end}).`,
+								),
+							);
 							onToolResult?.(round, "view_file → invalid range");
 							break;
 						}
-						const numbered = lines.slice(start - 1, end).map((line, i) => `${start + i}| ${line}`).join("\n");
-						messages.push(toolResult(tc.toolCallId, name, `<source_file lines="${start}-${end}" total="${lines.length}">\n${numbered}\n</source_file>`));
-						onToolResult?.(round, `view_file → L${start}-${end} (${end - start + 1} lines)`);
+						const numbered = lines
+							.slice(start - 1, end)
+							.map((line, i) => `${start + i}| ${line}`)
+							.join("\n");
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								`<source_file lines="${start}-${end}" total="${lines.length}">\n${numbered}\n</source_file>`,
+							),
+						);
+						onToolResult?.(
+							round,
+							`view_file → L${start}-${end} (${end - start + 1} lines)`,
+						);
 					} else {
-						messages.push(toolResult(tc.toolCallId, name, `<source_file>\n${current}\n</source_file>`));
+						messages.push(
+							toolResult(
+								tc.toolCallId,
+								name,
+								`<source_file>\n${current}\n</source_file>`,
+							),
+						);
 						onToolResult?.(round, `view_file → ok (${lines.length} lines)`);
 					}
 					break;
@@ -285,13 +344,20 @@ export async function editorLoop(
 				case "submit": {
 					const feedback =
 						typeof args.feedback === "string" && args.feedback.length > 0
-							? args.feedback : null;
+							? args.feedback
+							: null;
 					onToolResult?.(round, feedback ? `submit\n  ${feedback}` : "submit");
 					return { content: current, feedback, error: null, rounds: round + 1 };
 				}
 
 				default: {
-					messages.push(toolResult(tc.toolCallId, name, `Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`));
+					messages.push(
+						toolResult(
+							tc.toolCallId,
+							name,
+							`Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
+						),
+					);
 					onToolResult?.(round, `unknown tool: ${name}`);
 				}
 			}

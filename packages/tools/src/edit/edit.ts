@@ -25,8 +25,8 @@ import type {
 	ToolOutputChunk,
 	ToolStreamEvent,
 } from "@n0n/types";
-import editDescription from "./edit.md" with { type: "text" };
 import type { EditBackend } from "./backend.ts";
+import editDescription from "./edit.md" with { type: "text" };
 import { applySingleOp } from "./str-replace/loop.ts";
 
 export { EditArgsSchema } from "@n0n/types";
@@ -295,14 +295,16 @@ export async function* editToolStream(
 			push(`  ${summary}\n`);
 		};
 
-		const loopPromise = backend.execute(source, intent, {
-			onEvent,
-			onToolResult,
-		}).then((result) => {
-			done = true;
-			notify?.();
-			return result;
-		});
+		const loopPromise = backend
+			.execute(source, intent, {
+				onEvent,
+				onToolResult,
+			})
+			.then((result) => {
+				done = true;
+				notify?.();
+				return result;
+			});
 
 		// 从 queue yield chunks
 		while (!done) {

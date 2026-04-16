@@ -73,12 +73,7 @@ describe("RenderBuffer", () => {
 
 		// a 完成，flush a 然后 b
 		buf.pushEnd("a", { status: "completed", result: mockResult("a") });
-		expect(log).toEqual([
-			"start:a",
-			"end:a",
-			"start:b",
-			"end:b",
-		]);
+		expect(log).toEqual(["start:a", "end:a", "start:b", "end:b"]);
 	});
 
 	test("pause 状态下所有事件暂存，resume 时一次性 flush", () => {

@@ -91,7 +91,13 @@ export type PromptMessage =
 			toolCalls?: ToolCallPart[];
 			cacheBreakpoint?: boolean;
 	  }
-	| { role: "tool"; toolCallId: string; toolName: string; content: string; cacheBreakpoint?: boolean };
+	| {
+			role: "tool";
+			toolCallId: string;
+			toolName: string;
+			content: string;
+			cacheBreakpoint?: boolean;
+	  };
 
 export interface ToolCallPart {
 	id: string;

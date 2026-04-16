@@ -143,7 +143,10 @@ export class FeishuConversation {
 			await this.bot.sendCardEntity(this.ctx, cardEntityId);
 			this.cardEntityId = cardEntityId;
 		} catch (err) {
-			console.error("[feishu] initStreamingCard failed, degrading to plain card:", err);
+			console.error(
+				"[feishu] initStreamingCard failed, degrading to plain card:",
+				err,
+			);
 			this.degraded = true;
 		}
 	}

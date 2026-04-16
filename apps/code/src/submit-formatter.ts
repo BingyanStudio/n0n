@@ -61,7 +61,10 @@ function render(template: string, vars: Record<string, string>): string {
 		},
 	);
 
-	result = result.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? "");
+	result = result.replace(
+		/\{\{(\w+)\}\}/g,
+		(_, key: string) => vars[key] ?? "",
+	);
 
 	return result;
 }

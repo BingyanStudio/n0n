@@ -10,7 +10,12 @@
  * - ok/err（加粗）：最终结果
  */
 
-import type { Renderer, ToolCallRecord, ToolExecOutcome, ToolResult } from "@n0n/types";
+import type {
+	Renderer,
+	ToolCallRecord,
+	ToolExecOutcome,
+	ToolResult,
+} from "@n0n/types";
 import type { FeishuConversation } from "./conversation.ts";
 
 /** 流式文本更新节流间隔（CardKit 限制 10次/秒，留余量） */

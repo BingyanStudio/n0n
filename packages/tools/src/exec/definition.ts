@@ -105,7 +105,9 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 		"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
 		`- **Output truncation** — stdout+stderr exceeding ~4 000 tokens is auto-truncated: only the **last ~1 000 tokens** are kept and the full output is saved to a file. To avoid losing important content, **assess first** (${IS_WINDOWS ? "`dir`" : "`wc -l`, `ls -la`"}) then read selectively (${IS_WINDOWS ? "`findstr`, `powershell Select-String`" : "`head`, `grep`, `sed`"}) or split across parallel tool calls.`,
 		...(hasRipgrep
-			? [`- **Prefer \`rg\` (ripgrep) over \`grep\`** — \`rg\` is faster, respects \`.gitignore\`, and supports recursive search by default. Use \`rg "pattern" path/\` instead of \`grep -r "pattern" path/\`.`]
+			? [
+					`- **Prefer \`rg\` (ripgrep) over \`grep\`** — \`rg\` is faster, respects \`.gitignore\`, and supports recursive search by default. Use \`rg "pattern" path/\` instead of \`grep -r "pattern" path/\`.`,
+				]
 			: []),
 		`- **${jsHint}** — when you need to parse JSON, filter arrays, do math, or produce structured summaries, write a script instead of chaining shell commands.`,
 		`- **Simple commands use default shell (\`${env.defaultShell}\`)** — \`git status\`, \`ls\`/\`dir\` don't need a language runtime.`,

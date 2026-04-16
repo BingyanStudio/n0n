@@ -17,7 +17,13 @@ export interface SetupOption {
 }
 
 /** 配置项来源 */
-export type ConfigSource = "project" | "global" | "env" | "default" | "inherit" | "prefix";
+export type ConfigSource =
+	| "project"
+	| "global"
+	| "env"
+	| "default"
+	| "inherit"
+	| "prefix";
 
 /** 配置摘要条目 */
 export interface ConfigEntry {

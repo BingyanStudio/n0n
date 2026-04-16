@@ -59,7 +59,8 @@ function formatChunkGuide(
 		return `Truncated part: lines ${c.startLine}-${c.endLine} (~${c.tokens} tokens) — small enough to read in one go if needed.`;
 	}
 	const lines = chunks.map(
-		(c, i) => `  chunk ${i + 1}: lines ${c.startLine}-${c.endLine} (~${c.tokens} tok)`,
+		(c, i) =>
+			`  chunk ${i + 1}: lines ${c.startLine}-${c.endLine} (~${c.tokens} tok)`,
 	);
 	const readCmd = IS_WINDOWS
 		? `Use pwsh -c "Get-Content ${outputFile} | Select-Object -Skip <start-1> -First <count>" to read a specific chunk.`
@@ -101,10 +102,14 @@ export function formatExecResult(
 	switch (msg.status) {
 		case "timed_out": {
 			const metaFn = pick(timedOutMetaTemplates, msgIndex);
-			const parts = [wrapTag("exec_meta", metaFn(runtime, cwd, msg.durationMs), model)];
+			const parts = [
+				wrapTag("exec_meta", metaFn(runtime, cwd, msg.durationMs), model),
+			];
 
 			const noticeFn = pick(timeoutNoticeTemplates, msgIndex + 3);
-			parts.push(wrapTag("timeout_notice", noticeFn(msg.pid, msg.logFile), model));
+			parts.push(
+				wrapTag("timeout_notice", noticeFn(msg.pid, msg.logFile), model),
+			);
 
 			if (msg.stdoutSoFar)
 				parts.push(wrapTag(stdoutTag, msg.stdoutSoFar, model));
@@ -114,7 +119,13 @@ export function formatExecResult(
 		}
 		case "truncated": {
 			const metaFn = pick(truncatedMetaTemplates, msgIndex);
-			const parts = [wrapTag("exec_meta", metaFn(runtime, cwd, msg.exitCode, msg.durationMs, msg.outputFile), model)];
+			const parts = [
+				wrapTag(
+					"exec_meta",
+					metaFn(runtime, cwd, msg.exitCode, msg.durationMs, msg.outputFile),
+					model,
+				),
+			];
 
 			if (msg.stdoutTail)
 				parts.push(
@@ -131,12 +142,24 @@ export function formatExecResult(
 
 			const hintFn = pick(truncatedHintTemplates, msgIndex + 3);
 			const chunkGuide = formatChunkGuide(msg.truncatedChunks, msg.outputFile);
-			parts.push(wrapTag("output_hint", hintFn(msg.totalLines, msg.outputFile, chunkGuide), model));
+			parts.push(
+				wrapTag(
+					"output_hint",
+					hintFn(msg.totalLines, msg.outputFile, chunkGuide),
+					model,
+				),
+			);
 			return parts.join("\n");
 		}
 		case "completed": {
 			const metaFn = pick(metaTemplates, msgIndex);
-			const parts = [wrapTag("exec_meta", metaFn(runtime, cwd, msg.exitCode, msg.durationMs), model)];
+			const parts = [
+				wrapTag(
+					"exec_meta",
+					metaFn(runtime, cwd, msg.exitCode, msg.durationMs),
+					model,
+				),
+			];
 
 			if (msg.stdout) parts.push(wrapTag(stdoutTag, msg.stdout, model));
 			if (msg.stderr) parts.push(wrapTag(stderrTag, msg.stderr, model));
@@ -148,7 +171,13 @@ export function formatExecResult(
 					combined,
 				)
 			) {
-				parts.push(wrapTag("diagnostic_hint", pick(diagnosticHintTemplates, msgIndex + 4), model));
+				parts.push(
+					wrapTag(
+						"diagnostic_hint",
+						pick(diagnosticHintTemplates, msgIndex + 4),
+						model,
+					),
+				);
 			}
 			return parts.join("\n");
 		}

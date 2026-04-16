@@ -5,7 +5,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { parsePatch, applyPatchToSource } from "../edit/freeform-patch/parser.ts";
+import {
+	applyPatchToSource,
+	parsePatch,
+} from "../edit/freeform-patch/parser.ts";
 
 const LF_SOURCE = "line1\nline2\nline3\nline4";
 const CRLF_SOURCE = "line1\r\nline2\r\nline3\r\nline4";

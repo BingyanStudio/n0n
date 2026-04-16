@@ -65,7 +65,10 @@ export async function startFeishuService(): Promise<void> {
 	);
 	const runtime = createRuntimeContext({
 		client: createLLMClient(llmConfig),
-		editBackend: { type: "str-replace", editorClient: createLLMClient(editorLlmConfig) },
+		editBackend: {
+			type: "str-replace",
+			editorClient: createLLMClient(editorLlmConfig),
+		},
 	});
 	initRuntime(runtime);
 

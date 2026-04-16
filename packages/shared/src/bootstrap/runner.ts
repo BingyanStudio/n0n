@@ -114,7 +114,9 @@ function resolvePrefix(
 	globalEnv: Record<string, string>,
 	projectEnv: Record<string, string>,
 ): string | undefined {
-	return process.env.N0N_PREFIX ?? globalEnv.N0N_PREFIX ?? projectEnv.N0N_PREFIX;
+	return (
+		process.env.N0N_PREFIX ?? globalEnv.N0N_PREFIX ?? projectEnv.N0N_PREFIX
+	);
 }
 
 /**
@@ -130,7 +132,9 @@ function resolveEffectiveProvider(
 	if (prefix) {
 		const providerKey = `${prefix}_LLM_PROVIDER`;
 		const override =
-			process.env[providerKey] ?? globalEnv[providerKey] ?? projectEnv[providerKey];
+			process.env[providerKey] ??
+			globalEnv[providerKey] ??
+			projectEnv[providerKey];
 		if (override) return override;
 	}
 	return (
@@ -160,7 +164,9 @@ function computePrefixOverrides(
 	for (const key of keys) {
 		const prefixedKey = `${prefix}_${key}`;
 		const value =
-			process.env[prefixedKey] ?? globalEnv[prefixedKey] ?? projectEnv[prefixedKey];
+			process.env[prefixedKey] ??
+			globalEnv[prefixedKey] ??
+			projectEnv[prefixedKey];
 		if (value !== undefined) {
 			overrides[key] = value;
 		}
@@ -339,12 +345,19 @@ export async function bootstrap(
 	let prefixedKeys = new Set<string>();
 	if (prefix) {
 		const allKeys = allVars(spec).map((v) => v.key);
-		const overrides = computePrefixOverrides(prefix, allKeys, globalEnv, projectEnv);
+		const overrides = computePrefixOverrides(
+			prefix,
+			allKeys,
+			globalEnv,
+			projectEnv,
+		);
 		applyOverrides(overrides);
 		prefixedKeys = new Set(Object.keys(overrides));
 
 		if (prefixedKeys.size > 0) {
-			ui.info(`配置前缀切换: N0N_PREFIX=${prefix}（${prefixedKeys.size} 项被覆盖）`);
+			ui.info(
+				`配置前缀切换: N0N_PREFIX=${prefix}（${prefixedKeys.size} 项被覆盖）`,
+			);
 		}
 	}
 
@@ -381,7 +394,12 @@ export async function bootstrap(
 
 	// ── 配置摘要 ──
 
-	const configEntries = resolveConfigSources(spec, projectEnv, globalEnv, prefixedKeys);
+	const configEntries = resolveConfigSources(
+		spec,
+		projectEnv,
+		globalEnv,
+		prefixedKeys,
+	);
 	const overrides = configEntries.filter((c) => c.overridden);
 
 	const configGroups: ConfigGroup[] = spec.groups

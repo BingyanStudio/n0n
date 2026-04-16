@@ -277,8 +277,7 @@ export class GeminiClient implements LLMClient {
 
 			if (chunk.usage) {
 				const u = chunk.usage;
-				const cacheReadTokens =
-					u.prompt_tokens_details?.cached_tokens ?? 0;
+				const cacheReadTokens = u.prompt_tokens_details?.cached_tokens ?? 0;
 				const rawInput = u.prompt_tokens ?? 0;
 				lastUsage = {
 					inputTokens: rawInput - cacheReadTokens,

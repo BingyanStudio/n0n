@@ -186,7 +186,9 @@ export class ExecutionScheduler {
 				this.activeSet.delete(slot);
 				this.events?.onEnd(
 					tc.id,
-					argError ? { status: "arg_error" } : { status: "completed", result: result! },
+					argError
+						? { status: "arg_error" }
+						: { status: "completed", result: result! },
 				);
 				this.notify?.();
 			}

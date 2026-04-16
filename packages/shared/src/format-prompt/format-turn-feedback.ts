@@ -20,5 +20,9 @@ export function formatTurnFeedback(
 	msgIndex: number,
 ): string {
 	const tpl = pick(templates, msgIndex);
-	return wrapTag("turn_feedback", tpl(msg.status, msg.resultType, msg.detail), model);
+	return wrapTag(
+		"turn_feedback",
+		tpl(msg.status, msg.resultType, msg.detail),
+		model,
+	);
 }

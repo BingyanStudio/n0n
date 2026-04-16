@@ -21,17 +21,17 @@ import type {
 	ToolCallPart,
 	ToolResult,
 } from "@n0n/types";
-import { adaptTags, wrapTag } from "./utils.ts";
-import { formatExecResult } from "./format-exec.ts";
-import { formatWriteResult } from "./format-write.ts";
 import { formatEditResult } from "./format-edit.ts";
+import { formatExecResult } from "./format-exec.ts";
+import { formatIdleNudge } from "./format-idle-nudge.ts";
 import { formatReminderResult } from "./format-reminder.ts";
+import { formatReminderDue } from "./format-reminder-due.ts";
 import { formatSubmitResult } from "./format-submit.ts";
 import { formatSubmitRejected } from "./format-submit-rejected.ts";
-import { formatIdleNudge } from "./format-idle-nudge.ts";
-import { formatReminderDue } from "./format-reminder-due.ts";
-import { formatTurnFeedback } from "./format-turn-feedback.ts";
 import { formatToolArgError } from "./format-tool-arg-error.ts";
+import { formatTurnFeedback } from "./format-turn-feedback.ts";
+import { formatWriteResult } from "./format-write.ts";
+import { adaptTags, wrapTag } from "./utils.ts";
 
 // ── tool result 分发 ──
 

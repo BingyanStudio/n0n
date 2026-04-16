@@ -90,8 +90,7 @@ export function buildProviderConfigFromEnv(
 					? parsedBudget
 					: undefined;
 			// 兼容：ENABLE_THINKING=true 但没设 budget 时，用默认 budget
-			const enableFlag =
-				process.env[`${prefix}_ENABLE_THINKING`] === "true";
+			const enableFlag = process.env[`${prefix}_ENABLE_THINKING`] === "true";
 			const hasThinking = validBudget !== undefined || enableFlag;
 			return {
 				provider: "anthropic",
@@ -101,8 +100,7 @@ export function buildProviderConfigFromEnv(
 				...(hasThinking
 					? {
 							thinking: {
-								budgetTokens:
-									validBudget ?? DEFAULT_ANTHROPIC_THINKING_BUDGET,
+								budgetTokens: validBudget ?? DEFAULT_ANTHROPIC_THINKING_BUDGET,
 							},
 						}
 					: {}),

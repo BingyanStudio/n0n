@@ -15,8 +15,8 @@ import {
 	PlainRenderer,
 } from "@n0n/core";
 import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
-import { makeToolkit } from "@n0n/tools";
 import { parseWorkspaceArg } from "@n0n/shared";
+import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
 import { type FairyResponse, FairyResponseSchema } from "./schema.ts";
 import {
@@ -45,7 +45,10 @@ const editorLlmConfig = buildLLMConfigFromEnv(
 );
 const runtime = createRuntimeContext({
 	client: createLLMClient(llmConfig),
-	editBackend: { type: "str-replace", editorClient: createLLMClient(editorLlmConfig) },
+	editBackend: {
+		type: "str-replace",
+		editorClient: createLLMClient(editorLlmConfig),
+	},
 });
 initRuntime(runtime);
 
@@ -66,7 +69,11 @@ async function main(): Promise<void> {
 		workspace: paths.workspace,
 		tempDir: paths.temp,
 	});
-	const toolkit = await makeToolkit(FairyResponseSchema, toolsConfig, runtime.client.modelId);
+	const toolkit = await makeToolkit(
+		FairyResponseSchema,
+		toolsConfig,
+		runtime.client.modelId,
+	);
 
 	let abortController = new AbortController();
 	let agentRunning = false;

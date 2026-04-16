@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { splitLinesByTokenBudget, estimateTokens } from "../tokens.ts";
+import { estimateTokens, splitLinesByTokenBudget } from "../tokens.ts";
 
 describe("splitLinesByTokenBudget", () => {
 	it("小文本不分块（单块）", () => {
@@ -16,7 +16,9 @@ describe("splitLinesByTokenBudget", () => {
 
 	it("大文本按预算分成多块", () => {
 		// 构造一个约 200 token 每行的文本（每行约 50 个英文单词）
-		const longLine = "the quick brown fox jumps over the lazy dog ".repeat(6).trim();
+		const longLine = "the quick brown fox jumps over the lazy dog "
+			.repeat(6)
+			.trim();
 		const lines = Array.from({ length: 40 }, (_, i) => `${i + 1}: ${longLine}`);
 		const text = lines.join("\n");
 

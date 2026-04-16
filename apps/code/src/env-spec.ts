@@ -5,10 +5,7 @@
  * LLM 配置组根据当前 provider 动态构建，此处追加 code 专属变量。
  */
 
-import {
-	buildEditorLLMEnvGroup,
-	buildLLMEnvGroup,
-} from "@n0n/shared";
+import { buildEditorLLMEnvGroup, buildLLMEnvGroup } from "@n0n/shared";
 import type { EnvSpec } from "@n0n/types";
 
 /**

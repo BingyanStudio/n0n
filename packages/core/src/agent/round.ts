@@ -5,6 +5,7 @@
  * 每个函数都是 input → output 的纯映射，无副作用。
  */
 
+import { deepParseJsonStrings } from "@n0n/shared";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
@@ -12,7 +13,6 @@ import type {
 	StreamAccumulator,
 	ToolCallRecord,
 } from "@n0n/types";
-import { deepParseJsonStrings } from "@n0n/shared";
 import type { PipelineJob } from "./scheduler.ts";
 import type { StreamingResult } from "./streaming.ts";
 import {

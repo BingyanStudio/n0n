@@ -11,8 +11,8 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import type { DomainMessage } from "@n0n/types";
-import { createLLMClient } from "../factory.ts";
 import type { LLMConfig } from "../config.ts";
+import { createLLMClient } from "../factory.ts";
 
 function loadGlobalEnv(): boolean {
 	try {
@@ -35,7 +35,9 @@ function loadGlobalEnv(): boolean {
 const loaded = loadGlobalEnv();
 const integrationEnabled = process.env.N0N_INTEGRATION === "1";
 
-function makeGeminiConfig(thinkingEffort?: "low" | "medium" | "high"): LLMConfig {
+function makeGeminiConfig(
+	thinkingEffort?: "low" | "medium" | "high",
+): LLMConfig {
 	return {
 		providerConfig: {
 			provider: "google",

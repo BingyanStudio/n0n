@@ -139,10 +139,7 @@ export function applyPatchToSource(
 	return useCrlf ? result.replace(/\n/g, "\r\n") : result;
 }
 
-function findMatch(
-	sourceLines: string[],
-	matchLines: PatchLine[],
-): number {
+function findMatch(sourceLines: string[], matchLines: PatchLine[]): number {
 	const first = (matchLines[0] as PatchLine).text;
 	for (let j = 0; j < sourceLines.length; j++) {
 		if (sourceLines[j] !== first) continue;

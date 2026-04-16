@@ -26,10 +26,14 @@ export async function ensureUserInfo(
 	// 检查是否已有且未过期
 	if (existsSync(filePath)) {
 		try {
-			const existing: unknown = JSON.parse(
-				await Bun.file(filePath).text(),
-			);
-			if (!existing || typeof existing !== "object" || !("openId" in existing) || !("updatedAt" in existing)) throw new Error("invalid");
+			const existing: unknown = JSON.parse(await Bun.file(filePath).text());
+			if (
+				!existing ||
+				typeof existing !== "object" ||
+				!("openId" in existing) ||
+				!("updatedAt" in existing)
+			)
+				throw new Error("invalid");
 			const info = existing as FeishuUserInfo;
 			const age = Date.now() - new Date(info.updatedAt).getTime();
 			if (age < REFRESH_TTL_MS) return info;

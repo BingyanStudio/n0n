@@ -43,9 +43,7 @@ export function playNotifySound(): void {
 		} else {
 			// Linux: paplay (PulseAudio) → aplay (ALSA)
 			const player =
-				Bun.spawnSync(["which", "paplay"]).exitCode === 0
-					? "paplay"
-					: "aplay";
+				Bun.spawnSync(["which", "paplay"]).exitCode === 0 ? "paplay" : "aplay";
 			Bun.spawn([player, soundPath], {
 				stdout: "ignore",
 				stderr: "ignore",

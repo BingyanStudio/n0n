@@ -24,9 +24,9 @@ import {
 	FinishReason,
 	type LLMClient,
 	type PromptMessage,
-	type TagStyle,
 	type StreamEvent,
 	type StreamRequest,
+	type TagStyle,
 	type TokenUsage,
 	type ToolDefinition,
 } from "@n0n/types";
@@ -54,7 +54,12 @@ type AnthropicContent =
 			input: Record<string, unknown>;
 			cache_control?: { type: "ephemeral" };
 	  }
-	| { type: "tool_result"; tool_use_id: string; content: string; cache_control?: { type: "ephemeral" } };
+	| {
+			type: "tool_result";
+			tool_use_id: string;
+			content: string;
+			cache_control?: { type: "ephemeral" };
+	  };
 
 interface AnthropicMessage {
 	role: "user" | "assistant";
@@ -175,7 +180,10 @@ function toAnthropicFormat(
 	for (const msg of promptMessages) {
 		switch (msg.role) {
 			case "system": {
-				const part: (typeof systemParts)[number] = { type: "text", text: msg.content };
+				const part: (typeof systemParts)[number] = {
+					type: "text",
+					text: msg.content,
+				};
 				if (msg.cacheBreakpoint) {
 					part.cache_control = { type: "ephemeral" };
 					hasBreakpoint = true;
@@ -188,7 +196,13 @@ function toAnthropicFormat(
 				if (msg.cacheBreakpoint) {
 					messages.push({
 						role: "user",
-						content: [{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } }],
+						content: [
+							{
+								type: "text",
+								text: msg.content,
+								cache_control: { type: "ephemeral" },
+							},
+						],
 					});
 					hasBreakpoint = true;
 				} else {
@@ -312,7 +326,7 @@ function toAnthropicFormat(
 		}
 	}
 	// 有 cache_control 标记时必须使用数组形式（字符串形式不支持 cache_control）
-	const hasSystemBreakpoint = systemParts.some(p => p.cache_control);
+	const hasSystemBreakpoint = systemParts.some((p) => p.cache_control);
 	const system =
 		systemParts.length === 0
 			? undefined

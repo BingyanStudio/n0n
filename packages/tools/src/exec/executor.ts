@@ -24,7 +24,11 @@
 
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
-import { estimateTokens, tailByTokens, splitLinesByTokenBudget } from "@n0n/shared";
+import {
+	estimateTokens,
+	splitLinesByTokenBudget,
+	tailByTokens,
+} from "@n0n/shared";
 import type {
 	ExecToolCall,
 	ExecToolResult,
@@ -118,7 +122,10 @@ export async function* execToolStream(
 		: workspace;
 	// prompt cache 的 TTL 为 5 分钟，超时过长会导致缓存失效
 	const MAX_TIMEOUT_S = 240;
-	const timeoutS = Math.min(call.args.timeout ?? toolsConfig.defaultExecTimeout, MAX_TIMEOUT_S);
+	const timeoutS = Math.min(
+		call.args.timeout ?? toolsConfig.defaultExecTimeout,
+		MAX_TIMEOUT_S,
+	);
 	const timeoutMs = timeoutS * 1000;
 	const start = Date.now();
 
@@ -304,10 +311,14 @@ export async function* execToolStream(
 			const stdoutTail = tailByTokens(stdout, TAIL_TOKENS);
 
 			// 被截断的前半部分按 token 预算分块，帮助模型精确读取
-			const truncatedText = stdout.substring(0, stdout.length - stdoutTail.length);
-			const truncatedChunks = truncatedText.length > 0
-				? splitLinesByTokenBudget(truncatedText, TAIL_TOKENS)
-				: [];
+			const truncatedText = stdout.substring(
+				0,
+				stdout.length - stdoutTail.length,
+			);
+			const truncatedChunks =
+				truncatedText.length > 0
+					? splitLinesByTokenBudget(truncatedText, TAIL_TOKENS)
+					: [];
 			const totalLines = stdout.split("\n").length + stderr.split("\n").length;
 			const tailLines = stdoutTail.split("\n").length;
 			const tailStartLine = totalLines - tailLines + 1;

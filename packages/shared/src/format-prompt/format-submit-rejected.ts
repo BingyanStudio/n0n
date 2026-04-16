@@ -22,5 +22,9 @@ export function formatSubmitRejected(
 	msgIndex: number,
 ): string {
 	const tpl = pick(templates, msgIndex);
-	return wrapTag("submit_rejected", tpl(msg.attempt, msg.maxAttempts, msg.error), model);
+	return wrapTag(
+		"submit_rejected",
+		tpl(msg.attempt, msg.maxAttempts, msg.error),
+		model,
+	);
 }

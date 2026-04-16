@@ -46,7 +46,13 @@ export class RenderBuffer {
 
 	/** 注册一个新工具（按调用顺序） */
 	register(tc: ToolCallRecord): void {
-		const entry: ToolEntry = { tc, events: [], done: false, started: false, argError: false };
+		const entry: ToolEntry = {
+			tc,
+			events: [],
+			done: false,
+			started: false,
+			argError: false,
+		};
 		this.queue.push(entry);
 		this.entryMap.set(tc.id, entry);
 

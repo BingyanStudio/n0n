@@ -9,7 +9,12 @@
 
 import { createInterface } from "node:readline";
 import { isTTY, label, RichRenderer, style, writeln } from "@n0n/cli-ui";
-import { agentLoop, buildToolsConfig, getRuntime, PlainRenderer } from "@n0n/core";
+import {
+	agentLoop,
+	buildToolsConfig,
+	getRuntime,
+	PlainRenderer,
+} from "@n0n/core";
 import { loadSchedules } from "@n0n/scheduler";
 import { formatAgentsMdPrompt, loadAgentsMd } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";

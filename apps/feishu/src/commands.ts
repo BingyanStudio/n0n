@@ -266,7 +266,9 @@ export async function handleCommand(
 
 		default: {
 			const _exhaustive: never = cmd;
-			console.warn(`[feishu] unhandled command type: ${(_exhaustive as any).type}`);
+			console.warn(
+				`[feishu] unhandled command type: ${(_exhaustive as any).type}`,
+			);
 		}
 	}
 }

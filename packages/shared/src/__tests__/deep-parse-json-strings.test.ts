@@ -60,7 +60,7 @@ describe("deepParseJsonStrings", () => {
 	});
 
 	it("带空白的 JSON 字符串 → 正常解析", () => {
-		const input = '  [1, 2, 3]  ';
+		const input = "  [1, 2, 3]  ";
 		expect(deepParseJsonStrings(input)).toEqual([1, 2, 3]);
 	});
 });

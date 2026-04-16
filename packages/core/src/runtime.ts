@@ -8,8 +8,8 @@
  * 不直接依赖 @n0n/llm。Client 实例由 app 入口构造并注入。
  */
 
-import type { LLMClient } from "@n0n/types";
 import type { ResponsesClient, ToolsConfig } from "@n0n/tools";
+import type { LLMClient } from "@n0n/types";
 
 // ── 类型 ──
 

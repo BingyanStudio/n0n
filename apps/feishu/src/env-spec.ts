@@ -48,4 +48,3 @@ export function buildFeishuEnvSpec(provider: string): EnvSpec {
 		],
 	};
 }
-

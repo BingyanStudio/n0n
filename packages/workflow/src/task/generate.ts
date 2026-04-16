@@ -7,8 +7,8 @@
 
 import { agentLoop, buildToolsConfig, getRuntime } from "@n0n/core";
 import type { BaseWorkspacePaths } from "@n0n/shared";
-import type { DomainMessage } from "@n0n/types";
 import { makeToolkit } from "@n0n/tools";
+import type { DomainMessage } from "@n0n/types";
 import type { ZodType } from "zod";
 
 export interface GenerateOptions<T = unknown> {
@@ -49,7 +49,11 @@ export async function generate<T = unknown>(
 		workspace: options.paths.workspace,
 		tempDir: options.paths.temp,
 	});
-	const toolkit = await makeToolkit(options?.schema, toolsConfig, runtime.client.modelId);
+	const toolkit = await makeToolkit(
+		options?.schema,
+		toolsConfig,
+		runtime.client.modelId,
+	);
 
 	const result = await agentLoop<T>(history, {
 		toolkit,

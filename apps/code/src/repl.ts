@@ -7,10 +7,10 @@
  * - Context 注入项目结构和 git 状态，而非 workflow 列表
  */
 
-import { createInterface } from "node:readline";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { isTTY, label, style, writeln } from "@n0n/cli-ui";
 import {
 	agentLoop,
@@ -20,19 +20,19 @@ import {
 	HeartbeatState,
 	PlainRenderer,
 } from "@n0n/core";
-import { makeToolkit } from "@n0n/tools";
 import { readMultilineInput } from "@n0n/multiline-input";
 import {
 	type BaseWorkspacePaths,
 	loadConversation,
 	saveConversation,
 } from "@n0n/shared";
+import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { CodeRenderer } from "./code-renderer.ts";
-import codePromptText from "./prompts/code.md" with { type: "text" };
 import { buildContextFewshot } from "./context-fewshot.ts";
-import { type CodeResult, CodeResultSchema } from "./schema.ts";
 import { playNotifySound } from "./notify-sound.ts";
+import codePromptText from "./prompts/code.md" with { type: "text" };
+import { type CodeResult, CodeResultSchema } from "./schema.ts";
 import { formatSubmitResult } from "./submit-formatter.ts";
 
 export interface CodeReplOptions {
@@ -141,7 +141,11 @@ export async function startCodeRepl(
 		workspace: paths.workspace,
 		tempDir: paths.temp,
 	});
-	const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, runtime.client.modelId);
+	const toolkit = await makeToolkit(
+		CodeResultSchema,
+		toolsConfig,
+		runtime.client.modelId,
+	);
 	const contextFewshot = await buildContextFewshot(
 		toolkit,
 		paths.workspace,
@@ -150,9 +154,7 @@ export async function startCodeRepl(
 	// submit 结果文件编号（进程级，不随 renderer 生命周期绑定）
 	const submitSessionId = randomBytes(2).toString("hex");
 	let submitSeq = 0;
-	const renderer = isTTY
-		? new CodeRenderer(paths)
-		: new PlainRenderer();
+	const renderer = isTTY ? new CodeRenderer(paths) : new PlainRenderer();
 
 	// ── stdin 控制器（仅 TTY 模式） ──
 	const stdin = isTTY ? createStdinController() : null;
@@ -396,7 +398,11 @@ export async function startCodeRepl(
 		}
 		history = agentResult.history;
 		// agent 结束，启动心跳保活（使用相同的 messages + tools 确保缓存前缀一致）
-		keeper?.start({ messages: history, tools: agentResult.tools, toolChoice: "auto" });
+		keeper?.start({
+			messages: history,
+			tools: agentResult.tools,
+			toolChoice: "auto",
+		});
 
 		// ── --save-every-loop ──
 		if (saveEveryLoop) {
@@ -437,7 +443,11 @@ export async function startCodeRepl(
 		try {
 			if (!existsSync(paths.temp)) mkdirSync(paths.temp, { recursive: true });
 			writeFileSync(resolve(paths.temp, submitFilename), formatted, "utf-8");
-			writeFileSync(resolve(paths.temp, "submit-result.md"), formatted, "utf-8");
+			writeFileSync(
+				resolve(paths.temp, "submit-result.md"),
+				formatted,
+				"utf-8",
+			);
 		} catch {}
 
 		switch (ir.type) {

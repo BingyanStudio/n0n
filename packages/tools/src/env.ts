@@ -258,7 +258,11 @@ async function probeRuntime(def: RuntimeDef): Promise<RuntimeProbe> {
 }
 
 async function probeCliTool(def: CliToolDef): Promise<CliToolProbe> {
-	const base: CliToolProbe = { name: def.name, available: false, version: null };
+	const base: CliToolProbe = {
+		name: def.name,
+		available: false,
+		version: null,
+	};
 	try {
 		const proc = Bun.spawn([def.cmd, ...def.versionArgs], {
 			stdout: "pipe",

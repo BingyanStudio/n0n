@@ -44,7 +44,14 @@ export function createResponsesClient(
 				return { error: `API ${res.status}: ${text.slice(0, 300)}` };
 			}
 
-			return (await res.json()) as { output: { type: string; call_id?: string; name?: string; input?: string }[] };
+			return (await res.json()) as {
+				output: {
+					type: string;
+					call_id?: string;
+					name?: string;
+					input?: string;
+				}[];
+			};
 		},
 	};
 }

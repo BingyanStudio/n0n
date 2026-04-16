@@ -39,7 +39,8 @@ function makeLargeContext(): DomainMessage[] {
 	const msgs: DomainMessage[] = [
 		{
 			type: "system",
-			content: "You are a senior software engineer specializing in TypeScript, systems design, and distributed systems. Provide thorough, detailed analysis with code examples when relevant.",
+			content:
+				"You are a senior software engineer specializing in TypeScript, systems design, and distributed systems. Provide thorough, detailed analysis with code examples when relevant.",
 		},
 	];
 
@@ -101,7 +102,8 @@ function makeLargeContext(): DomainMessage[] {
 
 	msgs.push({
 		type: "user_input",
-		content: "Now summarize the common themes across all these distributed systems patterns.",
+		content:
+			"Now summarize the common themes across all these distributed systems patterns.",
 		context: null,
 		hint: null,
 	});

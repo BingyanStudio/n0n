@@ -14,7 +14,11 @@ export function mockExecTC(id: string, script = "echo hi"): ToolCallRecord {
 }
 
 export function mockWriteTC(id: string, path: string): ToolCallRecord {
-	return { id, tool: "write", args: { path, content: "test" } } as ToolCallRecord;
+	return {
+		id,
+		tool: "write",
+		args: { path, content: "test" },
+	} as ToolCallRecord;
 }
 
 export function mockEditTC(id: string, path: string): ToolCallRecord {
@@ -54,11 +58,24 @@ export function mockExecResult(tc: ToolCallRecord): ToolResult {
 
 // ── Mock PipelineJob 工厂 ──
 
-export function mockCompletedJob(tc: ToolCallRecord, result: ToolResult): PipelineJob {
-	return { status: "completed", tc, canStart: () => true, result } as PipelineJob;
+export function mockCompletedJob(
+	tc: ToolCallRecord,
+	result: ToolResult,
+): PipelineJob {
+	return {
+		status: "completed",
+		tc,
+		canStart: () => true,
+		result,
+	} as PipelineJob;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: test mock flexibility
 export function mockFailedJob(tc: ToolCallRecord, argError: any): PipelineJob {
-	return { status: "failed", tc, canStart: () => true, argError } as PipelineJob;
+	return {
+		status: "failed",
+		tc,
+		canStart: () => true,
+		argError,
+	} as PipelineJob;
 }

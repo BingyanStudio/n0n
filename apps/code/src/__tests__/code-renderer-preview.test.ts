@@ -16,8 +16,8 @@ import {
 import { join } from "node:path";
 import type { ToolCallRecord } from "@n0n/types";
 import { CodeRenderer } from "../code-renderer.ts";
-import { formatSubmitResult } from "../submit-formatter.ts";
 import type { CodeResult } from "../schema.ts";
+import { formatSubmitResult } from "../submit-formatter.ts";
 
 // ── 测试用临时目录 ──
 const TEST_WORKSPACE = join(import.meta.dir, ".tmp-preview-test");
@@ -187,7 +187,10 @@ describe("CodeRenderer 流式 write 预览", () => {
 
 describe("formatSubmitResult 单元测试", () => {
 	test("completed 仅 summary", () => {
-		const md = formatSubmitResult({ type: "completed", summary: "done" } satisfies CodeResult);
+		const md = formatSubmitResult({
+			type: "completed",
+			summary: "done",
+		} satisfies CodeResult);
 		expect(md).toContain("# ✅ 任务完成");
 		expect(md).toContain("done");
 		expect(md).not.toContain("## 下一步");
@@ -223,10 +226,7 @@ describe("formatSubmitResult 单元测试", () => {
 		const md = formatSubmitResult({
 			type: "request_assist",
 			content: "需要帮助",
-			checklist: [
-				{ label: "检查项1", detail: "详情1" },
-				{ label: "检查项2" },
-			],
+			checklist: [{ label: "检查项1", detail: "详情1" }, { label: "检查项2" }],
 		} satisfies CodeResult);
 		expect(md).toContain("# 🔧 请求协助");
 		expect(md).toContain("- [ ] 检查项1");

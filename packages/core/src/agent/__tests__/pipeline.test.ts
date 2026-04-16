@@ -9,9 +9,20 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import type { CanStartFn, ToolCallRecord, ToolResult, ToolStreamEvent } from "@n0n/types";
+import type {
+	CanStartFn,
+	ToolCallRecord,
+	ToolResult,
+	ToolStreamEvent,
+} from "@n0n/types";
 import { ExecutionScheduler, type SchedulerEvents } from "../scheduler.ts";
-import { mockExecTC, mockWriteTC, mockEditTC, mockReminderTC, mockResult } from "./test-helpers.ts";
+import {
+	mockEditTC,
+	mockExecTC,
+	mockReminderTC,
+	mockResult,
+	mockWriteTC,
+} from "./test-helpers.ts";
 
 // ── canStart 策略 ──
 
@@ -155,7 +166,9 @@ describe("ExecutionScheduler", () => {
 			resolve("w1");
 			await runPromise;
 
-			expect(scheduler.orderedJobs().every((j) => j.status === "completed")).toBe(true);
+			expect(
+				scheduler.orderedJobs().every((j) => j.status === "completed"),
+			).toBe(true);
 		});
 
 		it("相同路径的 write/edit 串行执行", async () => {
@@ -365,7 +378,11 @@ describe("ExecutionScheduler", () => {
 
 			// 所有 end 事件都应到达，顺序反映实际完成顺序（无序）
 			const endEvents = eventLog.filter((e) => e.startsWith("end:"));
-			expect(endEvents).toEqual(["end:w1:completed", "end:e2:completed", "end:e1:completed"]);
+			expect(endEvents).toEqual([
+				"end:w1:completed",
+				"end:e2:completed",
+				"end:e1:completed",
+			]);
 		});
 
 		it("无 events 时 scheduler 正常工作", async () => {

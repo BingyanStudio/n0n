@@ -16,8 +16,9 @@
  * - 验证后 submit（exec 运行验证 + 清理）
  */
 
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { Toolkit } from "@n0n/tools";
 import type {
 	DomainMessage,
 	ExecToolCall,
@@ -27,7 +28,6 @@ import type {
 	ToolResult,
 	ToolStreamEvent,
 } from "@n0n/types";
-import type { Toolkit } from "@n0n/tools";
 
 const IS_WINDOWS = process.platform === "win32";
 
@@ -79,10 +79,12 @@ async function runExec(
 	if (!entry || !entry.stream) {
 		throw new Error("exec tool entry not found or not stream");
 	}
-	const gen = (entry.execute as (
-		tc: ToolCallRecord,
-		reminders: never[],
-	) => AsyncGenerator<ToolStreamEvent>)(call, []);
+	const gen = (
+		entry.execute as (
+			tc: ToolCallRecord,
+			reminders: never[],
+		) => AsyncGenerator<ToolStreamEvent>
+	)(call, []);
 
 	let result: ToolResult | undefined;
 	for await (const event of gen) {
@@ -184,19 +186,22 @@ export async function buildContextFewshot(
 			: "";
 
 	// 从 codebase 输出中提取 Total 行
-	const totalLine =
-		codebaseStdout.match(/Total: .+/)?.[0] ?? "项目结构已扫描";
+	const totalLine = codebaseStdout.match(/Total: .+/)?.[0] ?? "项目结构已扫描";
 
 	// 从环境输出中提取关键信息
 	const osMatch = envStdout.match(/OS: (\S+)/);
-	const os = osMatch?.[1] ?? (envStdout.includes("Windows") ? "Windows" : "unknown");
+	const os =
+		osMatch?.[1] ?? (envStdout.includes("Windows") ? "Windows" : "unknown");
 
 	// Unix boot_1 outputs "Git branch: <name>"; Windows outputs bare branch name
 	// after the ver line. Fall back to parsing git branch output from raw lines.
 	const branchMatch = envStdout.match(/Git branch: (\S+)/);
 	let branch = branchMatch?.[1] ?? "unknown";
 	if (branch === "unknown" && IS_WINDOWS) {
-		const lines = envStdout.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+		const lines = envStdout
+			.split(/\r?\n/)
+			.map((l) => l.trim())
+			.filter(Boolean);
 		for (const line of lines) {
 			if (/^Microsoft Windows|^[MADRCU?!]{1,2}\s/.test(line)) continue;
 			branch = line;

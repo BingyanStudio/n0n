@@ -12,9 +12,9 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { pick } from "../format-prompt/seed.ts";
-import { formatPrompt } from "../format-prompt/index.ts";
 import type { DomainMessage } from "@n0n/types";
+import { formatPrompt } from "../format-prompt/index.ts";
+import { pick } from "../format-prompt/seed.ts";
 
 // ── 稳定性测试 ──
 
@@ -130,16 +130,15 @@ describe("pick 多样性", () => {
 		{ pattern: "single" as const, rounds: 50 },
 		{ pattern: "dual" as const, rounds: 30 },
 		{ pattern: "triple" as const, rounds: 20 },
-	])(
-		"大样本 $pattern x $rounds 轮：所有变体出现 + 偏差 <15%",
-		({ pattern, rounds }) => {
-			const indices = toolResultIndices(pattern, rounds);
-			const { maxDeviation, allPresent } =
-				analyzeDistribution(indices);
-			expect(allPresent).toBe(true);
-			expect(maxDeviation).toBeLessThan(0.15);
-		},
-	);
+	])("大样本 $pattern x $rounds 轮：所有变体出现 + 偏差 <15%", ({
+		pattern,
+		rounds,
+	}) => {
+		const indices = toolResultIndices(pattern, rounds);
+		const { maxDeviation, allPresent } = analyzeDistribution(indices);
+		expect(allPresent).toBe(true);
+		expect(maxDeviation).toBeLessThan(0.15);
+	});
 
 	// 中样本（10-20 轮的典型对话）：至少不会退化成只选一个
 	it.each([
@@ -147,39 +146,30 @@ describe("pick 多样性", () => {
 		{ pattern: "dual" as const, rounds: 8 },
 		{ pattern: "triple" as const, rounds: 5 },
 		{ pattern: "mixed" as const, rounds: 12 },
-	])(
-		"中样本 $pattern x $rounds 轮：至少出现 2 种变体",
-		({ pattern, rounds }) => {
-			const indices = toolResultIndices(pattern, rounds);
-			const picks = indices.map((i) => pick(variants, i));
-			const unique = new Set(picks);
-			expect(unique.size).toBeGreaterThanOrEqual(2);
-		},
-	);
+	])("中样本 $pattern x $rounds 轮：至少出现 2 种变体", ({
+		pattern,
+		rounds,
+	}) => {
+		const indices = toolResultIndices(pattern, rounds);
+		const picks = indices.map((i) => pick(variants, i));
+		const unique = new Set(picks);
+		expect(unique.size).toBeGreaterThanOrEqual(2);
+	});
 
 	// χ² 检验：1000 样本下各等差步长分布均匀
-	it.each([1, 2, 3, 4, 5])(
-		"χ² 检验 step=%i x1000：p>0.01",
-		(step) => {
-			const indices = Array.from(
-				{ length: 1000 },
-				(_, i) => 2 + i * step,
-			);
-			const counts = new Array(variants.length).fill(0) as number[];
-			for (const idx of indices) {
-				const v = pick(variants, idx);
-				const i = variants.indexOf(v);
-				counts[i] = counts[i]! + 1;
-			}
-			const expected = 1000 / variants.length;
-			const chi2 = counts.reduce(
-				(s, c) => s + (c - expected) ** 2 / expected,
-				0,
-			);
-			// χ²(df=2, α=0.01) = 9.21
-			expect(chi2).toBeLessThan(9.21);
-		},
-	);
+	it.each([1, 2, 3, 4, 5])("χ² 检验 step=%i x1000：p>0.01", (step) => {
+		const indices = Array.from({ length: 1000 }, (_, i) => 2 + i * step);
+		const counts = new Array(variants.length).fill(0) as number[];
+		for (const idx of indices) {
+			const v = pick(variants, idx);
+			const i = variants.indexOf(v);
+			counts[i] = counts[i]! + 1;
+		}
+		const expected = 1000 / variants.length;
+		const chi2 = counts.reduce((s, c) => s + (c - expected) ** 2 / expected, 0);
+		// χ²(df=2, α=0.01) = 9.21
+		expect(chi2).toBeLessThan(9.21);
+	});
 });
 
 // ── formatPrompt 端到端稳定性 ──
