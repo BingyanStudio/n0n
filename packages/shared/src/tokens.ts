@@ -73,7 +73,8 @@ export function splitLinesByTokenBudget(
 	let chunkText = "";
 
 	for (let i = 0; i < lines.length; i++) {
-		const lineWithNewline = i < lines.length - 1 ? lines[i] + "\n" : lines[i]!;
+		const lineWithNewline =
+			i < lines.length - 1 ? `${lines[i]}\n` : (lines[i] ?? "");
 		const candidateText = chunkText + lineWithNewline;
 		const candidateTokens = estimateTokens(candidateText);
 

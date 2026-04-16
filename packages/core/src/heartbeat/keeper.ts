@@ -180,7 +180,11 @@ export class HeartbeatKeeper {
 
 		let ok: boolean;
 		try {
-			ok = await this.callbacks.sendHeartbeat(this._lastRequest!);
+			if (!this._lastRequest) {
+				ok = false;
+			} else {
+				ok = await this.callbacks.sendHeartbeat(this._lastRequest);
+			}
 		} catch {
 			ok = false;
 		}

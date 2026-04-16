@@ -128,7 +128,8 @@ export class RenderBuffer {
 	/** 从当前队首开始，flush 所有可输出的事件 */
 	private flushHead(): void {
 		while (this.headIdx < this.queue.length) {
-			const entry = this.queue[this.headIdx]!;
+			const entry = this.queue[this.headIdx];
+			if (!entry) break;
 
 			// argError 的 entry：跳过不渲染
 			if (entry.argError) {

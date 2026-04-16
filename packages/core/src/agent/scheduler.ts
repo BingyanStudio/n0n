@@ -180,7 +180,7 @@ export class ExecutionScheduler {
 						status: "completed",
 						tc,
 						canStart,
-						result: result!,
+						result: result as ToolResult,
 					};
 				}
 				this.activeSet.delete(slot);
@@ -188,7 +188,7 @@ export class ExecutionScheduler {
 					tc.id,
 					argError
 						? { status: "arg_error" }
-						: { status: "completed", result: result! },
+						: { status: "completed", result: result as ToolResult },
 				);
 				this.notify?.();
 			}

@@ -9,12 +9,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import type {
-	CanStartFn,
-	ToolCallRecord,
-	ToolResult,
-	ToolStreamEvent,
-} from "@n0n/types";
+import type { CanStartFn, ToolCallRecord, ToolStreamEvent } from "@n0n/types";
 import { ExecutionScheduler, type SchedulerEvents } from "../scheduler.ts";
 import {
 	mockEditTC,

@@ -15,7 +15,6 @@ import type {
 	DomainMessage,
 	SubmitToolResult,
 	ToolCallRecord,
-	ToolResult,
 } from "@n0n/types";
 import { StreamAccumulator } from "@n0n/types";
 import { z } from "zod";
@@ -25,7 +24,6 @@ import {
 	collectJobMessages,
 	recoverTruncatedCalls,
 } from "../round.ts";
-import type { PipelineJob } from "../scheduler.ts";
 import {
 	mockCompletedJob,
 	mockExecResult,

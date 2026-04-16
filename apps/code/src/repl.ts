@@ -164,7 +164,7 @@ export async function startCodeRepl(
 	const keeper = client.heartbeat
 		? new HeartbeatKeeper({
 				sendHeartbeat: async (request) => {
-					const usage = await client.heartbeat!(request);
+					const usage = (await client.heartbeat?.(request)) ?? null;
 					return usage !== null;
 				},
 				onTick: (count, maxCount) => {

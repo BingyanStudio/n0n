@@ -104,7 +104,8 @@ export function formatPrompt(
 	const result: PromptMessage[] = [];
 
 	for (let i = 0; i < messages.length; i++) {
-		const msg = messages[i]!;
+		const msg = messages[i];
+		if (!msg) continue;
 
 		switch (msg.type) {
 			case "system":
@@ -236,7 +237,9 @@ export function formatPrompt(
 
 			default: {
 				const _exhaustive: never = msg;
-				throw new Error(`Unhandled message type: ${(_exhaustive as any).type}`);
+				throw new Error(
+					`Unhandled message type: ${(_exhaustive as unknown as Record<string, unknown>).type}`,
+				);
 			}
 		}
 	}

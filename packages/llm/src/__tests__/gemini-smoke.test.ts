@@ -87,7 +87,7 @@ describe("Gemini Client smoke test", () => {
 
 			expect(content.length).toBeGreaterThan(0);
 			expect(doneEvent).not.toBeNull();
-			expect(doneEvent!.finishReason).toBe("stop");
+			expect(doneEvent?.finishReason).toBe("stop");
 			// Gemini 始终思考，即使未配置 thinkingEffort 也应有 reasoning
 		},
 		30_000,
@@ -168,7 +168,7 @@ describe("Gemini Client smoke test", () => {
 				},
 			];
 
-			let content = "";
+			let _content = "";
 			const toolCalls: Array<{ name?: string; args: string }> = [];
 			let doneEvent = null;
 
@@ -178,13 +178,16 @@ describe("Gemini Client smoke test", () => {
 				toolChoice: "auto",
 			})) {
 				if (event.type === "content") {
-					content += event.text;
+					_content += event.text;
 				} else if (event.type === "tool_call_delta") {
 					if (!toolCalls[event.index]) {
 						toolCalls[event.index] = { name: event.name, args: "" };
 					}
-					if (event.name) toolCalls[event.index]!.name = event.name;
-					toolCalls[event.index]!.args += event.arguments;
+					const tc = toolCalls[event.index];
+					if (tc) {
+						if (event.name) tc.name = event.name;
+						tc.args += event.arguments;
+					}
 				} else if (event.type === "done") {
 					doneEvent = event;
 				} else if (event.type === "error") {
@@ -197,8 +200,8 @@ describe("Gemini Client smoke test", () => {
 
 			expect(doneEvent).not.toBeNull();
 			if (toolCalls.length > 0) {
-				expect(toolCalls[0]!.name).toBe("get_weather");
-				const args = JSON.parse(toolCalls[0]!.args);
+				expect(toolCalls[0]?.name).toBe("get_weather");
+				const args = JSON.parse(toolCalls[0]?.args ?? "{}");
 				expect(args.city).toBeDefined();
 			}
 		},
@@ -251,7 +254,7 @@ describe("Gemini Client smoke test", () => {
 			expect(content.length).toBeGreaterThan(0);
 			expect(content).toContain("391");
 			expect(doneEvent).not.toBeNull();
-			expect(doneEvent!.finishReason).toBe("stop");
+			expect(doneEvent?.finishReason).toBe("stop");
 		},
 		30_000,
 	);

@@ -11,7 +11,7 @@
  * 3. 启动 REPL
  */
 
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { CliSetupRenderer, style, writeln } from "@n0n/cli-ui";

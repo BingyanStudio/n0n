@@ -171,7 +171,8 @@ export async function buildContextFewshot(
 
 	// ── 从 boot_1 结果中提取环境摘要（用于 Turn 2 的 submit summary） ──
 
-	const envResult = turn1Results[0]!;
+	const envResult = turn1Results[0];
+	if (!envResult) throw new Error("missing env result");
 	const envStdout =
 		envResult.tool === "exec" && "stdout" in envResult
 			? envResult.stdout
@@ -179,7 +180,8 @@ export async function buildContextFewshot(
 				? (envResult as { stdoutSoFar: string }).stdoutSoFar
 				: "";
 
-	const codebaseResult = turn1Results[2]!;
+	const codebaseResult = turn1Results[2];
+	if (!codebaseResult) throw new Error("missing codebase result");
 	const codebaseStdout =
 		codebaseResult.tool === "exec" && "stdout" in codebaseResult
 			? codebaseResult.stdout
@@ -212,7 +214,7 @@ export async function buildContextFewshot(
 	const submitSummary = [
 		`环境初始化完成。`,
 		`${os}，工作目录 ${workspace}，当前在 ${branch} 分支。`,
-		totalLine + "。",
+		`${totalLine}。`,
 		"就绪，等待指令。",
 	].join("");
 

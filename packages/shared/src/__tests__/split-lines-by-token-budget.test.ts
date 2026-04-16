@@ -6,8 +6,8 @@ describe("splitLinesByTokenBudget", () => {
 		const text = "line 1\nline 2\nline 3";
 		const chunks = splitLinesByTokenBudget(text, 1000);
 		expect(chunks).toHaveLength(1);
-		expect(chunks[0]!.startLine).toBe(1);
-		expect(chunks[0]!.endLine).toBe(3);
+		expect(chunks[0]?.startLine).toBe(1);
+		expect(chunks[0]?.endLine).toBe(3);
 	});
 
 	it("空文本返回空数组", () => {
@@ -30,14 +30,14 @@ describe("splitLinesByTokenBudget", () => {
 
 		// 验证行号连续性：每块的 startLine 应等于上一块的 endLine + 1（首块除外）
 		for (let i = 1; i < chunks.length; i++) {
-			expect(chunks[i]!.startLine).toBe(chunks[i - 1]!.endLine + 1);
+			expect(chunks[i]?.startLine).toBe((chunks[i - 1]?.endLine ?? 0) + 1);
 		}
 
 		// 首块从第 1 行开始
-		expect(chunks[0]!.startLine).toBe(1);
+		expect(chunks[0]?.startLine).toBe(1);
 
 		// 末块以最后一行结束
-		expect(chunks[chunks.length - 1]!.endLine).toBe(lines.length);
+		expect(chunks[chunks.length - 1]?.endLine).toBe(lines.length);
 
 		// 每块的 token 数不应显著超出预算（允许单行超出的情况）
 		for (const chunk of chunks.slice(0, -1)) {
@@ -53,15 +53,15 @@ describe("splitLinesByTokenBudget", () => {
 		// 应能正常返回，不死循环
 		expect(chunks.length).toBeGreaterThanOrEqual(1);
 		// 行号覆盖完整
-		expect(chunks[0]!.startLine).toBe(1);
-		expect(chunks[chunks.length - 1]!.endLine).toBe(3);
+		expect(chunks[0]?.startLine).toBe(1);
+		expect(chunks[chunks.length - 1]?.endLine).toBe(3);
 	});
 
 	it("行号范围 1-based 且包含首尾", () => {
 		const text = "a\nb\nc\nd\ne";
 		const chunks = splitLinesByTokenBudget(text, 10000);
 		expect(chunks).toHaveLength(1);
-		expect(chunks[0]!.startLine).toBe(1);
-		expect(chunks[0]!.endLine).toBe(5);
+		expect(chunks[0]?.startLine).toBe(1);
+		expect(chunks[0]?.endLine).toBe(5);
 	});
 });

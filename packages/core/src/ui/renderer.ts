@@ -9,7 +9,6 @@ import type {
 	RoundTokenUsage,
 	ToolCallRecord,
 	ToolExecOutcome,
-	ToolResult,
 } from "@n0n/types";
 
 export class PlainRenderer implements Renderer {

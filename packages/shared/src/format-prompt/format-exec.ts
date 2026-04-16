@@ -55,7 +55,8 @@ function formatChunkGuide(
 ): string {
 	if (chunks.length === 0) return "";
 	if (chunks.length === 1) {
-		const c = chunks[0]!;
+		const c = chunks[0];
+		if (!c) return "";
 		return `Truncated part: lines ${c.startLine}-${c.endLine} (~${c.tokens} tokens) — small enough to read in one go if needed.`;
 	}
 	const lines = chunks.map(

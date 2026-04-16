@@ -150,7 +150,7 @@ describe("heartbeat integration", () => {
 			}
 			console.log("  stream:", JSON.stringify(streamUsage));
 			expect(streamUsage).not.toBeNull();
-			expect(streamUsage!.cacheWriteTokens).toBeGreaterThan(0);
+			expect(streamUsage?.cacheWriteTokens).toBeGreaterThan(0);
 
 			// Round 2: heartbeat 命中缓存
 			console.log("  [2/2] heartbeat (应命中缓存)...");
@@ -158,8 +158,8 @@ describe("heartbeat integration", () => {
 			console.log("  heartbeat:", JSON.stringify(hbUsage));
 
 			expect(hbUsage).not.toBeNull();
-			expect(hbUsage!.outputTokens).toBeLessThanOrEqual(2);
-			expect(hbUsage!.cacheReadTokens).toBeGreaterThan(0);
+			expect(hbUsage?.outputTokens).toBeLessThanOrEqual(2);
+			expect(hbUsage?.cacheReadTokens).toBeGreaterThan(0);
 		},
 		60_000,
 	);

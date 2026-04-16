@@ -300,7 +300,7 @@ export class RichRenderer implements Renderer {
 
 	// ── 工具执行（FIFO 有序渲染，事件无序到达）──
 
-	toolExecStart(tcId: string, tc: ToolCallRecord): void {
+	toolExecStart(_tcId: string, tc: ToolCallRecord): void {
 		this.renderBuffer.register(tc);
 	}
 
@@ -413,7 +413,6 @@ export class RichRenderer implements Renderer {
 						return `${style.dim("◂")} ${style.cyan("exec")} unknown status`;
 					}
 				}
-				break;
 			}
 			case "write": {
 				if (result.status === "failed" || result.status === "recover_failed") {

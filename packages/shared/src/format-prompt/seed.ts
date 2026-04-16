@@ -39,5 +39,5 @@ function hash(seed: number, index: number): number {
  */
 export function pick<T>(variants: T[], msgIndex: number): T {
 	const h = hash(BASE_SEED, msgIndex);
-	return variants[Math.floor((h / 0x100000000) * variants.length)]!;
+	return variants[Math.floor((h / 0x100000000) * variants.length)] as T;
 }

@@ -80,7 +80,7 @@ describe("pick 多样性", () => {
 				let idx = 2; // skip system + user_input
 				for (let r = 0; r < Math.min(rounds, toolCounts.length); r++) {
 					idx++; // assistant_tool_call
-					for (let t = 0; t < toolCounts[r]!; t++) {
+					for (let t = 0; t < (toolCounts[r] ?? 0); t++) {
 						indices.push(idx);
 						idx++;
 					}
@@ -163,7 +163,7 @@ describe("pick 多样性", () => {
 		for (const idx of indices) {
 			const v = pick(variants, idx);
 			const i = variants.indexOf(v);
-			counts[i] = counts[i]! + 1;
+			counts[i] = (counts[i] ?? 0) + 1;
 		}
 		const expected = 1000 / variants.length;
 		const chi2 = counts.reduce((s, c) => s + (c - expected) ** 2 / expected, 0);

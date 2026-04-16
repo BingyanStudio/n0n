@@ -102,7 +102,6 @@ function fmtResult(r: ToolResult): string {
 					return `unknown exec status`;
 				}
 			}
-			break;
 		case "write":
 			if (r.status === "failed" || r.status === "recover_failed") {
 				return `${r.call.args.path}: ${r.error ?? "failed"}`;

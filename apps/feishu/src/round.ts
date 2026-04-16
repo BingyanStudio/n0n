@@ -182,7 +182,7 @@ export async function runFeishuRound(
 		default: {
 			const _exhaustive: never = result.result;
 			console.warn(
-				`[feishu] unhandled result type: ${(_exhaustive as any).type}`,
+				`[feishu] unhandled result type: ${(_exhaustive as unknown as Record<string, unknown>).type}`,
 			);
 		}
 	}
