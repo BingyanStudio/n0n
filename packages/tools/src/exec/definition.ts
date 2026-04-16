@@ -103,7 +103,7 @@ function buildDescription(env: EnvSnapshot, model: string): string {
 	const tips = [
 		"- **Prefer `write` and `edit` for file operations** — they are more efficient and easier to review than shell commands. Use `exec` for batch operations (bulk renames, bulk replacements) or when you need shell-specific functionality.",
 		"- **Process output inside the script** — filter, summarize, format before printing. Avoid dumping large raw output.",
-		"- **Output truncation** — stdout+stderr exceeding ~4 000 tokens is auto-truncated: only the **last ~1 000 tokens** are kept and the full output is saved to a file. To avoid losing important content, **assess first** (`wc -l`, `ls -la`) then read selectively (`head`, `grep`, `sed`) or split across parallel tool calls.",
+		`- **Output truncation** — stdout+stderr exceeding ~4 000 tokens is auto-truncated: only the **last ~1 000 tokens** are kept and the full output is saved to a file. To avoid losing important content, **assess first** (${IS_WINDOWS ? "`dir`" : "`wc -l`, `ls -la`"}) then read selectively (${IS_WINDOWS ? "`findstr`, `powershell Select-String`" : "`head`, `grep`, `sed`"}) or split across parallel tool calls.`,
 		...(hasRipgrep
 			? [`- **Prefer \`rg\` (ripgrep) over \`grep\`** — \`rg\` is faster, respects \`.gitignore\`, and supports recursive search by default. Use \`rg "pattern" path/\` instead of \`grep -r "pattern" path/\`.`]
 			: []),
