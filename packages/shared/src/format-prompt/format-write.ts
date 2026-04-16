@@ -5,6 +5,8 @@
 import type { WriteToolResult } from "@n0n/types";
 import { pick, wrapTag } from "./utils.ts";
 
+const IS_WINDOWS = process.platform === "win32";
+
 // ── 变体模板 ──
 
 const completedTemplates = [
@@ -19,7 +21,7 @@ const recoveredTemplates = [
 		`The file contains only the first portion of your intended content.`,
 		``,
 		`To complete it, choose one strategy:`,
-		`1. Write the remaining content to a temp file, then use exec to append it: exec({ script: "cat tmp_rest.txt >> target_file" })`,
+		`1. Write the remaining content to a temp file, then use exec to append it: exec({ script: "${IS_WINDOWS ? "type tmp_rest.txt >> target_file" : "cat tmp_rest.txt >> target_file"}" })`,
 		`2. Break the file into smaller, well-structured modules and write each separately.`,
 		`Do NOT use edit for large appends — it is intent-driven and not suited for bulk content insertion.`,
 	].join("\n"),
@@ -28,7 +30,7 @@ const recoveredTemplates = [
 		`Only the beginning of the intended content is in the file.`,
 		``,
 		`Recovery options:`,
-		`1. Write the rest to a temp file and append: exec({ script: "cat remaining.txt >> ${path}" })`,
+		`1. Write the rest to a temp file and append: exec({ script: "${IS_WINDOWS ? `type remaining.txt >> ${path}` : `cat remaining.txt >> ${path}`}" })`,
 		`2. Split into smaller modules and write each one separately.`,
 		`Avoid using edit for bulk appends.`,
 	].join("\n"),

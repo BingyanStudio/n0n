@@ -8,6 +8,8 @@
 import type { ExecToolResult } from "@n0n/types";
 import { pick, wrapTag } from "./utils.ts";
 
+const IS_WINDOWS = process.platform === "win32";
+
 // ── 变体模板 ──
 
 const metaTemplates = [
@@ -59,16 +61,19 @@ function formatChunkGuide(
 	const lines = chunks.map(
 		(c, i) => `  chunk ${i + 1}: lines ${c.startLine}-${c.endLine} (~${c.tokens} tok)`,
 	);
-	return `Truncated part can be read in ${chunks.length} chunks:\n${lines.join("\n")}\nUse sed -n '<start>,<end>p' ${outputFile} to read a specific chunk.`;
+	const readCmd = IS_WINDOWS
+		? `Use pwsh -c "Get-Content ${outputFile} | Select-Object -Skip <start-1> -First <count>" to read a specific chunk.`
+		: `Use sed -n '<start>,<end>p' ${outputFile} to read a specific chunk.`;
+	return `Truncated part can be read in ${chunks.length} chunks:\n${lines.join("\n")}\n${readCmd}`;
 }
 
 const truncatedHintTemplates = [
 	(totalLines: number, outputFile: string, chunkGuide: string) =>
-		`Full output (${totalLines} lines) saved to: ${outputFile}\n${chunkGuide}\nOr write a script to extract key information — do NOT cat the full file.`,
+		`Full output (${totalLines} lines) saved to: ${outputFile}\n${chunkGuide}\nOr write a script to extract key information — do NOT ${IS_WINDOWS ? "type" : "cat"} the full file.`,
 	(totalLines: number, outputFile: string, chunkGuide: string) =>
 		`${totalLines} lines captured in ${outputFile}.\n${chunkGuide}\nPrefer writing a script to extract what you need rather than reading raw output.`,
 	(totalLines: number, outputFile: string, chunkGuide: string) =>
-		`Complete output saved to ${outputFile} (${totalLines} lines).\n${chunkGuide}\nUse targeted reads (sed/head/tail) or a script — avoid re-dumping the full file.`,
+		`Complete output saved to ${outputFile} (${totalLines} lines).\n${chunkGuide}\nUse targeted reads or a script — avoid re-dumping the full file.`,
 ];
 
 const diagnosticHintTemplates = [
