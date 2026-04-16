@@ -29,6 +29,8 @@ import type {
 } from "@n0n/types";
 import type { Toolkit } from "@n0n/tools";
 
+const IS_WINDOWS = process.platform === "win32";
+
 // ── bootstrap-test.md 内容（预置到 .temp/ 供扫描时发现） ──
 
 const BOOTSTRAP_TASK = `# Bootstrap Task
@@ -94,31 +96,6 @@ async function runExec(
 	return result;
 }
 
-// ── 消息构造辅助 ──
-
-function submitPair(
-	id: string,
-	args: Record<string, unknown>,
-): [DomainMessage, DomainMessage] {
-	const call: SubmitToolCall = { id, tool: "submit", args };
-	return [
-		{
-			type: "assistant_tool_call",
-			content: null,
-			reasoning: null,
-			reasoningSignature: null,
-			toolCalls: [call],
-		},
-		{
-			type: "tool_result",
-			tool: "submit" as const,
-			call,
-			cleanedResult: args,
-			userResponse: undefined,
-		} satisfies SubmitToolResult as DomainMessage,
-	];
-}
-
 // ── 主函数 ──
 
 /**
@@ -147,14 +124,18 @@ export async function buildContextFewshot(
 			id: "boot_1",
 			tool: "exec" as const,
 			args: {
-				script: 'echo "OS: $(uname -s)"; echo "Shell: $SHELL"; echo "Git branch: $(git branch --show-current 2>/dev/null || echo none)"; git status --short 2>/dev/null | head -20',
+				script: IS_WINDOWS
+					? "ver & git branch --show-current 2>nul & git status --short 2>nul"
+					: 'echo "OS: $(uname -s)"; echo "Shell: $SHELL"; echo "Git branch: $(git branch --show-current 2>/dev/null || echo none)"; git status --short 2>/dev/null | head -20',
 			},
 		},
 		{
 			id: "boot_2",
 			tool: "exec" as const,
 			args: {
-				script: "cat AGENTS.md 2>/dev/null || echo '(no AGENTS.md found)'",
+				script: IS_WINDOWS
+					? "type AGENTS.md 2>nul || echo (no AGENTS.md found)"
+					: "cat AGENTS.md 2>/dev/null || echo '(no AGENTS.md found)'",
 			},
 		},
 		{
@@ -169,7 +150,9 @@ export async function buildContextFewshot(
 			id: "boot_4",
 			tool: "exec" as const,
 			args: {
-				script: "cat .temp/bootstrap-test.md",
+				script: IS_WINDOWS
+					? "type .temp\\bootstrap-test.md"
+					: "cat .temp/bootstrap-test.md",
 			},
 		},
 	];
@@ -206,9 +189,20 @@ export async function buildContextFewshot(
 
 	// 从环境输出中提取关键信息
 	const osMatch = envStdout.match(/OS: (\S+)/);
+	const os = osMatch?.[1] ?? (envStdout.includes("Windows") ? "Windows" : "unknown");
+
+	// Unix boot_1 outputs "Git branch: <name>"; Windows outputs bare branch name
+	// after the ver line. Fall back to parsing git branch output from raw lines.
 	const branchMatch = envStdout.match(/Git branch: (\S+)/);
-	const os = osMatch?.[1] ?? "unknown";
-	const branch = branchMatch?.[1] ?? "unknown";
+	let branch = branchMatch?.[1] ?? "unknown";
+	if (branch === "unknown" && IS_WINDOWS) {
+		const lines = envStdout.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+		for (const line of lines) {
+			if (/^Microsoft Windows|^[MADRCU?!]{1,2}\s/.test(line)) continue;
+			branch = line;
+			break;
+		}
+	}
 
 	const submitSummary = [
 		`环境初始化完成。`,
@@ -273,7 +267,9 @@ export async function buildContextFewshot(
 		id: "boot_7",
 		tool: "exec" as const,
 		args: {
-			script: "bun .temp/hello.ts && rm .temp/hello.ts .temp/bootstrap-test.md",
+			script: IS_WINDOWS
+				? "bun .temp/hello.ts && del .temp\\hello.ts .temp\\bootstrap-test.md"
+				: "bun .temp/hello.ts && rm .temp/hello.ts .temp/bootstrap-test.md",
 		},
 	};
 	const turn2SubmitCall: SubmitToolCall = {
