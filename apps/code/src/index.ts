@@ -160,3 +160,4 @@ writeln(style.gray("支持多行输入 / 粘贴，按空行（回车）提交。
 writeln();
 
 await startCodeRepl(paths, { initialInput, resumeFile, saveEveryLoop });
+process.exit(0);

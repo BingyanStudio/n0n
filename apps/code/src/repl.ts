@@ -501,6 +501,7 @@ export async function startCodeRepl(
 		}
 	}
 
+	keeper?.stop();
 	stdin?.dispose();
 	writeln(style.gray("Bye!"));
 }
