@@ -30,13 +30,23 @@ if (args.includes("--help") || args.includes("-h")) {
 	console.log(`n0n v${version} — Code Agent
 
 用法:
-  n0n                     以当前目录为 workspace 启动
+  n0n                     以当前目录为 workspace 启动交互式 REPL
+  n0n "你的任务描述"       非交互式：直接传入 prompt 执行任务，完成后退出
   n0n <dir>               指定 workspace 目录（支持拖拽）
   n0n --workspace <dir>   显式指定 workspace 目录
   n0n --resume <file>     从对话日志文件恢复对话
   n0n --save-every-loop   每轮自动保存对话到 n0n-conversation-latest.json
   n0n -v, --version       显示版本号
   n0n -h, --help          显示帮助信息
+
+REPL 命令:
+  exit                    退出 REPL
+  pause                   停止缓存保活心跳（下次提交消息后自动恢复）
+  log                     将当前对话保存到文件
+
+快捷键（仅 TTY 模式）:
+  Ctrl+P                  停止缓存保活心跳
+  Ctrl+Q                  中断当前 agent 执行
 
 环境变量:
   N0N_CODE_WORKSPACE      默认 workspace 路径（优先级低于命令行参数）
