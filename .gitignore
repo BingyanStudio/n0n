@@ -19,6 +19,8 @@ workflows/
 !.runtime/feishu/shared/skills/set-cronjob/
 !.runtime/feishu/shared/skills/set-cronjob/**
 workflows/memory
-dist/ 
+dist/
 .DS_Store
 n0n-conversation-*.json
+docs/xlxz-wiki
+docs/xlxz-wiki.exe
