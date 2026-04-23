@@ -4,8 +4,8 @@
  * 为每种 DomainMessage 类型生成独立的 snapshot 文件，
  * 展示 formatPrompt 的格式化结果，供人工检查提示词结构。
  *
- * 运行: bun run packages/shared/src/__tests__/generate-format-snapshots.ts
- * 输出: packages/shared/src/__tests__/__snapshots__/<type>.snapshot.md
+ * 运行: bun run packages/shared/scripts/generate-format-snapshots.ts
+ * 输出: packages/shared/scripts/preview-output/<type>.snapshot.md
  */
 
 import { mkdirSync } from "node:fs";
@@ -14,7 +14,7 @@ import type { DomainMessage, PromptMessage } from "@n0n/types";
 import { formatPrompt } from "../src/format-prompt/index.ts";
 
 const MODEL = "claude-sonnet-4-20250514";
-const SNAPSHOT_DIR = join(import.meta.dir, "__snapshots__");
+const SNAPSHOT_DIR = join(import.meta.dir, "preview-output");
 
 mkdirSync(SNAPSHOT_DIR, { recursive: true });
 
@@ -167,6 +167,7 @@ const scenarios: Scenario[] = [
 				stderrLength: 0,
 				totalLines: 850,
 				tailStartLine: 847,
+				truncatedChunks: [],
 				durationMs: 320,
 			},
 		],
