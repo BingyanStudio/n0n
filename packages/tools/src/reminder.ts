@@ -7,12 +7,22 @@
  */
 
 import type {
+	ReminderArgs,
 	ReminderToolCall,
 	ReminderToolResult,
 	ToolDefinition,
 } from "@n0n/types";
+import { ReminderArgsSchema } from "@n0n/types";
+import { type FieldDescriptions, zodToParameters } from "./zod-to-parameters.ts";
 
-export { ReminderArgsSchema } from "@n0n/types";
+export { ReminderArgsSchema };
+
+const reminderDescriptions: FieldDescriptions<ReminderArgs> = {
+	content:
+		"Reminder content: what you've done, what remains, and what to do next.",
+	estimate:
+		"Rounds until this reminder fires (default: 7). 1 round = 1 tool call batch.",
+};
 
 export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 	name: "reminder",
@@ -23,23 +33,7 @@ export const REMINDER_TOOL_DEFINITION: ToolDefinition = {
 		"",
 		"This tool is deterministic and always succeeds — do not wait for its result.",
 	].join("\n"),
-	parameters: {
-		type: "object",
-		properties: {
-			content: {
-				type: "string",
-				description:
-					"Reminder content: what you've done, what remains, and what to do next.",
-			},
-			estimate: {
-				type: "number",
-				description:
-					"Rounds until this reminder fires (default: 7). 1 round = 1 tool call batch.",
-			},
-		},
-		required: ["content"],
-		additionalProperties: false,
-	},
+	parameters: zodToParameters(ReminderArgsSchema, reminderDescriptions),
 };
 
 export interface PendingReminder {

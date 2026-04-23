@@ -19,6 +19,7 @@ import type {
 	DiffChunk,
 	DiffLine,
 	EditDiff,
+	EditArgs,
 	EditToolCall,
 	EditToolResult,
 	ToolDefinition,
@@ -28,29 +29,21 @@ import type {
 import type { EditBackend } from "./backend.ts";
 import editDescription from "./edit.md" with { type: "text" };
 import { applySingleOp } from "./str-replace/loop.ts";
+import { EditArgsSchema } from "@n0n/types";
+import { type FieldDescriptions, zodToParameters } from "../zod-to-parameters.ts";
 
-export { EditArgsSchema } from "@n0n/types";
+export { EditArgsSchema };
+
+const editDescriptions: FieldDescriptions<EditArgs> = {
+	path: "File path relative to project root",
+	intent: "Edit intent in free-form text: natural language description, code snippets, or a mix of both. Describe what to change and where.",
+};
 
 // ── 主模型工具定义（intent 驱动） ──
 export const EDIT_TOOL_DEFINITION: ToolDefinition = {
 	name: "edit",
 	description: editDescription,
-	parameters: {
-		type: "object",
-		properties: {
-			path: {
-				type: "string",
-				description: "File path relative to project root",
-			},
-			intent: {
-				type: "string",
-				description:
-					"Edit intent in free-form text: natural language description, code snippets, or a mix of both. Describe what to change and where.",
-			},
-		},
-		required: ["path", "intent"],
-		additionalProperties: false,
-	},
+	parameters: zodToParameters(EditArgsSchema, editDescriptions),
 };
 
 // ── Types ──

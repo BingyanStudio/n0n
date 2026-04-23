@@ -15,9 +15,11 @@
 // —— Mebius ∞
 
 import { wrapTagFor } from "@n0n/shared";
-import type { ToolDefinition } from "@n0n/types";
+import type { ExecArgs, ToolDefinition } from "@n0n/types";
+import { ExecArgsSchema } from "@n0n/types";
 import type { EnvSnapshot } from "../env.ts";
 import { getAvailableByGroup } from "../env.ts";
+import { type FieldDescriptions, zodToParameters } from "../zod-to-parameters.ts";
 
 // ── runtime 示例（从 .md 文件导入） ──
 
@@ -32,7 +34,7 @@ import python3Example from "./examples/python3.md" with { type: "text" };
 import shExample from "./examples/sh.md" with { type: "text" };
 import uvExample from "./examples/uv.md" with { type: "text" };
 
-export { ExecArgsSchema } from "@n0n/types";
+export { ExecArgsSchema };
 
 const IS_WINDOWS = process.platform === "win32";
 const DEFAULT_RUNTIME = IS_WINDOWS ? "cmd" : "sh";
@@ -128,34 +130,16 @@ export function makeExecToolDefinition(
 ): ToolDefinition {
 	const available = env.runtimes.filter((r) => r.available);
 	const runtimeList = available.map((r) => r.name).join(", ");
+	const execDescriptions: FieldDescriptions<ExecArgs> = {
+		script: "Script content. Single command or multi-line code with imports, loops, etc.",
+		runtime: `Runtime (default: "${DEFAULT_RUNTIME}"). Available: ${runtimeList}.`,
+		cwd: "Working directory (default: injected workspace root)",
+		waitfor: "Max seconds to wait for process (default: 120, max: 240). Process continues in background if exceeded.",
+	};
 
 	return {
 		name: "exec",
 		description: buildDescription(env, model),
-		parameters: {
-			type: "object",
-			properties: {
-				script: {
-					type: "string",
-					description:
-						"Script content. Single command or multi-line code with imports, loops, etc.",
-				},
-				runtime: {
-					type: "string",
-					description: `Runtime (default: "${DEFAULT_RUNTIME}"). Available: ${runtimeList}.`,
-				},
-				cwd: {
-					type: "string",
-					description: "Working directory (default: injected workspace root)",
-				},
-				waitfor: {
-					type: "number",
-					description:
-						"Max seconds to wait for process (default: 120, max: 240). Process continues in background if exceeded.",
-				},
-			},
-			required: ["script"],
-			additionalProperties: false,
-		},
+		parameters: zodToParameters(ExecArgsSchema, execDescriptions),
 	};
 }

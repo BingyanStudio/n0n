@@ -16,31 +16,25 @@ import type {
 	DomainMessage,
 	ToolCallRecord,
 	ToolDefinition,
+	WriteArgs,
 	WriteToolCall,
 	WriteToolResult,
 } from "@n0n/types";
+import { WriteArgsSchema } from "@n0n/types";
+import { type FieldDescriptions, zodToParameters } from "./zod-to-parameters.ts";
 
-export { WriteArgsSchema } from "@n0n/types";
+export { WriteArgsSchema };
+
+const writeDescriptions: FieldDescriptions<WriteArgs> = {
+	path: "File path relative to project root",
+	content: "Complete file content to write",
+};
 
 export const WRITE_TOOL_DEFINITION: ToolDefinition = {
 	name: "write",
 	description:
 		"Create or overwrite a file with the given content. Directories are created automatically. For modifying existing files, use the edit tool instead.\n\nThis tool is deterministic and always succeeds — do not wait for its result. Continue issuing more tool calls in the same response.",
-	parameters: {
-		type: "object",
-		properties: {
-			path: {
-				type: "string",
-				description: "File path relative to project root",
-			},
-			content: {
-				type: "string",
-				description: "Complete file content to write",
-			},
-		},
-		required: ["path", "content"],
-		additionalProperties: false,
-	},
+	parameters: zodToParameters(WriteArgsSchema, writeDescriptions),
 };
 
 /** 正常写入（非截断恢复） */
