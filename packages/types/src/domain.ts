@@ -168,9 +168,9 @@ interface ExecTruncated extends ExecResultBase {
 	truncatedChunks: { startLine: number; endLine: number; tokens: number }[];
 }
 
-/** exec 超时，进程转入后台继续执行 */
-interface ExecTimedOut extends ExecResultBase {
-	status: "timed_out";
+/**  exec 等待超限，进程转入后台继续执行  */
+interface ExecBackgrounded extends ExecResultBase {
+	status: "backgrounded";
 	/** 后台进程 PID */
 	pid: number;
 	/** 后台日志文件路径 */
@@ -181,7 +181,7 @@ interface ExecTimedOut extends ExecResultBase {
 	stderrSoFar: string;
 }
 
-export type ExecToolResult = ExecCompleted | ExecTruncated | ExecTimedOut;
+export type ExecToolResult = ExecCompleted | ExecTruncated | ExecBackgrounded;
 
 /** write 结果的公共字段 */
 interface WriteResultBase extends ToolResultBase {

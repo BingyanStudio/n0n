@@ -173,12 +173,12 @@ const scenarios: Scenario[] = [
 	},
 	{
 		file: "exec-timed-out",
-		title: "exec tool_result — status: timed_out（等待超限转后台）",
+		title: "exec tool_result — status: backgrounded（等待超限转后台）",
 		messages: [
 			{
 				type: "tool_result",
 				tool: "exec",
-				status: "timed_out",
+				status: "backgrounded",
 				call: {
 					id: "tc_4",
 					tool: "exec",

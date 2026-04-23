@@ -210,16 +210,16 @@ export async function* execToolStream(
 		pumpStream(proc.stderr, stderrChunks);
 
 		// ── 等待机制：Promise.race 确定性中断 ──
-		let timedOut = false;
+		let backgrounded = false;
 		const waitforPromise = new Promise<"timeout">((resolve) => {
 			setTimeout(() => {
-				timedOut = true;
+				backgrounded = true;
 				resolve("timeout");
 			}, waitforMs);
 		});
 
 		while (streamsDone < 2 || pending.length > 0) {
-			if (timedOut) break;
+			if (backgrounded) break;
 			if (pending.length === 0) {
 				const waitForData = new Promise<"data">((r) => {
 					notify = () => r("data");
@@ -234,7 +234,7 @@ export async function* execToolStream(
 			}
 		}
 
-		if (timedOut) {
+		if (backgrounded) {
 			// ── 等待超限路径：写日志，后台继续收集 ──
 			const durationMs = Date.now() - start;
 			const pid = proc.pid;
@@ -279,7 +279,7 @@ export async function* execToolStream(
 				type: "tool_result",
 				tool: "exec" as const,
 				call,
-				status: "timed_out",
+				status: "backgrounded",
 				pid,
 				logFile,
 				stdoutSoFar: tailByTokens(stdoutSoFar, TAIL_TOKENS),

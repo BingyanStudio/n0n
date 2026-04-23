@@ -21,13 +21,13 @@ const metaTemplates = [
 		`(${rt}) ${cwd} | exit ${exit} | ${ms}ms`,
 ];
 
-const timedOutMetaTemplates = [
+const backgroundedMetaTemplates = [
 	(rt: string, cwd: string, ms: number) =>
-		`[${rt}] [cwd: ${cwd}] [timed out after ${ms}ms]`,
+		`[${rt}] [cwd: ${cwd}] [backgrounded after ${ms}ms]`,
 	(rt: string, cwd: string, ms: number) =>
-		`runtime=${rt} cwd=${cwd} status=timed_out after ${ms}ms`,
+		`runtime=${rt} cwd=${cwd} status=backgrounded after ${ms}ms`,
 	(rt: string, cwd: string, ms: number) =>
-		`(${rt}) ${cwd} | timed out | ${ms}ms`,
+		`(${rt}) ${cwd} | backgrounded | ${ms}ms`,
 ];
 
 const truncatedMetaTemplates = [
@@ -101,8 +101,8 @@ export function formatExecResult(
 	const stderrTag = pick(stderrTagNames, msgIndex + 2);
 
 	switch (msg.status) {
-		case "timed_out": {
-			const metaFn = pick(timedOutMetaTemplates, msgIndex);
+		case "backgrounded": {
+			const metaFn = pick(backgroundedMetaTemplates, msgIndex);
 			const parts = [
 				wrapTag("exec_meta", metaFn(runtime, cwd, msg.durationMs), model),
 			];

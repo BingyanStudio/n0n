@@ -2,7 +2,7 @@
 /**
  * exec waitfor 行为验证测试
  *
- * 验证 execToolStream 在脚本等待超限后能正确返回 timedOut 结果，
+ * 验证 execToolStream 在脚本等待超限后能正确返回 backgrounded 结果，
  * 而不是卡死。使用 Promise.race 硬超时保护防止测试进程挂起。
  *
  * TODO 平台兼容：使用 bun runtime 执行跨平台的阻塞脚本，
@@ -66,7 +66,7 @@ describe("exec waitfor 行为验证", () => {
 		}
 	});
 
-	test("阻塞脚本超过 waitfor — 应返回 timedOut 结果而非卡死", async () => {
+	test("阻塞脚本超过 waitfor — 应返回 backgrounded 结果而非卡死", async () => {
 		// 使用 bun runtime 执行跨平台的阻塞脚本
 		const outcome = await collectWithHardTimeout(
 			"await Bun.sleep(30000);",
@@ -78,8 +78,8 @@ describe("exec waitfor 行为验证", () => {
 		// 修复后应正确返回，不再卡死
 		expect(outcome.status).toBe("completed");
 		if (outcome.status === "completed") {
-			expect(outcome.result.status === "timed_out").toBe(true);
-			if (outcome.result.status === "timed_out") {
+			expect(outcome.result.status === "backgrounded").toBe(true);
+			if (outcome.result.status === "backgrounded") {
 				expect(outcome.result.pid).toBeGreaterThan(0);
 				expect(outcome.result.logFile).toContain("exec_bg_");
 				// 等待超限后 kill 后台进程以清理
@@ -90,7 +90,7 @@ describe("exec waitfor 行为验证", () => {
 		}
 	}, 15000);
 
-	test("shell fork 子进程场景 — 应返回 timedOut 结果而非卡死", async () => {
+	test("shell fork 子进程场景 — 应返回 backgrounded 结果而非卡死", async () => {
 		// 使用 bun runtime 模拟 fork 子进程场景：启动一个长时间运行的子进程
 		const script = [
 			'const proc = Bun.spawn(["bun", "-e", "await Bun.sleep(30000)"], { stdout: "inherit" });',
@@ -100,8 +100,8 @@ describe("exec waitfor 行为验证", () => {
 
 		expect(outcome.status).toBe("completed");
 		if (outcome.status === "completed") {
-			expect(outcome.result.status === "timed_out").toBe(true);
-			if (outcome.result.status === "timed_out") {
+			expect(outcome.result.status === "backgrounded").toBe(true);
+			if (outcome.result.status === "backgrounded") {
 				try {
 					process.kill(outcome.result.pid, "SIGKILL");
 				} catch {}
@@ -121,8 +121,8 @@ describe("exec waitfor 行为验证", () => {
 
 		expect(outcome.status).toBe("completed");
 		if (outcome.status === "completed") {
-			expect(outcome.result.status === "timed_out").toBe(true);
-			if (outcome.result.status === "timed_out") {
+			expect(outcome.result.status === "backgrounded").toBe(true);
+			if (outcome.result.status === "backgrounded") {
 				const lines = outcome.result.stdoutSoFar
 					.trim()
 					.split("\n")

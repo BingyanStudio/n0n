@@ -390,7 +390,7 @@ export class RichRenderer implements Renderer {
 					`${(result.durationMs / 1000).toFixed(1)}s`,
 				);
 				switch (result.status) {
-					case "timed_out":
+					case "backgrounded":
 						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${style.yellow(`waitfor exceeded → bg PID=${result.pid}`)}`;
 					case "truncated": {
 						const exit =
