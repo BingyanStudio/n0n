@@ -298,6 +298,7 @@ Usage: tarot reveal
 
 	if (remaining > 0) {
 		console.log(`\n还有 ${remaining} 张牌未翻开。`);
+		console.log(`\n⚡ 在翻开下一张之前，请先解读这张「${slot.position}」位的牌——它在你的问题上意味着什么？`);
 	} else {
 		session.phase = "complete";
 		console.log("\n✦ 所有牌已翻开。请静心感受这些牌在你问题上的启示。");
@@ -312,6 +313,7 @@ Usage: tarot reveal
 			console.log(`  ${s.position}：${c.numeral}. ${c.name}（${orient}）`);
 		}
 		console.log("\n冥想这些牌的组合，让它们为你的下一步指引方向。");
+		console.log("\n⚡ 现在请综合解读所有牌面：它们作为整体，对你的问题揭示了什么？牌与牌之间有怎样的呼应或张力？");
 	}
 
 	saveSession(session);
