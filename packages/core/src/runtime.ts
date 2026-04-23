@@ -16,7 +16,7 @@ import type { LLMClient } from "@n0n/types";
 export interface AgentConfig {
 	maxIterations: number;
 	maxIdleRounds: number;
-	defaultExecTimeout: number;
+	defaultExecWaitfor: number;
 }
 
 export interface SecurityConfig {
@@ -68,7 +68,7 @@ export function createRuntimeContext(options: RuntimeOptions): RuntimeContext {
 		agent: {
 			maxIterations: options.agent?.maxIterations ?? 50,
 			maxIdleRounds: options.agent?.maxIdleRounds ?? 5,
-			defaultExecTimeout: options.agent?.defaultExecTimeout ?? 120,
+			defaultExecWaitfor: options.agent?.defaultExecWaitfor ?? 120,
 		},
 		security: {
 			blockedCommands:

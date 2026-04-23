@@ -92,7 +92,7 @@ function fmtResult(r: ToolResult): string {
 		case "exec":
 			switch (r.status) {
 				case "timed_out":
-					return `timeout → bg PID=${r.pid}  ${(r.durationMs / 1000).toFixed(1)}s`;
+					return `waitfor exceeded → bg PID=${r.pid}  ${(r.durationMs / 1000).toFixed(1)}s`;
 				case "truncated":
 					return `exit=${r.exitCode} truncated  ${(r.durationMs / 1000).toFixed(1)}s`;
 				case "completed":

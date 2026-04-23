@@ -195,7 +195,7 @@ submit({ type: "completed", result: "当前时间是 2026-03-07 15:00:00 CST" })
 |------|------|------|
 | `write` | `path, content` | 创建/覆盖文件 |
 | `edit` | `path, search, replace, expectedMatches?` | 精确修改已有内容 |
-| `exec` | `script, runtime?, cwd?, timeout?` | 在指定运行时执行脚本 |
+| `exec` | `script, runtime?, cwd?, waitfor?` | 在指定运行时执行脚本 |
 
 **反模式**：一个工具多重语义（如 `write` 通过 `search` 有无区分创建/修改）
 

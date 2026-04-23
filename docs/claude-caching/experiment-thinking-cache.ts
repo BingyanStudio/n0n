@@ -74,9 +74,9 @@ const TOOLS = [
 					enum: ["cmd", "pwsh", "bun", "node", "uv"],
 					description: "Runtime to use",
 				},
-				timeout: {
+				waitfor: {
 					type: "number",
-					description: "Timeout in seconds (default: 120)",
+					description: "Max seconds to wait for process (default: 120)",
 				},
 			},
 			required: ["script"],

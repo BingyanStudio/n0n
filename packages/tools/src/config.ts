@@ -13,7 +13,7 @@ interface ToolsConfigBase {
 		blockedCommands: string[];
 	};
 	agent: {
-		defaultExecTimeout: number;
+		defaultExecWaitfor: number;
 	};
 	workspace: string;
 	tempDir: string;

@@ -1,8 +1,8 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: test scripts contain template literals as string content
 /**
- * exec timeout 行为验证测试
+ * exec waitfor 行为验证测试
  *
- * 验证 execToolStream 在脚本超时后能正确返回 timedOut 结果，
+ * 验证 execToolStream 在脚本等待超限后能正确返回 timedOut 结果，
  * 而不是卡死。使用 Promise.race 硬超时保护防止测试进程挂起。
  *
  * TODO 平台兼容：使用 bun runtime 执行跨平台的阻塞脚本，
@@ -17,15 +17,15 @@ import { ExecArgsSchema, execToolStream } from "../exec/index.ts";
 /** 收集 exec 流式输出，带硬超时保护 */
 async function collectWithHardTimeout(
 	script: string,
-	execTimeout: number,
+	execWaitfor: number,
 	hardTimeoutMs: number,
 	runtime?: string,
 ): Promise<
 	| { status: "completed"; result: ExecToolResult }
 	| { status: "hung"; elapsedMs: number }
 > {
-	const args = ExecArgsSchema.parse({ script, runtime, timeout: execTimeout });
-	const call: ExecToolCall = { id: "timeout-test", tool: "exec", args };
+	const args = ExecArgsSchema.parse({ script, runtime, waitfor: execWaitfor });
+	const call: ExecToolCall = { id: "waitfor-test", tool: "exec", args };
 	const start = Date.now();
 
 	const execPromise = (async () => {
@@ -33,7 +33,7 @@ async function collectWithHardTimeout(
 			workspace: process.cwd(),
 			tempDir: ".temp",
 			blockedCommands: [],
-			defaultExecTimeout: execTimeout,
+			defaultExecWaitfor: execWaitfor,
 		})) {
 			if (event.type === "tool_result" && event.tool === "exec") {
 				return { status: "completed" as const, result: event };
@@ -53,8 +53,8 @@ async function collectWithHardTimeout(
 	return Promise.race([execPromise, hardTimeout]);
 }
 
-describe("exec timeout 行为验证", () => {
-	test("正常脚本在 timeout 内完成 — 应返回正常结果", async () => {
+describe("exec waitfor 行为验证", () => {
+	test("正常脚本在 waitfor 内完成 — 应返回正常结果", async () => {
 		const outcome = await collectWithHardTimeout("echo hello", 10, 5000);
 		expect(outcome.status).toBe("completed");
 		if (
@@ -66,7 +66,7 @@ describe("exec timeout 行为验证", () => {
 		}
 	});
 
-	test("阻塞脚本超过 timeout — 应返回 timedOut 结果而非卡死", async () => {
+	test("阻塞脚本超过 waitfor — 应返回 timedOut 结果而非卡死", async () => {
 		// 使用 bun runtime 执行跨平台的阻塞脚本
 		const outcome = await collectWithHardTimeout(
 			"await Bun.sleep(30000);",
@@ -82,7 +82,7 @@ describe("exec timeout 行为验证", () => {
 			if (outcome.result.status === "timed_out") {
 				expect(outcome.result.pid).toBeGreaterThan(0);
 				expect(outcome.result.logFile).toContain("exec_bg_");
-				// 超时后 kill 后台进程以清理
+				// 等待超限后 kill 后台进程以清理
 				try {
 					process.kill(outcome.result.pid, "SIGKILL");
 				} catch {}
@@ -109,7 +109,7 @@ describe("exec timeout 行为验证", () => {
 		}
 	}, 15000);
 
-	test("有持续输出的脚本超时 — 应捕获超时前的部分输出", async () => {
+	test("有持续输出的脚本等待超限 — 应捕获超限前的部分输出", async () => {
 		// 使用 bun runtime 持续输出
 		const script = [
 			"for (let i = 1; i <= 10; i++) {",

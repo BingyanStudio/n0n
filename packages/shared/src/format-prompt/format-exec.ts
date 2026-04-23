@@ -39,13 +39,13 @@ const truncatedMetaTemplates = [
 		`(${rt}) ${cwd} | exit ${exit} | ${ms}ms | truncated to ${file}`,
 ];
 
-const timeoutNoticeTemplates = [
+const waitforNoticeTemplates = [
 	(pid: number, logFile: string) =>
-		`Process exceeded timeout, moved to background.\nPID: ${pid}\nLog file: ${logFile}\nRead the log file later to check process status.`,
+		`Process exceeded waitfor limit, moved to background.\nPID: ${pid}\nLog file: ${logFile}\nRead the log file later to check process status.`,
 	(pid: number, logFile: string) =>
-		`Timed out — process continues in background (PID ${pid}).\nOutput is being logged to: ${logFile}\nCheck the log file for progress.`,
+		`Waitfor exceeded — process continues in background (PID ${pid}).\nOutput is being logged to: ${logFile}\nCheck the log file for progress.`,
 	(pid: number, logFile: string) =>
-		`Background process started (PID: ${pid}).\nThe command timed out but is still running.\nMonitor via log: ${logFile}`,
+		`Background process started (PID: ${pid}).\nThe command exceeded its waitfor limit but is still running.\nMonitor via log: ${logFile}`,
 ];
 
 /** 格式化截断分块的读取建议 */
@@ -107,9 +107,9 @@ export function formatExecResult(
 				wrapTag("exec_meta", metaFn(runtime, cwd, msg.durationMs), model),
 			];
 
-			const noticeFn = pick(timeoutNoticeTemplates, msgIndex + 3);
+			const noticeFn = pick(waitforNoticeTemplates, msgIndex + 3);
 			parts.push(
-				wrapTag("timeout_notice", noticeFn(msg.pid, msg.logFile), model),
+				wrapTag("waitfor_notice", noticeFn(msg.pid, msg.logFile), model),
 			);
 
 			if (msg.stdoutSoFar)

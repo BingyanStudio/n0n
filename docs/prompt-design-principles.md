@@ -195,7 +195,7 @@ Each tool has a single responsibility; field names explain usage:
 |------|------------|---------|
 | `write` | `path, content` | Create/overwrite files |
 | `edit` | `path, search, replace, expectedMatches?` | Precisely modify existing content |
-| `exec` | `script, runtime?, cwd?, timeout?` | Execute scripts in specified runtime |
+| `exec` | `script, runtime?, cwd?, waitfor?` | Execute scripts in specified runtime |
 
 **Anti-pattern**: One tool with multiple semantics (e.g., `write` using optional `search` to distinguish create/modify)
 

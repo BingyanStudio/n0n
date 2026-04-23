@@ -42,7 +42,7 @@ const toolsConfig = {
 	workspace,
 	tempDir: resolve(workspace, ".temp"),
 	security: { blockedCommands: [] as string[] },
-	agent: { defaultExecTimeout: 120 },
+	agent: { defaultExecWaitfor: 120 },
 	editBackendType: "str-replace" as const,
 	editorClient: { modelId: "", tagStyle: "default" as const, async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); } },
 };

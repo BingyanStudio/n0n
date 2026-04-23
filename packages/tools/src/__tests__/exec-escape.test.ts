@@ -23,7 +23,7 @@ async function collectExecResult(script: string, runtime?: string) {
 		workspace: process.cwd(),
 		tempDir: ".temp",
 		blockedCommands: [],
-		defaultExecTimeout: 120,
+		defaultExecWaitfor: 120,
 	})) {
 		if (
 			event.type === "tool_result" &&

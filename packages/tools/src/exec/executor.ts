@@ -3,7 +3,7 @@
  *
  * 将模型提供的 script 写入临时文件，用指定 runtime 执行。
  *
- * 超时架构（为什么用 Promise.race 而不是 setTimeout + kill）：
+ * 等待架构（为什么用 Promise.race 而不是 setTimeout + kill）：
  * 旧方案 setTimeout → proc.kill() 依赖一个脆弱假设：kill 信号能让 stdout/stderr
  * 流关闭从而唤醒读取循环。实际上常不成立：
  * - shell 脚本 fork 的子进程不受 kill 影响，继续持有管道
@@ -11,8 +11,8 @@
  * - 子进程继承管道 fd，即使父进程退出流也不关闭
  * 结果：流读取的 await 永远不 resolve，agent 主循环卡死。
  *
- * 当前方案：Promise.race 让超时 Promise 与流读取 Promise 竞争，确定性中断。
- * 超时后进程转入后台继续执行，已捕获输出 + 后续输出写入 .temp/ 日志文件。
+ * 当前方案：Promise.race 让等待 Promise 与流读取 Promise 竞争，确定性中断。
+ * 等待超限后进程转入后台继续执行，已捕获输出 + 后续输出写入 .temp/ 日志文件。
  */
 
 // DESIGN NOTE: buildSpawnCmd 用 switch 硬编码每个 runtime 的执行命令，
@@ -99,8 +99,8 @@ const TAIL_TOKENS = 2_000;
 /**
  * 流式执行脚本。
  *
- * 超时机制：使用 Promise.race 让超时 Promise 与流读取竞争，
- * 确定性中断等待。超时后进程不被 kill，而是转入后台继续执行，
+ * 等待机制：使用 Promise.race 让等待 Promise 与流读取竞争，
+ * 确定性中断。等待超限后进程不被 kill，而是转入后台继续执行，
  * 已收集的输出和后续输出写入 .temp/ 日志文件。
  */
 export async function* execToolStream(
@@ -110,7 +110,7 @@ export async function* execToolStream(
 		workspace: string;
 		tempDir: string;
 		blockedCommands: string[];
-		defaultExecTimeout: number;
+		defaultExecWaitfor: number;
 	},
 ): AsyncGenerator<ToolStreamEvent> {
 	const runtime = call.args.runtime ?? DEFAULT_RUNTIME;
@@ -120,13 +120,13 @@ export async function* execToolStream(
 			? call.args.cwd
 			: resolve(workspace, call.args.cwd)
 		: workspace;
-	// prompt cache 的 TTL 为 5 分钟，超时过长会导致缓存失效
-	const MAX_TIMEOUT_S = 240;
-	const timeoutS = Math.min(
-		call.args.timeout ?? toolsConfig.defaultExecTimeout,
-		MAX_TIMEOUT_S,
+	// prompt cache 的 TTL 为 5 分钟，等待过长会导致缓存失效
+	const MAX_WAITFOR_S = 240;
+	const waitforS = Math.min(
+		call.args.waitfor ?? toolsConfig.defaultExecWaitfor,
+		MAX_WAITFOR_S,
 	);
-	const timeoutMs = timeoutS * 1000;
+	const waitforMs = waitforS * 1000;
 	const start = Date.now();
 
 	// Security check
@@ -209,13 +209,13 @@ export async function* execToolStream(
 		pumpStream(proc.stdout, stdoutChunks);
 		pumpStream(proc.stderr, stderrChunks);
 
-		// ── 超时机制：Promise.race 确定性中断 ──
+		// ── 等待机制：Promise.race 确定性中断 ──
 		let timedOut = false;
-		const timeoutPromise = new Promise<"timeout">((resolve) => {
+		const waitforPromise = new Promise<"timeout">((resolve) => {
 			setTimeout(() => {
 				timedOut = true;
 				resolve("timeout");
-			}, timeoutMs);
+			}, waitforMs);
 		});
 
 		while (streamsDone < 2 || pending.length > 0) {
@@ -224,7 +224,7 @@ export async function* execToolStream(
 				const waitForData = new Promise<"data">((r) => {
 					notify = () => r("data");
 				});
-				const raceResult = await Promise.race([waitForData, timeoutPromise]);
+				const raceResult = await Promise.race([waitForData, waitforPromise]);
 				notify = null;
 				if (raceResult === "timeout") break;
 			}
@@ -235,7 +235,7 @@ export async function* execToolStream(
 		}
 
 		if (timedOut) {
-			// ── 超时路径：写日志，后台继续收集 ──
+			// ── 等待超限路径：写日志，后台继续收集 ──
 			const durationMs = Date.now() - start;
 			const pid = proc.pid;
 			const logFile = join(tempDir, `exec_bg_${pid}.log`);

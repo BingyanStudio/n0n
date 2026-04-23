@@ -173,7 +173,7 @@ const scenarios: Scenario[] = [
 	},
 	{
 		file: "exec-timed-out",
-		title: "exec tool_result — status: timed_out（超时转后台）",
+		title: "exec tool_result — status: timed_out（等待超限转后台）",
 		messages: [
 			{
 				type: "tool_result",
@@ -182,7 +182,7 @@ const scenarios: Scenario[] = [
 				call: {
 					id: "tc_4",
 					tool: "exec",
-					args: { script: "npm install", timeout: 30 },
+					args: { script: "npm install", waitfor: 30 },
 				},
 				pid: 65432,
 				logFile: ".temp/exec_bg_65432.log",

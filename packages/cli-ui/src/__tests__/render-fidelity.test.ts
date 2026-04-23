@@ -135,7 +135,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		restoreStderr(saved);
 
 		// 用不同种子跑同一场景，收集最终画面
-		const json = '{"script":"ls -la","runtime":"cmd","timeout":"30"}';
+		const json = '{"script":"ls -la","runtime":"cmd","waitfor":"30"}';
 		const finalScreens: string[][] = [];
 
 		for (const seed of [1, 42, 100, 999, 65535]) {

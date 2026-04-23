@@ -125,7 +125,7 @@ function buildBaseRegistry(
 		workspace: toolsConfig.workspace,
 		tempDir: toolsConfig.tempDir,
 		blockedCommands: toolsConfig.security.blockedCommands,
-		defaultExecTimeout: toolsConfig.agent.defaultExecTimeout,
+		defaultExecWaitfor: toolsConfig.agent.defaultExecWaitfor,
 	};
 
 	const editBackend: EditBackend =

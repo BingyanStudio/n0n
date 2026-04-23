@@ -556,7 +556,7 @@ interface ToolCallRecord {
 const ExecArgsSchema = z.object({
   runtime: z.enum(["cmd", "sh", "pwsh", "bun", "node", "uv", "python"]),
   script: z.string(),
-  timeout: z.number().optional(),
+  waitfor: z.number().optional(),
 });
 ```
 
@@ -1004,7 +1004,7 @@ LLM_ENABLE_THINKING=true
 ```typescript
 const agentConfig: AgentConfig = {
   maxRetries: 4,              // 最大重试次数
-  defaultExecTimeout: 30000,  // 默认执行超时（ms）
+  defaultExecWaitfor: 30000,  // 默认执行等待时间（ms）
   enableThinking: true,       // 启用 thinking chain
   streamOutput: true,         // 流式输出
 };

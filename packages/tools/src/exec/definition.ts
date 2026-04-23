@@ -148,10 +148,10 @@ export function makeExecToolDefinition(
 					type: "string",
 					description: "Working directory (default: injected workspace root)",
 				},
-				timeout: {
+				waitfor: {
 					type: "number",
 					description:
-						"Timeout in seconds (default: 120, max: 240). Process continues in background if exceeded.",
+						"Max seconds to wait for process (default: 120, max: 240). Process continues in background if exceeded.",
 				},
 			},
 			required: ["script"],

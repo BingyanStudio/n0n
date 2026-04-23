@@ -391,7 +391,7 @@ export class RichRenderer implements Renderer {
 				);
 				switch (result.status) {
 					case "timed_out":
-						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${style.yellow(`timeout → bg PID=${result.pid}`)}`;
+						return `${style.dim("◂")} ${style.cyan("exec")} ${duration} ${style.yellow(`waitfor exceeded → bg PID=${result.pid}`)}`;
 					case "truncated": {
 						const exit =
 							result.exitCode === 0
