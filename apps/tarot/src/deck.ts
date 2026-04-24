@@ -131,11 +131,11 @@ const SUIT_MEANINGS: [string, string][][] = [
 
 const MINOR: Card[] = SUIT_MEANINGS.flatMap((meanings, suitIdx) =>
 	meanings.map(([upright, reversed], rankIdx) => ({
-		numeral: RANK_NUMERALS[rankIdx],
-		name: SUIT_NAMES[suitIdx] + RANK_NAMES[rankIdx],
-		nameEn: RANK_NAMES_EN[rankIdx] + " of " + SUIT_NAMES_EN[suitIdx],
-		suit: SUIT_NAMES[suitIdx],
-		suitEn: SUIT_NAMES_EN[suitIdx],
+		numeral: RANK_NUMERALS[rankIdx]!,
+		name: SUIT_NAMES[suitIdx]! + RANK_NAMES[rankIdx],
+		nameEn: RANK_NAMES_EN[rankIdx] + " of " + SUIT_NAMES_EN[suitIdx]!,
+		suit: SUIT_NAMES[suitIdx]!,
+		suitEn: SUIT_NAMES_EN[suitIdx]!,
 		upright,
 		reversed,
 	})),
@@ -151,10 +151,10 @@ export function draw(n: number): DrawnCard[] {
 	// Fisher-Yates shuffle
 	for (let i = indices.length - 1; i > 0; i--) {
 		const j = Math.floor(Math.random() * (i + 1));
-		[indices[i], indices[j]] = [indices[j], indices[i]];
+		[indices[i], indices[j]] = [indices[j]!, indices[i]!];
 	}
 	return indices.slice(0, n).map((idx) => ({
-		card: DECK[idx],
+		card: DECK[idx]!,
 		reversed: Math.random() < 0.5,
 	}));
 }

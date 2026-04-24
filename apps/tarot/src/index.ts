@@ -220,11 +220,11 @@ Usage: tarot draw [牌阵名称 | 数字]
 	let spreadLabel: string;
 
 	if (!arg) {
-		const s = SPREADS[DEFAULT_SPREAD];
+		const s = SPREADS[DEFAULT_SPREAD]!;
 		positions = s.positions;
 		spreadLabel = s.name;
 	} else if (arg in SPREADS) {
-		const s = SPREADS[arg];
+		const s = SPREADS[arg]!;
 		positions = s.positions;
 		spreadLabel = s.name;
 	} else {
@@ -244,7 +244,7 @@ Usage: tarot draw [牌阵名称 | 数字]
 	session.spread = drawnCards.map((dc, i) => ({
 		cardIndex: DECK.indexOf(dc.card),
 		reversed: dc.reversed,
-		position: positions[i],
+		position: positions[i]!,
 		revealed: false,
 	}));
 
@@ -287,10 +287,10 @@ Usage: tarot reveal
 		return;
 	}
 
-	const slot = session.spread[nextIdx];
+	const slot = session.spread[nextIdx]!;
 	slot.revealed = true;
 
-	const card = DECK[slot.cardIndex];
+	const card = DECK[slot.cardIndex]!;
 	const remaining = session.spread.filter((s) => !s.revealed).length;
 
 	console.log(`✦ 翻开第 ${nextIdx + 1} 张牌 —— 「${slot.position}」\n`);
@@ -308,7 +308,7 @@ Usage: tarot reveal
 		}
 		console.log("\n── 完整牌面 ──\n");
 		for (const s of session.spread) {
-			const c = DECK[s.cardIndex];
+			const c = DECK[s.cardIndex]!;
 			const orient = s.reversed ? "逆位" : "正位";
 			console.log(`  ${s.position}：${c.numeral}. ${c.name}（${orient}）`);
 		}
@@ -350,9 +350,9 @@ Usage: tarot reading
 	}
 
 	for (let i = 0; i < session.spread.length; i++) {
-		const slot = session.spread[i];
+		const slot = session.spread[i]!;
 		if (slot.revealed) {
-			const card = DECK[slot.cardIndex];
+			const card = DECK[slot.cardIndex]!;
 			const orient = slot.reversed ? "逆位 ↓" : "正位 ↑";
 			const meaning = slot.reversed ? card.reversed : card.upright;
 			console.log(`  ${i + 1}. 「${slot.position}」 ${card.numeral}. ${card.name}（${orient}）`);
