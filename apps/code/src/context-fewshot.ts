@@ -1,16 +1,17 @@
 /**
  * context-fewshot — Bootstrap 教学场景
  *
- * 设计方式：FEWSHOT_TEMPLATE 是模型看到的完整对话结构。
- * 三种 entry：
+ * 三重作用：环境注入（真实 exec 结果）+ 行为教学（exec-as-thinking、并行调用、submit）+ 格式对齐（通过真实 toolkit 确保 tool_call 格式正确）。
+ *
+ * FEWSHOT_TEMPLATE 是模型看到的完整对话结构。三种 entry：
  * - DomainMessage — 静态消息，直接使用
  * - ExecSlot      — 需要真实执行，结果替换此位置
  * - DerivedSlot   — 从运行时上下文派生
  *
  * 3-turn 教学流程：
- * Turn 1: 环境发现（5 个并行 exec）
- * Turn 2: 执行任务（write + edit + exec），reasoning 包含 runtime 反思
- * Turn 3: 确认结果后 submit（教学：用户看不到 content，只有 submit 送达）
+ * Turn 1: exec 推理（拆解任务）+ 5 个并行 exec 环境发现
+ * Turn 2: exec 推理（规划步骤）+ write + edit + exec 执行任务
+ * Turn 3: submit 提交结果
  */
 
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
@@ -51,6 +52,33 @@ interface RuntimeCtx {
 const IS_WINDOWS = process.platform === "win32";
 
 // ── Turn 1 调用定义 ──
+
+const BOOT_PLAN: ExecToolCall = {
+	id: "boot_plan",
+	tool: "exec",
+	args: {
+		runtime: "bun",
+		script: `// system-reminder 里的任务有些驳杂，整理一下再执行
+const raw = [
+  { task: "Check OS, shell, git state",          tag: "env" },
+  { task: "Read AGENTS.md",                      tag: "config" },
+  { task: "Survey codebase structure",            tag: "scan" },
+  { task: "Read and complete bootstrap-test.md",  tag: "task" },
+  { task: "Discover CLI tools in PATH",           tag: "env" },
+];
+// 按认知顺序重排：先知道在哪 → 再知道项目要求 → 再看代码全貌 → 最后读具体任务
+const sorted = [
+  { pri: 0, label: "OS / shell / git",       reason: "先确定基础环境" },
+  { pri: 1, label: "PATH 可用工具",           reason: "知道有什么能用" },
+  { pri: 2, label: "AGENTS.md",              reason: "了解项目特定指令" },
+  { pri: 3, label: "代码库结构",              reason: "建立项目全貌" },
+  { pri: 4, label: "bootstrap-test.md 任务",  reason: "最后读具体要做的事" },
+];
+for (const s of sorted) console.log(\`\${s.pri}. \${s.label} — \${s.reason}\`);
+// 全部是只读操作，互不依赖，可以一起发出
+console.log("→ 5 项只读探测，并行执行");`,
+	},
+};
 
 const BOOT_ENV: ExecToolCall = {
 	id: "boot_1",
@@ -164,6 +192,51 @@ const TURN2_EXEC: ExecToolCall = {
 	},
 };
 
+const PLAN_RESULT: DomainMessage = {
+	type: "tool_result",
+	tool: "exec" as const,
+	call: BOOT_PLAN,
+	status: "completed" as const,
+	exitCode: 0,
+	stdout: [
+		"0. OS / shell / git — 先确定基础环境",
+		"1. PATH 可用工具 — 知道有什么能用",
+		"2. AGENTS.md — 了解项目特定指令",
+		"3. 代码库结构 — 建立项目全貌",
+		"4. bootstrap-test.md 任务 — 最后读具体要做的事",
+		"→ 5 项只读探测，并行执行",
+	].join("\n"),
+	stderr: "",
+	durationMs: 25,
+};
+
+const BOOT_THINK: ExecToolCall = {
+	id: "boot_think",
+	tool: "exec",
+	args: {
+		runtime: "bun",
+		script: `// 整理 Turn 1 收集的信息，规划 bootstrap 任务
+const steps = [
+  { action: "write .temp/hello.ts",     tool: "write", deterministic: true },
+  { action: "edit Status PENDING→DONE", tool: "edit",  deterministic: true },
+  { action: "run hello.ts + cleanup",   tool: "exec",   deterministic: false },
+];
+// write/edit 结果已知（确定性工具），与 exec 同批发出
+console.log("plan: " + steps.map(s => s.tool).join(", ") + " — 一次性发出");`,
+	},
+};
+
+const THINK_RESULT: DomainMessage = {
+	type: "tool_result",
+	tool: "exec" as const,
+	call: BOOT_THINK,
+	status: "completed" as const,
+	exitCode: 0,
+	stdout: "plan: write, edit, exec — 一次性发出",
+	stderr: "",
+	durationMs: 30,
+};
+
 const WRITE_RESULT: DomainMessage = {
 	type: "tool_result",
 	tool: "write" as const,
@@ -211,22 +284,13 @@ function buildSubmitSummary(ctx: RuntimeCtx): string {
 	].join("");
 }
 
-function buildTurn2Assistant(ctx: RuntimeCtx): DomainMessage {
-	const runtimeLine = extractStdout(ctx.results.get("boot_5"))
-		? "boot_3 使用 bun runtime 成功执行，确认 bun 可用。"
-		: "";
+function buildTurn2Assistant(_ctx: RuntimeCtx): DomainMessage {
 	return {
 		type: "assistant_tool_call",
 		content: null,
-		reasoning: [
-			"环境扫描完成。",
-			runtimeLine,
-			"bootstrap-test.md 要求四件事：创建文件、修改状态、运行验证、清理临时文件。",
-			"write 创建 .temp/hello.ts，edit 修改 Status——确定性工具，不需要等待结果。",
-			"exec 运行 hello.ts 验证 bun 可用并清理。三个调用一次性发出。",
-		].filter(Boolean).join(""),
+		reasoning: "让我整理一下。",
 		reasoningSignature: null,
-		toolCalls: [TURN2_WRITE, TURN2_EDIT, TURN2_EXEC],
+		toolCalls: [BOOT_THINK, TURN2_WRITE, TURN2_EDIT, TURN2_EXEC],
 	};
 }
 
@@ -243,7 +307,7 @@ function buildTurn3Submit(ctx: RuntimeCtx): DomainMessage {
 	return {
 		type: "assistant_tool_call",
 		content: null,
-		reasoning: "write、edit、exec 全部成功，bootstrap ok 确认环境正常。用户无法看到文本消息，通过 submit 提交结果。",
+		reasoning: "确认完成，提交结果。",
 		reasoningSignature: null,
 		toolCalls: [submitCall],
 	};
@@ -290,10 +354,8 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 			"",
 			"帮我初始化工作环境。",
 			"",
-			"【思维模式要求】在你的思考过程中，请遵守以下规则：",
-			"1. 分析任务可以拆解为哪些独立步骤，将没有依赖关系的工具调用在同一轮一次性全部发出，不要逐个等待",
-			"2. 确定性工具（write、edit、reminder）总是成功——不需要等待结果确认，直接和其他调用并行发出",
-			"3. 任务完成后必须通过 submit 工具提交结果，而不是用纯文本消息结束",
+			"【思维模式要求】",
+			"面对复杂决策或分析时，用 exec 做思维实验——把心智模型写成具体的数据、逻辑或分步场景，然后检查结果。抽象推理会隐藏漏洞；具象化迫使你直面细节。exec 天然适合这件事：脚本可以结构化、计算和验证，// 注释可以内嵌推理且无副作用。当你发现自己在想“大概”“应该”“让我想想有哪些情况”时，这就是该具象化而非空想的信号。",
 		].join("\n"),
 	},
 
@@ -301,21 +363,22 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 	{
 		type: "assistant_tool_call",
 		content: null,
-		reasoning: "用户要求初始化环境。五个独立的探测命令：OS/shell/git 状态、项目指令、代码结构、bootstrap 任务、PATH 工具发现。全部并行发出。",
+		reasoning: "让我想想要做什么。",
 		reasoningSignature: null,
-		toolCalls: [BOOT_ENV, BOOT_AGENTS, BOOT_CODE, BOOT_TASK, BOOT_TOOLS],
+		toolCalls: [BOOT_PLAN, BOOT_ENV, BOOT_TOOLS, BOOT_AGENTS, BOOT_CODE, BOOT_TASK],
 	},
 
+	PLAN_RESULT,
 	{ _slot: "exec", call: BOOT_ENV },
+	{ _slot: "exec", call: BOOT_TOOLS },
 	{ _slot: "exec", call: BOOT_AGENTS },
 	{ _slot: "exec", call: BOOT_CODE },
 	{ _slot: "exec", call: BOOT_TASK },
-	{ _slot: "exec", call: BOOT_TOOLS },
 
-	// ── Turn 2: 执行 bootstrap 任务（write + edit + exec） ──
-	// reasoning 包含对可用 runtime 的反思
+	// ── Turn 2: exec 推理 + 执行 bootstrap 任务 ──
 	{ _slot: "derived", build: buildTurn2Assistant },
 
+	THINK_RESULT,
 	WRITE_RESULT,
 	EDIT_RESULT,
 	EXEC_RESULT,
