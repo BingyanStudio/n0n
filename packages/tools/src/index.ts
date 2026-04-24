@@ -38,9 +38,9 @@ import {
 } from "./edit/index.ts";
 import { detectEnv } from "./env.ts";
 import {
+	EXEC_TOOL_DEFINITION,
 	ExecArgsSchema,
 	execToolStream,
-	makeExecToolDefinition,
 } from "./exec/index.ts";
 import {
 	type PendingReminder,
@@ -117,7 +117,6 @@ const pathExclusiveCanStart: CanStartFn = (self, active) => {
  * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir/editorClient）。
  */
 function buildBaseRegistry(
-	execToolDef: ToolDefinition,
 	toolsConfig: ToolsConfig,
 ): Record<string, ToolEntry> {
 	const resolvedWorkspace = toolsConfig.workspace;
@@ -135,7 +134,7 @@ function buildBaseRegistry(
 
 	return {
 		exec: {
-			definition: execToolDef,
+			definition: EXEC_TOOL_DEFINITION,
 			stream: true,
 			execute: (tc, _reminders, confirmFn) => {
 				const call: ExecToolCall = {
@@ -218,8 +217,7 @@ export async function makeToolkit(
 	toolsConfig: ToolsConfig,
 	model?: string,
 ): Promise<Toolkit> {
-	const env = await detectEnv();
-	const execToolDef = makeExecToolDefinition(env, model);
+	await detectEnv();
 	const submitEntry: ToolEntry = {
 		definition: makeSubmitToolDefinition(schema),
 		stream: false,
@@ -236,7 +234,7 @@ export async function makeToolkit(
 	};
 
 	const registry: Record<string, ToolEntry> = {
-		...buildBaseRegistry(execToolDef, toolsConfig),
+		...buildBaseRegistry(toolsConfig),
 		submit: submitEntry,
 	};
 
@@ -253,7 +251,7 @@ export async function makeToolkit(
 
 export type { CanStartFn } from "@n0n/types";
 export type { ResponsesClient, ToolsConfig } from "./config.ts";
-export type { CliToolProbe, EnvSnapshot, RuntimeProbe } from "./env.ts";
+export type { CliToolProbe, EnvSnapshot, RuntimeProbe, UserPathEntry } from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";
 export { DefaultSubmitSchema } from "./submit.ts";
