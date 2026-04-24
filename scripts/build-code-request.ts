@@ -39,7 +39,7 @@ const toolsConfig = {
 	security: { blockedCommands: [] as string[] },
 	agent: { defaultExecWaitfor: 120 },
 	editBackendType: "str-replace" as const,
-	editorClient: { modelId: "", tagStyle: "default" as const, async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); } },
+	editorClient: { modelId: "", tagStyle: "default" as const, async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); }, async ping() { return { ok: true as const }; } },
 };
 
 const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, modelId);

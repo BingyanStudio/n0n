@@ -486,4 +486,34 @@ export class OpenAIClient implements LLMClient {
 
 		throw lastError ?? new Error("LLM request failed after retries");
 	}
+
+	async ping(): Promise<{ ok: boolean; error?: string }> {
+		try {
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), 15_000);
+			try {
+				for await (const event of this.stream(
+					{ messages: [{ type: "generic_user_text", content: "hi" }] },
+					controller.signal,
+				)) {
+					if (event.type === "error") {
+						return { ok: false as const, error: event.error };
+					}
+					controller.abort();
+					break;
+				}
+			} finally {
+				clearTimeout(timeout);
+			}
+			return { ok: true as const };
+		} catch (err) {
+			if (err instanceof Error) {
+				if (isAbortError(err)) {
+					return { ok: false as const, error: "连接超时（15s），请检查网络或 API 地址" };
+				}
+				return { ok: false as const, error: err.message.slice(0, 200) };
+			}
+			return { ok: false as const, error: `连接失败: ${String(err)}` };
+		}
+	}
 }

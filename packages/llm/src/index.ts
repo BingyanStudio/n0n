@@ -42,4 +42,3 @@ export { createLLMClient } from "./factory.ts";
 export type { ResponsesClientConfig } from "./responses-client.ts";
 // Responses API client
 export { createResponsesClient } from "./responses-client.ts";
-export { createLLMConnectionTester } from "./connection-tester.ts";

@@ -19,7 +19,6 @@ import { createRuntimeContext, initRuntime } from "@n0n/core";
 import {
 	buildLLMConfigFromEnv,
 	createLLMClient,
-	createLLMConnectionTester,
 	createResponsesClient,
 } from "@n0n/llm";
 import {
@@ -41,7 +40,11 @@ if (!existsSync(globalConfigDir)) {
 const setupUI = new CliSetupRenderer();
 
 /** LLM 连通性测试回调 — 注入到 bootstrap，避免 shared 直接依赖 llm */
-const testLLM = createLLMConnectionTester();
+const testLLM = async () => {
+	const llmConfig = buildLLMConfigFromEnv("LLM");
+	const tempClient = createLLMClient(llmConfig);
+	return tempClient.ping();
+};
 
 const result = await bootstrap(
 	buildCodeEnvSpec,

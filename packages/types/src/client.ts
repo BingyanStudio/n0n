@@ -185,6 +185,14 @@ export interface LLMClient {
 	 * @returns 本次心跳的 token 用量，失败时返回 null
 	 */
 	heartbeat?(request: StreamRequest): Promise<TokenUsage | null>;
+
+	/**
+	 * 连通性测试 — bootstrap 流程使用
+	 *
+	 * 发送最轻量请求验证 API 连通性与认证。
+	 * 各 provider 自行实现，错误消息由 provider 层生成。
+	 */
+	ping(): Promise<{ ok: boolean; error?: string }>;
 }
 
 // ── StreamAccumulator ──
