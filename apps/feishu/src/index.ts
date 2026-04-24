@@ -24,7 +24,11 @@ import { homedir } from "node:os";
 import { basename, resolve } from "node:path";
 import * as lark from "@larksuiteoapi/node-sdk";
 import { createRuntimeContext, initRuntime } from "@n0n/core";
-import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
+import {
+	buildLLMConfigFromEnv,
+	createLLMClient,
+	createLLMConnectionTester,
+} from "@n0n/llm";
 import {
 	loadSchedules,
 	type SchedulerCallbacks,
@@ -329,43 +333,7 @@ if (import.meta.main) {
 	const setupUI = new ServerSetupRenderer();
 
 	/** LLM 连通性测试回调 — 注入到 bootstrap，避免 shared 直接依赖 llm */
-	const testLLM = async () => {
-		try {
-			const config = buildLLMConfigFromEnv("LLM");
-			const client = createLLMClient(config);
-			const controller = new AbortController();
-			const timeout = setTimeout(() => controller.abort(), 15_000);
-			try {
-				for await (const event of client.stream(
-					{ messages: [{ type: "generic_user_text", content: "hi" }] },
-					controller.signal,
-				)) {
-					if (event.type === "error") {
-						return { ok: false as const, error: event.error };
-					}
-					controller.abort();
-					break;
-				}
-			} finally {
-				clearTimeout(timeout);
-			}
-			return { ok: true as const };
-		} catch (err) {
-			if (err instanceof Error) {
-				if (err.message.includes("401") || err.message.includes("403")) {
-					return { ok: false as const, error: "认证失败，请检查 API Key" };
-				}
-				if (err.name === "TimeoutError" || err.message.includes("timeout")) {
-					return {
-						ok: false as const,
-						error: "连接超时（15s），请检查网络或 API 地址",
-					};
-				}
-				return { ok: false as const, error: err.message.slice(0, 200) };
-			}
-			return { ok: false as const, error: `连接失败: ${String(err)}` };
-		}
-	};
+	const testLLM = createLLMConnectionTester();
 
 	const result = await bootstrap(
 		buildFeishuEnvSpec,
