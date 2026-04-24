@@ -489,26 +489,29 @@ export class OpenAIClient implements LLMClient {
 
 	async ping(): Promise<{ ok: boolean; error?: string }> {
 		try {
+			const modelsUrl = this.apiUrl.replace(/\/chat\/completions\/?$/, "/models");
 			const controller = new AbortController();
 			const timeout = setTimeout(() => controller.abort(), 15_000);
-			try {
-				for await (const event of this.stream(
-					{ messages: [{ type: "generic_user_text", content: "hi" }] },
-					controller.signal,
-				)) {
-					if (event.type === "error") {
-						return { ok: false as const, error: event.error };
-					}
-					controller.abort();
-					break;
-				}
-			} finally {
-				clearTimeout(timeout);
+			const resp = await fetch(modelsUrl, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${this.pc.apiKey}`,
+					"Content-Type": "application/json",
+				},
+				signal: controller.signal,
+			});
+			clearTimeout(timeout);
+
+			if (resp.ok) return { ok: true as const };
+
+			if (resp.status === 401 || resp.status === 403) {
+				return { ok: false as const, error: "认证失败，请检查 API Key" };
 			}
-			return { ok: true as const };
+			const text = await resp.text().catch(() => "");
+			return { ok: false as const, error: `API ${resp.status}: ${text.slice(0, 200)}` };
 		} catch (err) {
 			if (err instanceof Error) {
-				if (isAbortError(err)) {
+				if (isAbortError(err) || err.name === "TimeoutError") {
 					return { ok: false as const, error: "连接超时（15s），请检查网络或 API 地址" };
 				}
 				return { ok: false as const, error: err.message.slice(0, 200) };
