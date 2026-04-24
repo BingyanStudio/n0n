@@ -204,27 +204,22 @@ describe("formatSubmitResult 单元测试", () => {
 		const md = formatSubmitResult({
 			type: "ask_user",
 			question: "选哪个？",
-			options: [
-				{ choice: "A", affect: "影响A" },
-				{ choice: "B", affect: "影响B" },
-			],
+			options: "## A\n影响A\n\n## B\n影响B",
 		} satisfies CodeResult);
 		expect(md).toContain("# ❓ 需要确认");
 		expect(md).toContain("选哪个？");
-		expect(md).toContain("### 1. A");
-		expect(md).toContain("> 影响A");
-		expect(md).toContain("### 2. B");
+		expect(md).toContain("## A");
+		expect(md).toContain("## B");
 	});
 
 	test("request_assist 完整检查列表", () => {
 		const md = formatSubmitResult({
 			type: "request_assist",
 			content: "需要帮助",
-			checklist: [{ label: "检查项1", detail: "详情1" }, { label: "检查项2" }],
+			checklist: "## 检查项1\n详情1\n\n## 检查项2\n详情2",
 		} satisfies CodeResult);
 		expect(md).toContain("# 🔧 请求协助");
-		expect(md).toContain("- [ ] 检查项1");
-		expect(md).toContain("> 详情1");
-		expect(md).toContain("- [ ] 检查项2");
+		expect(md).toContain("## 检查项1");
+		expect(md).toContain("## 检查项2");
 	});
 });

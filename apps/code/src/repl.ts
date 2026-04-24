@@ -24,6 +24,7 @@ import { readMultilineInput } from "@n0n/multiline-input";
 import {
 	type BaseWorkspacePaths,
 	loadConversation,
+	parseDsl,
 	saveConversation,
 } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
@@ -453,9 +454,13 @@ export async function startCodeRepl(
 		switch (ir.type) {
 			case "ask_user": {
 				writeln(`${style.yellow("?")} ${ir.question}`);
-				for (const [i, opt] of ir.options.entries()) {
-					writeln(`  ${style.cyan(`${i + 1})`)} ${opt.choice}`);
-					writeln(`     ${style.gray(opt.affect)}`);
+				writeln();
+				const askUserItems = parseDsl(ir.options);
+				for (const [i, item] of askUserItems.entries()) {
+					writeln(`  ${style.cyan(`${i + 1})`)} ${item.label}`);
+					if (item.detail) {
+						writeln(`     ${style.gray(item.detail)}`);
+					}
 				}
 				writeln();
 				playNotifySound();
@@ -467,7 +472,9 @@ export async function startCodeRepl(
 			}
 			case "request_assist": {
 				writeln(`${style.yellow("🔧")} 请求协助: ${ir.content}`);
-				for (const [i, item] of ir.checklist.entries()) {
+				writeln();
+				const checklistItems = parseDsl(ir.checklist);
+				for (const [i, item] of checklistItems.entries()) {
 					writeln(`  ${style.cyan(`${i + 1})`)} ${item.label}`);
 					if (item.detail) {
 						writeln(`     ${style.gray(item.detail)}`);

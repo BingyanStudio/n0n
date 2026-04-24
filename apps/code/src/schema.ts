@@ -12,16 +12,6 @@
 
 import { z } from "zod";
 
-const FollowUpOption = z.object({
-	choice: z.string().describe("选项文本"),
-	affect: z.string().describe("选择此项后的影响说明"),
-});
-
-const ChecklistItem = z.object({
-	label: z.string().describe("检查项描述"),
-	detail: z.string().optional().describe("补充说明或操作指引"),
-});
-
 export const CodeResultSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("completed"),
@@ -36,14 +26,16 @@ export const CodeResultSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("ask_user"),
 		question: z.string().describe("向用户提出的具体问题"),
-		options: z.array(FollowUpOption).describe("2-4 个选项供用户选择"),
+		options: z.string().describe(
+			"DSL 格式：每个选项以 `## ` 开头，下一行写详细说明；2-4 个选项供用户选择。示例：\n## 方案 A：直接修改\n代码改动量最小，但可能与未来功能冲突\n## 方案 B：提取为单独模块\n更清晰但需要额外重构",
+		),
 	}),
 	z.object({
 		type: z.literal("request_assist"),
 		content: z.string().describe("需要用户协助的具体内容"),
-		checklist: z
-			.array(ChecklistItem)
-			.describe("问卷/检查列表，便于用户逐项执行并反馈结果"),
+		checklist: z.string().describe(
+			"使用 DSL 格式，每个检查项以 `## ` 开头，可选详情在下一行。示例：\n## 运行测试\n重点关注测试套件的继承关系\n## 检查 diff\n确认只修改了目标文件",
+		),
 	}),
 ]);
 

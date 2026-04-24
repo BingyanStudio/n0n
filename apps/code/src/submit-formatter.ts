@@ -3,10 +3,6 @@
  */
 
 import type { CodeResult } from "./schema.ts";
-
-type AskUserResult = Extract<CodeResult, { type: "ask_user" }>;
-type RequestAssistResult = Extract<CodeResult, { type: "request_assist" }>;
-
 // ── Markdown 模板 ──
 
 const COMPLETED_TEMPLATE = `# ✅ 任务完成
@@ -25,22 +21,16 @@ const COMPLETED_TEMPLATE = `# ✅ 任务完成
 `;
 
 const ASK_USER_TEMPLATE = `# ❓ 需要确认
-
-## 问题
-
 {{question}}
 
-## 选项
-
+---
 {{options}}
 `;
 
 const REQUEST_ASSIST_TEMPLATE = `# 🔧 请求协助
-
 {{content}}
 
-## 检查列表
-
+---
 {{checklist}}
 `;
 
@@ -81,39 +71,12 @@ export function formatSubmitResult(result: CodeResult): string {
 		case "ask_user":
 			return render(ASK_USER_TEMPLATE, {
 				question: result.question,
-				options: formatOptions(result.options),
+				options: result.options,
 			});
 		case "request_assist":
 			return render(REQUEST_ASSIST_TEMPLATE, {
 				content: result.content,
-				checklist: formatChecklist(result.checklist),
+				checklist: result.checklist,
 			});
 	}
-}
-
-// ── 内部辅助 ──
-
-function formatOptions(options: AskUserResult["options"]): string {
-	const lines: string[] = [];
-	for (const [i, opt] of options.entries()) {
-		lines.push(`### ${i + 1}. ${opt.choice}`);
-		if (opt.affect) {
-			lines.push("");
-			lines.push(`> ${opt.affect}`);
-		}
-		lines.push("");
-	}
-	return lines.join("\n");
-}
-
-function formatChecklist(checklist: RequestAssistResult["checklist"]): string {
-	const lines: string[] = [];
-	for (const item of checklist) {
-		lines.push(`- [ ] ${item.label}`);
-		if (item.detail) {
-			lines.push(`  > ${item.detail}`);
-		}
-	}
-	lines.push("");
-	return lines.join("\n");
 }
