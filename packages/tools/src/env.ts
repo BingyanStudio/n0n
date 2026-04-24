@@ -10,6 +10,9 @@
  * - Shell:  平台默认(cmd/sh) + 可选(bash, pwsh)
  */
 
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+
 // DESIGN NOTE: 环境探测体系的四个关注点（探测、执行、示例模板、提示词注入）
 // 故意分散在 env.ts / executor.ts / definition.ts 三个文件中，而非抽象为统一的
 // RuntimeProvider 接口。原因：
@@ -49,6 +52,14 @@ export interface CliToolProbe {
 	version: string | null;
 }
 
+/** PATH 扫描结果：用户安装目录中的可执行文件 */
+export interface UserPathEntry {
+	/** 目录路径（~ 缩写） */
+	dir: string;
+	/** 目录中的可执行文件列表 */
+	tools: string[];
+}
+
 /** 完整的环境信息快照 */
 export interface EnvSnapshot {
 	os: "windows" | "macos" | "linux" | string;
@@ -56,6 +67,8 @@ export interface EnvSnapshot {
 	defaultShell: string;
 	runtimes: RuntimeProbe[];
 	cliTools: CliToolProbe[];
+	/** 用户安装目录中发现的所有 CLI 工具 */
+	userPath: UserPathEntry[];
 }
 
 // === Runtime 定义 ===
@@ -183,24 +196,6 @@ const RUNTIME_DEFS: RuntimeDef[] = [
 	},
 ];
 
-// === CLI 工具定义 ===
-
-interface CliToolDef {
-	name: string;
-	cmd: string;
-	versionArgs: string[];
-	versionPattern: RegExp;
-}
-
-const CLI_TOOL_DEFS: CliToolDef[] = [
-	{
-		name: "rg",
-		cmd: "rg",
-		versionArgs: ["--version"],
-		versionPattern: /ripgrep\s+(\d+\.\d+[\w.]*)/,
-	},
-];
-
 // === Detection ===
 
 async function probeRuntime(def: RuntimeDef): Promise<RuntimeProbe> {
@@ -257,33 +252,55 @@ async function probeRuntime(def: RuntimeDef): Promise<RuntimeProbe> {
 	}
 }
 
-async function probeCliTool(def: CliToolDef): Promise<CliToolProbe> {
-	const base: CliToolProbe = {
-		name: def.name,
-		available: false,
-		version: null,
-	};
-	try {
-		const proc = Bun.spawn([def.cmd, ...def.versionArgs], {
-			stdout: "pipe",
-			stderr: "pipe",
-			env: { ...process.env },
-		});
-		const timer = setTimeout(() => proc.kill(), 5000);
+// === PATH Scanning ===
+
+const HOME = process.env.HOME || process.env.USERPROFILE || "";
+
+/** 判断是否为用户主动安装的目录（非系统自带） */
+function isUserDir(dir: string): boolean {
+	if (HOME && dir.startsWith(HOME)) return true;
+	if (dir.startsWith("/opt/homebrew")) return true;
+	if (dir === "/usr/local/bin") return true;
+	// Windows: 非系统目录
+	if (IS_WINDOWS && !dir.includes("\\Windows\\")) return true;
+	return false;
+}
+
+function shortenPath(dir: string): string {
+	if (HOME && dir.startsWith(HOME)) return "~" + dir.slice(HOME.length);
+	return dir;
+}
+
+/** 扫描 PATH 中用户安装目录的所有可执行文件 */
+function scanUserPath(): UserPathEntry[] {
+	const pathDirs = (process.env.PATH || "").split(IS_WINDOWS ? ";" : ":");
+	const seen = new Set<string>();
+	const result: UserPathEntry[] = [];
+
+	for (const dir of pathDirs) {
+		if (!dir || seen.has(dir)) continue;
+		seen.add(dir);
+		if (!isUserDir(dir)) continue;
+
 		try {
-			const stdout = await new Response(proc.stdout).text();
-			const stderr = await new Response(proc.stderr).text();
-			const exitCode = await proc.exited;
-			if (exitCode !== 0) return base;
-			const output = stdout + stderr;
-			const match = output.match(def.versionPattern);
-			return { ...base, available: true, version: match?.[1] ?? null };
-		} finally {
-			clearTimeout(timer);
-		}
-	} catch {
-		return base;
+			const entries = readdirSync(dir);
+			const tools: string[] = [];
+			for (const name of entries) {
+				try {
+					const s = statSync(join(dir, name));
+					if (s.isFile() && (s.mode & 0o111)) {
+						tools.push(name);
+					}
+				} catch {}
+			}
+			if (tools.length > 0) {
+				tools.sort();
+				result.push({ dir: shortenPath(dir), tools });
+			}
+		} catch {}
 	}
+
+	return result;
 }
 
 // === Cache & Public API ===
@@ -310,9 +327,8 @@ function buildOsName(): EnvSnapshot["os"] {
 export async function detectEnv(): Promise<EnvSnapshot> {
 	if (cachedSnapshot) return cachedSnapshot;
 
-	const [probes, cliProbes] = await Promise.all([
+	const [probes] = await Promise.all([
 		Promise.all(RUNTIME_DEFS.map(probeRuntime)),
-		Promise.all(CLI_TOOL_DEFS.map(probeCliTool)),
 	]);
 
 	cachedSnapshot = {
@@ -320,7 +336,8 @@ export async function detectEnv(): Promise<EnvSnapshot> {
 		platform: process.platform,
 		defaultShell: IS_WINDOWS ? "cmd" : "sh",
 		runtimes: probes,
-		cliTools: cliProbes,
+		cliTools: [],
+		userPath: scanUserPath(),
 	};
 
 	return cachedSnapshot;
