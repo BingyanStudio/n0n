@@ -457,6 +457,7 @@ export class GeminiClient implements LLMClient {
 	}
 
 	async ping(): Promise<{ ok: boolean; error?: string }> {
+		// XXX: Gemini 通过 OpenAI 兼容网关走 stream，当前仅用于排除网络问题。如果未来网关提供了 GET /models 等轻量端点，应切换为直接 HTTP 请求，避免消息构建和流式解析开销。
 		try {
 			const controller = new AbortController();
 			const timeout = setTimeout(() => controller.abort(), 15_000);

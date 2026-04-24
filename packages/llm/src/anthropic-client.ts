@@ -766,6 +766,7 @@ export class AnthropicClient implements LLMClient {
 	}
 
 	async ping(): Promise<{ ok: boolean; error?: string }> {
+		// XXX: Anthropic 无轻量 health check 端点，当前通过 stream 发送空消息排除网络问题。如果未来 Anthropic 提供了等效端点（如 GET /v1/models），应切换为直接 HTTP 请求，避免消息构建和 token 消耗。
 		try {
 			const controller = new AbortController();
 			const timeout = setTimeout(() => controller.abort(), 15_000);
