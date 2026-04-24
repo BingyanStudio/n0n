@@ -192,24 +192,14 @@ n0n/
 │   ├── tools/         # 核心工具（exec/write/edit/reminder/submit）
 │   ├── core/          # Agent Loop 核心引擎
 │   ├── shared/        # Skills 发现、对话持久化
-│   ├── workflow/      # delegateTask/generate/RAG 流水线
-│   ├── scheduler/     # Cron 调度器
-│   ├── tui/           # 终端 UI（React + Ink）
 │   ├── cli-ui/        # 共享终端渲染
 │   └── multiline-input/ # 多行输入组件
 │
 ├── apps/              # 应用入口
-│   ├── cli/           # 交互式 REPL
 │   ├── code/          # 代码编辑 Agent
-│   ├── feishu/        # 飞书 Bot（WebSocket + 流式卡片）
-│   ├── fairy/         # 独立 Agent 应用
-│   └── scheduler/     # 定时调度服务
+│   └── fairy/         # 独立 Agent 应用
 │
-└── workflows/         # 运行时目录
-    ├── skills/        # 可复用 Skill 目录
-    ├── tasks/         # 生成的 Workflow 文件
-    ├── memory/        # 记忆/知识库
-    └── history/       # 对话历史
+└── scripts/           # 工具脚本
 ```
 
 ---
@@ -320,7 +310,6 @@ bun run typecheck
 bun run lint
 
 # 单独启动某个 app
-bun run apps/cli/src/index.ts
 bun run apps/code/src/cli.ts
 ```
 

@@ -2,8 +2,6 @@
  * @n0n/core — Agent Loop 核心
  *
  * 只包含 agentLoop 核心循环 + 运行时配置。
- * 业务流水线（delegateTask、generate）在 @n0n/workflow。
- * 定时调度在 @n0n/scheduler。
  * 通用工具（workspace、skills、frontmatter）在 @n0n/shared。
  */
 
