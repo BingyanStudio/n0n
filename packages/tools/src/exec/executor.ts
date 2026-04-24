@@ -211,10 +211,10 @@ export async function* execToolStream(
 
 		// ── 等待机制：Promise.race 确定性中断 ──
 		let backgrounded = false;
-		const waitforPromise = new Promise<"timeout">((resolve) => {
+		const waitforPromise = new Promise<"waitfor">((resolve) => {
 			setTimeout(() => {
 				backgrounded = true;
-				resolve("timeout");
+				resolve("waitfor");
 			}, waitforMs);
 		});
 
@@ -226,7 +226,7 @@ export async function* execToolStream(
 				});
 				const raceResult = await Promise.race([waitForData, waitforPromise]);
 				notify = null;
-				if (raceResult === "timeout") break;
+				if (raceResult === "waitfor") break;
 			}
 			while (pending.length > 0) {
 				const chunk = pending.shift();
