@@ -34,6 +34,8 @@ export interface StreamingResult {
 	readyTools: Map<number, ToolCallRecord>;
 	/** 中断原因（null = 正常结束） */
 	interrupt: "length" | "error" | "aborted" | null;
+	/** error 中断时的原始错误消息 */
+	errorMessage?: string;
 }
 
 // ── 解析器 ──
@@ -57,6 +59,7 @@ export async function* parseStream(
 	const seenIndices = new Set<number>();
 	const completedIndices = new Set<number>();
 	let interrupt: "length" | "error" | "aborted" | null = null;
+	let errorMessage: string | undefined;
 
 	for await (const event of stream) {
 		if (signal?.aborted) {
@@ -129,6 +132,7 @@ export async function* parseStream(
 			case "error":
 				if (phase === "thinking") yield { type: "thinking_end" };
 				interrupt = "error";
+				errorMessage = event.error;
 				yield { type: "error", error: event.error };
 				break;
 
@@ -155,6 +159,6 @@ export async function* parseStream(
 
 	yield {
 		type: "done",
-		result: { accumulator: acc, readyTools, interrupt },
+		result: { accumulator: acc, readyTools, interrupt, errorMessage },
 	};
 }

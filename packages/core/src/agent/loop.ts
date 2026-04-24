@@ -346,7 +346,11 @@ function classifyRound(
 
 	// error，无工具 → 终止
 	if (result.interrupt === "error" && !hasReadyTools) {
-		return { action: "exit", reason: "LLM error", report: "LLM stream error" };
+		return {
+			action: "exit",
+			reason: result.errorMessage ?? "LLM error",
+			report: result.errorMessage ?? "LLM stream error",
+		};
 	}
 
 	// content_filter → 终止
