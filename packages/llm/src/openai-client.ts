@@ -140,14 +140,14 @@ function toOpenAIMessages(
 					result.push({
 						role: "assistant",
 						content: msg.content || null,
-						reasoning_content: enableThinking ? (msg.reasoning ?? "") : (msg.reasoning ?? undefined),
+						...(enableThinking ? { reasoning_content: msg.reasoning ?? "" } : {}),
 						tool_calls: toolCalls,
 					});
 				} else {
 					result.push({
 						role: "assistant",
 						content: msg.content || null,
-						reasoning_content: enableThinking ? (msg.reasoning ?? "") : (msg.reasoning ?? undefined),
+						...(enableThinking ? { reasoning_content: msg.reasoning ?? "" } : {}),
 					});
 				}
 				break;

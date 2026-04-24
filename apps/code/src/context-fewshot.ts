@@ -31,6 +31,19 @@ import type {
 
 const IS_WINDOWS = process.platform === "win32";
 
+/**
+ * DeepSeek V4 思考模式指令 — 编程 agent 专用
+ *
+ * 追加到第一条 user 消息末尾，控制 <think> 中的思维链风格。
+ * 与 fewshot reasoning 内容配合使用：指令定义规则，reasoning 示范规则。
+ */
+const CODING_AGENT_THINKING_INSTRUCTION = [
+	"\n\n【思维模式要求】在你的思考过程中，请遵守以下规则：",
+	"1. 分析任务可以拆解为哪些独立步骤，将没有依赖关系的工具调用在同一轮一次性全部发出，不要逐个等待",
+	"2. 确定性工具（write、edit、reminder）总是成功——不需要等待结果确认，直接和其他调用并行发出",
+	"3. 任务完成后必须通过 submit 工具提交结果，而不是用纯文本消息结束",
+].join("\n");
+
 // ── bootstrap-test.md 内容（预置到 .temp/ 供扫描时发现） ──
 
 const BOOTSTRAP_TASK = `# Bootstrap Task
@@ -223,27 +236,29 @@ export async function buildContextFewshot(
 	const messages: DomainMessage[] = [];
 
 	// Message: user prompt（system-reminder 引导 + 请求）
+	const userContent = [
+		"<system-reminder>",
+		"Bootstrap: discover your environment before the user's first message.",
+		"1. Check OS, shell, and git state",
+		"2. Read AGENTS.md for project-specific instructions",
+		"3. Survey the codebase structure",
+		"4. Read and complete the bootstrap task in .temp/bootstrap-test.md",
+		"Submit when all steps are done.",
+		"</system-reminder>",
+		"",
+		"帮我初始化工作环境。",
+	].join("\n");
+
 	messages.push({
 		type: "generic_user_text",
-		content: [
-			"<system-reminder>",
-			"Bootstrap: discover your environment before the user's first message.",
-			"1. Check OS, shell, and git state",
-			"2. Read AGENTS.md for project-specific instructions",
-			"3. Survey the codebase structure",
-			"4. Read and complete the bootstrap task in .temp/bootstrap-test.md",
-			"Submit when all steps are done.",
-			"</system-reminder>",
-			"",
-			"帮我初始化工作环境。",
-		].join("\n"),
+		content: userContent + CODING_AGENT_THINKING_INSTRUCTION,
 	});
 
 	// Message: assistant Turn 1（4 个并行 exec）
 	messages.push({
 		type: "assistant_tool_call",
 		content: null,
-		reasoning: null,
+		reasoning: "用户要求初始化环境，bootstrap 的标准流程是检查 OS/shell/git、读项目指令、扫描代码结构、读取 bootstrap 任务。四个命令互相独立，全部并行发出。",
 		reasoningSignature: null,
 		toolCalls: turn1Calls,
 	});
@@ -292,7 +307,7 @@ export async function buildContextFewshot(
 	messages.push({
 		type: "assistant_tool_call",
 		content: null,
-		reasoning: null,
+		reasoning: "bootstrap-test.md 要求创建文件、修改状态、运行验证、提交结果。write 和 edit 是确定性工具不需要等待结果，exec 运行验证并清理，submit 提交完成报告。四个调用一次性发出。",
 		reasoningSignature: null,
 		toolCalls: [turn2WriteCall, turn2EditCall, turn2ExecCall, turn2SubmitCall],
 	});
