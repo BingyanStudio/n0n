@@ -113,6 +113,7 @@ function isSSEChunk(data: unknown): data is SSEChunk {
 function toOpenAIMessages(
 	promptMessages: PromptMessage[],
 	backendProvider?: string,
+	enableThinking?: boolean,
 ): OpenAIMessage[] {
 	const result: OpenAIMessage[] = [];
 
@@ -139,14 +140,14 @@ function toOpenAIMessages(
 					result.push({
 						role: "assistant",
 						content: msg.content || null,
-						reasoning_content: msg.reasoning ?? undefined,
+						reasoning_content: enableThinking ? (msg.reasoning ?? "") : (msg.reasoning ?? undefined),
 						tool_calls: toolCalls,
 					});
 				} else {
 					result.push({
 						role: "assistant",
 						content: msg.content || null,
-						reasoning_content: msg.reasoning ?? undefined,
+						reasoning_content: enableThinking ? (msg.reasoning ?? "") : (msg.reasoning ?? undefined),
 					});
 				}
 				break;
@@ -232,6 +233,9 @@ export class OpenAIClient implements LLMClient {
 			promptMessages,
 			this.pc.provider === "openai-compatible"
 				? this.pc.backendProvider
+				: undefined,
+			this.pc.provider === "openai-compatible"
+				? this.pc.enableThinking
 				: undefined,
 		);
 
