@@ -1,9 +1,0 @@
-{
-	"name": "@n0n/tarot",
-	"version": "0.1.0",
-	"private": true,
-	"type": "module",
-	"bin": {
-		"tarot": "src/index.ts"
-	}
-}
