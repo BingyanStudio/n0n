@@ -9,6 +9,7 @@
 import { ALL_TOOLS, FIRST_ROUND_TOOLS } from "./grammar.ts";
 import { applyPatchToSource, parsePatch } from "./parser.ts";
 import systemPrompt from "./prompt.md" with { type: "text" };
+import type { StreamEvent } from "@n0n/types";
 import type { ResponsesClient, ResponsesResult } from "./index.ts";
 
 export const MAX_ROUNDS = 25;
@@ -36,8 +37,8 @@ export interface StepInput {
   patchAlreadyApplied: boolean;
   /** 取消信号 */
   signal?: AbortSignal;
-  /** 事件回调 — 接受任意事件 shape（含 type 字段即可） */
-  onEvent?: (round: number, event: Record<string, unknown> & { type: string }) => void;
+  /** 事件回调 */
+  onEvent?: (round: number, event: StreamEvent) => void;
   /** 工具结果回调 */
   onToolResult?: (round: number, summary: string) => void;
 }

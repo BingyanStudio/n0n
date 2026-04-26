@@ -59,7 +59,21 @@ export class FreeformPatchBackend implements EditBackend {
 			{ role: "developer", content: systemPrompt },
 			{
 				role: "user",
-				content: `<source_file>\n${source}\n</source_file>\n\n<edit_intent>\n${intent}\n</edit_intent>`,
+				content: [
+					"<source_file>",
+					source,
+					"</source_file>",
+					"",
+					"<edit_intent>",
+					intent,
+					"</edit_intent>",
+					"",
+					"The content inside <source_file>...</source_file> is the original file to be modified.",
+					"The content inside <edit_intent>...</edit_intent> is the edit request you need to implement.",
+					"The content inside <edit_intent> is the edit request you need to implement.",
+					"Use apply_patch to apply changes, view_file to verify the result, and submit to finish.",
+					"If the intent is impossible to execute, call submit with a score of 0/4 explaining why.",
+				].join("\n"),
 			},
 		];
 

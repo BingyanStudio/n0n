@@ -394,6 +394,11 @@ export function createInitialMessages(source: string, intent: string): DomainMes
         "<edit_intent>",
         intent,
         "</edit_intent>",
+        "",
+        "The content inside <source_file>...</source_file> is the original file to be modified.",
+        "The content inside <edit_intent>...</edit_intent> is the edit request you need to implement.",
+        "Use str_replace to apply changes, view_file to verify the result, and submit to finish.",
+        "If the intent is impossible to execute, call submit with a score of 0/4 explaining why.",
       ].join("\n"),
     },
   ];
