@@ -25,3 +25,4 @@ n0n-conversation-*.json
 docs/xlxz-wiki
 docs/xlxz-wiki.exe
 .tarot-session.json
+packages/tools/src/edit/__tests__/.secret.json

@@ -2,7 +2,7 @@
  * FreeformPatchBackend — OpenAI Responses API + 全 freeform 工具
  *
  * 闭环流程：apply_patch → view_file(验证) → submit(反馈)
- * 所有工具均使用 grammar，无 JSON schema 开销。
+ * 使用 step.ts 的单步执行组装多轮循环。
  */
 
 import type {
@@ -10,27 +10,12 @@ import type {
 	EditBackendCallbacks,
 	EditBackendResult,
 } from "../backend.ts";
-import { ALL_TOOLS, FIRST_ROUND_TOOLS } from "./grammar.ts";
-import { applyPatchToSource, parsePatch } from "./parser.ts";
+import { step, MAX_ROUNDS } from "./step.ts";
+import type { UsageInfo } from "./step.ts";
 import systemPrompt from "./prompt.md" with { type: "text" };
 
-interface ResponseItem {
-	type: string;
-	call_id?: string;
-	name?: string;
-	input?: string;
-}
+// ── 重新导出 ResponsesClient 类型 ──
 
-export interface ResponsesResult {
-	output: ResponseItem[];
-}
-
-/**
- * OpenAI Responses API 的最小调用接口。
- *
- * baseUrl、apiKey、model 等细节由外部实现闭包，
- * FreeformPatchBackend 只关心 "给 input + tools，拿 result"。
- */
 export interface ResponsesClient {
 	create(
 		input: unknown[],
@@ -39,7 +24,17 @@ export interface ResponsesClient {
 	): Promise<ResponsesResult | { error: string }>;
 }
 
-const MAX_ROUNDS = 25;
+export interface ResponsesResult {
+	output: ResponseItem[];
+	usage?: UsageInfo;
+}
+
+interface ResponseItem {
+	type: string;
+	call_id?: string;
+	name?: string;
+	input?: string;
+}
 
 export class FreeformPatchBackend implements EditBackend {
 	readonly name = "freeform-patch";
@@ -58,6 +53,7 @@ export class FreeformPatchBackend implements EditBackend {
 		let current = source;
 		let feedback: string | null = null;
 		let patchApplied = false;
+		const roundTokenUsage: Array<{ round: number; usage: UsageInfo | null }> = [];
 
 		const conversation: unknown[] = [
 			{ role: "developer", content: systemPrompt },
@@ -77,86 +73,35 @@ export class FreeformPatchBackend implements EditBackend {
 				};
 			}
 
-			callbacks?.onEvent?.(round, {
-				type: "thinking",
-				text: `round ${round + 1}...`,
+			const result = await step({
+				conversation,
+				content: current,
+				client: this.client,
+				round,
+				patchAlreadyApplied: patchApplied,
+				signal,
+				onEvent: callbacks?.onEvent,
+				onToolResult: callbacks?.onToolResult,
 			});
 
-			const tools = round === 0 ? FIRST_ROUND_TOOLS : ALL_TOOLS;
-			const json = await this.client.create(conversation, tools, signal);
-			if ("error" in json && typeof json.error === "string") {
+			// 记录 token 用量
+			roundTokenUsage.push({ round, usage: result.tokenUsage });
+
+			// 更新状态
+			current = result.content;
+			if (result.patchAppliedThisRound) patchApplied = true;
+
+			if (result.error) {
 				return {
 					content: current,
-					feedback,
-					error: json.error,
+					feedback: null,
+					error: result.error,
 					rounds: round + 1,
 				};
 			}
 
-			let hasSubmit = false;
-			if (
-				!json ||
-				typeof json !== "object" ||
-				!("output" in json) ||
-				!Array.isArray(json.output)
-			) {
-				break;
-			}
-			const response = json as ResponsesResult;
-
-			for (const item of response.output) {
-				if (item.type !== "custom_tool_call") continue;
-				const raw = item.input ?? "";
-
-				switch (item.name) {
-					case "apply_patch": {
-						callbacks?.onToolResult?.(
-							round,
-							`apply_patch (${raw.split("\n").length} lines)`,
-						);
-
-						const hunk = parsePatch(raw);
-						if ("error" in hunk) {
-							this.pushResult(conversation, item, `Error: ${hunk.error}`);
-							break;
-						}
-						const result = applyPatchToSource(current, hunk);
-						if (typeof result !== "string") {
-							this.pushResult(conversation, item, `Error: ${result.error}`);
-							break;
-						}
-						current = result;
-						patchApplied = true;
-						this.pushResult(conversation, item, "OK: Patch applied.");
-						break;
-					}
-
-					case "view_file": {
-						const lines = current.split("\n");
-						const { start, end } = this.parseRange(raw.trim(), lines.length);
-						const numbered = lines
-							.slice(start - 1, end)
-							.map((l, i) => `${start + i}| ${l}`)
-							.join("\n");
-						const content = `<source_file lines="${start}-${end}" total="${lines.length}">\n${numbered}\n</source_file>`;
-						callbacks?.onToolResult?.(round, `view_file → L${start}-${end}`);
-						this.pushResult(conversation, item, content);
-						break;
-					}
-
-					case "submit": {
-						feedback = raw.trim() || null;
-						hasSubmit = true;
-						callbacks?.onToolResult?.(
-							round,
-							feedback ? `submit\n  ${feedback}` : "submit",
-						);
-						break;
-					}
-				}
-			}
-
-			if (hasSubmit) {
+			if (result.hasSubmit) {
+				feedback = result.feedback;
 				return {
 					content: current,
 					feedback,
@@ -172,40 +117,5 @@ export class FreeformPatchBackend implements EditBackend {
 			error: patchApplied ? null : `Did not submit within ${MAX_ROUNDS} rounds`,
 			rounds: MAX_ROUNDS,
 		};
-	}
-
-	private pushResult(
-		conversation: unknown[],
-		item: ResponseItem,
-		output: string,
-	) {
-		conversation.push(item);
-		conversation.push({
-			type: "custom_tool_call_output",
-			call_id: item.call_id,
-			output,
-		});
-	}
-
-	private parseRange(
-		raw: string,
-		totalLines: number,
-	): { start: number; end: number } {
-		if (!raw) return { start: 1, end: totalLines };
-
-		const tailMatch = raw.match(/^-(\d+)$/);
-		if (tailMatch) {
-			const n = Number.parseInt(tailMatch[1] as string, 10);
-			return { start: Math.max(1, totalLines - n + 1), end: totalLines };
-		}
-
-		const rangeMatch = raw.match(/^(\d+)[~-](\d+)$/);
-		if (rangeMatch) {
-			const s = Number.parseInt(rangeMatch[1] as string, 10);
-			const e = Number.parseInt(rangeMatch[2] as string, 10);
-			return { start: Math.max(1, s), end: Math.min(totalLines, e) };
-		}
-
-		return { start: 1, end: totalLines };
 	}
 }

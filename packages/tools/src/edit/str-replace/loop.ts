@@ -1,118 +1,37 @@
 /**
  * Editor Loop — Editor LLM 多轮 str_replace 循环
  *
- * 流程：
- * 1. 发送 [system, user(source + intent)]
- * 2. Editor LLM 调用 str_replace → 执行替换 → 返回结果
- * 3. Editor LLM 调用 view_file → 返回当前文件内容
- * 4. Editor LLM 调用 submit → 提取 feedback → 退出循环
+ * 使用 editorStep() 组装多轮循环，每轮委托给 step.ts 的单步执行。
+ *
+ * 导出：
+ * - editorLoop: 完整多轮循环（供 StrReplaceBackend 使用）
+ * - applySingleOp: 单次 search/replace 应用（供外部测试使用）
+ * - countOccurrences, getReplacementContext: 内部工具函数
  */
 
-import type { DomainMessage, LLMClient, StreamEvent } from "@n0n/types";
-import { StreamAccumulator } from "@n0n/types";
-import prompt from "./prompt.md" with { type: "text" };
-import { EDITOR_TOOLS } from "./tools.ts";
+import type { DomainMessage, StreamEvent, TokenUsage } from "@n0n/types";
+import type { LLMClient } from "@n0n/types";
+import {
+  type StepInput,
+  type StepResult,
+  MAX_ROUNDS,
+  createInitialMessages,
+  editorStep,
+} from "./step.ts";
 
-const MAX_ROUNDS = 15;
+// ── 外部依赖直接导出（保持兼容） ──
+
+export { applySingleOp, countOccurrences, getReplacementContext } from "./step.ts";
+
+// ── 结果类型 ──
 
 export interface EditorLoopResult {
 	content: string;
 	feedback: string | null;
 	error: string | null;
 	rounds: number;
-}
-
-// ── 辅助函数 ──
-
-function toolResult(
-	toolCallId: string,
-	toolName: string,
-	value: string,
-): DomainMessage {
-	return {
-		type: "generic_tool_result",
-		callId: toolCallId,
-		toolName,
-		content: value,
-	};
-}
-
-function countOccurrences(text: string, pattern: string): number {
-	if (pattern.length === 0) return 0;
-	let count = 0;
-	let pos = text.indexOf(pattern, 0);
-	while (pos !== -1) {
-		count++;
-		pos = text.indexOf(pattern, pos + pattern.length);
-	}
-	return count;
-}
-
-/**
- * 应用单次 search/replace 操作。
- * 归一化 CRLF 换行符，确保 LLM 生成的 \n 能匹配源文件的 \r\n。
- */
-export function applySingleOp(
-	source: string,
-	oldStr: string,
-	newStr: string,
-	expectedMatches = 1,
-): { ok: true; content: string } | { ok: false; error: string } {
-	const useCrlf = source.includes("\r\n");
-	const normSource = useCrlf ? source.replace(/\r\n/g, "\n") : source;
-	const normOld = oldStr.replace(/\r\n/g, "\n");
-
-	const actualMatches = countOccurrences(normSource, normOld);
-
-	if (actualMatches !== expectedMatches) {
-		const preview =
-			normOld.length > 80 ? `${normOld.slice(0, 80)}...` : normOld;
-		if (actualMatches === 0) {
-			return {
-				ok: false,
-				error: `Search text not found: "${preview}" — actual matches: 0, expected matches: ${expectedMatches}. Rejected. Please fix expected_matches or provide more context in old_string for precise matching.`,
-			};
-		}
-		return {
-			ok: false,
-			error: `Match count mismatch for "${preview}" — actual matches: ${actualMatches}, expected matches: ${expectedMatches}. Rejected. Please fix expected_matches or provide more context in old_string for precise matching.`,
-		};
-	}
-
-	const normNew = useCrlf
-		? newStr.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n")
-		: newStr.replace(/\r\n/g, "\n");
-	const content = normSource.split(normOld).join(normNew);
-	return { ok: true, content: useCrlf ? content : content };
-}
-
-function getReplacementContext(
-	content: string,
-	newStr: string,
-	contextLines = 2,
-): string {
-	if (!newStr) return "(deletion — no replacement context)";
-
-	const pos = content.indexOf(newStr);
-	if (pos === -1) return "";
-
-	const lines = content.split("\n");
-	const linesBefore = content.slice(0, pos).split("\n");
-	const replacementStartLine = linesBefore.length;
-	const replacementLines = newStr.split("\n").length;
-
-	const start = Math.max(0, replacementStartLine - contextLines - 1);
-	const end = Math.min(
-		lines.length,
-		replacementStartLine + replacementLines + contextLines,
-	);
-
-	const numbered = lines
-		.slice(start, end)
-		.map((line, i) => `${start + i + 1}| ${line}`)
-		.join("\n");
-
-	return `Context (L${start + 1}-${end}):\n${numbered}`;
+  /** 每轮的 token 用量（新增，供评估和监控使用） */
+  roundTokenUsage: Array<{ round: number; usage: TokenUsage | null }>;
 }
 
 // ── Editor Loop ──
@@ -127,22 +46,8 @@ export async function editorLoop(
 ): Promise<EditorLoopResult> {
 	let current = source;
 	let editCount = 0;
-
-	const messages: DomainMessage[] = [
-		{ type: "system", content: prompt },
-		{
-			type: "generic_user_text",
-			content: [
-				"<source_file>",
-				source,
-				"</source_file>",
-				"",
-				"<edit_intent>",
-				intent,
-				"</edit_intent>",
-			].join("\n"),
-		},
-	];
+  const messages = createInitialMessages(source, intent);
+  const roundTokenUsage: Array<{ round: number; usage: TokenUsage | null }> = [];
 
 	for (let round = 0; round < MAX_ROUNDS; round++) {
 		if (signal?.aborted) {
@@ -151,217 +56,56 @@ export async function editorLoop(
 				feedback: null,
 				error: "Editor loop aborted",
 				rounds: round,
+        roundTokenUsage,
 			};
 		}
 
-		const acc = new StreamAccumulator();
-		let message: ReturnType<StreamAccumulator["toMessage"]>;
-		try {
-			for await (const event of editorClient.stream(
-				{ messages, tools: EDITOR_TOOLS, toolChoice: "required" },
-				signal,
-			)) {
-				acc.push(event);
-				onEvent?.(round, event);
-			}
-			message = acc.toMessage();
-		} catch (err) {
-			return {
-				content: current,
-				feedback: null,
-				error: `Editor LLM error: ${err instanceof Error ? err.message : String(err)}`,
-				rounds: round + 1,
-			};
-		}
+    const stepInput: StepInput = {
+      messages,
+      content: current,
+      client: editorClient,
+      round,
+      editCount,
+      signal,
+      onEvent,
+      onToolResult,
+    };
 
-		if (message.toolCalls.length === 0) {
-			return {
-				content: current,
-				feedback: null,
-				error: "Editor LLM returned no tool calls",
-				rounds: round + 1,
-			};
-		}
+    const result: StepResult = await editorStep(stepInput);
 
-		const parsedToolCalls: Array<{
-			tc: (typeof message.toolCalls)[number];
-			args: Record<string, unknown> | null;
-		}> = message.toolCalls.map((tc) => {
-			try {
-				return { tc, args: JSON.parse(tc.input) as Record<string, unknown> };
-			} catch {
-				return { tc, args: null };
-			}
-		});
+    // 累积 token 用量
+    roundTokenUsage.push({ round, usage: result.tokenUsage });
 
-		messages.push({
-			type: "generic_tool_call",
-			content: message.content ?? "",
-			toolCalls: parsedToolCalls
-				.filter((p) => p.args !== null)
-				.map((p) => ({
-					id: p.tc.toolCallId,
-					tool: p.tc.toolName,
-					// biome-ignore lint/style/noNonNullAssertion: filtered above
-					args: p.args!,
-				})),
-		});
+    // 更新状态 (result.messages IS messages — already mutated in place by editorStep)
+    current = result.content;
+    editCount = result.totalEditCount;
 
-		for (const { tc, args } of parsedToolCalls) {
-			const name = tc.toolName;
-			if (args === null) {
-				messages.push(
-					toolResult(
-						tc.toolCallId,
-						name,
-						"Error: Failed to parse tool arguments as JSON.",
-					),
-				);
-				onToolResult?.(round, "parse error");
-				continue;
-			}
+    // 需要引导（模型未调用工具）：注入引导后继续循环
+    if (result.needsGuidance && result.toolCalls.length === 0) {
+      continue;
+    }
 
-			switch (name) {
-				case "str_replace": {
-					const oldStr = String(args.old_string ?? "");
-					const newStr = String(args.new_string ?? "");
-					const expectedMatches =
-						typeof args.expected_matches === "number"
-							? args.expected_matches
-							: 1;
+    // 处理错误
+    if (result.error) {
+      return {
+        content: current,
+        feedback: result.feedback,
+        error: result.error,
+        rounds: round + 1,
+        roundTokenUsage,
+      };
+    }
 
-					if (!oldStr) {
-						messages.push(
-							toolResult(
-								tc.toolCallId,
-								name,
-								"Error: old_string cannot be empty.",
-							),
-						);
-						onToolResult?.(round, "str_replace → old_string empty");
-						break;
-					}
-
-					const result = applySingleOp(
-						current,
-						oldStr,
-						newStr,
-						expectedMatches,
-					);
-					if (result.ok) {
-						current = result.content;
-						editCount++;
-						const context = getReplacementContext(current, newStr);
-						messages.push(
-							toolResult(
-								tc.toolCallId,
-								name,
-								`OK: Replacement applied (edit #${editCount}).\n${context}`,
-							),
-						);
-						const oldLines = oldStr.split("\n").length;
-						const newLines = newStr.split("\n").length;
-						const addedLines = Math.max(0, newLines - oldLines);
-						const removedLines = Math.max(0, oldLines - newLines);
-						const lineStats =
-							[
-								removedLines > 0 ? `-${removedLines}` : null,
-								addedLines > 0 ? `+${addedLines}` : null,
-							]
-								.filter(Boolean)
-								.join(" ") || "±0";
-						onToolResult?.(
-							round,
-							`str_replace → edit #${editCount} (${lineStats} lines)`,
-						);
-					} else {
-						messages.push(
-							toolResult(
-								tc.toolCallId,
-								name,
-								[
-									`Error: ${result.error}`,
-									"",
-									"Check whitespace, indentation, and character-for-character accuracy.",
-									"Call view_file to see the current file content.",
-								].join("\n"),
-							),
-						);
-						onToolResult?.(round, `str_replace → ${result.error}`);
-					}
-					break;
-				}
-
-				case "view_file": {
-					const startLine =
-						typeof args.start_line === "number" ? args.start_line : undefined;
-					const endLine =
-						typeof args.end_line === "number" ? args.end_line : undefined;
-					const lines = current.split("\n");
-
-					if (startLine !== undefined || endLine !== undefined) {
-						const start = Math.max(1, startLine ?? 1);
-						const end = Math.min(lines.length, endLine ?? lines.length);
-						if (start > end) {
-							messages.push(
-								toolResult(
-									tc.toolCallId,
-									name,
-									`Error: Invalid line range: start_line (${start}) > end_line (${end}).`,
-								),
-							);
-							onToolResult?.(round, "view_file → invalid range");
-							break;
-						}
-						const numbered = lines
-							.slice(start - 1, end)
-							.map((line, i) => `${start + i}| ${line}`)
-							.join("\n");
-						messages.push(
-							toolResult(
-								tc.toolCallId,
-								name,
-								`<source_file lines="${start}-${end}" total="${lines.length}">\n${numbered}\n</source_file>`,
-							),
-						);
-						onToolResult?.(
-							round,
-							`view_file → L${start}-${end} (${end - start + 1} lines)`,
-						);
-					} else {
-						messages.push(
-							toolResult(
-								tc.toolCallId,
-								name,
-								`<source_file>\n${current}\n</source_file>`,
-							),
-						);
-						onToolResult?.(round, `view_file → ok (${lines.length} lines)`);
-					}
-					break;
-				}
-
-				case "submit": {
-					const feedback =
-						typeof args.feedback === "string" && args.feedback.length > 0
-							? args.feedback
-							: null;
-					onToolResult?.(round, feedback ? `submit\n  ${feedback}` : "submit");
-					return { content: current, feedback, error: null, rounds: round + 1 };
-				}
-
-				default: {
-					messages.push(
-						toolResult(
-							tc.toolCallId,
-							name,
-							`Error: Unknown tool "${name}". Use str_replace, view_file, or submit.`,
-						),
-					);
-					onToolResult?.(round, `unknown tool: ${name}`);
-				}
-			}
-		}
+    // submit 提交则退出
+    if (result.hasSubmit) {
+      return {
+        content: current,
+        feedback: result.feedback,
+        error: current !== source || editCount > 0 ? null : "No patch applied",
+        rounds: round + 1,
+        roundTokenUsage,
+      };
+    }
 	}
 
 	return {
@@ -369,5 +113,6 @@ export async function editorLoop(
 		feedback: null,
 		error: `Editor LLM did not submit within ${MAX_ROUNDS} rounds (${editCount} edits applied).`,
 		rounds: MAX_ROUNDS,
+    roundTokenUsage,
 	};
 }
