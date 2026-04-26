@@ -10,9 +10,9 @@ import type {
 	EditBackendCallbacks,
 	EditBackendResult,
 } from "../backend.ts";
-import { step, MAX_ROUNDS } from "./step.ts";
-import type { UsageInfo } from "./step.ts";
 import systemPrompt from "./prompt.md" with { type: "text" };
+import type { UsageInfo } from "./step.ts";
+import { MAX_ROUNDS, step } from "./step.ts";
 
 // ── 重新导出 ResponsesClient 类型 ──
 
@@ -53,7 +53,8 @@ export class FreeformPatchBackend implements EditBackend {
 		let current = source;
 		let feedback: string | null = null;
 		let patchApplied = false;
-		const roundTokenUsage: Array<{ round: number; usage: UsageInfo | null }> = [];
+		const roundTokenUsage: Array<{ round: number; usage: UsageInfo | null }> =
+			[];
 
 		const conversation: unknown[] = [
 			{ role: "developer", content: systemPrompt },

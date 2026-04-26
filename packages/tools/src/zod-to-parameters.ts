@@ -7,7 +7,7 @@
  */
 
 import type { ToolDefinition } from "@n0n/types";
-import { type z, toJSONSchema } from "zod";
+import { toJSONSchema, type z } from "zod";
 
 /**
  * 强制覆盖 schema 所有字段的描述映射。

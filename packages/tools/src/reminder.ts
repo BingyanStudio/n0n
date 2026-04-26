@@ -13,7 +13,10 @@ import type {
 	ToolDefinition,
 } from "@n0n/types";
 import { ReminderArgsSchema } from "@n0n/types";
-import { type FieldDescriptions, zodToParameters } from "./zod-to-parameters.ts";
+import {
+	type FieldDescriptions,
+	zodToParameters,
+} from "./zod-to-parameters.ts";
 
 export { ReminderArgsSchema };
 

@@ -215,7 +215,7 @@ export const REGISTERED_TOOLS = new Set([
 export async function makeToolkit(
 	schema: ZodType | undefined,
 	toolsConfig: ToolsConfig,
-	model?: string,
+	_model?: string,
 ): Promise<Toolkit> {
 	await detectEnv();
 	const submitEntry: ToolEntry = {
@@ -251,7 +251,12 @@ export async function makeToolkit(
 
 export type { CanStartFn } from "@n0n/types";
 export type { ResponsesClient, ToolsConfig } from "./config.ts";
-export type { CliToolProbe, EnvSnapshot, RuntimeProbe, UserPathEntry } from "./env.ts";
+export type {
+	CliToolProbe,
+	EnvSnapshot,
+	RuntimeProbe,
+	UserPathEntry,
+} from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
 export type { PendingReminder } from "./reminder.ts";
 export { DefaultSubmitSchema } from "./submit.ts";

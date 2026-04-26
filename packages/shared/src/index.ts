@@ -27,8 +27,6 @@ export {
 } from "./conversation-log/index.ts";
 // Deep parse JSON strings
 export { deepParseJsonStrings } from "./deep-parse-json-strings.ts";
-// DSL Parser
-export { parseDsl } from "./parse-dsl.ts";
 // Format Prompt
 export { formatPrompt } from "./format-prompt/index.ts";
 // Frontmatter
@@ -38,6 +36,8 @@ export {
 	extractRawYaml,
 	parseFrontmatter,
 } from "./frontmatter.ts";
+// DSL Parser
+export { parseDsl } from "./parse-dsl.ts";
 export {
 	discoverSkills,
 	formatSkillContents,

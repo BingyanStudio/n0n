@@ -23,7 +23,8 @@ Runtimes and CLI tools available in the current environment are listed in the bo
 
 Output exceeding ~4 000 tokens is auto-truncated: only the last ~1 000 tokens are kept and the full output is saved to a file. To avoid losing important content, assess first then read selectively, or split across parallel tool calls.`;
 
-const ALL_RUNTIMES = "sh, bash, pwsh, cmd, bun, node, deno, python, python3, uv";
+const ALL_RUNTIMES =
+	"sh, bash, pwsh, cmd, bun, node, deno, python, python3, uv";
 
 const EXEC_FIELD_DESCRIPTIONS: FieldDescriptions<ExecArgs> = {
 	script:

@@ -140,14 +140,18 @@ function toOpenAIMessages(
 					result.push({
 						role: "assistant",
 						content: msg.content || null,
-						...(enableThinking ? { reasoning_content: msg.reasoning ?? "" } : {}),
+						...(enableThinking
+							? { reasoning_content: msg.reasoning ?? "" }
+							: {}),
 						tool_calls: toolCalls,
 					});
 				} else {
 					result.push({
 						role: "assistant",
 						content: msg.content || null,
-						...(enableThinking ? { reasoning_content: msg.reasoning ?? "" } : {}),
+						...(enableThinking
+							? { reasoning_content: msg.reasoning ?? "" }
+							: {}),
 					});
 				}
 				break;
@@ -489,7 +493,10 @@ export class OpenAIClient implements LLMClient {
 
 	async ping(): Promise<{ ok: boolean; error?: string }> {
 		try {
-			const modelsUrl = this.apiUrl.replace(/\/chat\/completions\/?$/, "/models");
+			const modelsUrl = this.apiUrl.replace(
+				/\/chat\/completions\/?$/,
+				"/models",
+			);
 			const controller = new AbortController();
 			const timeout = setTimeout(() => controller.abort(), 15_000);
 			const resp = await fetch(modelsUrl, {
@@ -508,11 +515,17 @@ export class OpenAIClient implements LLMClient {
 				return { ok: false as const, error: "认证失败，请检查 API Key" };
 			}
 			const text = await resp.text().catch(() => "");
-			return { ok: false as const, error: `API ${resp.status}: ${text.slice(0, 200)}` };
+			return {
+				ok: false as const,
+				error: `API ${resp.status}: ${text.slice(0, 200)}`,
+			};
 		} catch (err) {
 			if (err instanceof Error) {
 				if (isAbortError(err) || err.name === "TimeoutError") {
-					return { ok: false as const, error: "连接超时（15s），请检查网络或 API 地址" };
+					return {
+						ok: false as const,
+						error: "连接超时（15s），请检查网络或 API 地址",
+					};
 				}
 				return { ok: false as const, error: err.message.slice(0, 200) };
 			}

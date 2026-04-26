@@ -249,10 +249,13 @@ const EDIT_RESULT: DomainMessage = {
 	tool: "edit" as const,
 	call: TURN2_EDIT as import("@n0n/types").EditToolCall,
 	diff: {
-		chunks: [{
-			startLine: 7, endLine: 7,
-			lines: [{ line: 7, content: "Status: DONE", changed: true }],
-		}],
+		chunks: [
+			{
+				startLine: 7,
+				endLine: 7,
+				lines: [{ line: 7, content: "Status: DONE", changed: true }],
+			},
+		],
 		added: 1,
 		removed: 1,
 	},
@@ -365,7 +368,14 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 		content: null,
 		reasoning: "让我想想要做什么。",
 		reasoningSignature: null,
-		toolCalls: [BOOT_PLAN, BOOT_ENV, BOOT_TOOLS, BOOT_AGENTS, BOOT_CODE, BOOT_TASK],
+		toolCalls: [
+			BOOT_PLAN,
+			BOOT_ENV,
+			BOOT_TOOLS,
+			BOOT_AGENTS,
+			BOOT_CODE,
+			BOOT_TASK,
+		],
 	},
 
 	PLAN_RESULT,
@@ -415,9 +425,7 @@ async function runExec(
 		if (event.type === "tool_result") result = event;
 	}
 	if (!result)
-		throw new Error(
-			`exec tool did not yield a result for call ${call.id}`,
-		);
+		throw new Error(`exec tool did not yield a result for call ${call.id}`);
 	return result;
 }
 
@@ -491,8 +499,7 @@ async function renderFewshot(
 		workspace,
 		os: extractOs(envStdout),
 		branch: extractBranch(envStdout),
-		codebaseSummary:
-			codeStdout.match(/Total: .+/)?.[0] ?? "项目结构已扫描",
+		codebaseSummary: codeStdout.match(/Total: .+/)?.[0] ?? "项目结构已扫描",
 	};
 
 	return template.map((entry): DomainMessage => {

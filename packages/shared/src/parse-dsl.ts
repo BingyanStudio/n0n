@@ -33,7 +33,10 @@ export function parseDsl(input: string): DslItem[] {
 		const match = /^##\s+(.+)$/.exec(line);
 		if (match) {
 			if (currentLabel) {
-				items.push({ label: currentLabel, detail: currentDetail.join(" ").trim() });
+				items.push({
+					label: currentLabel,
+					detail: currentDetail.join(" ").trim(),
+				});
 			}
 			currentLabel = match[1]!;
 			currentDetail.length = 0;

@@ -3,6 +3,7 @@
  */
 
 import type { CodeResult } from "./schema.ts";
+
 // ── Markdown 模板 ──
 
 const COMPLETED_TEMPLATE = `# ✅ 任务完成

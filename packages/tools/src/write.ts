@@ -21,7 +21,10 @@ import type {
 	WriteToolResult,
 } from "@n0n/types";
 import { WriteArgsSchema } from "@n0n/types";
-import { type FieldDescriptions, zodToParameters } from "./zod-to-parameters.ts";
+import {
+	type FieldDescriptions,
+	zodToParameters,
+} from "./zod-to-parameters.ts";
 
 export { WriteArgsSchema };
 

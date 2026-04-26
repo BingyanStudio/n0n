@@ -267,7 +267,7 @@ function isUserDir(dir: string): boolean {
 }
 
 function shortenPath(dir: string): string {
-	if (HOME && dir.startsWith(HOME)) return "~" + dir.slice(HOME.length);
+	if (HOME && dir.startsWith(HOME)) return `~${dir.slice(HOME.length)}`;
 	return dir;
 }
 
@@ -288,7 +288,7 @@ function scanUserPath(): UserPathEntry[] {
 			for (const name of entries) {
 				try {
 					const s = statSync(join(dir, name));
-					if (s.isFile() && (s.mode & 0o111)) {
+					if (s.isFile() && s.mode & 0o111) {
 						tools.push(name);
 					}
 				} catch {}

@@ -463,7 +463,9 @@ export class GeminiClient implements LLMClient {
 			const timeout = setTimeout(() => controller.abort(), 15_000);
 			try {
 				for await (const event of this.stream(
-					{ messages: [{ type: "generic_user_text", content: "hi" }] } as StreamRequest,
+					{
+						messages: [{ type: "generic_user_text", content: "hi" }],
+					} as StreamRequest,
 					controller.signal,
 				)) {
 					if (event.type === "error") {
@@ -479,7 +481,10 @@ export class GeminiClient implements LLMClient {
 		} catch (err) {
 			if (err instanceof Error) {
 				if (isAbortError(err)) {
-					return { ok: false as const, error: "连接超时（15s），请检查网络或 API 地址" };
+					return {
+						ok: false as const,
+						error: "连接超时（15s），请检查网络或 API 地址",
+					};
 				}
 				return { ok: false as const, error: err.message.slice(0, 200) };
 			}
