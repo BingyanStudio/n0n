@@ -20,6 +20,14 @@ export interface UsageInfo {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /** API 返回的 snake_case 字段 */
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
+  prompt_cache_hit_tokens?: number;
+  prompt_cache_miss_tokens?: number;
 }
 
 // ── 输入/输出类型 ──
@@ -135,11 +143,11 @@ export async function step(input: StepInput): Promise<StepResult> {
       type: "done",
       finishReason: "stop",
       usage: {
-        inputTokens: (usageInfo as any).input_tokens ?? usageInfo.inputTokens ?? 0,
-        outputTokens: (usageInfo as any).output_tokens ?? usageInfo.outputTokens ?? 0,
-        totalTokens: (usageInfo as any).total_tokens ?? usageInfo.totalTokens ?? 0,
-        cacheReadTokens: (usageInfo as any).cache_read_tokens ?? (usageInfo as any).prompt_cache_hit_tokens ?? 0,
-        cacheWriteTokens: (usageInfo as any).cache_write_tokens ?? (usageInfo as any).prompt_cache_miss_tokens ?? 0,
+        inputTokens: usageInfo.input_tokens ?? usageInfo.inputTokens ?? 0,
+        outputTokens: usageInfo.output_tokens ?? usageInfo.outputTokens ?? 0,
+        totalTokens: usageInfo.total_tokens ?? usageInfo.totalTokens ?? 0,
+        cacheReadTokens: usageInfo.cache_read_tokens ?? usageInfo.prompt_cache_hit_tokens ?? 0,
+        cacheWriteTokens: usageInfo.cache_write_tokens ?? usageInfo.prompt_cache_miss_tokens ?? 0,
       },
     });
   }
