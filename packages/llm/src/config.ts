@@ -74,6 +74,13 @@ export interface OpenAICompatibleProviderConfig extends ProviderConfigBase {
 	enableThinking?: boolean;
 }
 
+/** DeepSeek 原生 API 配置 — 走 OpenAI 兼容协议，支持 thinking 模式 */
+export interface DeepSeekProviderConfig extends ProviderConfigBase {
+	provider: "deepseek";
+	/** 启用思考模式（默认启用） */
+	enableThinking?: boolean;
+}
+
 /**
  * ProviderConfig — 统一的 LLM provider 配置
  *
@@ -83,7 +90,8 @@ export type ProviderConfig =
 	| OpenAIProviderConfig
 	| AnthropicProviderConfig
 	| GoogleProviderConfig
-	| OpenAICompatibleProviderConfig;
+	| OpenAICompatibleProviderConfig
+	| DeepSeekProviderConfig;
 
 // ── LLMConfig ──
 

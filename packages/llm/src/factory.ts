@@ -12,6 +12,7 @@ import type { LLMClient } from "@n0n/types";
 import { AnthropicClient } from "./anthropic-client.ts";
 import type { LLMConfig } from "./config.ts";
 import { GeminiClient } from "./gemini-client.ts";
+import { DeepSeekClient } from "./deepseek-client.ts";
 import { OpenAIClient } from "./openai-client.ts";
 
 /**
@@ -28,6 +29,8 @@ export function createLLMClient(config: LLMConfig): LLMClient {
 			return new OpenAIClient(pc);
 		case "anthropic":
 			return new AnthropicClient(pc);
+		case "deepseek":
+			return new DeepSeekClient(pc);
 		case "google":
 			return new GeminiClient(pc);
 	}
