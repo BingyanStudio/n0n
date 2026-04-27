@@ -238,6 +238,10 @@ export function formatPrompt(
 				break;
 			}
 
+			case "token_usage":
+				// token 用量是 LLM 调用元数据，不产生提示词输出
+				break;
+
 			default: {
 				const _exhaustive: never = msg;
 				throw new Error(
