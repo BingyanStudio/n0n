@@ -26,6 +26,7 @@ export const AFFECTS_SUBSEQUENT: Record<MessageType, boolean> = {
 	"submit:rejected": true,
 	tool_arg_error: true,
 	cache_breakpoint: false,
+	token_usage: false,  // 不产生提示词输出，不参与 msgIndex 计数（与 cache_breakpoint 同理）
 };
 
 /** 判断给定消息类型是否影响后续消息的 msgIndex 计数 */

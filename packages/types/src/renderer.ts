@@ -14,7 +14,7 @@
  *   roundEnd
  */
 
-import type { ToolCallRecord, ToolExecOutcome } from "./domain.ts";
+import type { DomainMessage, ToolCallRecord, ToolExecOutcome, TokenUsageMessage } from "./domain.ts";
 
 /** 单轮 LLM 调用的 token 用量统计 */
 export interface RoundTokenUsage {
@@ -104,4 +104,17 @@ export interface Renderer
 
 	/** 用户中断（Ctrl+C）— 清理流式输出状态 */
 	aborted(): void;
+}
+
+/** 从消息历史末尾反向查找最近一轮的 token 用量 */
+export function findLastUsage(
+	messages: readonly DomainMessage[],
+): RoundTokenUsage | null {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const m = messages[i];
+		if (m && m.type === "token_usage") {
+			return m.usage;
+		}
+	}
+	return null;
 }
