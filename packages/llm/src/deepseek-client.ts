@@ -5,7 +5,7 @@
  * 区别：
  * - tagStyle 为 default，DSML 标签仅在 Client 内部按需使用
  * - 自定义 TagAdapter：对特定 tag name 可做特殊处理
- * - 默认启用 thinking 模式（enable_thinking）
+ * - 默认启用 thinking 模式（thinking: { type: "enabled" }）
  * - 默认 base URL 指向 DeepSeek API
  *
  * 后续扩展点（Phase 2-4）：
@@ -47,6 +47,9 @@ const DIRECTIVE_TAGS = new Set([
 	"submit_rejected",
 	"turn_feedback",
 	"reminder",
+	"edit_feedback",
+	"diagnostic_hint",
+	"output_hint",
 ]);
 
 interface CollectedDirective {
@@ -97,6 +100,7 @@ interface DeepSeekMessage {
 	reasoning_content?: string | null;
 	tool_calls?: DeepSeekToolCall[];
 	tool_call_id?: string;
+	task?: string;
 }
 
 interface DeepSeekToolCall {
@@ -126,7 +130,7 @@ interface DeepSeekRequest {
 	max_tokens?: number;
 	stream?: boolean;
 	stream_options?: { include_usage: boolean };
-	enable_thinking?: boolean;
+	thinking?: { type: "enabled" | "disabled" };
 }
 
 interface SSEChunk {
@@ -241,11 +245,11 @@ function toDeepSeekTools(tools: ToolDefinition[]): DeepSeekToolDef[] {
  * 将 CollectingTagAdapter 拦截的控制性内容注入为 developer / latest_reminder 消息，
  * 并过滤掉被清空的 user 消息。
  *
- * 处理逻辑：
- * 1. 遍历 messages，对每条 user 消息检查 content 是否被清空（trim 后为空）
- *    - 如果 flush 中有对应的 directive → 替换为 developer 消息（reminder tag → latest_reminder）
- *    - 如果 content 不为空但有剩余 directive → 在该消息后追加 developer 消息
- * 2. flush 中的 directive 按 FIFO 顺序消费，与 formatPrompt 中 wrapTag 调用顺序一致
+ * 消费逻辑：
+ * - 遍历消息序列，遇到 user 消息时 flush 所有积累的 directive
+ * - A 类（空 user）：跳过该消息，directive 已作为 developer 消息替代
+ * - B/C 类（非空 user）：保留 user 消息，directive 在其前面插入
+ * - directive 按 FIFO 顺序消费，与 formatPrompt 中 wrapTag 调用顺序一致
  */
 function injectDirectives(
 	messages: DeepSeekMessage[],
@@ -254,46 +258,68 @@ function injectDirectives(
 	if (directives.length === 0) return messages;
 
 	const result: DeepSeekMessage[] = [];
-	let di = 0; // directive index
+	let di = 0;
+
+	const flushDirectives = () => {
+		while (di < directives.length) {
+			const d = directives[di++]!;
+			result.push({
+				role: d.tag === "reminder" ? "latest_reminder" : "developer",
+				content: d.content,
+			});
+		}
+	};
 
 	for (const msg of messages) {
 		if (msg.role === "user") {
-			const trimmed = (msg.content ?? "").trim();
-			if (trimmed === "" && di < directives.length) {
-				// A 类：整条消息内容被清空 → 替换为 developer / latest_reminder
-				const d = directives[di++]!;
-				result.push({
-					...msg,
-					role: d.tag === "reminder" ? "latest_reminder" : "developer",
-					content: d.content,
-				});
-			} else {
-				// 保留非空 user 消息
+			// 在 user 消息前 flush 所有积累的 directive
+			flushDirectives();
+			// 空 user 消息（A 类被清空的）跳过——对应的 directive 已在上面 flush
+			if ((msg.content ?? "").trim() !== "") {
 				result.push(msg);
-				// B 类：消息中有 hint 等被剥离的片段 → 追加 developer 消息
-				while (di < directives.length && directives[di]!.tag === "hint") {
-					result.push({
-						role: "developer",
-						content: directives[di]!.content,
-					});
-					di++;
-				}
 			}
 		} else {
 			result.push(msg);
 		}
 	}
 
-	// 剩余未消费的 directive（不应发生，但兜底）
-	while (di < directives.length) {
-		const d = directives[di++]!;
-		result.push({
-			role: d.tag === "reminder" ? "latest_reminder" : "developer",
-			content: d.content,
-		});
-	}
+	// 尾部剩余 directive（最后一条消息之后的，不应发生但兜底）
+	flushDirectives();
 
 	return result;
+}
+
+// ── Task Token 解析 ──
+
+/**
+ * 用户可在消息中输入 【【task_type】】 触发原生 task token。
+ * 匹配后从消息内容中移除标记，在该消息上设置 task 字段。
+ *
+ * 支持的 task type（与 DeepSeek-V4 训练集一致）：
+ * action, query, authority, domain, title, read_url
+ */
+const VALID_TASKS = new Set(["action", "query", "authority", "domain", "title", "read_url"]);
+const TASK_PATTERN = /【【(\w+)】】/;
+
+/**
+ * 从所有 user 消息中剔除 【【task】】 标记并设置 task 字段。
+ * 严格只匹配 role === "user"（用户手动输入），不匹配 developer 等系统消息。
+ * 每条消息独立处理：有标记就剔除内容 + 设 task 字段，无标记则跳过。
+ */
+function applyTaskToken(messages: DeepSeekMessage[]): void {
+	for (const msg of messages) {
+		if (msg.role !== "user") continue;
+
+		const match = (msg.content ?? "").match(TASK_PATTERN);
+		if (!match) continue;
+
+		msg.content = (msg.content ?? "").replace(TASK_PATTERN, "").trim();
+
+		const taskType = match[1]!;
+		if (VALID_TASKS.has(taskType)) {
+			msg.task = taskType;
+		}
+	}
 }
 
 // ── DeepSeek Client ──
@@ -330,7 +356,11 @@ export class DeepSeekClient implements LLMClient {
 		const adapter = new DeepSeekCollectingAdapter(this.tags);
 		const promptMessages = formatPrompt(request.messages, adapter);
 		const rawMessages = toDeepSeekMessages(promptMessages, this.enableThinking);
-		const apiMessages = injectDirectives(rawMessages, adapter.flush());
+		const injected = injectDirectives(rawMessages, adapter.flush());
+
+		// 解析 【【task】】 标记，直接透传 task 字段
+		const apiMessages = [...injected];
+		applyTaskToken(apiMessages);
 
 		const body: DeepSeekRequest = {
 			model: this.modelId,
@@ -344,8 +374,9 @@ export class DeepSeekClient implements LLMClient {
 			body.tool_choice = request.toolChoice ?? "auto";
 		}
 
+		// thinking 模式
 		if (this.enableThinking) {
-			body.enable_thinking = true;
+			body.thinking = { type: "enabled" };
 		}
 
 		let res: Response;
