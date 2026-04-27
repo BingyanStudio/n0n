@@ -6,7 +6,8 @@
  */
 
 import type { IdleNudgeMessage } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const templates = [
 	(idle: number, max: number) =>
@@ -19,13 +20,12 @@ const templates = [
 
 export function formatIdleNudge(
 	msg: IdleNudgeMessage,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const tpl = pick(templates, msgIndex);
-	return wrapTag(
+	return tags.wrapTag(
 		"system_warning",
 		tpl(msg.idleCount, msg.maxIdleRounds),
-		model,
 	);
 }

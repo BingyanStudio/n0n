@@ -3,7 +3,8 @@
  */
 
 import type { SubmitToolResult } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const successTemplates = [
 	"Submitted successfully.",
@@ -13,13 +14,13 @@ const successTemplates = [
 
 export function formatSubmitResult(
 	msg: SubmitToolResult,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const text = pick(successTemplates, msgIndex);
-	const parts = [wrapTag("result", text, model)];
+	const parts = [tags.wrapTag("result", text)];
 	if (msg.userResponse) {
-		parts.push(wrapTag("user_response", msg.userResponse, model));
+		parts.push(tags.wrapTag("user_response", msg.userResponse));
 	}
 	return parts.join("\n");
 }

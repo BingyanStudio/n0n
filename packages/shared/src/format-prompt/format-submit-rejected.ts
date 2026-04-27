@@ -5,7 +5,8 @@
  */
 
 import type { SubmitRejectedMessage } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const templates = [
 	(attempt: number, max: number, error: string) =>
@@ -18,13 +19,12 @@ const templates = [
 
 export function formatSubmitRejected(
 	msg: SubmitRejectedMessage,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const tpl = pick(templates, msgIndex);
-	return wrapTag(
+	return tags.wrapTag(
 		"submit_rejected",
 		tpl(msg.attempt, msg.maxAttempts, msg.error),
-		model,
 	);
 }

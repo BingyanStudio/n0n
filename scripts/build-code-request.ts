@@ -7,7 +7,7 @@
  * 用法：bun run scripts/build-code-request.ts [--user "你的任务描述"]
  */
 
-import { formatPrompt } from "@n0n/shared";
+import { createTagAdapter, formatPrompt } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage, ToolDefinition } from "@n0n/types";
 import { resolve } from "node:path";
@@ -39,7 +39,7 @@ const toolsConfig = {
 	security: { blockedCommands: [] as string[] },
 	agent: { defaultExecWaitfor: 120 },
 	editBackendType: "str-replace" as const,
-	editorClient: { modelId: "", tagStyle: "default" as const, async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); }, async ping() { return { ok: true as const }; } },
+	editorClient: { modelId: "", tagStyle: "default" as const, tags: createTagAdapter("default"), async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); }, async ping() { return { ok: true as const }; } },
 };
 
 const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, modelId);
@@ -61,7 +61,7 @@ const domainMessages: DomainMessage[] = [
 
 // ── DomainMessage → PromptMessage → OpenAI 格式 ──
 
-const promptMessages = formatPrompt(domainMessages, modelId);
+const promptMessages = formatPrompt(domainMessages, createTagAdapter("default"));
 
 // 转为 OpenAI 消息格式（与 openai-client.ts 中 toOpenAIMessages 一致）
 interface OpenAIMessage {

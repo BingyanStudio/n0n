@@ -1,78 +1,44 @@
 /**
- * Gemini Client — Google Gemini 模型通过 OpenAI Chat Completions 兼容协议实现
+ * DeepSeek Client — SSE 通信与流式解析
  *
- * 实现 LLMClient 接口，通过原生 fetch + SSE 解析与 Gemini 兼容网关通信。
- * Gemini 的 OpenAI 兼容端点遵循标准 Chat Completions 协议：
- * - 请求格式同 OpenAI（messages + tools + stream）
- * - SSE 响应格式同 OpenAI（data: JSON chunks）
- * - 支持 function calling（tool_calls）
- *
- * Thinking 模式：
- * - 请求：注入 `reasoning_effort`（low/medium/high），思考内容通过 `delta.reasoning_content` 独立传输
- * - 响应：思考内容通过 `delta.reasoning_content` 流式传输（与 DeepSeek 格式一致）
- * - 签名：通过 `delta.provider_specific_fields.thought_signatures` 传递
- * - 多轮回传：assistant 消息中通过 reasoning_content 字段回传历史思考内容
- *
- * 缓存：Gemini 的 Context Caching 是独立 API，OpenAI 兼容端点不暴露，因此不实现 heartbeat。
+ * 走 OpenAI 兼容协议（https://api.deepseek.com）。
+ * 消息格式转换、directive 拦截注入由同目录的 formatter / directives 模块负责。
  */
 
-import { createTagAdapter, detectTagStyle, formatPrompt } from "@n0n/shared";
+import { createTagAdapter, formatPrompt } from "@n0n/shared";
 import type {
 	CompleteRequest,
 	CompleteResponse,
 	LLMClient,
-	PromptMessage,
 	StreamEvent,
 	StreamRequest,
 	TagAdapter,
 	TagStyle,
 	TokenUsage,
-	ToolDefinition,
 } from "@n0n/types";
-import type { GoogleProviderConfig } from "./config.ts";
-import { isAbortError, LLMError } from "./errors.ts";
+import type { DeepSeekProviderConfig } from "../config.ts";
+import { isAbortError, LLMError } from "../errors.ts";
+import { DeepSeekCollectingAdapter, injectDirectives } from "./directives.ts";
+import type { DeepSeekMessage } from "./formatter.ts";
+import {
+	applyTaskToken,
+	toDeepSeekMessages,
+	toDeepSeekTools,
+} from "./formatter.ts";
 
-// ── OpenAI-compatible API Types ──
+// ── SSE 解析类型 ──
 
-interface GeminiMessage {
-	role: "system" | "user" | "assistant" | "tool";
-	content: string | null;
-	reasoning_content?: string | null;
-	tool_calls?: GeminiToolCall[];
-	tool_call_id?: string;
-}
-
-interface GeminiToolCall {
-	id: string;
-	type: "function";
-	function: {
-		name: string;
-		arguments: string;
-	};
-}
-
-interface GeminiToolDef {
-	type: "function";
-	function: {
-		name: string;
-		description: string;
-		parameters: Record<string, unknown>;
-	};
-}
-
-interface GeminiRequest {
+interface DeepSeekRequest {
 	model: string;
-	messages: GeminiMessage[];
-	tools?: GeminiToolDef[];
+	messages: DeepSeekMessage[];
+	tools?: ReturnType<typeof toDeepSeekTools>;
 	tool_choice?: "auto" | "none" | "required";
 	temperature?: number;
 	max_tokens?: number;
 	stream?: boolean;
 	stream_options?: { include_usage: boolean };
-	reasoning_effort?: "low" | "medium" | "high";
+	thinking?: { type: "enabled" | "disabled" };
 }
-
-// ── SSE Chunk Types ──
 
 interface SSEChunk {
 	choices?: Array<{
@@ -81,9 +47,6 @@ interface SSEChunk {
 			role?: string;
 			content?: string;
 			reasoning_content?: string;
-			provider_specific_fields?: {
-				thought_signatures?: string[];
-			};
 			tool_calls?: Array<{
 				index: number;
 				id?: string;
@@ -100,13 +63,11 @@ interface SSEChunk {
 		prompt_tokens?: number;
 		completion_tokens?: number;
 		total_tokens?: number;
-		completion_tokens_details?: {
-			reasoning_tokens?: number;
-			text_tokens?: number;
-		};
 		prompt_tokens_details?: {
 			cached_tokens?: number;
 		};
+		prompt_cache_hit_tokens?: number;
+		prompt_cache_miss_tokens?: number;
 	};
 }
 
@@ -116,87 +77,23 @@ function isSSEChunk(data: unknown): data is SSEChunk {
 	return Array.isArray(obj.choices) || obj.usage !== undefined;
 }
 
-// ── PromptMessage → Gemini Message 转换 ──
+// ── DeepSeek Client ──
 
-function toGeminiMessages(promptMessages: PromptMessage[]): GeminiMessage[] {
-	const result: GeminiMessage[] = [];
-
-	for (const msg of promptMessages) {
-		switch (msg.role) {
-			case "system":
-				result.push({ role: "system", content: msg.content });
-				break;
-
-			case "user":
-				result.push({ role: "user", content: msg.content });
-				break;
-
-			case "assistant": {
-				if (msg.toolCalls?.length) {
-					const toolCalls: GeminiToolCall[] = msg.toolCalls.map((tc) => ({
-						id: tc.id,
-						type: "function" as const,
-						function: {
-							name: tc.tool,
-							arguments: JSON.stringify(tc.args),
-						},
-					}));
-					result.push({
-						role: "assistant",
-						content: msg.content || null,
-						reasoning_content: msg.reasoning ?? undefined,
-						tool_calls: toolCalls,
-					});
-				} else {
-					result.push({
-						role: "assistant",
-						content: msg.content || null,
-						reasoning_content: msg.reasoning ?? undefined,
-					});
-				}
-				break;
-			}
-
-			case "tool":
-				result.push({
-					role: "tool",
-					content: msg.content,
-					tool_call_id: msg.toolCallId,
-				});
-				break;
-		}
-	}
-
-	return result;
-}
-
-function toGeminiTools(tools: ToolDefinition[]): GeminiToolDef[] {
-	return tools.map((t) => ({
-		type: "function" as const,
-		function: {
-			name: t.name,
-			description: t.description,
-			parameters: t.parameters,
-		},
-	}));
-}
-
-// ── Gemini Client ──
-
-export class GeminiClient implements LLMClient {
+export class DeepSeekClient implements LLMClient {
 	readonly modelId: string;
-	readonly tagStyle: TagStyle;
+	readonly tagStyle: TagStyle = "default";
 	readonly tags: TagAdapter;
-	private readonly pc: GoogleProviderConfig;
+	private readonly pc: DeepSeekProviderConfig;
 	private readonly apiUrl: string;
+	private readonly enableThinking: boolean;
 
-	constructor(pc: GoogleProviderConfig) {
+	constructor(pc: DeepSeekProviderConfig) {
 		this.pc = pc;
 		this.modelId = this.pc.model;
-		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
-		this.tags = createTagAdapter(this.tagStyle);
+		this.tags = createTagAdapter("default");
+		this.enableThinking = this.pc.enableThinking ?? true;
 
-		const base = this.pc.baseUrl ?? "https://generativelanguage.googleapis.com";
+		const base = this.pc.baseUrl ?? "https://api.deepseek.com";
 		if (base.includes("/chat/completions")) {
 			this.apiUrl = base;
 		} else {
@@ -209,23 +106,48 @@ export class GeminiClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = formatPrompt(request.messages, this.tags);
-		const apiMessages = toGeminiMessages(promptMessages);
+		// 每次 stream 新建 collecting adapter，拦截控制性 tag
+		const adapter = new DeepSeekCollectingAdapter(this.tags);
+		const promptMessages = formatPrompt(request.messages, adapter);
+		const rawMessages = toDeepSeekMessages(
+			promptMessages,
+			this.enableThinking,
+		);
+		const injected = injectDirectives(rawMessages, adapter.directives());
 
-		const body: GeminiRequest = {
+		// 解析 【【task】】 标记
+		const apiMessages = [...injected];
+		applyTaskToken(apiMessages);
+
+		// 过滤无效消息：
+		// - 空 user 消息（directive 提取后残留的空壳）
+		// - 空 assistant 消息（只有 thinking 没有 content/tool_calls，回传会报错）
+		const filteredMessages = apiMessages.filter((msg) => {
+			if (msg.role === "user" && !(msg.content ?? "").trim()) return false;
+			if (
+				msg.role === "assistant" &&
+				!msg.content?.trim() &&
+				!msg.tool_calls?.length
+			)
+				return false;
+			return true;
+		});
+
+		const body: DeepSeekRequest = {
 			model: this.modelId,
-			messages: apiMessages,
+			messages: filteredMessages,
 			stream: true,
 			stream_options: { include_usage: true },
 		};
 
 		if (request.tools?.length) {
-			body.tools = toGeminiTools(request.tools);
+			body.tools = toDeepSeekTools(request.tools);
 			body.tool_choice = request.toolChoice ?? "auto";
 		}
 
-		// Gemini 始终思考，必须传 reasoning_effort 才能让 thinking 独立流式传输
-		body.reasoning_effort = this.pc.thinkingEffort ?? "high";
+		if (this.enableThinking) {
+			body.thinking = { type: "enabled" };
+		}
 
 		let res: Response;
 		try {
@@ -249,14 +171,14 @@ export class GeminiClient implements LLMClient {
 
 		if (!res.ok) {
 			const text = await res.text();
-			yield { type: "error", error: `Gemini API ${res.status}: ${text}` };
+			yield { type: "error", error: `DeepSeek API ${res.status}: ${text}` };
 			return;
 		}
 
 		if (!res.body) {
 			yield {
 				type: "error",
-				error: "Gemini streaming response has no body",
+				error: "DeepSeek streaming response has no body",
 			};
 			return;
 		}
@@ -280,14 +202,20 @@ export class GeminiClient implements LLMClient {
 
 			if (chunk.usage) {
 				const u = chunk.usage;
-				const cacheReadTokens = u.prompt_tokens_details?.cached_tokens ?? 0;
+				// 流式 usage 用 prompt_tokens_details.cached_tokens，
+				// 非流式用 prompt_cache_hit_tokens —— 两种都要兼容
+				const cacheReadTokens =
+					u.prompt_tokens_details?.cached_tokens ??
+					u.prompt_cache_hit_tokens ??
+					0;
+				const cacheWriteTokens = u.prompt_cache_miss_tokens ?? 0;
 				const rawInput = u.prompt_tokens ?? 0;
 				lastUsage = {
 					inputTokens: rawInput - cacheReadTokens,
 					outputTokens: u.completion_tokens ?? 0,
 					totalTokens: u.total_tokens ?? 0,
 					cacheReadTokens,
-					cacheWriteTokens: 0,
+					cacheWriteTokens,
 				};
 			}
 
@@ -298,12 +226,6 @@ export class GeminiClient implements LLMClient {
 				}
 				if (delta.content) {
 					yield { type: "content", text: delta.content };
-				}
-				// Gemini 通过 provider_specific_fields.thought_signatures 传递签名
-				if (delta.provider_specific_fields?.thought_signatures?.length) {
-					for (const sig of delta.provider_specific_fields.thought_signatures) {
-						yield { type: "thinking_signature", signature: sig };
-					}
 				}
 				if (delta.tool_calls) {
 					for (const tc of delta.tool_calls) {
@@ -361,7 +283,6 @@ export class GeminiClient implements LLMClient {
 				}
 			}
 
-			// Flush remaining buffer
 			if (buffer.trim()) {
 				for (const line of buffer.split("\n")) {
 					if (!line.startsWith("data: ")) continue;
@@ -391,16 +312,15 @@ export class GeminiClient implements LLMClient {
 	}
 
 	async complete(request: CompleteRequest): Promise<CompleteResponse> {
-		const messages: GeminiMessage[] = request.messages.map((m) => ({
+		const messages: DeepSeekMessage[] = request.messages.map((m) => ({
 			role: m.role,
 			content: m.content,
 		}));
 
-		const body: GeminiRequest = {
+		const body: DeepSeekRequest = {
 			model: this.modelId,
 			messages,
 			stream: false,
-			reasoning_effort: this.pc.thinkingEffort ?? "high",
 		};
 
 		if (request.temperature !== undefined) {
@@ -430,14 +350,14 @@ export class GeminiClient implements LLMClient {
 					const text = await res.text();
 					if (res.status === 429 || res.status >= 500) {
 						lastError = new LLMError(
-							`Gemini API ${res.status}: ${text}`,
+							`DeepSeek API ${res.status}: ${text}`,
 							res.status,
 							text,
 						);
 						continue;
 					}
 					throw new LLMError(
-						`Gemini API ${res.status}: ${text}`,
+						`DeepSeek API ${res.status}: ${text}`,
 						res.status,
 						text,
 					);
@@ -456,34 +376,40 @@ export class GeminiClient implements LLMClient {
 			}
 		}
 
-		throw lastError ?? new Error("Gemini request failed after retries");
+		throw lastError ?? new Error("DeepSeek request failed after retries");
 	}
 
 	async ping(): Promise<{ ok: boolean; error?: string }> {
-		// XXX: Gemini 通过 OpenAI 兼容网关走 stream，当前仅用于排除网络问题。如果未来网关提供了 GET /models 等轻量端点，应切换为直接 HTTP 请求，避免消息构建和流式解析开销。
 		try {
+			const modelsUrl = this.apiUrl.replace(
+				/\/chat\/completions\/?$/,
+				"/models",
+			);
 			const controller = new AbortController();
 			const timeout = setTimeout(() => controller.abort(), 15_000);
-			try {
-				for await (const event of this.stream(
-					{
-						messages: [{ type: "generic_user_text", content: "hi" }],
-					} as StreamRequest,
-					controller.signal,
-				)) {
-					if (event.type === "error") {
-						return { ok: false as const, error: event.error };
-					}
-					controller.abort();
-					break;
-				}
-			} finally {
-				clearTimeout(timeout);
+			const resp = await fetch(modelsUrl, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${this.pc.apiKey}`,
+					"Content-Type": "application/json",
+				},
+				signal: controller.signal,
+			});
+			clearTimeout(timeout);
+
+			if (resp.ok) return { ok: true as const };
+
+			if (resp.status === 401 || resp.status === 403) {
+				return { ok: false as const, error: "认证失败，请检查 API Key" };
 			}
-			return { ok: true as const };
+			const text = await resp.text().catch(() => "");
+			return {
+				ok: false as const,
+				error: `API ${resp.status}: ${text.slice(0, 200)}`,
+			};
 		} catch (err) {
 			if (err instanceof Error) {
-				if (isAbortError(err)) {
+				if (isAbortError(err) || err.name === "TimeoutError") {
 					return {
 						ok: false as const,
 						error: "连接超时（15s），请检查网络或 API 地址",

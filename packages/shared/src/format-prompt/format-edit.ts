@@ -3,7 +3,8 @@
  */
 
 import type { EditDiff, EditToolResult } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 // ── 变体模板 ──
 
@@ -29,19 +30,19 @@ function formatDiffText(diff: EditDiff): string {
 
 export function formatEditResult(
 	msg: EditToolResult,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const parts: string[] = [];
 	if (msg.success) {
 		const prefix = pick(successPrefixTemplates, msgIndex);
 		const summary = `${prefix(msg.call.args.path)}\n${formatDiffText(msg.diff)}`;
-		parts.push(wrapTag("edit_result", summary, model));
+		parts.push(tags.wrapTag("edit_result", summary));
 	} else {
-		parts.push(wrapTag("error", `Edit failed: ${msg.error}`, model));
+		parts.push(tags.wrapTag("error", `Edit failed: ${msg.error}`));
 	}
 	if (msg.feedback) {
-		parts.push(wrapTag("edit_feedback", msg.feedback, model));
+		parts.push(tags.wrapTag("edit_feedback", msg.feedback));
 	}
 	return parts.join("\n");
 }

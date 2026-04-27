@@ -51,8 +51,10 @@ export type { SkillContent, SkillMeta } from "./skills/types.ts";
 export {
 	adaptTagsFor,
 	closeTag,
+	createTagAdapter,
 	detectTagStyle,
 	openTag,
+	type TagAdapter,
 	type TagStyle,
 	wrapTagFor,
 } from "./tags.ts";

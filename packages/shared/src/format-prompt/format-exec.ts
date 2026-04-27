@@ -6,7 +6,8 @@
  */
 
 import type { ExecToolResult } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const IS_WINDOWS = process.platform === "win32";
 
@@ -91,7 +92,7 @@ const stderrTagNames = ["stderr", "error_output", "console_error"];
 
 export function formatExecResult(
 	msg: ExecToolResult,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const runtime = msg.call.args.runtime ?? "unknown";
@@ -104,50 +105,47 @@ export function formatExecResult(
 		case "backgrounded": {
 			const metaFn = pick(backgroundedMetaTemplates, msgIndex);
 			const parts = [
-				wrapTag("exec_meta", metaFn(runtime, cwd, msg.durationMs), model),
+				tags.wrapTag("exec_meta", metaFn(runtime, cwd, msg.durationMs)),
 			];
 
 			const noticeFn = pick(waitforNoticeTemplates, msgIndex + 3);
 			parts.push(
-				wrapTag("waitfor_notice", noticeFn(msg.pid, msg.logFile), model),
+				tags.wrapTag("waitfor_notice", noticeFn(msg.pid, msg.logFile)),
 			);
 
 			if (msg.stdoutSoFar)
-				parts.push(wrapTag(stdoutTag, msg.stdoutSoFar, model));
+				parts.push(tags.wrapTag(stdoutTag, msg.stdoutSoFar));
 			if (msg.stderrSoFar)
-				parts.push(wrapTag(stderrTag, msg.stderrSoFar, model));
+				parts.push(tags.wrapTag(stderrTag, msg.stderrSoFar));
 			return parts.join("\n");
 		}
 		case "truncated": {
 			const metaFn = pick(truncatedMetaTemplates, msgIndex);
 			const parts = [
-				wrapTag(
+				tags.wrapTag(
 					"exec_meta",
 					metaFn(runtime, cwd, msg.exitCode, msg.durationMs, msg.outputFile),
-					model,
 				),
 			];
 
 			if (msg.stdoutTail)
 				parts.push(
-					wrapTag(
+					tags.wrapTag(
 						stdoutTag,
 						`... (last ${msg.totalLines - msg.tailStartLine + 1} of ${msg.totalLines} lines)\n${msg.stdoutTail}`,
-						model,
 					),
 				);
 			if (msg.stderrTail)
 				parts.push(
-					wrapTag(stderrTag, `... (truncated)\n${msg.stderrTail}`, model),
+					tags.wrapTag(stderrTag, `... (truncated)\n${msg.stderrTail}`),
 				);
 
 			const hintFn = pick(truncatedHintTemplates, msgIndex + 3);
 			const chunkGuide = formatChunkGuide(msg.truncatedChunks, msg.outputFile);
 			parts.push(
-				wrapTag(
+				tags.wrapTag(
 					"output_hint",
 					hintFn(msg.totalLines, msg.outputFile, chunkGuide),
-					model,
 				),
 			);
 			return parts.join("\n");
@@ -155,15 +153,14 @@ export function formatExecResult(
 		case "completed": {
 			const metaFn = pick(metaTemplates, msgIndex);
 			const parts = [
-				wrapTag(
+				tags.wrapTag(
 					"exec_meta",
 					metaFn(runtime, cwd, msg.exitCode, msg.durationMs),
-					model,
 				),
 			];
 
-			if (msg.stdout) parts.push(wrapTag(stdoutTag, msg.stdout, model));
-			if (msg.stderr) parts.push(wrapTag(stderrTag, msg.stderr, model));
+			if (msg.stdout) parts.push(tags.wrapTag(stdoutTag, msg.stdout));
+			if (msg.stderr) parts.push(tags.wrapTag(stderrTag, msg.stderr));
 
 			const combined = (msg.stdout || "") + (msg.stderr || "");
 			if (
@@ -173,10 +170,9 @@ export function formatExecResult(
 				)
 			) {
 				parts.push(
-					wrapTag(
+					tags.wrapTag(
 						"diagnostic_hint",
 						pick(diagnosticHintTemplates, msgIndex + 4),
-						model,
 					),
 				);
 			}
