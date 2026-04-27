@@ -371,6 +371,16 @@ export interface CacheBreakpointMessage {
 	type: "cache_breakpoint";
 }
 
+// ── Token 用量 ──
+/** LLM 调用完成后的 token 用量统计，独立于 assistant 消息的领域事件 */
+export interface TokenUsageMessage {
+	type: "token_usage";
+	/** 本轮 LLM 调用的 token 用量 */
+	usage: import("./client.ts").TokenUsage;
+	/** 对应的归一化完成原因（来自 FinishReason），便于消费方区分 stop / tool_calls / length / content_filter */
+	finishReason: string;
+}
+
 // ── 联合类型 ──
 export type DomainMessage =
 	| GenericSystemMessage
@@ -387,7 +397,8 @@ export type DomainMessage =
 	| ReminderDueMessage
 	| SubmitRejectedMessage
 	| ToolArgErrorMessage
-	| CacheBreakpointMessage;
+	| CacheBreakpointMessage
+	| TokenUsageMessage;
 
 // ── 工具并行条件判断 ──
 
