@@ -90,10 +90,29 @@ function injectDirectives(
 ): TestMessage[] {
 	if (directives.length === 0) return messages;
 
-	const result: TestMessage[] = [];
+	// 找最后一个 assistant 消息的索引 G
+	let lastAssistantIdx = -1;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		if (messages[i].role === "assistant") {
+			lastAssistantIdx = i;
+			break;
+		}
+	}
 
-	for (const msg of messages) {
+	const result: TestMessage[] = [];
+	const collected: CollectedDirective[] = [];
+
+	for (let i = 0; i < messages.length; i++) {
+		const msg = messages[i];
 		const content = msg.content ?? "";
+
+		if (!DIRECTIVE_PLACEHOLDER_RE.test(content)) {
+			DIRECTIVE_PLACEHOLDER_RE.lastIndex = 0;
+			result.push(msg);
+			continue;
+		}
+		DIRECTIVE_PLACEHOLDER_RE.lastIndex = 0;
+
 		const found: CollectedDirective[] = [];
 		const cleaned = content
 			.replace(DIRECTIVE_PLACEHOLDER_RE, (_, idxStr) => {
@@ -103,20 +122,22 @@ function injectDirectives(
 			})
 			.trim();
 
-		if (found.length === 0) {
-			result.push(msg);
-			continue;
-		}
-
 		if (cleaned) {
 			result.push({ ...msg, content: cleaned });
 		}
-		for (const d of found) {
-			result.push({
-				role: d.tag === "reminder" ? "latest_reminder" : "developer",
-				content: d.content,
-			});
+
+		// G 之后的 directive 收集到末尾；G 及之前的丢弃
+		if (i > lastAssistantIdx) {
+			collected.push(...found);
 		}
+	}
+
+	// 末尾追加收集到的 directive
+	for (const d of collected) {
+		result.push({
+			role: d.tag === "reminder" ? "latest_reminder" : "developer",
+			content: d.content,
+		});
 	}
 
 	return result;
@@ -156,7 +177,7 @@ describe("injectDirectives hint 位置对齐", () => {
 		expect(devIdx).toBe(userIdx + 1);
 	});
 
-	it("多轮 user_input 各自带 hint：每个 hint 应与其 user 消息对齐", () => {
+	it("多轮 user_input 各自带 hint：仅保留最后一轮 hint", () => {
 		const result = pipeline([
 			{ type: "system", content: "You are helpful." },
 			{
@@ -179,23 +200,18 @@ describe("injectDirectives hint 位置对齐", () => {
 			},
 		]);
 
+		// G = assistant(回复1)，提示1 在 G 之前被 strip，提示2 在 G 之后收集到末尾
 		const devMsgs = messagesOfRole(result, "developer");
-		expect(devMsgs).toHaveLength(2);
-		expect(devMsgs[0]!.content).toBe("提示1");
-		expect(devMsgs[1]!.content).toBe("提示2");
+		expect(devMsgs).toHaveLength(1);
+		expect(devMsgs[0]!.content).toBe("提示2");
 
-		const contents = result.map((m) => m.content);
-		const hint2Idx = contents.indexOf("提示2");
-		const reply1Idx = contents.indexOf("回复1");
-		const question2Idx = contents.indexOf("问题2");
-
-		// 关键：提示2 在 回复1 之后
-		expect(hint2Idx).toBeGreaterThan(reply1Idx);
-		// 提示2 紧跟 问题2
-		expect(hint2Idx).toBe(question2Idx + 1);
+		// developer 在序列末尾
+		const lastMsg = result[result.length - 1];
+		expect(lastMsg.role).toBe("developer");
+		expect(lastMsg.content).toBe("提示2");
 	});
 
-	it("三轮对话：每轮 hint 不错位", () => {
+	it("三轮对话：仅保留最后一个 assistant 之后的 hint", () => {
 		const result = pipeline([
 			{ type: "system", content: "You are helpful." },
 			{ type: "user_input", content: "Q1", context: null, hint: "H1" },
@@ -215,14 +231,17 @@ describe("injectDirectives hint 位置对齐", () => {
 			{ type: "user_input", content: "Q3", context: null, hint: "H3" },
 		]);
 
+		// G = assistant(A2), H1 和 H2 在 G 之前被 strip，H3 在 G 之后收集到末尾
 		const devMsgs = messagesOfRole(result, "developer");
-		expect(devMsgs).toHaveLength(3);
-		expect(devMsgs[0]!.content).toBe("H1");
-		expect(devMsgs[1]!.content).toBe("H2");
-		expect(devMsgs[2]!.content).toBe("H3");
+		expect(devMsgs).toHaveLength(1);
+		expect(devMsgs[0]!.content).toBe("H3");
 
+		// developer 在序列末尾
+		const lastMsg = result[result.length - 1];
+		expect(lastMsg.role).toBe("developer");
+
+		// H3 在 A2 之后
 		const contents = result.map((m) => m.content);
-		expect(contents.indexOf("H2")).toBeGreaterThan(contents.indexOf("A1"));
 		expect(contents.indexOf("H3")).toBeGreaterThan(contents.indexOf("A2"));
 	});
 });
@@ -336,5 +355,220 @@ describe("injectDirectives C 类 directive（嵌在 tool result 中）", () => {
 					(m.content ?? "").toLowerCase().includes("package")),
 		);
 		expect(diagIdx).toBeGreaterThan(toolIdx);
+	});
+});
+
+describe("injectDirectives 不破坏 tool_calls→tool_result 连续性", () => {
+	/** assistant(tool_calls=N) 后的 N 条消息必须全部是 tool role */
+	function checkToolCallIntegrity(
+		msgs: TestMessage[],
+	): { ok: boolean; issue?: string } {
+		for (let i = 0; i < msgs.length; i++) {
+			const msg = msgs[i];
+			if (
+				msg.role === "assistant" &&
+				msg.tool_calls &&
+				msg.tool_calls.length > 0
+			) {
+				const n = msg.tool_calls.length;
+				for (let j = 1; j <= n; j++) {
+					const next = msgs[i + j];
+					if (!next || next.role !== "tool") {
+						return {
+							ok: false,
+							issue: `[${i}] assistant has ${n} tool_calls, but [${i + j}] is ${next?.role ?? "missing"}`,
+						};
+					}
+				}
+			}
+		}
+		return { ok: true };
+	}
+
+	it("truncated exec（含 output_hint）不应在 tool 消息间插入 developer", () => {
+		const result = pipeline([
+			{ type: "system", content: "You are helpful." },
+			{ type: "user_input", content: "请执行", context: null, hint: null },
+			{
+				type: "assistant_tool_call",
+				content: null,
+				reasoning: null,
+				reasoningSignature: null,
+				toolCalls: [
+					{ id: "tc_1", tool: "exec", args: { script: "git diff HEAD" } },
+					{ id: "tc_2", tool: "exec", args: { script: "echo ok" } },
+					{ id: "tc_3", tool: "exec", args: { script: "git log" } },
+					{ id: "tc_4", tool: "exec", args: { script: "git diff HEAD~3" } },
+				],
+			},
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "truncated",
+				call: {
+					id: "tc_1",
+					tool: "exec",
+					args: { script: "git diff HEAD" },
+				},
+				exitCode: 0,
+				stdoutTail: "last 100 lines...",
+				stderrTail: "",
+				outputFile: "/tmp/exec_output_abc.txt",
+				stdoutLength: 16000,
+				stderrLength: 0,
+				totalLines: 500,
+				tailStartLine: 400,
+				truncatedChunks: [
+					{ startLine: 1, endLine: 200, tokens: 2000 },
+					{ startLine: 201, endLine: 399, tokens: 1800 },
+				],
+				durationMs: 200,
+			} as DomainMessage,
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "completed",
+				call: {
+					id: "tc_2",
+					tool: "exec",
+					args: { script: "echo ok" },
+				},
+				exitCode: 0,
+				stdout: "ok",
+				stderr: "",
+				durationMs: 50,
+			} as DomainMessage,
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "completed",
+				call: {
+					id: "tc_3",
+					tool: "exec",
+					args: { script: "git log" },
+				},
+				exitCode: 0,
+				stdout: "commit abc...",
+				stderr: "",
+				durationMs: 80,
+			} as DomainMessage,
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "truncated",
+				call: {
+					id: "tc_4",
+					tool: "exec",
+					args: { script: "git diff HEAD~3" },
+				},
+				exitCode: 0,
+				stdoutTail: "another tail...",
+				stderrTail: "",
+				outputFile: "/tmp/exec_output_def.txt",
+				stdoutLength: 20000,
+				stderrLength: 0,
+				totalLines: 700,
+				tailStartLine: 500,
+				truncatedChunks: [
+					{ startLine: 1, endLine: 250, tokens: 2500 },
+					{ startLine: 251, endLine: 499, tokens: 2200 },
+				],
+				durationMs: 300,
+			} as DomainMessage,
+		]);
+
+		const integrity = checkToolCallIntegrity(result);
+		expect(integrity.ok).toBe(true);
+
+		// directive（output_hint）应存在但不在 tool 消息间
+		const devMsgs = messagesOfRole(result, "developer");
+		expect(devMsgs.length).toBeGreaterThanOrEqual(1);
+
+		// 所有 developer 消息都在最后一个 tool 消息之后
+		const lastToolIdx = result.reduce(
+			(acc, m, i) => (m.role === "tool" ? i : acc),
+			-1,
+		);
+		for (const dev of devMsgs) {
+			const devIdx = result.indexOf(dev);
+			expect(devIdx).toBeGreaterThan(lastToolIdx);
+		}
+	});
+
+	it("多轮 tool_calls + truncated：早期轮次的 directive 被 strip", () => {
+		const result = pipeline([
+			{ type: "system", content: "You are helpful." },
+			{ type: "user_input", content: "开始", context: null, hint: null },
+			// 第一轮 tool_calls
+			{
+				type: "assistant_tool_call",
+				content: null,
+				reasoning: null,
+				reasoningSignature: null,
+				toolCalls: [
+					{ id: "a1", tool: "exec", args: { script: "cmd1" } },
+				],
+			},
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "truncated",
+				call: { id: "a1", tool: "exec", args: { script: "cmd1" } },
+				exitCode: 0,
+				stdoutTail: "tail...",
+				stderrTail: "",
+				outputFile: "/tmp/out1.txt",
+				stdoutLength: 10000,
+				stderrLength: 0,
+				totalLines: 300,
+				tailStartLine: 200,
+				truncatedChunks: [{ startLine: 1, endLine: 199, tokens: 1500 }],
+				durationMs: 100,
+			} as DomainMessage,
+			// 第二轮 tool_calls（最后一个 assistant = G）
+			{
+				type: "assistant_tool_call",
+				content: null,
+				reasoning: null,
+				reasoningSignature: null,
+				toolCalls: [
+					{ id: "b1", tool: "exec", args: { script: "cmd2" } },
+				],
+			},
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "truncated",
+				call: { id: "b1", tool: "exec", args: { script: "cmd2" } },
+				exitCode: 0,
+				stdoutTail: "tail2...",
+				stderrTail: "",
+				outputFile: "/tmp/out2.txt",
+				stdoutLength: 8000,
+				stderrLength: 0,
+				totalLines: 250,
+				tailStartLine: 150,
+				truncatedChunks: [{ startLine: 1, endLine: 149, tokens: 1200 }],
+				durationMs: 90,
+			} as DomainMessage,
+		]);
+
+		const integrity = checkToolCallIntegrity(result);
+		expect(integrity.ok).toBe(true);
+
+		// 只保留最后一轮（G 之后）的 directives
+		const devMsgs = messagesOfRole(result, "developer");
+		expect(devMsgs.length).toBeGreaterThanOrEqual(1);
+
+		// 所有 developer 在序列末尾
+		const lastNonDev = result.reduce(
+			(acc, m, i) => (m.role !== "developer" ? i : acc),
+			-1,
+		);
+		for (let i = 0; i < result.length; i++) {
+			if (result[i].role === "developer") {
+				expect(i).toBeGreaterThan(lastNonDev);
+			}
+		}
 	});
 });

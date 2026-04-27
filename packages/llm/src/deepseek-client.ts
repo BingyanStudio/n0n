@@ -249,13 +249,16 @@ function toDeepSeekTools(tools: ToolDefinition[]): DeepSeekToolDef[] {
 // ── 后处理：按占位符位置注入 developer / latest_reminder 消息 ──
 
 /**
- * 扫描消息 content 中的占位符，按位置提取为 developer / latest_reminder 消息。
+ * 扫描消息 content 中的占位符，将控制性 directive 集中追加到序列末尾。
  *
- * - 占位符在 content 中保持了原始位置信息（与 wrapTag 调用顺序一致）
- * - 非 user 消息中的占位符（如 tool result 中的 C 类 directive）
- *   从 content 中移除，对应的 developer 消息紧跟在该消息之后
- * - user 消息中的占位符移除后如果 content 为空（A 类），用 developer 替换
- * - user 消息中的占位符移除后 content 非空（B 类），在 user 消息后追加 developer
+ * 策略（与 format.py 的 _drop_thinking_messages 等效）：
+ * - 找到最后一个 assistant 消息 G
+ * - G 及其之前的占位符：从 content 中移除，directive 丢弃（历史 directive 已过时）
+ * - G 之后的占位符：从 content 中移除，directive 收集起来
+ * - 收集到的 directive 统一追加到序列末尾作为 developer/latest_reminder 消息
+ *
+ * 这样做确保 developer 消息不会插入 assistant(tool_calls)→tool(result) 之间，
+ * 避免 DeepSeek API "insufficient tool messages following tool_calls" 错误。
  */
 function injectDirectives(
 	messages: DeepSeekMessage[],
@@ -263,10 +266,29 @@ function injectDirectives(
 ): DeepSeekMessage[] {
 	if (directives.length === 0) return messages;
 
-	const result: DeepSeekMessage[] = [];
+	// 找最后一个 assistant 消息的索引 G
+	let lastAssistantIdx = -1;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		if (messages[i].role === "assistant") {
+			lastAssistantIdx = i;
+			break;
+		}
+	}
 
-	for (const msg of messages) {
+	const result: DeepSeekMessage[] = [];
+	const collected: CollectedDirective[] = [];
+
+	for (let i = 0; i < messages.length; i++) {
+		const msg = messages[i];
 		const content = msg.content ?? "";
+
+		if (!DIRECTIVE_PLACEHOLDER_RE.test(content)) {
+			DIRECTIVE_PLACEHOLDER_RE.lastIndex = 0;
+			result.push(msg);
+			continue;
+		}
+		DIRECTIVE_PLACEHOLDER_RE.lastIndex = 0;
+
 		const found: CollectedDirective[] = [];
 		const cleaned = content.replace(DIRECTIVE_PLACEHOLDER_RE, (_, idxStr) => {
 			const d = directives[Number(idxStr)];
@@ -274,22 +296,22 @@ function injectDirectives(
 			return "";
 		}).trim();
 
-		if (found.length === 0) {
-			// 无占位符，原样保留
-			result.push(msg);
-			continue;
-		}
-
-		// 有占位符：先 push 清理后的消息（如果非空），再追加 directive
 		if (cleaned) {
 			result.push({ ...msg, content: cleaned });
 		}
-		for (const d of found) {
-			result.push({
-				role: d.tag === "reminder" ? "latest_reminder" : "developer",
-				content: d.content,
-			});
+
+		// G 之后的 directive 收集到末尾；G 及之前的丢弃
+		if (i > lastAssistantIdx) {
+			collected.push(...found);
 		}
+	}
+
+	// 末尾追加收集到的 directive
+	for (const d of collected) {
+		result.push({
+			role: d.tag === "reminder" ? "latest_reminder" : "developer",
+			content: d.content,
+		});
 	}
 
 	return result;
