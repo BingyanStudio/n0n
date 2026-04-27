@@ -14,11 +14,10 @@ import type {
 	DomainMessage,
 	PartialToolCallRecord,
 	Renderer,
-	TokenUsage,
 	ToolCallRecord,
 	ToolDefinition,
 } from "@n0n/types";
-import { FinishReason } from "@n0n/types";
+import { FinishReason, findLastUsage } from "@n0n/types";
 import type { ZodType } from "zod";
 import { getRuntime } from "../runtime.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
@@ -70,14 +69,6 @@ export async function agentLoop<T = unknown>(
 	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
 	let submitRetries = 0;
-	let lastUsage: TokenUsage = {
-		inputTokens: 0,
-		outputTokens: 0,
-		totalTokens: 0,
-		cacheReadTokens: 0,
-		cacheWriteTokens: 0,
-	};
-
 	for (let iter = 0; iter < maxIter; iter++) {
 		if (options.signal?.aborted) {
 			renderer.aborted();
@@ -90,7 +81,7 @@ export async function agentLoop<T = unknown>(
 		}
 
 		injectReminders(messages, reminders);
-		renderer.roundStart(iter + 1, maxIter, messages.length, lastUsage);
+		renderer.roundStart(iter + 1, maxIter, messages.length, findLastUsage(messages));
 
 		// ── 1. 流式解析 + 并行执行（交织进行） ──
 		const scheduler = new ExecutionScheduler(
@@ -166,20 +157,27 @@ export async function agentLoop<T = unknown>(
 			}
 		}
 		renderer.streamEnd();
-		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
-		lastUsage = streamResult!.accumulator.usage ?? lastUsage;
 
 		// ── 2. 分类本轮结果，决定后续动作 ──
 		const outcome = classifyRound(
 			// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 			streamResult!,
-			messages,
 			idleCount,
 			runtime.agent.maxIdleRounds,
 		);
 
+		// 提取本轮 LLM 调用的 token 用量，后续各分支统一插入 token_usage 消息
+		const roundUsage = streamResult!.accumulator.usage;
+		const roundFinishReason = streamResult!.accumulator.finishReason ?? "unknown";
+
 		if (outcome.action === "exit") {
 			scheduler.seal();
+			if (outcome.assistantMessage) {
+				messages.push(outcome.assistantMessage);
+			}
+			if (roundUsage) {
+				messages.push({ type: "token_usage", usage: roundUsage, finishReason: roundFinishReason });
+			}
 			if (outcome.reason === "aborted") renderer.aborted();
 			else renderer.agentTerminated(outcome.reason);
 			renderer.roundEnd();
@@ -193,6 +191,10 @@ export async function agentLoop<T = unknown>(
 
 		if (outcome.action === "idle") {
 			scheduler.seal();
+			messages.push(outcome.assistantMessage);
+			if (roundUsage) {
+				messages.push({ type: "token_usage", usage: roundUsage, finishReason: roundFinishReason });
+			}
 			idleCount++;
 			if (idleCount >= runtime.agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
@@ -216,6 +218,11 @@ export async function agentLoop<T = unknown>(
 
 		if (outcome.action === "retry_truncated") {
 			scheduler.seal();
+			messages.push(outcome.assistantMessage);
+			messages.push(outcome.retryMessage);
+			if (roundUsage) {
+				messages.push({ type: "token_usage", usage: roundUsage, finishReason: roundFinishReason });
+			}
 			renderer.roundEnd();
 			continue;
 		}
@@ -253,6 +260,10 @@ export async function agentLoop<T = unknown>(
 		// ── 4. 构建 assistant 消息 ──
 		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 		messages.push(buildToolCallMessage(streamResult!.accumulator, allCalls));
+
+		if (roundUsage) {
+			messages.push({ type: "token_usage", usage: roundUsage, finishReason: roundFinishReason });
+		}
 
 		// ── 5. 等待执行 + 渲染完成 ──
 		await runPromise;
@@ -323,14 +334,13 @@ export async function agentLoop<T = unknown>(
 // ── 本轮结果分类（纯函数） ──
 
 type RoundOutcome =
-	| { action: "exit"; reason: string; report: string | null }
-	| { action: "idle" }
-	| { action: "retry_truncated" }
+	| { action: "exit"; reason: string; report: string | null; assistantMessage?: import("@n0n/types").AssistantTextMessage }
+	| { action: "idle"; assistantMessage: import("@n0n/types").AssistantTextMessage }
+	| { action: "retry_truncated"; assistantMessage: import("@n0n/types").AssistantTextMessage; retryMessage: import("@n0n/types").GenericUserTextMessage }
 	| { action: "execute_tools" };
 
 function classifyRound(
 	result: StreamingResult,
-	messages: DomainMessage[],
 	_idleCount: number,
 	_maxIdleRounds: number,
 ): RoundOutcome {
@@ -338,6 +348,7 @@ function classifyRound(
 	const hasIncomplete =
 		result.accumulator.toolCalls.size > result.readyTools.size;
 	const hasAnyTools = hasReadyTools || hasIncomplete;
+	const acc = result.accumulator;
 
 	// aborted，无任何工具 → 直接返回
 	if (result.interrupt === "aborted" && !hasAnyTools) {
@@ -354,46 +365,49 @@ function classifyRound(
 	}
 
 	// content_filter → 终止
-	if (result.accumulator.finishReason === FinishReason.CONTENT_FILTER) {
-		messages.push({
-			type: "assistant_text",
-			content: result.accumulator.content || "",
-			reasoning: result.accumulator.reasoning || undefined,
-			reasoningSignature: result.accumulator.reasoningSignature || undefined,
-		});
+	if (acc.finishReason === FinishReason.CONTENT_FILTER) {
 		return {
 			action: "exit",
 			reason: "Content was filtered by the model provider.",
 			report: "Agent terminated: content filter triggered",
+			assistantMessage: {
+				type: "assistant_text",
+				content: acc.content || "",
+				reasoning: acc.reasoning || undefined,
+				reasoningSignature: acc.reasoningSignature || undefined,
+			},
 		};
 	}
 
 	// length 截断且无工具 → 告知模型重试
 	if (result.interrupt === "length" && !hasAnyTools) {
-		messages.push({
-			type: "assistant_text",
-			content: result.accumulator.content || "",
-			reasoning: result.accumulator.reasoning || undefined,
-			reasoningSignature: result.accumulator.reasoningSignature || undefined,
-		});
-		messages.push({
-			type: "generic_user_text",
-			content:
-				"Your previous response was truncated due to max_tokens limit. Please retry with a shorter response, or break the task into smaller steps.",
-		});
-		return { action: "retry_truncated" };
+		return {
+			action: "retry_truncated",
+			assistantMessage: {
+				type: "assistant_text",
+				content: acc.content || "",
+				reasoning: acc.reasoning || undefined,
+				reasoningSignature: acc.reasoningSignature || undefined,
+			},
+			retryMessage: {
+				type: "generic_user_text",
+				content:
+					"Your previous response was truncated due to max_tokens limit. Please retry with a shorter response, or break the task into smaller steps.",
+			},
+		};
 	}
 
 	// 无工具调用 → idle
 	if (!hasAnyTools) {
-		const content = result.accumulator.content ?? "";
-		messages.push({
-			type: "assistant_text",
-			content,
-			reasoning: result.accumulator.reasoning || undefined,
-			reasoningSignature: result.accumulator.reasoningSignature || undefined,
-		});
-		return { action: "idle" };
+		return {
+			action: "idle",
+			assistantMessage: {
+				type: "assistant_text",
+				content: acc.content ?? "",
+				reasoning: acc.reasoning || undefined,
+				reasoningSignature: acc.reasoningSignature || undefined,
+			},
+		};
 	}
 
 	// 有工具调用 → 执行
