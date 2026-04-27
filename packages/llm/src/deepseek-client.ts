@@ -30,33 +30,69 @@ import type {
 import type { DeepSeekProviderConfig } from "./config.ts";
 import { isAbortError, LLMError } from "./errors.ts";
 
-// ── DeepSeek TagAdapter 工厂 ──
+// ── 控制性 Tag 拦截 ──
 
 /**
- * 创建 DeepSeek 专用 TagAdapter。
+ * 控制性 tag 集合 — wrapTag 时拦截这些 tag 的内容，
+ * 从消息正文中剥离，后续转为 developer / latest_reminder 消息。
  *
- * 基于标准 deepseek 风格，但可对特定 tag name 做特殊处理。
- * 例如未来可以在此为 tool_calls、tool_result 等使用不同的编码格式。
+ * A 类（整条消息都是控制性内容）：
+ *   system_warning, submit_rejected, turn_feedback, reminder
+ * B 类（嵌在 user_input 中的控制性片段）：
+ *   hint
  */
-function createDeepSeekTagAdapter(): TagAdapter {
-	const base = createTagAdapter("deepseek");
+const DIRECTIVE_TAGS = new Set([
+	"hint",
+	"system_warning",
+	"submit_rejected",
+	"turn_feedback",
+	"reminder",
+]);
 
-	return {
-		wrapTag(name: string, content: string): string {
-			// 特殊 tag 处理点 — 后续 Phase 可在此为特定 tag 做定制
-			// 例如: if (name === "tool_calls") return customDSMLFormat(content);
-			return base.wrapTag(name, content);
-		},
-		adaptTags(text: string): string {
-			return base.adaptTags(text);
-		},
-	};
+interface CollectedDirective {
+	tag: string;
+	content: string;
+}
+
+/**
+ * 带 sideband 收集的 TagAdapter — DeepSeek 内部实现。
+ *
+ * wrapTag 时检查 tag name：
+ * - 控制性 tag → 返回空字符串，内容存入 collected
+ * - 数据性 tag → 正常返回 DSML 包裹内容
+ *
+ * 每次 stream() 调用新建一个实例，调用完 formatPrompt 后通过 flush() 取出收集的指令。
+ */
+class DeepSeekCollectingAdapter implements TagAdapter {
+	private readonly base: TagAdapter;
+	private readonly collected: CollectedDirective[] = [];
+
+	constructor(base: TagAdapter) {
+		this.base = base;
+	}
+
+	wrapTag(name: string, content: string): string {
+		if (DIRECTIVE_TAGS.has(name)) {
+			this.collected.push({ tag: name, content });
+			return "";
+		}
+		return this.base.wrapTag(name, content);
+	}
+
+	adaptTags(text: string): string {
+		return this.base.adaptTags(text);
+	}
+
+	/** 取出并清空收集到的控制性内容 */
+	flush(): CollectedDirective[] {
+		return this.collected.splice(0);
+	}
 }
 
 // ── OpenAI-compatible API Types (与 OpenAIClient 一致) ──
 
 interface DeepSeekMessage {
-	role: "system" | "user" | "assistant" | "tool";
+	role: "system" | "user" | "assistant" | "tool" | "developer" | "latest_reminder";
 	content: string | null;
 	reasoning_content?: string | null;
 	tool_calls?: DeepSeekToolCall[];
@@ -199,6 +235,67 @@ function toDeepSeekTools(tools: ToolDefinition[]): DeepSeekToolDef[] {
 	}));
 }
 
+// ── 后处理：注入 developer / latest_reminder 消息 ──
+
+/**
+ * 将 CollectingTagAdapter 拦截的控制性内容注入为 developer / latest_reminder 消息，
+ * 并过滤掉被清空的 user 消息。
+ *
+ * 处理逻辑：
+ * 1. 遍历 messages，对每条 user 消息检查 content 是否被清空（trim 后为空）
+ *    - 如果 flush 中有对应的 directive → 替换为 developer 消息（reminder tag → latest_reminder）
+ *    - 如果 content 不为空但有剩余 directive → 在该消息后追加 developer 消息
+ * 2. flush 中的 directive 按 FIFO 顺序消费，与 formatPrompt 中 wrapTag 调用顺序一致
+ */
+function injectDirectives(
+	messages: DeepSeekMessage[],
+	directives: CollectedDirective[],
+): DeepSeekMessage[] {
+	if (directives.length === 0) return messages;
+
+	const result: DeepSeekMessage[] = [];
+	let di = 0; // directive index
+
+	for (const msg of messages) {
+		if (msg.role === "user") {
+			const trimmed = (msg.content ?? "").trim();
+			if (trimmed === "" && di < directives.length) {
+				// A 类：整条消息内容被清空 → 替换为 developer / latest_reminder
+				const d = directives[di++]!;
+				result.push({
+					...msg,
+					role: d.tag === "reminder" ? "latest_reminder" : "developer",
+					content: d.content,
+				});
+			} else {
+				// 保留非空 user 消息
+				result.push(msg);
+				// B 类：消息中有 hint 等被剥离的片段 → 追加 developer 消息
+				while (di < directives.length && directives[di]!.tag === "hint") {
+					result.push({
+						role: "developer",
+						content: directives[di]!.content,
+					});
+					di++;
+				}
+			}
+		} else {
+			result.push(msg);
+		}
+	}
+
+	// 剩余未消费的 directive（不应发生，但兜底）
+	while (di < directives.length) {
+		const d = directives[di++]!;
+		result.push({
+			role: d.tag === "reminder" ? "latest_reminder" : "developer",
+			content: d.content,
+		});
+	}
+
+	return result;
+}
+
 // ── DeepSeek Client ──
 
 export class DeepSeekClient implements LLMClient {
@@ -212,7 +309,8 @@ export class DeepSeekClient implements LLMClient {
 	constructor(pc: DeepSeekProviderConfig) {
 		this.pc = pc;
 		this.modelId = this.pc.model;
-		this.tags = createDeepSeekTagAdapter();
+		// 公共 tags 用于外部访问（如 LLMClient.tags），使用标准 deepseek 风格
+		this.tags = createTagAdapter("deepseek");
 		this.enableThinking = this.pc.enableThinking ?? true;
 
 		const base = this.pc.baseUrl ?? "https://api.deepseek.com";
@@ -228,11 +326,11 @@ export class DeepSeekClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = formatPrompt(request.messages, this.tags);
-		const apiMessages = toDeepSeekMessages(
-			promptMessages,
-			this.enableThinking,
-		);
+		// 每次 stream 新建 collecting adapter，拦截控制性 tag
+		const adapter = new DeepSeekCollectingAdapter(this.tags);
+		const promptMessages = formatPrompt(request.messages, adapter);
+		const rawMessages = toDeepSeekMessages(promptMessages, this.enableThinking);
+		const apiMessages = injectDirectives(rawMessages, adapter.flush());
 
 		const body: DeepSeekRequest = {
 			model: this.modelId,
