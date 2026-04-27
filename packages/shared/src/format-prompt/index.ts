@@ -5,6 +5,9 @@
  * 所有含自然语言的格式化逻辑委托给各自的子模块，
  * 每个模块内维护 anti-few-shot 表述变体。
  *
+ * TagAdapter 注入：各 LLM Client 构造自己的 TagAdapter 实例传入，
+ * 控制 XML tag 的风格。DeepSeek 可对特定 tag name 做特殊处理。
+ *
  * Anti-few-shot 设计动机（参考 Manus "Don't Get Few-Shotted"）：
  * LLM 是出色的模仿者，会复现上下文中的行为模式。当上下文充满结构
  * 相同的"行动-观测"对时，模型倾向于遵循该模式，即使它不再是最佳
@@ -18,6 +21,7 @@
 import type {
 	DomainMessage,
 	PromptMessage,
+	TagAdapter,
 	ToolCallPart,
 	ToolResult,
 } from "@n0n/types";
@@ -32,26 +36,25 @@ import { formatSubmitRejected } from "./format-submit-rejected.ts";
 import { formatToolArgError } from "./format-tool-arg-error.ts";
 import { formatTurnFeedback } from "./format-turn-feedback.ts";
 import { formatWriteResult } from "./format-write.ts";
-import { adaptTags, wrapTag } from "./utils.ts";
 
 // ── tool result 分发 ──
 
 function toolResultToContent(
 	msg: ToolResult,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	switch (msg.tool) {
 		case "exec":
-			return formatExecResult(msg, model, msgIndex);
+			return formatExecResult(msg, tags, msgIndex);
 		case "write":
-			return formatWriteResult(msg, model, msgIndex);
+			return formatWriteResult(msg, tags, msgIndex);
 		case "edit":
-			return formatEditResult(msg, model, msgIndex);
+			return formatEditResult(msg, tags, msgIndex);
 		case "reminder":
-			return formatReminderResult(msg, model, msgIndex);
+			return formatReminderResult(msg, tags, msgIndex);
 		case "submit":
-			return formatSubmitResult(msg, model, msgIndex);
+			return formatSubmitResult(msg, tags, msgIndex);
 	}
 }
 
@@ -59,15 +62,15 @@ function toolResultToContent(
 
 function buildUserInputContent(
 	msg: Extract<DomainMessage, { type: "user_input" }>,
-	model: string,
+	tags: TagAdapter,
 ): string {
 	const parts: string[] = [];
 	if (msg.context) {
-		parts.push(wrapTag("context", msg.context, model));
+		parts.push(tags.wrapTag("context", msg.context));
 	}
 	parts.push(msg.content);
 	if (msg.hint) {
-		parts.push(wrapTag("hint", msg.hint, model));
+		parts.push(tags.wrapTag("hint", msg.hint));
 	}
 	return parts.join("\n\n");
 }
@@ -96,11 +99,11 @@ function mergeConsecutiveSystem(messages: PromptMessage[]): PromptMessage[] {
  * DomainMessage[] → PromptMessage[]
  *
  * @param messages 领域消息历史
- * @param modelId 模型标识，用于 XML tag 风格选择
+ * @param tags TagAdapter 实例，由 LLM Client 构造注入
  */
 export function formatPrompt(
 	messages: DomainMessage[],
-	modelId: string,
+	tags: TagAdapter,
 ): PromptMessage[] {
 	const result: PromptMessage[] = [];
 	let i = 0;
@@ -111,7 +114,7 @@ export function formatPrompt(
 			case "system":
 				result.push({
 					role: "system",
-					content: adaptTags(msg.content, modelId),
+					content: tags.adaptTags(msg.content),
 				});
 				break;
 
@@ -156,42 +159,42 @@ export function formatPrompt(
 					role: "tool",
 					toolCallId: msg.call.id,
 					toolName: msg.call.tool,
-					content: toolResultToContent(msg, modelId, i),
+					content: toolResultToContent(msg, tags, i),
 				});
 				break;
 
 			case "idle_nudge":
 				result.push({
 					role: "user",
-					content: formatIdleNudge(msg, modelId, i),
+					content: formatIdleNudge(msg, tags, i),
 				});
 				break;
 
 			case "reminder:due":
 				result.push({
 					role: "user",
-					content: formatReminderDue(msg, modelId, i),
+					content: formatReminderDue(msg, tags, i),
 				});
 				break;
 
 			case "submit:rejected":
 				result.push({
 					role: "user",
-					content: formatSubmitRejected(msg, modelId, i),
+					content: formatSubmitRejected(msg, tags, i),
 				});
 				break;
 
 			case "user_input":
 				result.push({
 					role: "user",
-					content: buildUserInputContent(msg, modelId),
+					content: buildUserInputContent(msg, tags),
 				});
 				break;
 
 			case "turn_feedback":
 				result.push({
 					role: "user",
-					content: formatTurnFeedback(msg, modelId, i),
+					content: formatTurnFeedback(msg, tags, i),
 				});
 				break;
 
@@ -200,7 +203,7 @@ export function formatPrompt(
 					role: "tool",
 					toolCallId: msg.callId,
 					toolName: msg.tool,
-					content: formatToolArgError(msg, modelId, i),
+					content: formatToolArgError(msg, tags, i),
 				});
 				break;
 

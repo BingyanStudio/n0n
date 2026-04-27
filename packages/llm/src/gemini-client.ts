@@ -16,7 +16,7 @@
  * 缓存：Gemini 的 Context Caching 是独立 API，OpenAI 兼容端点不暴露，因此不实现 heartbeat。
  */
 
-import { detectTagStyle, formatPrompt } from "@n0n/shared";
+import { createTagAdapter, detectTagStyle, formatPrompt } from "@n0n/shared";
 import type {
 	CompleteRequest,
 	CompleteResponse,
@@ -24,6 +24,7 @@ import type {
 	PromptMessage,
 	StreamEvent,
 	StreamRequest,
+	TagAdapter,
 	TagStyle,
 	TokenUsage,
 	ToolDefinition,
@@ -185,6 +186,7 @@ function toGeminiTools(tools: ToolDefinition[]): GeminiToolDef[] {
 export class GeminiClient implements LLMClient {
 	readonly modelId: string;
 	readonly tagStyle: TagStyle;
+	readonly tags: TagAdapter;
 	private readonly pc: GoogleProviderConfig;
 	private readonly apiUrl: string;
 
@@ -192,6 +194,7 @@ export class GeminiClient implements LLMClient {
 		this.pc = pc;
 		this.modelId = this.pc.model;
 		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
+		this.tags = createTagAdapter(this.tagStyle);
 
 		const base = this.pc.baseUrl ?? "https://generativelanguage.googleapis.com";
 		if (base.includes("/chat/completions")) {
@@ -206,7 +209,7 @@ export class GeminiClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = formatPrompt(request.messages, this.modelId);
+		const promptMessages = formatPrompt(request.messages, this.tags);
 		const apiMessages = toGeminiMessages(promptMessages);
 
 		const body: GeminiRequest = {

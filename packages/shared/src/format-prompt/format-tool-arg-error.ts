@@ -3,7 +3,8 @@
  */
 
 import type { ToolArgErrorMessage } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const prefixTemplates = [
 	(error: string) => `Invalid tool arguments: ${error}`,
@@ -13,7 +14,7 @@ const prefixTemplates = [
 
 export function formatToolArgError(
 	msg: ToolArgErrorMessage,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const tpl = pick(prefixTemplates, msgIndex);
@@ -21,5 +22,5 @@ export function formatToolArgError(
 	if (msg.schema) {
 		content += `\n\nExpected schema:\n${JSON.stringify(msg.schema, null, 2)}`;
 	}
-	return wrapTag("error", content, model);
+	return tags.wrapTag("error", content);
 }

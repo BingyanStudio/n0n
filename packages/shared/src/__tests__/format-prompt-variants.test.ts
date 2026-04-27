@@ -15,6 +15,7 @@ import { describe, expect, it } from "bun:test";
 import type { DomainMessage } from "@n0n/types";
 import { formatPrompt } from "../format-prompt/index.ts";
 import { pick } from "../format-prompt/seed.ts";
+import { createTagAdapter } from "../tags.ts";
 
 // ── 稳定性测试 ──
 
@@ -176,6 +177,7 @@ describe("pick 多样性", () => {
 
 describe("formatPrompt 变体端到端", () => {
 	const model = "claude-sonnet-4-20250514";
+	const tags = createTagAdapter("default");
 
 	/** 构造一段典型对话：N 轮单工具 exec 调用 */
 	function buildConversation(rounds: number): DomainMessage[] {
@@ -220,8 +222,8 @@ describe("formatPrompt 变体端到端", () => {
 		const short = buildConversation(5);
 		const long = buildConversation(10);
 
-		const shortResult = formatPrompt(short, model);
-		const longResult = formatPrompt(long, model);
+		const shortResult = formatPrompt(short, tags);
+		const longResult = formatPrompt(long, tags);
 
 		// 前 N 条 PromptMessage 应该完全相同
 		for (let i = 0; i < shortResult.length; i++) {
@@ -231,7 +233,7 @@ describe("formatPrompt 变体端到端", () => {
 
 	it("多轮 exec 结果的格式化不完全相同（anti-few-shot）", () => {
 		const msgs = buildConversation(10);
-		const result = formatPrompt(msgs, model);
+		const result = formatPrompt(msgs, tags);
 
 		// 提取所有 tool role 的 content
 		const toolContents = result
@@ -245,9 +247,9 @@ describe("formatPrompt 变体端到端", () => {
 
 	it("多次调用 formatPrompt 结果完全一致（确定性）", () => {
 		const msgs = buildConversation(8);
-		const first = formatPrompt(msgs, model);
+		const first = formatPrompt(msgs, tags);
 		for (let repeat = 0; repeat < 10; repeat++) {
-			const again = formatPrompt(msgs, model);
+			const again = formatPrompt(msgs, tags);
 			expect(again).toEqual(first);
 		}
 	});

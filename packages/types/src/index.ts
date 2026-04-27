@@ -10,6 +10,7 @@ export type {
 	SimpleMessage,
 	StreamEvent,
 	StreamRequest,
+	TagAdapter,
 	TagStyle,
 	TokenUsage,
 	ToolCallPart,

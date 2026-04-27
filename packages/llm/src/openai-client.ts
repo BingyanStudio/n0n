@@ -11,7 +11,7 @@
  * 同时处理 openai-compatible provider（如 DeepSeek、litellm 代理）。
  */
 
-import { detectTagStyle, formatPrompt } from "@n0n/shared";
+import { createTagAdapter, detectTagStyle, formatPrompt } from "@n0n/shared";
 import type {
 	CompleteRequest,
 	CompleteResponse,
@@ -19,6 +19,7 @@ import type {
 	PromptMessage,
 	StreamEvent,
 	StreamRequest,
+	TagAdapter,
 	TagStyle,
 	TokenUsage,
 	ToolDefinition,
@@ -210,6 +211,7 @@ function toOpenAITools(tools: ToolDefinition[]): OpenAIToolDef[] {
 export class OpenAIClient implements LLMClient {
 	readonly modelId: string;
 	readonly tagStyle: TagStyle;
+	readonly tags: TagAdapter;
 	private readonly pc: OpenAIProviderConfig | OpenAICompatibleProviderConfig;
 	private readonly apiUrl: string;
 
@@ -217,6 +219,7 @@ export class OpenAIClient implements LLMClient {
 		this.pc = pc;
 		this.modelId = this.pc.model;
 		this.tagStyle = this.pc.tagStyle ?? detectTagStyle(this.modelId);
+		this.tags = createTagAdapter(this.tagStyle);
 
 		const base = this.pc.baseUrl ?? "https://api.openai.com";
 		// 处理 baseUrl 可能已包含 /v1 或完整路径的情况
@@ -232,7 +235,7 @@ export class OpenAIClient implements LLMClient {
 		request: StreamRequest,
 		signal?: AbortSignal,
 	): AsyncGenerator<StreamEvent> {
-		const promptMessages = formatPrompt(request.messages, this.modelId);
+		const promptMessages = formatPrompt(request.messages, this.tags);
 		const apiMessages = toOpenAIMessages(
 			promptMessages,
 			this.pc.provider === "openai-compatible"

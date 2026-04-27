@@ -3,7 +3,8 @@
  */
 
 import type { WriteToolResult } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const IS_WINDOWS = process.platform === "win32";
 
@@ -51,33 +52,31 @@ const recoveredTemplates = [
 
 export function formatWriteResult(
 	msg: WriteToolResult,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	switch (msg.status) {
 		case "completed": {
 			const tpl = pick(completedTemplates, msgIndex);
-			return wrapTag("write_result", tpl(msg.call.args.path), model);
+			return tags.wrapTag("write_result", tpl(msg.call.args.path));
 		}
 		case "failed":
-			return wrapTag("error", `Write failed: ${msg.error}`, model);
+			return tags.wrapTag("error", `Write failed: ${msg.error}`);
 		case "recovered": {
 			const tpl = pick(recoveredTemplates, msgIndex);
-			return wrapTag("write_result", tpl(msg.call.args.path), model);
+			return tags.wrapTag("write_result", tpl(msg.call.args.path));
 		}
 		case "recover_failed":
-			return wrapTag(
+			return tags.wrapTag(
 				"error",
 				`Write failed after truncation recovery: ${msg.error}`,
-				model,
 			);
 		default: {
 			const _exhaustive: never = msg;
-			return wrapTag(
+			return tags.wrapTag(
 				"error",
 				// biome-ignore lint/suspicious/noExplicitAny: exhaustive switch default
 				`Unknown write status: ${(msg as any).status}`,
-				model,
 			);
 		}
 	}

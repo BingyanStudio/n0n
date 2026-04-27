@@ -3,7 +3,8 @@
  */
 
 import type { ReminderDueMessage } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const templates = [
 	(est: number, content: string) =>
@@ -16,9 +17,9 @@ const templates = [
 
 export function formatReminderDue(
 	msg: ReminderDueMessage,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const tpl = pick(templates, msgIndex);
-	return wrapTag("reminder", tpl(msg.originalEstimate, msg.content), model);
+	return tags.wrapTag("reminder", tpl(msg.originalEstimate, msg.content));
 }

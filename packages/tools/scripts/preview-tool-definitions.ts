@@ -10,6 +10,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { makeToolkit } from "../src/index.ts";
+import { createTagAdapter } from "@n0n/shared";
 import { CodeResultSchema } from "../../../apps/code/src/schema.ts";
 
 const MODEL = "claude-sonnet-4-20250514";
@@ -26,8 +27,10 @@ const toolkit = await makeToolkit(CodeResultSchema, {
 	editorClient: {
 		modelId: "",
 		tagStyle: "default" as const,
+		tags: createTagAdapter("default"),
 		async *stream() { throw new Error("unused"); },
 		async complete() { throw new Error("unused"); },
+		async ping() { return { ok: true as const }; },
 	},
 }, MODEL);
 

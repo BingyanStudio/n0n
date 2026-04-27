@@ -12,7 +12,7 @@
  */
 
 import { resolve } from "node:path";
-import { formatPrompt } from "@n0n/shared";
+import { createTagAdapter, formatPrompt } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage, PromptMessage, ToolDefinition } from "@n0n/types";
 
@@ -44,7 +44,7 @@ const toolsConfig = {
 	security: { blockedCommands: [] as string[] },
 	agent: { defaultExecWaitfor: 120 },
 	editBackendType: "str-replace" as const,
-	editorClient: { modelId: "", tagStyle: "default" as const, async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); }, async ping() { return { ok: true as const }; } },
+	editorClient: { modelId: "", tagStyle: "default" as const, tags: createTagAdapter("default"), async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); }, async ping() { return { ok: true as const }; } },
 };
 
 const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, modelId);
@@ -67,7 +67,7 @@ const domainMessages: DomainMessage[] = [
 
 // ── formatPrompt 渲染 ──
 
-const promptMessages = formatPrompt(domainMessages, modelId);
+const promptMessages = formatPrompt(domainMessages, createTagAdapter("default"));
 
 // ── 输出为 markdown ──
 
@@ -179,7 +179,7 @@ await Bun.write(outPath, output);
 // 摘要统计
 const toolDefChars = toolDefs.reduce((s, t) => s + t.description.length + JSON.stringify(t.parameters).length, 0);
 const systemChars = systemPrompt.length;
-const fewshotFormatted = formatPrompt(contextFewshot, modelId);
+const fewshotFormatted = formatPrompt(contextFewshot, createTagAdapter("default"));
 const fewshotChars = fewshotFormatted.reduce((s, m) => {
 	let c = m.content.length;
 	if (m.role === "assistant" && "toolCalls" in m && m.toolCalls) c += JSON.stringify(m.toolCalls).length;

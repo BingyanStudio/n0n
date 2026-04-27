@@ -3,7 +3,8 @@
  */
 
 import type { TurnFeedbackMessage } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const templates = [
 	(status: string, type: string, detail: string) =>
@@ -16,13 +17,12 @@ const templates = [
 
 export function formatTurnFeedback(
 	msg: TurnFeedbackMessage,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const tpl = pick(templates, msgIndex);
-	return wrapTag(
+	return tags.wrapTag(
 		"turn_feedback",
 		tpl(msg.status, msg.resultType, msg.detail),
-		model,
 	);
 }

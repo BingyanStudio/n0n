@@ -47,6 +47,17 @@ export type FinishReason = (typeof FinishReason)[keyof typeof FinishReason];
 /** XML-like tag 风格，不同 LLM 模型训练时使用不同的标签格式 */
 export type TagStyle = "deepseek" | "glm" | "minimax" | "default";
 
+/**
+ * Tag 适配器 — 由各 LLM Client 构造并注入到 formatPrompt。
+ * 不同 provider 可对特定 tag name 做特殊处理（如 DeepSeek 的 DSML 格式）。
+ */
+export interface TagAdapter {
+	/** 用标签包裹内容 */
+	wrapTag(name: string, content: string): string;
+	/** 将文本中的标准 XML 标签替换为当前风格 */
+	adaptTags(text: string): string;
+}
+
 // ── StreamEvent ──
 
 export type StreamEvent =
@@ -171,6 +182,9 @@ export interface LLMClient {
 
 	/** XML tag 风格（由 provider 配置指定或从模型名推断） */
 	readonly tagStyle: TagStyle;
+
+	/** Tag 适配器实例（由 provider 构造，注入到 formatPrompt） */
+	readonly tags: TagAdapter;
 
 	/**
 	 * 缓存保活心跳（可选）

@@ -3,7 +3,8 @@
  */
 
 import type { ReminderToolResult } from "@n0n/types";
-import { pick, wrapTag } from "./utils.ts";
+import type { TagAdapter } from "./utils.ts";
+import { pick } from "./utils.ts";
 
 const templates = [
 	(est: number) =>
@@ -16,10 +17,10 @@ const templates = [
 
 export function formatReminderResult(
 	msg: ReminderToolResult,
-	model: string,
+	tags: TagAdapter,
 	msgIndex: number,
 ): string {
 	const estimate = msg.call.args.estimate ?? 7;
 	const tpl = pick(templates, msgIndex);
-	return wrapTag("result", tpl(estimate), model);
+	return tags.wrapTag("result", tpl(estimate));
 }
