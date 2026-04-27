@@ -365,9 +365,23 @@ export class DeepSeekClient implements LLMClient {
 		const apiMessages = [...injected];
 		applyTaskToken(apiMessages);
 
+		// 过滤无效消息：
+		// - 空 user 消息（directive 提取后残留的空壳）
+		// - 空 assistant 消息（只有 thinking 没有 content/tool_calls，回传会报错）
+		const filteredMessages = apiMessages.filter((msg) => {
+			if (msg.role === "user" && !(msg.content ?? "").trim()) return false;
+			if (
+				msg.role === "assistant" &&
+				!msg.content?.trim() &&
+				!msg.tool_calls?.length
+			)
+				return false;
+			return true;
+		});
+
 		const body: DeepSeekRequest = {
 			model: this.modelId,
-			messages: apiMessages,
+			messages: filteredMessages,
 			stream: true,
 			stream_options: { include_usage: true },
 		};
