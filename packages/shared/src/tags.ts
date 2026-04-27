@@ -4,14 +4,14 @@
  * 不同 LLM 模型对 XML-like 标签的理解不同，
  * 使用各模型训练时的原生标签风格可以获得更好的结构化理解效果。
  *
- * - Deepseek: <｜DSML｜tag> content </｜DSML｜tag>
  * - GLM:      <tag> content </tag>
  * - Minimax:  ]~b]tag content [e~[
  * - 默认:     <tag> content </tag>  (标准 XML 风格)
  *
+ * DeepSeek 的 DSML 标签不在公共层处理——由 DeepSeekClient 内部按需使用。
+ *
  * 各 LLM Client 通过 createTagAdapter(style) 构造 TagAdapter 实例，
- * 注入到 formatPrompt。DeepSeek Client 可自行构造定制化的 TagAdapter，
- * 对特定 tag name 做特殊处理。
+ * 注入到 formatPrompt。
  */
 
 import type { TagAdapter, TagStyle } from "@n0n/types";
@@ -20,7 +20,6 @@ export type { TagAdapter, TagStyle };
 /** 从模型名称推断 tag 风格（fallback，优先使用 ProviderConfig.tagStyle） */
 export function detectTagStyle(model: string): TagStyle {
 	const m = model.toLowerCase();
-	if (m.includes("deepseek")) return "deepseek";
 	if (m.includes("glm")) return "glm";
 	if (m.includes("minimax")) return "minimax";
 	return "default";
@@ -29,8 +28,6 @@ export function detectTagStyle(model: string): TagStyle {
 /** 生成开标签 */
 export function openTag(style: TagStyle, name: string): string {
 	switch (style) {
-		case "deepseek":
-			return `<｜DSML｜${name}>`;
 		case "minimax":
 			return `]~b]${name}`;
 		case "glm":
@@ -42,8 +39,6 @@ export function openTag(style: TagStyle, name: string): string {
 /** 生成闭标签 */
 export function closeTag(style: TagStyle, name: string): string {
 	switch (style) {
-		case "deepseek":
-			return `</｜DSML｜${name}>`;
 		case "minimax":
 			return "[e~[";
 		case "glm":
@@ -76,8 +71,7 @@ function wrapTagByStyle(
 /**
  * 创建标准 TagAdapter — 基于 TagStyle 的通用实现。
  *
- * 大多数 provider（OpenAI、Anthropic、Gemini）使用此工厂。
- * DeepSeek Client 可构造自定义 TagAdapter 替代。
+ * 大多数 provider（OpenAI、Anthropic、Gemini、DeepSeek）使用此工厂。
  */
 export function createTagAdapter(style: TagStyle): TagAdapter {
 	return {

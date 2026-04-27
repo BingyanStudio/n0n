@@ -45,7 +45,7 @@ export const FinishReason = {
 export type FinishReason = (typeof FinishReason)[keyof typeof FinishReason];
 
 /** XML-like tag 风格，不同 LLM 模型训练时使用不同的标签格式 */
-export type TagStyle = "deepseek" | "glm" | "minimax" | "default";
+export type TagStyle = "glm" | "minimax" | "default";
 
 /**
  * Tag 适配器 — 由各 LLM Client 构造并注入到 formatPrompt。

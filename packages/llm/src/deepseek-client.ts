@@ -3,7 +3,7 @@
  *
  * 走 OpenAI 兼容协议（https://api.deepseek.com），SSE 解析逻辑与 OpenAIClient 一致。
  * 区别：
- * - tagStyle 强制为 "deepseek"
+ * - tagStyle 为 default，DSML 标签仅在 Client 内部按需使用
  * - 自定义 TagAdapter：对特定 tag name 可做特殊处理
  * - 默认启用 thinking 模式（enable_thinking）
  * - 默认 base URL 指向 DeepSeek API
@@ -300,7 +300,7 @@ function injectDirectives(
 
 export class DeepSeekClient implements LLMClient {
 	readonly modelId: string;
-	readonly tagStyle: TagStyle = "deepseek";
+	readonly tagStyle: TagStyle = "default";
 	readonly tags: TagAdapter;
 	private readonly pc: DeepSeekProviderConfig;
 	private readonly apiUrl: string;
@@ -309,8 +309,8 @@ export class DeepSeekClient implements LLMClient {
 	constructor(pc: DeepSeekProviderConfig) {
 		this.pc = pc;
 		this.modelId = this.pc.model;
-		// 公共 tags 用于外部访问（如 LLMClient.tags），使用标准 deepseek 风格
-		this.tags = createTagAdapter("deepseek");
+		// 公共 tags 用于外部访问（如 LLMClient.tags）
+		this.tags = createTagAdapter("default");
 		this.enableThinking = this.pc.enableThinking ?? true;
 
 		const base = this.pc.baseUrl ?? "https://api.deepseek.com";
