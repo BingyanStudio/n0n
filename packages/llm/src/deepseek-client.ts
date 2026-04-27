@@ -156,6 +156,9 @@ interface SSEChunk {
 		prompt_tokens?: number;
 		completion_tokens?: number;
 		total_tokens?: number;
+		prompt_tokens_details?: {
+			cached_tokens?: number;
+		};
 		prompt_cache_hit_tokens?: number;
 		prompt_cache_miss_tokens?: number;
 	};
@@ -432,7 +435,12 @@ export class DeepSeekClient implements LLMClient {
 
 			if (chunk.usage) {
 				const u = chunk.usage;
-				const cacheReadTokens = u.prompt_cache_hit_tokens ?? 0;
+				// 流式 usage 用 prompt_tokens_details.cached_tokens，
+				// 非流式用 prompt_cache_hit_tokens —— 两种都要兼容
+				const cacheReadTokens =
+					u.prompt_tokens_details?.cached_tokens ??
+					u.prompt_cache_hit_tokens ??
+					0;
 				const cacheWriteTokens = u.prompt_cache_miss_tokens ?? 0;
 				const rawInput = u.prompt_tokens ?? 0;
 				lastUsage = {
