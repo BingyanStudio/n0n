@@ -21,6 +21,7 @@ import type {
 	ToolCallPart,
 	ToolResult,
 } from "@n0n/types";
+import { affectsSubsequent } from "./config.ts";
 import { formatEditResult } from "./format-edit.ts";
 import { formatExecResult } from "./format-exec.ts";
 import { formatIdleNudge } from "./format-idle-nudge.ts";
@@ -102,9 +103,8 @@ export function formatPrompt(
 	modelId: string,
 ): PromptMessage[] {
 	const result: PromptMessage[] = [];
-
-	for (let i = 0; i < messages.length; i++) {
-		const msg = messages[i];
+	let i = 0;
+	for (const msg of messages) {
 		if (!msg) continue;
 
 		switch (msg.type) {
@@ -241,6 +241,12 @@ export function formatPrompt(
 					`Unhandled message type: ${(_exhaustive as unknown as Record<string, unknown>).type}`,
 				);
 			}
+		}
+
+		// 避免 cache_breakpoint 消息滑动时影响其他的消息的 index
+		// 变更index可能会导致其他消息格式化的时候格式化后的内容发生变化，从而影响提示词缓存。
+		if (affectsSubsequent(msg.type)) {
+			i++;
 		}
 	}
 
