@@ -57,14 +57,17 @@ interface CollectedDirective {
 	content: string;
 }
 
+// 占位符：嵌入在 content 中保持位置信息，后处理时按位置提取为 developer 消息
+const DIRECTIVE_PLACEHOLDER_RE = /🔮⟪DIR:(\d+)⟫🔮/g;
+
 /**
  * 带 sideband 收集的 TagAdapter — DeepSeek 内部实现。
  *
  * wrapTag 时检查 tag name：
- * - 控制性 tag → 返回空字符串，内容存入 collected
- * - 数据性 tag → 正常返回 DSML 包裹内容
+ * - 控制性 tag → 存入 collected，返回占位符（保持位置信息）
+ * - 数据性 tag → 正常返回标准 XML 包裹内容
  *
- * 每次 stream() 调用新建一个实例，调用完 formatPrompt 后通过 flush() 取出收集的指令。
+ * 每次 stream() 调用新建一个实例。
  */
 class DeepSeekCollectingAdapter implements TagAdapter {
 	private readonly base: TagAdapter;
@@ -76,8 +79,9 @@ class DeepSeekCollectingAdapter implements TagAdapter {
 
 	wrapTag(name: string, content: string): string {
 		if (DIRECTIVE_TAGS.has(name)) {
+			const idx = this.collected.length;
 			this.collected.push({ tag: name, content });
-			return "";
+			return `🔮⟪DIR:${idx}⟫🔮`;
 		}
 		return this.base.wrapTag(name, content);
 	}
@@ -86,9 +90,9 @@ class DeepSeekCollectingAdapter implements TagAdapter {
 		return this.base.adaptTags(text);
 	}
 
-	/** 取出并清空收集到的控制性内容 */
-	flush(): CollectedDirective[] {
-		return this.collected.splice(0);
+	/** 返回收集到的全部控制性内容（不清空，供 injectDirectives 按索引引用） */
+	directives(): readonly CollectedDirective[] {
+		return this.collected;
 	}
 }
 
@@ -242,52 +246,51 @@ function toDeepSeekTools(tools: ToolDefinition[]): DeepSeekToolDef[] {
 	}));
 }
 
-// ── 后处理：注入 developer / latest_reminder 消息 ──
+// ── 后处理：按占位符位置注入 developer / latest_reminder 消息 ──
 
 /**
- * 将 CollectingTagAdapter 拦截的控制性内容注入为 developer / latest_reminder 消息，
- * 并过滤掉被清空的 user 消息。
+ * 扫描消息 content 中的占位符，按位置提取为 developer / latest_reminder 消息。
  *
- * 消费逻辑：
- * - 遍历消息序列，遇到 user 消息时 flush 所有积累的 directive
- * - A 类（空 user）：跳过该消息，directive 已作为 developer 消息替代
- * - B/C 类（非空 user）：保留 user 消息，directive 在其前面插入
- * - directive 按 FIFO 顺序消费，与 formatPrompt 中 wrapTag 调用顺序一致
+ * - 占位符在 content 中保持了原始位置信息（与 wrapTag 调用顺序一致）
+ * - 非 user 消息中的占位符（如 tool result 中的 C 类 directive）
+ *   从 content 中移除，对应的 developer 消息紧跟在该消息之后
+ * - user 消息中的占位符移除后如果 content 为空（A 类），用 developer 替换
+ * - user 消息中的占位符移除后 content 非空（B 类），在 user 消息后追加 developer
  */
 function injectDirectives(
 	messages: DeepSeekMessage[],
-	directives: CollectedDirective[],
+	directives: readonly CollectedDirective[],
 ): DeepSeekMessage[] {
 	if (directives.length === 0) return messages;
 
 	const result: DeepSeekMessage[] = [];
-	let di = 0;
 
-	const flushDirectives = () => {
-		while (di < directives.length) {
-			const d = directives[di++]!;
+	for (const msg of messages) {
+		const content = msg.content ?? "";
+		const found: CollectedDirective[] = [];
+		const cleaned = content.replace(DIRECTIVE_PLACEHOLDER_RE, (_, idxStr) => {
+			const d = directives[Number(idxStr)];
+			if (d) found.push(d);
+			return "";
+		}).trim();
+
+		if (found.length === 0) {
+			// 无占位符，原样保留
+			result.push(msg);
+			continue;
+		}
+
+		// 有占位符：先 push 清理后的消息（如果非空），再追加 directive
+		if (cleaned) {
+			result.push({ ...msg, content: cleaned });
+		}
+		for (const d of found) {
 			result.push({
 				role: d.tag === "reminder" ? "latest_reminder" : "developer",
 				content: d.content,
 			});
 		}
-	};
-
-	for (const msg of messages) {
-		if (msg.role === "user") {
-			// 在 user 消息前 flush 所有积累的 directive
-			flushDirectives();
-			// 空 user 消息（A 类被清空的）跳过——对应的 directive 已在上面 flush
-			if ((msg.content ?? "").trim() !== "") {
-				result.push(msg);
-			}
-		} else {
-			result.push(msg);
-		}
 	}
-
-	// 尾部剩余 directive（最后一条消息之后的，不应发生但兜底）
-	flushDirectives();
 
 	return result;
 }
@@ -359,7 +362,7 @@ export class DeepSeekClient implements LLMClient {
 		const adapter = new DeepSeekCollectingAdapter(this.tags);
 		const promptMessages = formatPrompt(request.messages, adapter);
 		const rawMessages = toDeepSeekMessages(promptMessages, this.enableThinking);
-		const injected = injectDirectives(rawMessages, adapter.flush());
+		const injected = injectDirectives(rawMessages, adapter.directives());
 
 		// 解析 【【task】】 标记，直接透传 task 字段
 		const apiMessages = [...injected];
