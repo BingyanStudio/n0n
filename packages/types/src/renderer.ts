@@ -113,7 +113,7 @@ export function findLastUsage(
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const m = messages[i];
 		if (m && m.type === "token_usage") {
-			return (m as unknown as TokenUsageMessage).usage;
+			return m.usage;
 		}
 	}
 	return null;

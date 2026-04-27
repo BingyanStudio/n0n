@@ -12,6 +12,7 @@
 import type { PendingReminder, Toolkit } from "@n0n/tools";
 import type {
 	DomainMessage,
+	TokenUsage,
 	PartialToolCallRecord,
 	Renderer,
 	ToolCallRecord,
@@ -175,9 +176,7 @@ export async function agentLoop<T = unknown>(
 			if (outcome.assistantMessage) {
 				messages.push(outcome.assistantMessage);
 			}
-			if (roundUsage) {
-				messages.push({ type: "token_usage", usage: roundUsage, finishReason: roundFinishReason });
-			}
+			pushTokenUsage(messages, roundUsage, roundFinishReason);
 			if (outcome.reason === "aborted") renderer.aborted();
 			else renderer.agentTerminated(outcome.reason);
 			renderer.roundEnd();
@@ -192,9 +191,7 @@ export async function agentLoop<T = unknown>(
 		if (outcome.action === "idle") {
 			scheduler.seal();
 			messages.push(outcome.assistantMessage);
-			if (roundUsage) {
-				messages.push({ type: "token_usage", usage: roundUsage, finishReason: roundFinishReason });
-			}
+			pushTokenUsage(messages, roundUsage, roundFinishReason);
 			idleCount++;
 			if (idleCount >= runtime.agent.maxIdleRounds) {
 				renderer.agentTerminated("max idle rounds exceeded (no tool calls)");
@@ -220,9 +217,7 @@ export async function agentLoop<T = unknown>(
 			scheduler.seal();
 			messages.push(outcome.assistantMessage);
 			messages.push(outcome.retryMessage);
-			if (roundUsage) {
-				messages.push({ type: "token_usage", usage: roundUsage, finishReason: roundFinishReason });
-			}
+			pushTokenUsage(messages, roundUsage, roundFinishReason);
 			renderer.roundEnd();
 			continue;
 		}
@@ -261,9 +256,7 @@ export async function agentLoop<T = unknown>(
 		// biome-ignore lint/style/noNonNullAssertion: streamResult is always set by the stream loop above
 		messages.push(buildToolCallMessage(streamResult!.accumulator, allCalls));
 
-		if (roundUsage) {
-			messages.push({ type: "token_usage", usage: roundUsage, finishReason: roundFinishReason });
-		}
+		pushTokenUsage(messages, roundUsage, roundFinishReason);
 
 		// ── 5. 等待执行 + 渲染完成 ──
 		await runPromise;
@@ -368,7 +361,7 @@ function classifyRound(
 	if (acc.finishReason === FinishReason.CONTENT_FILTER) {
 		return {
 			action: "exit",
-			reason: "Content was filtered by the model provider.",
+			reason: "Content was filtered by the model provider",
 			report: "Agent terminated: content filter triggered",
 			assistantMessage: {
 				type: "assistant_text",
@@ -412,6 +405,18 @@ function classifyRound(
 
 	// 有工具调用 → 执行
 	return { action: "execute_tools" };
+}
+
+// ── pushTokenUsage ──
+
+function pushTokenUsage(
+	messages: DomainMessage[],
+	usage: TokenUsage | null | undefined,
+	finishReason: string,
+): void {
+	if (usage) {
+		messages.push({ type: "token_usage" as const, usage, finishReason });
+	}
 }
 
 // ── Reminders ──
