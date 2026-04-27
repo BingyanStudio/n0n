@@ -1,17 +1,8 @@
 /**
- * DeepSeek Client — DeepSeek 原生 API 支持
+ * DeepSeek Client — SSE 通信与流式解析
  *
- * 走 OpenAI 兼容协议（https://api.deepseek.com），SSE 解析逻辑与 OpenAIClient 一致。
- * 区别：
- * - tagStyle 为 default，DSML 标签仅在 Client 内部按需使用
- * - 自定义 TagAdapter：对特定 tag name 可做特殊处理
- * - 默认启用 thinking 模式（thinking: { type: "enabled" }）
- * - 默认 base URL 指向 DeepSeek API
- *
- * 后续扩展点（Phase 2-4）：
- * - DSML 工具调用编码
- * - 扩展消息角色（latest_reminder、developer）
- * - Task Token 意图路由
+ * 走 OpenAI 兼容协议（https://api.deepseek.com）。
+ * 消息格式转换、directive 拦截注入由同目录的 formatter / directives 模块负责。
  */
 
 import { createTagAdapter, formatPrompt } from "@n0n/shared";
@@ -19,116 +10,28 @@ import type {
 	CompleteRequest,
 	CompleteResponse,
 	LLMClient,
-	PromptMessage,
 	StreamEvent,
 	StreamRequest,
 	TagAdapter,
 	TagStyle,
 	TokenUsage,
-	ToolDefinition,
 } from "@n0n/types";
-import type { DeepSeekProviderConfig } from "./config.ts";
-import { isAbortError, LLMError } from "./errors.ts";
+import type { DeepSeekProviderConfig } from "../config.ts";
+import { isAbortError, LLMError } from "../errors.ts";
+import { DeepSeekCollectingAdapter, injectDirectives } from "./directives.ts";
+import type { DeepSeekMessage } from "./formatter.ts";
+import {
+	applyTaskToken,
+	toDeepSeekMessages,
+	toDeepSeekTools,
+} from "./formatter.ts";
 
-// ── 控制性 Tag 拦截 ──
-
-/**
- * 控制性 tag 集合 — wrapTag 时拦截这些 tag 的内容，
- * 从消息正文中剥离，后续转为 developer / latest_reminder 消息。
- *
- * A 类（整条消息都是控制性内容）：
- *   system_warning, submit_rejected, turn_feedback, reminder
- * B 类（嵌在 user_input 中的控制性片段）：
- *   hint
- */
-const DIRECTIVE_TAGS = new Set([
-	"hint",
-	"system_warning",
-	"submit_rejected",
-	"turn_feedback",
-	"reminder",
-	"edit_feedback",
-	"diagnostic_hint",
-	"output_hint",
-]);
-
-interface CollectedDirective {
-	tag: string;
-	content: string;
-}
-
-// 占位符：嵌入在 content 中保持位置信息，后处理时按位置提取为 developer 消息
-const DIRECTIVE_PLACEHOLDER_RE = /🔮⟪DIR:(\d+)⟫🔮/g;
-
-/**
- * 带 sideband 收集的 TagAdapter — DeepSeek 内部实现。
- *
- * wrapTag 时检查 tag name：
- * - 控制性 tag → 存入 collected，返回占位符（保持位置信息）
- * - 数据性 tag → 正常返回标准 XML 包裹内容
- *
- * 每次 stream() 调用新建一个实例。
- */
-class DeepSeekCollectingAdapter implements TagAdapter {
-	private readonly base: TagAdapter;
-	private readonly collected: CollectedDirective[] = [];
-
-	constructor(base: TagAdapter) {
-		this.base = base;
-	}
-
-	wrapTag(name: string, content: string): string {
-		if (DIRECTIVE_TAGS.has(name)) {
-			const idx = this.collected.length;
-			this.collected.push({ tag: name, content });
-			return `🔮⟪DIR:${idx}⟫🔮`;
-		}
-		return this.base.wrapTag(name, content);
-	}
-
-	adaptTags(text: string): string {
-		return this.base.adaptTags(text);
-	}
-
-	/** 返回收集到的全部控制性内容（不清空，供 injectDirectives 按索引引用） */
-	directives(): readonly CollectedDirective[] {
-		return this.collected;
-	}
-}
-
-// ── OpenAI-compatible API Types (与 OpenAIClient 一致) ──
-
-interface DeepSeekMessage {
-	role: "system" | "user" | "assistant" | "tool" | "developer" | "latest_reminder";
-	content: string | null;
-	reasoning_content?: string | null;
-	tool_calls?: DeepSeekToolCall[];
-	tool_call_id?: string;
-	task?: string;
-}
-
-interface DeepSeekToolCall {
-	id: string;
-	type: "function";
-	function: {
-		name: string;
-		arguments: string;
-	};
-}
-
-interface DeepSeekToolDef {
-	type: "function";
-	function: {
-		name: string;
-		description: string;
-		parameters: Record<string, unknown>;
-	};
-}
+// ── SSE 解析类型 ──
 
 interface DeepSeekRequest {
 	model: string;
 	messages: DeepSeekMessage[];
-	tools?: DeepSeekToolDef[];
+	tools?: ReturnType<typeof toDeepSeekTools>;
 	tool_choice?: "auto" | "none" | "required";
 	temperature?: number;
 	max_tokens?: number;
@@ -174,182 +77,6 @@ function isSSEChunk(data: unknown): data is SSEChunk {
 	return Array.isArray(obj.choices) || obj.usage !== undefined;
 }
 
-// ── PromptMessage → DeepSeek Message 转换 ──
-
-function toDeepSeekMessages(
-	promptMessages: PromptMessage[],
-	enableThinking: boolean,
-): DeepSeekMessage[] {
-	const result: DeepSeekMessage[] = [];
-
-	for (const msg of promptMessages) {
-		switch (msg.role) {
-			case "system":
-				result.push({ role: "system", content: msg.content });
-				break;
-
-			case "user":
-				result.push({ role: "user", content: msg.content });
-				break;
-
-			case "assistant": {
-				if (msg.toolCalls?.length) {
-					const toolCalls: DeepSeekToolCall[] = msg.toolCalls.map((tc) => ({
-						id: tc.id,
-						type: "function" as const,
-						function: {
-							name: tc.tool,
-							arguments: JSON.stringify(tc.args),
-						},
-					}));
-					result.push({
-						role: "assistant",
-						content: msg.content || null,
-						...(enableThinking
-							? { reasoning_content: msg.reasoning ?? "" }
-							: {}),
-						tool_calls: toolCalls,
-					});
-				} else {
-					result.push({
-						role: "assistant",
-						content: msg.content || null,
-						...(enableThinking
-							? { reasoning_content: msg.reasoning ?? "" }
-							: {}),
-					});
-				}
-				break;
-			}
-
-			case "tool":
-				result.push({
-					role: "tool",
-					content: msg.content,
-					tool_call_id: msg.toolCallId,
-				});
-				break;
-		}
-	}
-
-	return result;
-}
-
-function toDeepSeekTools(tools: ToolDefinition[]): DeepSeekToolDef[] {
-	return tools.map((t) => ({
-		type: "function" as const,
-		function: {
-			name: t.name,
-			description: t.description,
-			parameters: t.parameters,
-		},
-	}));
-}
-
-// ── 后处理：按占位符位置注入 developer / latest_reminder 消息 ──
-
-/**
- * 扫描消息 content 中的占位符，将控制性 directive 集中追加到序列末尾。
- *
- * 策略（与 format.py 的 _drop_thinking_messages 等效）：
- * - 找到最后一个 assistant 消息 G
- * - G 及其之前的占位符：从 content 中移除，directive 丢弃（历史 directive 已过时）
- * - G 之后的占位符：从 content 中移除，directive 收集起来
- * - 收集到的 directive 统一追加到序列末尾作为 developer/latest_reminder 消息
- *
- * 这样做确保 developer 消息不会插入 assistant(tool_calls)→tool(result) 之间，
- * 避免 DeepSeek API "insufficient tool messages following tool_calls" 错误。
- */
-function injectDirectives(
-	messages: DeepSeekMessage[],
-	directives: readonly CollectedDirective[],
-): DeepSeekMessage[] {
-	if (directives.length === 0) return messages;
-
-	// 找最后一个 assistant 消息的索引 G
-	let lastAssistantIdx = -1;
-	for (let i = messages.length - 1; i >= 0; i--) {
-		if (messages[i].role === "assistant") {
-			lastAssistantIdx = i;
-			break;
-		}
-	}
-
-	const result: DeepSeekMessage[] = [];
-	const collected: CollectedDirective[] = [];
-
-	for (let i = 0; i < messages.length; i++) {
-		const msg = messages[i];
-		const content = msg.content ?? "";
-
-		if (!DIRECTIVE_PLACEHOLDER_RE.test(content)) {
-			DIRECTIVE_PLACEHOLDER_RE.lastIndex = 0;
-			result.push(msg);
-			continue;
-		}
-		DIRECTIVE_PLACEHOLDER_RE.lastIndex = 0;
-
-		const found: CollectedDirective[] = [];
-		const cleaned = content.replace(DIRECTIVE_PLACEHOLDER_RE, (_, idxStr) => {
-			const d = directives[Number(idxStr)];
-			if (d) found.push(d);
-			return "";
-		}).trim();
-
-		if (cleaned) {
-			result.push({ ...msg, content: cleaned });
-		}
-
-		// G 之后的 directive 收集到末尾；G 及之前的丢弃
-		if (i > lastAssistantIdx) {
-			collected.push(...found);
-		}
-	}
-
-	// 末尾追加收集到的 directive
-	for (const d of collected) {
-		result.push({
-			role: d.tag === "reminder" ? "latest_reminder" : "developer",
-			content: d.content,
-		});
-	}
-
-	return result;
-}
-
-// ── Task Token 解析 ──
-
-/**
- * 用户可在消息中输入 【【task_type】】 触发原生 task token。
- * 匹配后从消息内容中移除标记，在该消息上设置 task 字段。
- *
- * 支持的 task type（与 DeepSeek-V4 训练集一致）：
- * action, query, authority, domain, title, read_url
- */
-const VALID_TASKS = new Set(["action", "query", "authority", "domain", "title", "read_url"]);
-const TASK_PATTERN = /【【(\w+)】】/;
-
-/**
- * 从所有 user 消息中剔除 【【task】】 标记并设置 task 字段。
- * 严格只匹配 role === "user"（用户手动输入），不匹配 developer 等系统消息。
- * 每条消息独立处理：有标记就剔除内容 + 设 task 字段，无标记则跳过。
- */
-function applyTaskToken(messages: DeepSeekMessage[]): void {
-	for (const msg of messages) {
-		if (msg.role !== "user") continue;
-
-		const match = (msg.content ?? "").match(TASK_PATTERN);
-		if (!match) continue;
-
-		msg.content = (msg.content ?? "").replace(TASK_PATTERN, "").trim();
-
-		const taskType = match[1]!;
-		if (VALID_TASKS.has(taskType)) {
-			msg.task = taskType;
-		}
-	}
-}
-
 // ── DeepSeek Client ──
 
 export class DeepSeekClient implements LLMClient {
@@ -363,7 +90,6 @@ export class DeepSeekClient implements LLMClient {
 	constructor(pc: DeepSeekProviderConfig) {
 		this.pc = pc;
 		this.modelId = this.pc.model;
-		// 公共 tags 用于外部访问（如 LLMClient.tags）
 		this.tags = createTagAdapter("default");
 		this.enableThinking = this.pc.enableThinking ?? true;
 
@@ -383,10 +109,13 @@ export class DeepSeekClient implements LLMClient {
 		// 每次 stream 新建 collecting adapter，拦截控制性 tag
 		const adapter = new DeepSeekCollectingAdapter(this.tags);
 		const promptMessages = formatPrompt(request.messages, adapter);
-		const rawMessages = toDeepSeekMessages(promptMessages, this.enableThinking);
+		const rawMessages = toDeepSeekMessages(
+			promptMessages,
+			this.enableThinking,
+		);
 		const injected = injectDirectives(rawMessages, adapter.directives());
 
-		// 解析 【【task】】 标记，直接透传 task 字段
+		// 解析 【【task】】 标记
 		const apiMessages = [...injected];
 		applyTaskToken(apiMessages);
 
@@ -416,7 +145,6 @@ export class DeepSeekClient implements LLMClient {
 			body.tool_choice = request.toolChoice ?? "auto";
 		}
 
-		// thinking 模式
 		if (this.enableThinking) {
 			body.thinking = { type: "enabled" };
 		}
