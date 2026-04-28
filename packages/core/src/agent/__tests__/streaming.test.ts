@@ -235,6 +235,45 @@ describe("parseStream", () => {
 			expect(done.result.readyTools.size).toBe(0);
 			expect(done.result.interrupt).toBe("length");
 		});
+
+		it("未知工具 + 完整 JSON → 仍触发 tool_ready", async () => {
+			const events = await collect([
+				{
+					type: "tool_call_delta",
+					index: 0,
+					id: "tc_unknown",
+					name: "read",
+					arguments: "{}",
+				},
+				{ type: "done", finishReason: "tool_calls", usage: null },
+			]);
+
+			const ready = ofType(events, "tool_ready");
+			expect(ready).toHaveLength(1);
+			// @ts-expect-error — 运行时工具名不受判别联合约束
+			expect(ready[0]!.tc.tool).toBe("read");
+			expect(ready[0]!.tc.args).toEqual({});
+		});
+
+		it("未知工具 + tool_ready → readyTools 中包含该工具", async () => {
+			const events = await collect([
+				{
+					type: "tool_call_delta",
+					index: 0,
+					id: "tc_unknown2",
+					name: "unknownTool",
+					arguments: "{}",
+				},
+				{ type: "done", finishReason: "tool_calls", usage: null },
+			]);
+
+			const done = ofType(events, "done")[0]!;
+			expect(done.result.readyTools.size).toBe(1);
+			const toolCall = done.result.readyTools.values().next().value!;
+			// @ts-expect-error — 运行时工具名不受判别联合约束
+			expect(toolCall.tool).toBe("unknownTool");
+			expect(toolCall.args).toEqual({});
+		});
 	});
 
 	describe("中断处理", () => {

@@ -12,6 +12,7 @@
  * 输出统一为 (call, result) 对的列表。loop 不需要关心具体工具类型。
  */
 
+import { REGISTERED_TOOLS } from "@n0n/tools";
 import type {
 	DomainMessage,
 	PartialToolCallRecord,
@@ -108,6 +109,12 @@ export async function recoverPartialCalls(
 				tool: partial.toolName,
 				args: {},
 			};
+
+			const isKnownTool = REGISTERED_TOOLS.has(partial.toolName);
+			const error = isKnownTool
+				? { kind: "truncated_recovery" as const }
+				: { kind: "unknown_tool" as const };
+
 			pairs.push({
 				status: "unrecoverable",
 				call: placeholderCall,
@@ -115,8 +122,7 @@ export async function recoverPartialCalls(
 					type: "tool_arg_error",
 					callId: partial.toolCallId,
 					tool: partial.toolName,
-					error:
-						"Tool call arguments were truncated by max_tokens and could not be recovered. Please retry with a shorter response, or break the task into smaller steps.",
+					error,
 				},
 			});
 		}
