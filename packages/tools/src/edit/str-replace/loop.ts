@@ -9,7 +9,7 @@
  * - countOccurrences, getReplacementContext: 内部工具函数
  */
 
-import type { LLMClient, StreamEvent, TokenUsage } from "@n0n/types";
+import type { LLMClient, PatchOp, StreamEvent, TokenUsage } from "@n0n/types";
 import {
 	createInitialMessages,
 	editorStep,
@@ -35,6 +35,8 @@ export interface EditorLoopResult {
 	rounds: number;
 	/** 每轮的 token 用量（新增，供评估和监控使用） */
 	roundTokenUsage: Array<{ round: number; usage: TokenUsage | null }>;
+	/** 所有已应用的 patch 操作 */
+	patches: PatchOp[];
 }
 
 // ── Editor Loop ──
@@ -52,6 +54,7 @@ export async function editorLoop(
 	const messages = createInitialMessages(source, intent);
 	const roundTokenUsage: Array<{ round: number; usage: TokenUsage | null }> =
 		[];
+	const patches: PatchOp[] = [];
 
 	for (let round = 0; round < MAX_ROUNDS; round++) {
 		if (signal?.aborted) {
@@ -61,6 +64,7 @@ export async function editorLoop(
 				error: "Editor loop aborted",
 				rounds: round,
 				roundTokenUsage,
+				patches,
 			};
 		}
 
@@ -83,6 +87,7 @@ export async function editorLoop(
 		// 更新状态 (result.messages IS messages — already mutated in place by editorStep)
 		current = result.content;
 		editCount = result.totalEditCount;
+		patches.push(...(result.patches ?? []));
 
 		// 需要引导（模型未调用工具）：注入引导后继续循环
 		if (result.needsGuidance && result.toolCalls.length === 0) {
@@ -97,6 +102,7 @@ export async function editorLoop(
 				error: result.error,
 				rounds: round + 1,
 				roundTokenUsage,
+				patches,
 			};
 		}
 
@@ -108,6 +114,7 @@ export async function editorLoop(
 				error: current !== source || editCount > 0 ? null : "No patch applied",
 				rounds: round + 1,
 				roundTokenUsage,
+				patches,
 			};
 		}
 	}
@@ -118,5 +125,6 @@ export async function editorLoop(
 		error: `Editor LLM did not submit within ${MAX_ROUNDS} rounds (${editCount} edits applied).`,
 		rounds: MAX_ROUNDS,
 		roundTokenUsage,
+		patches,
 	};
 }
