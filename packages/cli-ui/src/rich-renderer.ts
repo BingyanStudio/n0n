@@ -429,7 +429,8 @@ export class RichRenderer implements Renderer {
 				if (!result.success) {
 					return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${style.red(result.error ?? "failed")}`;
 				}
-				const { added, removed } = result.diff;
+				const added = result.patches.reduce((s, p) => s + (p.newText === "" ? 0 : p.newText.split("\n").length), 0);
+				const removed = result.patches.reduce((s, p) => s + (p.oldText === "" ? 0 : p.oldText.split("\n").length), 0);
 				const lineStats =
 					[
 						added > 0 ? style.green(`+${added}`) : null,

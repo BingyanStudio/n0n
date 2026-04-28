@@ -9,10 +9,8 @@ import {
 } from "@n0n/tools";
 import type {
 	AssistantToolCallPart,
-	ExecToolCall,
 	ToolArgErrorMessage,
 	ToolCallRecord,
-	ToolDefinition,
 	ToolStreamEvent,
 } from "@n0n/types";
 import { ZodError } from "zod";
@@ -64,19 +62,11 @@ export async function* executeToolStream(
 	const entry = resolve(tc.tool);
 	if (!entry) {
 		yield {
-			type: "tool_result",
-			tool: "exec" as const,
-			call: {
-				id: tc.id,
-				tool: "exec" as const,
-				args: { script: "" },
-			} satisfies ExecToolCall,
-			status: "completed" as const,
-			exitCode: 1,
-			stdout: "",
-			stderr: `Unknown tool: ${tc.tool}`,
-			durationMs: 0,
-		};
+			type: "tool_arg_error",
+			callId: tc.id,
+			tool: tc.tool,
+			error: { kind: "unknown_tool" },
+		} satisfies ToolArgErrorMessage;
 		return;
 	}
 
@@ -88,16 +78,18 @@ export async function* executeToolStream(
 		}
 	} catch (err) {
 		if (err instanceof ZodError) {
-			// 恢复 schema 字段 — 为模型提供修复依据
-			const toolDef: ToolDefinition | undefined = entry.definition;
 			const argError: ToolArgErrorMessage = {
 				type: "tool_arg_error",
 				callId: tc.id,
 				tool: tc.tool,
-				error: err.issues
-					.map((i) => `${i.path.join(".")}: ${i.message}`)
-					.join("; "),
-				schema: toolDef?.parameters,
+				error: {
+					kind: "invalid_args",
+					issues: err.issues.map((i) => ({
+						path: i.path.join("."),
+						message: i.message,
+					})),
+					schema: entry.definition?.parameters,
+				},
 			};
 			yield argError;
 			return;

@@ -2,7 +2,7 @@
  * edit tool result 格式化 — 含 anti-few-shot 变体
  */
 
-import type { EditDiff, EditToolResult } from "@n0n/types";
+import type { EditToolResult, PatchOp } from "@n0n/types";
 import type { TagAdapter } from "./utils.ts";
 import { pick } from "./utils.ts";
 
@@ -14,16 +14,14 @@ const successPrefixTemplates = [
 	(path: string) => `Updated \`${path}\`:`,
 ];
 
-// ── diff 格式化 ──
+// ── patches 格式化 ──
 
-function formatDiffText(diff: EditDiff): string {
-	if (diff.chunks.length === 0) return "(no changes)";
-	const sections: string[] = [];
-	for (const chunk of diff.chunks) {
-		const body = chunk.lines.map((dl) => dl.content).join("\n");
-		sections.push(body);
-	}
-	return sections.join("\n...\n");
+function formatPatches(patches: PatchOp[]): string {
+	if (patches.length === 0) return "(no changes)";
+	const parts = patches
+		.map((p) => p.newText)
+		.filter((t) => t.length > 0);
+	return parts.length === 0 ? "(no changes)" : parts.join("\n...\n");
 }
 
 // ── 格式化函数 ──
@@ -36,7 +34,7 @@ export function formatEditResult(
 	const parts: string[] = [];
 	if (msg.success) {
 		const prefix = pick(successPrefixTemplates, msgIndex);
-		const summary = `${prefix(msg.call.args.path)}\n${formatDiffText(msg.diff)}`;
+		const summary = `${prefix(msg.call.args.path)}\n${formatPatches(msg.patches)}`;
 		parts.push(tags.wrapTag("edit_result", summary));
 	} else {
 		parts.push(tags.wrapTag("error", `Edit failed: ${msg.error}`));

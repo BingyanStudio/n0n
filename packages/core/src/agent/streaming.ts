@@ -9,7 +9,7 @@
 
 import type { StreamEvent, ToolCallRecord } from "@n0n/types";
 import { FinishReason, StreamAccumulator } from "@n0n/types";
-import { isValidToolCall, parseToolCalls } from "./tool.ts";
+import { parseToolCalls } from "./tool.ts";
 
 // ── 输出事件（判别联合） ──
 
@@ -117,7 +117,7 @@ export async function* parseStream(
 							completedIndices.add(event.index);
 							const parsed = parseToolCalls([tcAcc]);
 							const parsedTc = parsed[0];
-							if (parsedTc && isValidToolCall(parsedTc)) {
+							if (parsedTc) {
 								readyTools.set(event.index, parsedTc);
 								yield { type: "tool_ready", index: event.index, tc: parsedTc };
 							}

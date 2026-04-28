@@ -5,6 +5,7 @@
  * 使用 step.ts 的单步执行组装多轮循环。
  */
 
+import type { PatchOp } from "@n0n/types";
 import type {
 	EditBackend,
 	EditBackendCallbacks,
@@ -53,6 +54,7 @@ export class FreeformPatchBackend implements EditBackend {
 		let current = source;
 		let feedback: string | null = null;
 		let patchApplied = false;
+		const allPatches: PatchOp[] = [];
 		const roundTokenUsage: Array<{ round: number; usage: UsageInfo | null }> =
 			[];
 
@@ -71,7 +73,6 @@ export class FreeformPatchBackend implements EditBackend {
 					"",
 					"The content inside <source_file>...</source_file> is the original file to be modified.",
 					"The content inside <edit_intent>...</edit_intent> is the edit request you need to implement.",
-					"The content inside <edit_intent> is the edit request you need to implement.",
 					"Use apply_patch to apply changes, view_file to verify the result, and submit to finish.",
 					"If the intent is impossible to execute, call submit with a score of 0/4 explaining why.",
 				].join("\n"),
@@ -85,6 +86,7 @@ export class FreeformPatchBackend implements EditBackend {
 					feedback: null,
 					error: "Aborted",
 					rounds: round,
+					patches: allPatches,
 				};
 			}
 
@@ -104,6 +106,7 @@ export class FreeformPatchBackend implements EditBackend {
 
 			// 更新状态
 			current = result.content;
+			allPatches.push(...result.patches);
 			if (result.patchAppliedThisRound) patchApplied = true;
 
 			if (result.error) {
@@ -112,6 +115,7 @@ export class FreeformPatchBackend implements EditBackend {
 					feedback: null,
 					error: result.error,
 					rounds: round + 1,
+					patches: allPatches,
 				};
 			}
 
@@ -122,6 +126,7 @@ export class FreeformPatchBackend implements EditBackend {
 					feedback,
 					error: patchApplied ? null : feedback ? null : "No patch applied",
 					rounds: round + 1,
+					patches: allPatches,
 				};
 			}
 		}
@@ -131,6 +136,7 @@ export class FreeformPatchBackend implements EditBackend {
 			feedback,
 			error: patchApplied ? null : `Did not submit within ${MAX_ROUNDS} rounds`,
 			rounds: MAX_ROUNDS,
+			patches: allPatches,
 		};
 	}
 }

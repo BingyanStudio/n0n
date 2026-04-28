@@ -8,6 +8,7 @@
 import type {
 	DomainMessage,
 	LLMClient,
+	PatchOp,
 	StreamEvent,
 	TokenUsage,
 } from "@n0n/types";
@@ -154,6 +155,8 @@ export interface StepResult {
 	content: string;
 	/** 本轮调用的工具列表 */
 	toolCalls: ToolCallInfo[];
+	/** 本轮完成的补丁列表 */
+	patches: PatchOp[];
 	/** 本轮完成的编辑次数（增量） */
 	editCountDelta: number;
 	/** 累计编辑次数 */
@@ -204,6 +207,7 @@ export async function editorStep(input: StepInput): Promise<StepResult> {
 			messages,
 			content: current,
 			toolCalls: [],
+			patches: [],
 			editCountDelta: 0,
 			totalEditCount: input.editCount,
 			tokenUsage: null,
@@ -235,6 +239,7 @@ export async function editorStep(input: StepInput): Promise<StepResult> {
 			messages,
 			content: current,
 			toolCalls: [],
+			patches: [],
 			editCountDelta: 0,
 			totalEditCount: input.editCount,
 			tokenUsage: null,
@@ -263,6 +268,7 @@ export async function editorStep(input: StepInput): Promise<StepResult> {
 			messages,
 			content: current,
 			toolCalls: [],
+			patches: [],
 			editCountDelta: 0,
 			totalEditCount: input.editCount,
 			tokenUsage,
@@ -305,6 +311,7 @@ export async function editorStep(input: StepInput): Promise<StepResult> {
 	// ── 4. 执行工具调用 ──
 
 	const toolCalls: ToolCallInfo[] = [];
+	const patchOps: PatchOp[] = [];
 	let hasSubmit = false;
 	let feedback: string | null = null;
 
@@ -349,6 +356,7 @@ export async function editorStep(input: StepInput): Promise<StepResult> {
 				if (result.ok) {
 					current = result.content;
 					editCountDelta++;
+					patchOps.push({ oldText: oldStr, newText: newStr });
 					const context = getReplacementContext(current, newStr);
 					messages.push(
 						toolResultMessage(
@@ -466,6 +474,7 @@ export async function editorStep(input: StepInput): Promise<StepResult> {
 		messages,
 		content: current,
 		toolCalls,
+		patches: patchOps,
 		editCountDelta,
 		totalEditCount: input.editCount + editCountDelta,
 		tokenUsage,

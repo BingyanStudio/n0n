@@ -169,7 +169,10 @@ export class ExecutionScheduler {
 						type: "tool_arg_error",
 						callId: tc.id,
 						tool: tc.tool,
-						error: `Internal execution error: ${err instanceof Error ? err.message : String(err)}`,
+						error: {
+							kind: "internal_error",
+							message: `Internal execution error: ${err instanceof Error ? err.message : String(err)}`,
+						},
 					};
 				}
 			} finally {

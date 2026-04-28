@@ -5,12 +5,13 @@
  * 后端负责：接收源码 + 意图 → 返回修改后的内容。
  */
 
-import type { StreamEvent } from "@n0n/types";
+import type { PatchOp, StreamEvent } from "@n0n/types";
 
 export interface EditBackendResult {
 	content: string;
 	feedback: string | null;
 	error: string | null;
+	patches: PatchOp[];
 	rounds: number;
 }
 
