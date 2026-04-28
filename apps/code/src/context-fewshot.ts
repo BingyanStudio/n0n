@@ -248,17 +248,12 @@ const EDIT_RESULT: DomainMessage = {
 	type: "tool_result",
 	tool: "edit" as const,
 	call: TURN2_EDIT as import("@n0n/types").EditToolCall,
-	diff: {
-		chunks: [
-			{
-				startLine: 7,
-				endLine: 7,
-				lines: [{ line: 7, content: "Status: DONE", changed: true }],
-			},
-		],
-		added: 1,
-		removed: 1,
-	},
+	patches: [
+		{
+			oldText: "Status: PENDING",
+			newText: "Status: DONE",
+		},
+	],
 	success: true,
 	error: null,
 	feedback: null,

@@ -225,29 +225,12 @@ const scenarios: Scenario[] = [
 					args: { path: "src/auth.ts", intent: "fix the null check" },
 				},
 				success: true,
-				diff: {
-					chunks: [
-						{
-							startLine: 10,
-							endLine: 14,
-							lines: [
-								{
-									line: 10,
-									content: "  const user = getUser();",
-									changed: false,
-								},
-								{
-									line: 11,
-									content: "  if (!user) return null;",
-									changed: true,
-								},
-								{ line: 12, content: "  return user.name;", changed: false },
-							],
-						},
-					],
-					added: 1,
-					removed: 0,
-				},
+				patches: [
+					{
+						oldText: "  const user = getUser();\n  return user.name;",
+						newText: "  const user = getUser();\n  if (!user) return null;\n  return user.name;",
+					},
+				],
 				error: null,
 				feedback: null,
 				rounds: 1,
