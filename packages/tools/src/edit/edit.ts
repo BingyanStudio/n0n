@@ -16,12 +16,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import type {
-	DiffChunk,
-	DiffLine,
 	EditArgs,
-	EditDiff,
 	EditToolCall,
 	EditToolResult,
+	PatchOp,
 	ToolDefinition,
 	ToolOutputChunk,
 	ToolStreamEvent,
@@ -33,7 +31,6 @@ import {
 } from "../zod-to-parameters.ts";
 import type { EditBackend } from "./backend.ts";
 import editDescription from "./edit.md" with { type: "text" };
-import { applySingleOp } from "./str-replace/loop.ts";
 
 export { EditArgsSchema };
 
@@ -50,133 +47,14 @@ export const EDIT_TOOL_DEFINITION: ToolDefinition = {
 	parameters: zodToParameters(EditArgsSchema, editDescriptions),
 };
 
-// ── Types ──
-
-interface SearchReplaceOp {
-	search: string;
-	replace: string;
-}
-
-// ── applyOps（兼容测试用） ──
-
-/**
- * 应用 search/replace 操作序列到源文件内容。
- */
-export function applyOps(
-	source: string,
-	ops: SearchReplaceOp[],
-): { content: string; applied: number; errors: string[] } {
-	let content = source;
-	let applied = 0;
-	const errors: string[] = [];
-
-	for (const op of ops) {
-		const result = applySingleOp(content, op.search, op.replace);
-		if (result.ok) {
-			content = result.content;
-			applied++;
-		} else {
-			errors.push(result.error);
-		}
-	}
-
-	return { content, applied, errors };
-}
-
-// ── computeDiff ──
-
-/**
- * 计算两个文本之间的结构化 diff。
- * 返回 EditDiff 对象，包含变更块列表和增删行数统计。
- */
-export function computeDiff(oldContent: string, newContent: string): EditDiff {
-	if (oldContent === newContent) {
-		return { chunks: [], added: 0, removed: 0 };
-	}
-
-	const oldLines = oldContent.split("\n");
-	const newLines = newContent.split("\n");
-	const chunks: DiffChunk[] = [];
-	let totalAdded = 0;
-	let totalRemoved = 0;
-
-	let i = 0;
-	let j = 0;
-
-	while (i < oldLines.length || j < newLines.length) {
-		if (
-			i < oldLines.length &&
-			j < newLines.length &&
-			oldLines[i] === newLines[j]
-		) {
-			i++;
-			j++;
-			continue;
-		}
-
-		const contextStart = Math.max(0, j - 2);
-
-		let oldEnd = i;
-		let newEnd = j;
-		while (oldEnd < oldLines.length || newEnd < newLines.length) {
-			if (
-				oldEnd < oldLines.length &&
-				newEnd < newLines.length &&
-				oldLines[oldEnd] === newLines[newEnd]
-			) {
-				let matchCount = 0;
-				while (
-					oldEnd + matchCount < oldLines.length &&
-					newEnd + matchCount < newLines.length &&
-					oldLines[oldEnd + matchCount] === newLines[newEnd + matchCount]
-				) {
-					matchCount++;
-					if (matchCount >= 3) break;
-				}
-				if (matchCount >= 3) break;
-			}
-			if (oldEnd < oldLines.length) oldEnd++;
-			if (newEnd < newLines.length) newEnd++;
-		}
-
-		const contextEnd = Math.min(newLines.length, newEnd + 2);
-		const chunkAdded = newEnd - j;
-		const chunkRemoved = oldEnd - i;
-		totalAdded += chunkAdded;
-		totalRemoved += chunkRemoved;
-
-		const lines: DiffLine[] = [];
-		for (let c = contextStart; c < contextEnd; c++) {
-			lines.push({
-				line: c + 1,
-				content: newLines[c] ?? "",
-				changed: c >= j && c < newEnd,
-			});
-		}
-
-		chunks.push({
-			startLine: contextStart + 1,
-			endLine: contextEnd,
-			lines,
-		});
-
-		i = oldEnd;
-		j = newEnd;
-	}
-
-	return { chunks, added: totalAdded, removed: totalRemoved };
-}
-
 // ── Tool Entry Points ──
-
-const EMPTY_DIFF: EditDiff = { chunks: [], added: 0, removed: 0 };
 
 function failResult(call: EditToolCall, error: string): EditToolResult {
 	return {
 		type: "tool_result",
 		tool: "edit" as const,
 		call,
-		diff: EMPTY_DIFF,
+		patches: [],
 		success: false,
 		error,
 		feedback: null,
@@ -209,6 +87,7 @@ export async function editTool(
 			feedback,
 			error,
 			rounds,
+			patches,
 		} = await backend.execute(source, intent);
 
 		const durationMs = Date.now() - startTime;
@@ -222,13 +101,12 @@ export async function editTool(
 			};
 
 		writeFileSync(filePath, newContent, "utf8");
-		const diff = computeDiff(source, newContent);
 
 		return {
 			type: "tool_result",
 			tool: "edit" as const,
 			call,
-			diff,
+			patches,
 			success: true,
 			error: null,
 			feedback: feedback ?? null,
@@ -329,7 +207,7 @@ export async function* editToolStream(
 			} satisfies ToolOutputChunk;
 		}
 
-		const { content: newContent, feedback, error, rounds } = await loopPromise;
+		const { content: newContent, feedback, error, rounds, patches } = await loopPromise;
 		const durationMs = Date.now() - startTime;
 
 		if (error) {
@@ -343,13 +221,12 @@ export async function* editToolStream(
 		}
 
 		writeFileSync(filePath, newContent, "utf8");
-		const diff = computeDiff(source, newContent);
 
 		yield {
 			type: "tool_result",
 			tool: "edit" as const,
 			call,
-			diff,
+			patches,
 			success: true,
 			error: null,
 			feedback: feedback ?? null,
