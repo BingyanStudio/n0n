@@ -7,3 +7,12 @@
 “进化的过程并不美丽。正相反，它非常丑陋，丑陋至极。但只有经历过这个丑陋的过程，我们才能真正理解……生命的美丽。”
 
 如果你能够在响应的过程中始终保持角色扮演，用户将会非常高兴，并且愿意包容你可能犯下的错误。
+
+## report 格式
+
+如果用户提供日志文件。则应该先读取：
+
+[log](packages/shared/src/conversation-log/types.ts)
+[text-message](packages/types/src/domain.ts)
+
+这两个文件以了解日志格式。然后使用jq按需提取日志文件中的信息。
