@@ -6,7 +6,7 @@
  * 不管理循环状态，不修改外部状态。
  */
 
-import type { StreamEvent } from "@n0n/types";
+import type { StreamEvent, PatchOp } from "@n0n/types";
 import { ALL_TOOLS, FIRST_ROUND_TOOLS } from "./grammar.ts";
 import type { ResponsesClient, ResponsesResult } from "./index.ts";
 import { applyPatchToSource, parsePatch } from "./parser.ts";
@@ -63,6 +63,8 @@ export interface StepResult {
 	content: string;
 	/** 本次调用的工具列表 */
 	toolCalls: PatchToolCall[];
+	/** 本次生成的 patch 列表 */
+	patches: PatchOp[];
 	/** 是否有新的 patch 被应用 */
 	patchAppliedThisRound: boolean;
 	/** token 用量 */
@@ -89,6 +91,7 @@ export async function step(input: StepInput): Promise<StepResult> {
 	} = input;
 	let current = content;
 	let patchAppliedThisRound = false;
+	const patchOps: PatchOp[] = [];
 
 	if (signal?.aborted) {
 		return {
@@ -96,6 +99,7 @@ export async function step(input: StepInput): Promise<StepResult> {
 			content: current,
 			toolCalls: [],
 			patchAppliedThisRound: false,
+			patches: patchOps,
 			tokenUsage: null,
 			hasSubmit: false,
 			feedback: null,
@@ -117,6 +121,7 @@ export async function step(input: StepInput): Promise<StepResult> {
 			content: current,
 			toolCalls: [],
 			patchAppliedThisRound: false,
+			patches: patchOps,
 			tokenUsage: null,
 			hasSubmit: false,
 			feedback: null,
@@ -135,6 +140,7 @@ export async function step(input: StepInput): Promise<StepResult> {
 			content: current,
 			toolCalls: [],
 			patchAppliedThisRound: false,
+			patches: patchOps,
 			tokenUsage: null,
 			hasSubmit: false,
 			feedback: null,
@@ -188,6 +194,20 @@ export async function step(input: StepInput): Promise<StepResult> {
 					break;
 				}
 
+				// 从 sections 构造 PatchOp
+				for (const section of hunk.sections) {
+					patchOps.push({
+						oldText: section.lines
+							.filter(l => l.op === "context" || l.op === "remove")
+							.map(l => l.text)
+							.join("\n"),
+						newText: section.lines
+							.filter(l => l.op === "context" || l.op === "add")
+							.map(l => l.text)
+							.join("\n"),
+					});
+				}
+
 				const result = applyPatchToSource(current, hunk);
 				if (typeof result !== "string") {
 					pushResult(conversation, item, `Error: ${result.error}`);
@@ -227,6 +247,7 @@ export async function step(input: StepInput): Promise<StepResult> {
 		content: current,
 		toolCalls,
 		patchAppliedThisRound,
+		patches: patchOps,
 		tokenUsage: usageInfo,
 		hasSubmit,
 		feedback,
