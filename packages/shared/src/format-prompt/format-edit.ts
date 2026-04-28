@@ -18,10 +18,10 @@ const successPrefixTemplates = [
 
 function formatPatches(patches: PatchOp[]): string {
 	if (patches.length === 0) return "(no changes)";
-	return patches
+	const parts = patches
 		.map((p) => p.newText)
-		.filter((t) => t.length > 0)
-		.join("\n...\n");
+		.filter((t) => t.length > 0);
+	return parts.length === 0 ? "(no changes)" : parts.join("\n...\n");
 }
 
 // ── 格式化函数 ──
