@@ -32,7 +32,7 @@ import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { CodeRenderer } from "./code-renderer.ts";
 import { buildContextFewshot } from "./context-fewshot.ts";
 import { playNotifySound } from "./notify-sound.ts";
-import codePromptText from "./prompts/code.md" with { type: "text" };
+import { getPrompt } from "./prompts/index.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 import { formatSubmitResult } from "./submit-formatter.ts";
 
@@ -40,6 +40,8 @@ export interface CodeReplOptions {
 	initialInput?: string;
 	resumeFile?: string;
 	saveEveryLoop?: boolean;
+	/** 提示词版本，如 "0.1" 对应 code-v0.1.md；不传则使用默认 code.md */
+	promptVersion?: string;
 }
 
 type CodeWorkspacePaths = BaseWorkspacePaths;
@@ -131,10 +133,15 @@ export async function startCodeRepl(
 	paths: CodeWorkspacePaths,
 	options: CodeReplOptions = {},
 ): Promise<void> {
-	const { initialInput, resumeFile, saveEveryLoop = false } = options;
+	const {
+		initialInput,
+		resumeFile,
+		saveEveryLoop = false,
+		promptVersion,
+	} = options;
 
 	// 基础系统提示词（稳定前缀，不含 agents.md 和环境信息）
-	const baseSystemPrompt = codePromptText;
+	const baseSystemPrompt = getPrompt(promptVersion);
 
 	// 构建 Toolkit — 含 CodeResultSchema，供 fewshot 和 agentLoop 共用
 	const runtime = getRuntime();

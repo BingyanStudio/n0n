@@ -61,10 +61,16 @@ if (!result.ok) {
 // ── 初始化 ──
 
 const cliOpts = (globalThis as Record<string, unknown>).__n0n_cli_opts as
-	| { resumeFile?: string; saveEveryLoop?: boolean; filteredArgs?: string[] }
+	| {
+			resumeFile?: string;
+			saveEveryLoop?: boolean;
+			promptVersion?: string;
+			filteredArgs?: string[];
+		}
 	| undefined;
 const resumeFile = cliOpts?.resumeFile;
 const saveEveryLoop = cliOpts?.saveEveryLoop ?? false;
+const promptVersion = cliOpts?.promptVersion;
 
 const { workspace, remainingArgs } = parseWorkspaceArg(
 	cliOpts?.filteredArgs ?? process.argv.slice(2),
@@ -116,8 +122,12 @@ const { startCodeRepl } = await import("./repl.ts");
 const initialInput =
 	remainingArgs.length > 0 ? remainingArgs.join(" ") : undefined;
 
+// 提示词版本信息
+const versionNote = promptVersion ? ` [提示词 v${promptVersion}]` : "";
+
 writeln(
-	style.bold("n0n code") + style.gray(` — Code Agent [${paths.workspace}]`),
+	style.bold("n0n code") +
+		style.gray(` — Code Agent [${paths.workspace}]${versionNote}`),
 );
 writeln(
 	style.gray('描述你的编码任务，AI 将直接修改项目代码。输入 "exit" 退出。'),
@@ -125,5 +135,10 @@ writeln(
 writeln(style.gray("支持多行输入 / 粘贴，按空行（回车）提交。"));
 writeln();
 
-await startCodeRepl(paths, { initialInput, resumeFile, saveEveryLoop });
+await startCodeRepl(paths, {
+	initialInput,
+	resumeFile,
+	saveEveryLoop,
+	promptVersion,
+});
 process.exit(0);

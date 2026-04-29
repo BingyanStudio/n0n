@@ -17,7 +17,7 @@ import type { BaseWorkspacePaths } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage, SubmitToolResult } from "@n0n/types";
 import { buildContextFewshot } from "./context-fewshot.ts";
-import codePromptText from "./prompts/code.md" with { type: "text" };
+import { getPrompt } from "./prompts/index.ts";
 import { type CodeResult, CodeResultSchema } from "./schema.ts";
 
 export interface HeadlessOptions {
@@ -31,6 +31,8 @@ export interface HeadlessOptions {
 	timeoutMs?: number;
 	/** 额外的 system prompt 前缀 */
 	systemPromptPrefix?: string;
+	/** 提示词版本，如 "0.1" 对应 code-v0.1.md；不传则使用默认 code.md */
+	promptVersion?: string;
 }
 
 export interface HeadlessResult {
@@ -78,15 +80,16 @@ export async function runHeadless(
 		maxIterations = 100,
 		timeoutMs = 900_000, // 15 分钟默认
 		systemPromptPrefix,
+		promptVersion,
 	} = options;
 
 	const startTime = Date.now();
 
 	// 构建 system prompt
-	let systemPrompt = codePromptText;
-	if (systemPromptPrefix) {
-		systemPrompt = `${systemPromptPrefix}\n\n${systemPrompt}`;
-	}
+	const systemPrompt = getPrompt(promptVersion);
+	const effectivePrompt = systemPromptPrefix
+		? `${systemPromptPrefix}\n\n${systemPrompt}`
+		: systemPrompt;
 
 	const renderer = new PlainRenderer();
 	const abortController = new AbortController();
@@ -112,7 +115,7 @@ export async function runHeadless(
 	);
 
 	let history: DomainMessage[] = [
-		{ type: "system", content: systemPrompt },
+		{ type: "system", content: effectivePrompt },
 		{ type: "cache_breakpoint" },
 		...contextFewshot,
 		{
