@@ -8,9 +8,9 @@ import type { CodeResult } from "./schema.ts";
 
 const COMPLETED_TEMPLATE = `# ✅ 任务完成
 
-## 总结
+## 汇报
 
-{{summary}}
+{{report}}
 {{#next_step}}
 
 ---
@@ -66,7 +66,7 @@ export function formatSubmitResult(result: CodeResult): string {
 	switch (result.type) {
 		case "completed":
 			return render(COMPLETED_TEMPLATE, {
-				summary: result.summary,
+				report: result.report,
 				next_step: result.next_step ?? "",
 			});
 		case "ask_user":

@@ -180,10 +180,10 @@ describe("CodeRenderer 流式 write 预览", () => {
 });
 
 describe("formatSubmitResult 单元测试", () => {
-	test("completed 仅 summary", () => {
+	test("completed 仅 report", () => {
 		const md = formatSubmitResult({
 			type: "completed",
-			summary: "done",
+			report: "done",
 		} satisfies CodeResult);
 		expect(md).toContain("# ✅ 任务完成");
 		expect(md).toContain("done");
@@ -193,7 +193,7 @@ describe("formatSubmitResult 单元测试", () => {
 	test("completed 带 next_step", () => {
 		const md = formatSubmitResult({
 			type: "completed",
-			summary: "done",
+			report: "done",
 			next_step: "review",
 		} satisfies CodeResult);
 		expect(md).toContain("## 下一步");

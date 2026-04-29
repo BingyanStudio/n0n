@@ -3,6 +3,9 @@
  *
  * ## 设计说明
  *
+ * submit 是模型唯一能被用户看到的信息出口——所有思考、工具调用、中间结果，
+ * 用户均不可见。只有 submit 参数中的内容会被提交给用户。
+ *
  * 所有模式统一走 schema 路径：
  * - 有自定义 schema 时：使用调用方提供的 schema。
  * - 无自定义 schema 时：使用默认 schema `{ report: string }`。
@@ -24,7 +27,9 @@ import { toJSONSchema, type ZodType, z } from "zod";
 export const DefaultSubmitSchema = z.object({
 	report: z
 		.string()
-		.describe("Brief report of what was done and any notable findings."),
+		.describe(
+			"Complete report of what was done, verification results, and key decisions. This is the ONLY output visible to the user — be thorough and self-contained.",
+		),
 });
 
 // ── 工具定义 ──
@@ -44,7 +49,7 @@ export function makeSubmitToolDefinition(schema?: ZodType): ToolDefinition {
 
 	return {
 		name: "submit",
-		description: `Submit your final result. Fill in the fields directly as parameters — they must conform to this schema:\n\n\`\`\`json\n${schemaStr}\n\`\`\`\n\nValidation is enforced — non-conforming submissions will be rejected.`,
+		description: `Submit your final result — this is the ONLY way to deliver content to the user; they cannot see anything else (not your reasoning, not your tool calls, not your intermediate results). Fill in the fields directly as parameters — they must conform to this schema:\n\n\`\`\`json\n${schemaStr}\n\`\`\`\n\nValidation is enforced — non-conforming submissions will be rejected.`,
 		parameters: {
 			type: "object",
 		},

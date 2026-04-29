@@ -274,7 +274,7 @@ const EXEC_RESULT: DomainMessage = {
 
 // ── 派生消息构建器 ──
 
-function buildSubmitSummary(ctx: RuntimeCtx): string {
+function buildSubmitReport(ctx: RuntimeCtx): string {
 	return [
 		"环境初始化完成。",
 		`${ctx.os}，工作目录 ${ctx.workspace}，当前在 ${ctx.branch} 分支。`,
@@ -298,7 +298,7 @@ function buildTurn3Submit(ctx: RuntimeCtx): DomainMessage {
 		tool: "submit" as const,
 		args: {
 			type: "completed",
-			summary: buildSubmitSummary(ctx),
+			report: buildSubmitReport(ctx),
 			next_step: "等待指令。如有需要可随时查看上述环境信息。",
 		},
 	};
@@ -317,7 +317,7 @@ function buildSubmitResult(ctx: RuntimeCtx): DomainMessage {
 		tool: "submit" as const,
 		args: {
 			type: "completed",
-			summary: buildSubmitSummary(ctx),
+			report: buildSubmitReport(ctx),
 			next_step: "等待指令。如有需要可随时查看上述环境信息。",
 		},
 	};

@@ -496,7 +496,7 @@ export async function startCodeRepl(
 				continue;
 			}
 			case "completed": {
-				writeln(`${style.green("✓")} 完成: ${ir.summary}`);
+				writeln(`${style.green("✓")} 完成: ${ir.report}`);
 				if (ir.next_step) {
 					writeln(style.gray(`  后续: ${ir.next_step}`));
 				}

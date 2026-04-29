@@ -2,12 +2,15 @@
  * Code Agent submit 结果 schema
  *
  * 三种结束状态：
- * - completed：任务完成，简要汇报 + 可选 next-step 忏悔不足
+ * - completed：任务完成，完整汇报 + 可选 next-step 忏悔不足
  * - ask_user：向用户提问，需要用户选择/补充信息
  * - request_assist：请求用户协助（debug、外部信息等），附带检查列表
  *
  * 无 error 类型——code agent 应持续尝试，不主动放弃。
  * ask_user / request_assist 通过 submit userResponse 机制在 loop 内处理。
+ *
+ * 重要：submit 是模型唯一能被用户看到的信息出口。
+ * 所有字段描述均假定用户已失去上下文——内容必须完整且自包含。
  */
 
 import { z } from "zod";
@@ -15,7 +18,9 @@ import { z } from "zod";
 export const CodeResultSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("completed"),
-		summary: z.string().describe("完成摘要：做了什么"),
+		report: z.string().describe(
+			"完成汇报——这是用户唯一可见的输出。详细说明已完成的工作、验证结果和关键决策。假定用户已失去上下文，务必完整、自包含。",
+		),
 		next_step: z
 			.string()
 			.optional()
