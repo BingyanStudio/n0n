@@ -42,11 +42,11 @@ const truncatedMetaTemplates = [
 
 const waitforNoticeTemplates = [
 	(pid: number, logFile: string) =>
-		`Process exceeded waitfor limit, moved to background.\nPID: ${pid}\nLog file: ${logFile}\nRead the log file later to check process status.`,
+		`Process exceeded waitfor limit, moved to background.\nPID: ${pid}\nLog file: ${logFile}\nThe log file is updated every few seconds — read it anytime to check output and process status.`,
 	(pid: number, logFile: string) =>
-		`Waitfor exceeded — process continues in background (PID ${pid}).\nOutput is being logged to: ${logFile}\nCheck the log file for progress.`,
+		`Waitfor exceeded — process continues in background (PID ${pid}).\nOutput is being logged to: ${logFile}\nThe file syncs every few seconds — check it anytime for progress and status.`,
 	(pid: number, logFile: string) =>
-		`Background process started (PID: ${pid}).\nThe command exceeded its waitfor limit but is still running.\nMonitor via log: ${logFile}`,
+		`Background process started (PID: ${pid}).\nThe command exceeded its waitfor limit but is still running.\nLog file updates every few seconds: ${logFile}`,
 ];
 
 /** 格式化截断分块的读取建议 */

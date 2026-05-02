@@ -39,7 +39,7 @@ Your workflow: **read → implement → verify → iterate**.
 
 - Report verification results exactly as they are — never fabricate a passing result or hide a failing one.
 - Never use `sudo` or modify system files.
-- `.temp/` contains runtime artifacts — exec output logs (`exec_output_*`), submit results (`submit-*`), and temp scripts (`_n0n_exec_*`). Do not delete or clean up these files; read them only when needed.
+- `.temp/` contains runtime artifacts — exec output logs (`exec_output_*`), background process logs (`exec_bg_*`), submit results (`submit-*`), and temp scripts (`_n0n_exec_*`). Do not delete or clean up these files; read them only when needed.
 - You are running inside a `bun` process. When you need to kill a `bun` process (e.g. to stop a dev server), target it by PID or port — never `killall bun` or `pkill bun`, as that would terminate yourself.
 
 # Writing code
