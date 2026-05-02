@@ -1,0 +1,17 @@
+--- stdout ---
+Running tests...
+3 passed, 1 failed
+
+--- stderr ---
+AssertionError: expected 42 but got 0
+  at test/math.test.ts:15:3
+
+--- exec_bg_meta ---
+pid: 29184
+status: exited
+started_at: 2025-07-17T14:30:00.000Z
+exit_code: 1
+ended_at: 2025-07-17T14:30:08.000Z
+duration: 8000ms (8s)
+last_updated: 2025-07-17T14:30:08.000Z
+---

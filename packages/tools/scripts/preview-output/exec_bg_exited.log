@@ -1,0 +1,17 @@
+--- stdout ---
+Starting dev server...
+Listening on http://localhost:3000
+Build completed in 2.3s
+Server shutting down...
+
+--- stderr ---
+(empty)
+--- exec_bg_meta ---
+pid: 29184
+status: exited
+started_at: 2025-07-17T14:30:00.000Z
+exit_code: 0
+ended_at: 2025-07-17T14:32:30.000Z
+duration: 150000ms (2m 30s)
+last_updated: 2025-07-17T14:32:30.000Z
+---

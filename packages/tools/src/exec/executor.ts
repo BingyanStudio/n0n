@@ -235,38 +235,102 @@ export async function* execToolStream(
 		}
 
 		if (backgrounded) {
-			// ── 等待超限路径：写日志，后台继续收集 ──
+			// ── 等待超限路径：写日志，后台定期同步 ──
 			const durationMs = Date.now() - start;
 			const pid = proc.pid;
 			const logFile = join(tempDir, `exec_bg_${pid}.log`);
+			const startedAt = new Date(start).toISOString();
 			const stdoutSoFar = stdoutChunks.join("");
 			const stderrSoFar = stderrChunks.join("");
 
-			// 写入已收集的输出
+			/** 构建 bg 文件内容：输出 + 元数据块 */
+			const buildLogContent = (opts: {
+				status: "running" | "exited";
+				stdout: string;
+				stderr: string;
+				exitCode?: number;
+				endedAt?: string;
+				totalDurationMs?: number;
+			}): string => {
+				const now = new Date().toISOString();
+				const stdoutSection = `--- stdout ---\n${opts.stdout || "(empty)"}`;
+				const stderrSection = `--- stderr ---\n${opts.stderr || "(empty)"}`;
+
+				const metaLines = [`pid: ${pid}`, `status: ${opts.status}`, `started_at: ${startedAt}`];
+
+				if (opts.status === "running") {
+					metaLines.push(`last_updated: ${now}`);
+					metaLines.push(
+						`note: If current time is far ahead of last_updated, log sync may be delayed — verify process status via PID. If current time is close to last_updated and content unchanged, the process likely has no new output.`,
+					);
+				} else {
+					// exited
+					if (opts.exitCode !== undefined) metaLines.push(`exit_code: ${opts.exitCode}`);
+					if (opts.endedAt) metaLines.push(`ended_at: ${opts.endedAt}`);
+					if (opts.totalDurationMs !== undefined) {
+						const secs = Math.round(opts.totalDurationMs / 1000);
+						const mins = Math.floor(secs / 60);
+						const remSecs = secs % 60;
+						const human = mins > 0 ? `${mins}m ${remSecs}s` : `${secs}s`;
+						metaLines.push(`duration: ${opts.totalDurationMs}ms (${human})`);
+					}
+					metaLines.push(`last_updated: ${now}`);
+				}
+
+				return `${stdoutSection}\n${stderrSection}\n--- exec_bg_meta ---\n${metaLines.join("\n")}\n---\n`;
+			};
+
+			// 初始写入
 			await Bun.write(
 				logFile,
-				`--- stdout so far ---\n${stdoutSoFar}\n--- stderr so far ---\n${stderrSoFar}\n--- background continues ---\n`,
+				buildLogContent({ status: "running", stdout: stdoutSoFar, stderr: stderrSoFar }),
 			);
 
-			// 启动后台协程继续收集，进程退出后更新日志并清理临时脚本
+			// 启动后台协程：定期同步 + 等待进程结束
 			(async () => {
+				const SYNC_INTERVAL_MS = 3000;
+				let syncTimer: ReturnType<typeof setInterval> | null = null;
+
+				const syncToFile = () => {
+					const currentStdout = stdoutChunks.join("");
+					const currentStderr = stderrChunks.join("");
+					// 非阻塞写入（fire-and-forget 在 interval 中）
+					Bun.write(
+						logFile,
+						buildLogContent({ status: "running", stdout: currentStdout, stderr: currentStderr }),
+					);
+				};
+
 				try {
+					// 定期同步：即使没有新输出也更新 last_updated 时间戳
+					syncTimer = setInterval(syncToFile, SYNC_INTERVAL_MS);
+
+					// 等待流结束 — 使用 polling + sleep 替代 notify 避免竞态
 					while (streamsDone < 2) {
-						await new Promise<void>((r) => {
-							notify = () => r();
-						});
-						notify = null;
+						await new Promise<void>((r) => setTimeout(r, 500));
 					}
+
 					const exitCode = await proc.exited;
+					const endedAt = new Date().toISOString();
+					const totalDurationMs = Date.now() - start;
 					const finalStdout = stdoutChunks.join("");
 					const finalStderr = stderrChunks.join("");
+
 					await Bun.write(
 						logFile,
-						`--- stdout (complete) ---\n${finalStdout}\n--- stderr (complete) ---\n${finalStderr}\n--- Process exited with code ${exitCode} ---\n`,
+						buildLogContent({
+							status: "exited",
+							stdout: finalStdout,
+							stderr: finalStderr,
+							exitCode,
+							endedAt,
+							totalDurationMs,
+						}),
 					);
 				} catch {
 					// 后台协程出错不影响主流程
 				} finally {
+					if (syncTimer) clearInterval(syncTimer);
 					try {
 						unlinkSync(tmpFile);
 					} catch {

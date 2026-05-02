@@ -1,0 +1,13 @@
+--- stdout ---
+Starting dev server...
+Listening on http://localhost:3000
+
+--- stderr ---
+(empty)
+--- exec_bg_meta ---
+pid: 29184
+status: running
+started_at: 2025-07-17T14:30:00.000Z
+last_updated: 2026-05-02T16:43:29.028Z
+note: If current time is far ahead of last_updated, log sync may be delayed — verify process status via PID. If current time is close to last_updated and content unchanged, the process likely has no new output.
+---
