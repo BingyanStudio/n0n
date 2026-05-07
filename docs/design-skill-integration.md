@@ -145,3 +145,15 @@ skill 定义"怎么做事"（方法论），progress 定义"怎么汇报进展"�
 4. `~/.n0n/builtin-skills/`：编写内置 skill（bugfix、refactor、discuss 等）
 5. 将 `apps/code/src/prompts/code-v0.1.md` 内容迁移为 bugfix skill 格式
 6. 提示词中增加 skill 使用说明
+
+## 实现状态
+
+| 改动项 | 状态 | 备注 |
+|--------|------|------|
+| `apps/n0n-skill/` CLI 应用 | ✓ 已实现 | init/help/read/install/create 全部完成 |
+| `packages/shared/src/skills/` 增加 activation | ✓ 已实现 | 新增 SkillActivation 类型 + discoverSkillsMultiDir |
+| `apps/code/src/repl.ts` @name 解析 | ✓ 已实现 | 通过 skill-inject.ts 模块 |
+| context fewshot 注入 skill help | ✓ 已实现 | Turn 1 并行 exec 中加入 |
+| 内置 skill (bugfix/refactor/discuss) | ✓ 已实现 | apps/n0n-skill/builtin/ |
+| 迁移 code-v0.1.md 为 skill | ✓ 已实现 | bugfix skill 提炼了认知五步核心 |
+| 提示词说明 | ✓ 已实现 | 通过 fewshot exec 输出自然引导，无需硬编码 |
