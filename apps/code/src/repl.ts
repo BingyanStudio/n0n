@@ -35,7 +35,7 @@ import { playNotifySound } from "./notify-sound.ts";
 import { codeProgressConfig } from "./progress-config.ts";
 import { formatProgressResult } from "./progress-formatter.ts";
 import { getPrompt } from "./prompts/index.ts";
-import { type CodeProgressResult, CodeProgressSchema } from "./schema.ts";
+import type { CodeProgressResult } from "./schema.ts";
 
 export interface CodeReplOptions {
 	initialInput?: string;
@@ -397,7 +397,6 @@ export async function startCodeRepl(
 		try {
 			agentResult = await agentLoop<CodeProgressResult>(history, {
 				toolkit,
-				schema: CodeProgressSchema,
 				maxIterations: 100,
 				renderer,
 				confirmFn,

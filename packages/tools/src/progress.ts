@@ -10,7 +10,6 @@ import type {
 	ProgressToolResult,
 	ToolDefinition,
 } from "@n0n/types";
-import { z } from "zod";
 
 // ── 配置类型 ──
 
@@ -70,15 +69,6 @@ export function makeProgressTool(config: ProgressStatusConfig[]): ToolDefinition
 			additionalProperties: false,
 		},
 	};
-}
-
-// ── Schema 生成（用于 agentLoop 内部后验证） ──
-
-export function makeProgressSchema(config: ProgressStatusConfig[]) {
-	return z.object({
-		status: z.enum(config.map(c => c.value) as [string, ...string[]]),
-		content: z.string(),
-	});
 }
 
 // ── 执行器 ──

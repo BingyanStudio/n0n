@@ -96,9 +96,6 @@ export interface Renderer
 	/** progress 被接受 */
 	progressAccepted(): void;
 
-	/** progress 被拒绝 */
-	progressRejected(attempt: number, maxAttempts: number, error: string): void;
-
 	/** agent 终止 */
 	agentTerminated(reason: string): void;
 

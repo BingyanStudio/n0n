@@ -18,7 +18,7 @@ import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
 import { parseWorkspaceArg } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
-import { type FairyProgressResult, FairyProgressSchema } from "./schema.ts";
+import { type FairyProgressResult } from "./schema.ts";
 import { fairyProgressConfig } from "./progress-config.ts";
 import {
 	ensureFairyFiles,
@@ -124,7 +124,6 @@ async function main(): Promise<void> {
 				toolkit,
 				maxIterations: 30,
 				renderer,
-				schema: FairyProgressSchema,
 				signal: abortController.signal,
 			});
 		} catch (err) {

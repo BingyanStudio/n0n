@@ -22,7 +22,6 @@ export const AFFECTS_SUBSEQUENT: Record<MessageType, boolean> = {
 	tool_result: true,
 	idle_nudge: true,
 	turn_feedback: true,
-	"progress:rejected": true,
 	tool_arg_error: true,
 	cache_breakpoint: false,
 	token_usage: false,  // 不产生提示词输出，不参与 msgIndex 计数（与 cache_breakpoint 同理）

@@ -30,7 +30,6 @@ import { formatEditResult } from "./format-edit.ts";
 import { formatExecResult } from "./format-exec.ts";
 import { formatIdleNudge } from "./format-idle-nudge.ts";
 import { formatProgressResult } from "./format-progress.ts";
-import { formatProgressRejected } from "./format-progress-rejected.ts";
 import { formatToolArgError } from "./format-tool-arg-error.ts";
 import { formatTurnFeedback } from "./format-turn-feedback.ts";
 import { formatWriteResult } from "./format-write.ts";
@@ -166,12 +165,6 @@ export function formatPrompt(
 				});
 				break;
 
-			case "progress:rejected":
-				result.push({
-					role: "user",
-					content: formatProgressRejected(msg, tags, i),
-				});
-				break;
 
 			case "user_input":
 				result.push({

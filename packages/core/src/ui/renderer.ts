@@ -59,12 +59,6 @@ export class PlainRenderer implements Renderer {
 		console.error("  [agent] progress accepted ✓");
 	}
 
-	progressRejected(attempt: number, maxAttempts: number, error: string): void {
-		console.error(
-			`  [agent] progress rejected (${attempt}/${maxAttempts}): ${error}`,
-		);
-	}
-
 	agentTerminated(reason: string): void {
 		console.error(`  [agent] ${reason}`);
 	}

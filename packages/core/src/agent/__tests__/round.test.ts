@@ -7,20 +7,17 @@
  * - recoverTruncatedCalls：从 streaming 结果中识别截断工具，委托 tool-recovery 模块恢复并执行
  * - buildToolCallMessage：构建 assistant_tool_call 消息
  * - collectJobMessages：从 scheduler jobs 收集 domain messages
- * - checkProgress：progress 校验（无 schema / 有 schema / 重试 / 超限）
+ 
  */
 
 import { describe, expect, it } from "bun:test";
 import type {
 	DomainMessage,
-	ProgressToolResult,
 	ToolCallRecord,
 } from "@n0n/types";
 import { StreamAccumulator } from "@n0n/types";
-import { z } from "zod";
 import {
 	buildToolCallMessage,
-	checkProgress,
 	collectJobMessages,
 	recoverTruncatedCalls,
 } from "../round.ts";
@@ -49,20 +46,6 @@ function makeAccWithToolCalls(
 	return acc;
 }
 
-function mockProgressResult(
-	cleanedResult: Record<string, unknown>,
-): ProgressToolResult {
-	return {
-		type: "tool_result",
-		tool: "progress",
-		call: {
-			id: "prog_1",
-			tool: "progress",
-			args: cleanedResult,
-		},
-		cleanedResult,
-	} as ProgressToolResult;
-}
 
 // ── recoverTruncatedCalls ──
 
@@ -221,113 +204,3 @@ describe("collectJobMessages", () => {
 	});
 });
 
-// ── checkProgress ──
-
-describe("checkProgress", () => {
-	it("无 progress 调用 → 空结果", () => {
-		const tc = mockExecTC("tc_1");
-		const jobs = [mockCompletedJob(tc, mockExecResult(tc))];
-		const result = checkProgress(jobs, undefined, 0, 4);
-		expect(result.accepted).toBeUndefined();
-		expect(result.rejected).toBeUndefined();
-		expect(result.gaveUp).toBeUndefined();
-	});
-
-	it("无 schema → 直接 accepted", () => {
-		const progressTc = {
-			id: "prog_1",
-			tool: "progress",
-			args: { status: "completed", content: "done" },
-		} as ToolCallRecord;
-		const progressResult = mockProgressResult({ status: "completed", content: "done" });
-		const jobs = [mockCompletedJob(progressTc, progressResult)];
-
-		const result = checkProgress(jobs, undefined, 0, 4);
-		expect(result.accepted).toBeDefined();
-		expect(result.accepted!.value).toEqual({ status: "completed", content: "done" });
-	});
-
-	it("有 schema，校验通过 → accepted", () => {
-		const schema = z.object({ status: z.string(), content: z.string() });
-		const progressTc = {
-			id: "prog_1",
-			tool: "progress",
-			args: { status: "completed", content: "done" },
-		} as ToolCallRecord;
-		const progressResult = mockProgressResult({ status: "completed", content: "done" });
-		const jobs = [mockCompletedJob(progressTc, progressResult)];
-
-		const result = checkProgress(jobs, schema, 0, 4);
-		expect(result.accepted).toBeDefined();
-		expect(result.accepted!.value).toEqual({ status: "completed", content: "done" });
-	});
-
-	it("有 schema，校验失败 → rejected", () => {
-		const schema = z.object({ status: z.enum(["completed", "working", "blocked"]), content: z.string() });
-		const progressTc = {
-			id: "prog_1",
-			tool: "progress",
-			args: { status: "invalid_status", content: "test" },
-		} as ToolCallRecord;
-		const progressResult = mockProgressResult({ status: "invalid_status", content: "test" });
-		const jobs = [mockCompletedJob(progressTc, progressResult)];
-
-		const result = checkProgress(jobs, schema, 0, 4);
-		expect(result.rejected).toBeDefined();
-		expect(result.rejected!.retries).toBe(1);
-		expect(result.rejected!.error).toContain("schema");
-	});
-
-	it("重试次数达到上限 → gaveUp", () => {
-		const schema = z.object({ status: z.enum(["completed"]), content: z.string() });
-		const progressTc = {
-			id: "prog_1",
-			tool: "progress",
-			args: { status: "bad", content: "test" },
-		} as ToolCallRecord;
-		const progressResult = mockProgressResult({ status: "bad", content: "test" });
-		const jobs = [mockCompletedJob(progressTc, progressResult)];
-
-		const result = checkProgress(jobs, schema, 3, 4);
-		expect(result.gaveUp).toBeDefined();
-		expect(result.gaveUp!.error).toContain("schema");
-	});
-
-	it("嵌套 JSON 字符串字段 → 自动解析后通过校验", () => {
-		const schema = z.object({
-			status: z.literal("blocked"),
-			content: z.string(),
-		});
-		const raw = {
-			status: "blocked",
-			content: "Pick one",
-		};
-		const progressTc = {
-			id: "prog_1",
-			tool: "progress",
-			args: raw,
-		} as ToolCallRecord;
-		const progressResult = mockProgressResult(raw);
-		const jobs = [mockCompletedJob(progressTc, progressResult)];
-
-		const result = checkProgress(jobs, schema, 0, 4);
-		expect(result.accepted).toBeDefined();
-		expect((result.accepted!.value as any).status).toBe("blocked");
-	});
-
-	it("非 JSON 字符串值不受影响", () => {
-		const schema = z.object({ status: z.string(), content: z.string() });
-		const raw = { status: "completed", content: "just a plain string" };
-		const progressTc = {
-			id: "prog_1",
-			tool: "progress",
-			args: raw,
-		} as ToolCallRecord;
-		const progressResult = mockProgressResult(raw);
-		const jobs = [mockCompletedJob(progressTc, progressResult)];
-
-		const result = checkProgress(jobs, schema, 0, 4);
-		expect(result.accepted).toBeDefined();
-		expect((result.accepted!.value as any).content).toBe("just a plain string");
-	});
-});

@@ -245,18 +245,6 @@ const scenarios: Scenario[] = [
 		messages: [{ type: "idle_nudge", idleCount: 2, maxIdleRounds: 5 }],
 	},
 	{
-		file: "progress-rejected",
-		title: "progress:rejected 消息",
-		messages: [
-			{
-				type: "progress:rejected",
-				error: "Missing required field: content",
-				attempt: 1,
-				maxAttempts: 4,
-			},
-		],
-	},
-	{
 		file: "progress-result",
 		title: "progress tool_result",
 		messages: [

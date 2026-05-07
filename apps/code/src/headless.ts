@@ -19,7 +19,7 @@ import type { DomainMessage, ProgressToolResult } from "@n0n/types";
 import { buildContextFewshot } from "./context-fewshot.ts";
 import { codeProgressConfig } from "./progress-config.ts";
 import { getPrompt } from "./prompts/index.ts";
-import { type CodeProgressResult, CodeProgressSchema } from "./schema.ts";
+import type { CodeProgressResult } from "./schema.ts";
 
 export interface HeadlessOptions {
 	/** 任务指令 */
@@ -134,7 +134,6 @@ export async function runHeadless(
 		while (true) {
 			const agentResult = await agentLoop<CodeProgressResult>(history, {
 				toolkit,
-				schema: CodeProgressSchema,
 				maxIterations,
 				renderer,
 				confirmFn: async () => "y",

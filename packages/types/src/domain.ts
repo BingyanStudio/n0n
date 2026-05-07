@@ -318,15 +318,6 @@ export interface ToolArgErrorMessage {
 	error: ToolError;
 }
 
-// ── Progress 被拒 ──
-/** progress 校验失败时注入的消息，adapter 负责生成具体提示词 */
-export interface ProgressRejectedMessage {
-	type: "progress:rejected";
-	error: string;
-	attempt: number;
-	maxAttempts: number;
-}
-
 // ── 通用工具消息（内部子循环使用） ──
 
 /**
@@ -379,7 +370,6 @@ export type DomainMessage =
 	| ToolResult
 	| IdleNudgeMessage
 	| TurnFeedbackMessage
-	| ProgressRejectedMessage
 	| ToolArgErrorMessage
 	| CacheBreakpointMessage
 	| TokenUsageMessage;
