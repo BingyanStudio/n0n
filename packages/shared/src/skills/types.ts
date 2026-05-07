@@ -2,12 +2,17 @@
  * Skill 数据类型
  */
 
+/** Skill 激活模式 */
+export type SkillActivation = "auto" | "manual";
+
 /** Skill 元数据（从 SKILL.md frontmatter 解析） */
 export interface SkillMeta {
 	/** 短标识符（必须匹配目录名） */
 	name: string;
 	/** 描述：做什么、何时使用 */
 	description: string;
+	/** 激活模式：auto 出现在 help 列表，manual 需显式唤起 */
+	activation: SkillActivation;
 	/** SKILL.md 绝对路径 */
 	path: string;
 	/** skill 目录绝对路径 */
