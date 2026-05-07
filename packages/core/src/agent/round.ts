@@ -87,28 +87,28 @@ export function collectJobMessages(
 	return msgs;
 }
 
-// ── Submit 检查 ──
+// ── Progress 检查 ──
 
 import type { ZodType } from "zod";
 import { toJSONSchema } from "zod";
 
-export interface SubmitCheckResult {
-	/** submit 校验通过的值 */
+export interface ProgressCheckResult {
+	/** progress 校验通过的值 */
 	accepted?: { value: unknown };
-	/** submit 校验失败的错误 */
+	/** progress 校验失败的错误 */
 	rejected?: { error: string; retries: number };
 	/** 已达最大重试次数 */
 	gaveUp?: { error: string };
 }
 
-export function checkSubmit<T>(
+export function checkProgress<T>(
 	jobs: readonly PipelineJob[],
 	schema: ZodType<T> | undefined,
 	currentRetries: number,
 	maxRetries: number,
-): SubmitCheckResult {
+): ProgressCheckResult {
 	for (const job of jobs) {
-		if (job.status !== "completed" || job.result.tool !== "submit") continue;
+		if (job.status !== "completed" || job.result.tool !== "progress") continue;
 
 		if (!schema) {
 			return { accepted: { value: job.result.cleanedResult } };
@@ -138,5 +138,5 @@ export function checkSubmit<T>(
 		return { rejected: { error, retries } };
 	}
 
-	return {}; // 没有 submit 调用
+	return {}; // 没有 progress 调用
 }

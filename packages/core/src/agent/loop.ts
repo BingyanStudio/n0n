@@ -4,12 +4,12 @@
  * 每一步都是一个清晰的函数调用：
  * 1. parseStream  → 流式解析，yield 语义事件
  * 2. scheduler    → 流水线并行执行（streaming 中工具就绪即入队）
- * 3. round.*      → 纯函数后处理（截断恢复、消息构建、submit 检查）
+ * 3. round.*      → 纯函数后处理（截断恢复、消息构建、progress 检查）
  *
  * scheduler 通过回调发射 raw 无序事件，排序由各 Renderer 实现自行决定。
  */
 
-import type { PendingReminder, Toolkit } from "@n0n/tools";
+import type { Toolkit } from "@n0n/tools";
 import type {
 	DomainMessage,
 	TokenUsage,
@@ -24,7 +24,7 @@ import { getRuntime } from "../runtime.ts";
 import { PlainRenderer } from "../ui/renderer.ts";
 import {
 	buildToolCallMessage,
-	checkSubmit,
+	checkProgress,
 	collectJobMessages,
 	recoverTruncatedCalls,
 } from "./round.ts";
@@ -45,7 +45,7 @@ export interface AgentResult<T = unknown> {
 export interface AgentOptions<T = unknown> {
 	/** 工具集实例 — 由 app 层通过 makeToolkit 构造并注入 */
 	toolkit: Toolkit;
-	/** submit 结果的 Zod schema（用于 checkSubmit 后验证） */
+	/** progress 结果的 Zod schema（用于 checkProgress 后验证） */
 	schema?: ZodType<T>;
 	maxIterations?: number;
 	renderer?: Renderer;
@@ -53,7 +53,7 @@ export interface AgentOptions<T = unknown> {
 	signal?: AbortSignal;
 }
 
-const MAX_SUBMIT_RETRIES = 4;
+const MAX_PROGRESS_RETRIES = 4;
 
 // ── Agent Loop ──
 
@@ -67,9 +67,8 @@ export async function agentLoop<T = unknown>(
 	const client = runtime.client;
 	const toolkit = options.toolkit;
 	const messages: DomainMessage[] = [...history];
-	const reminders: PendingReminder[] = [];
 	let idleCount = 0;
-	let submitRetries = 0;
+	let progressRetries = 0;
 	for (let iter = 0; iter < maxIter; iter++) {
 		if (options.signal?.aborted) {
 			renderer.aborted();
@@ -81,13 +80,12 @@ export async function agentLoop<T = unknown>(
 			};
 		}
 
-		injectReminders(messages, reminders);
 		renderer.roundStart(iter + 1, maxIter, messages.length, findLastUsage(messages));
 
 		// ── 1. 流式解析 + 并行执行（交织进行） ──
 		const scheduler = new ExecutionScheduler(
 			(tc) =>
-				executeToolStream(tc, reminders, options.confirmFn, toolkit.getEntry),
+				executeToolStream(tc, options.confirmFn, toolkit.getEntry),
 			{
 				onRegister: (tc) => renderer.toolExecStart(tc.id, tc),
 				onChunk: (tcId, tool, chunk) =>
@@ -268,49 +266,49 @@ export async function agentLoop<T = unknown>(
 			messages.push(pair.result);
 		}
 
-		// ── 7. Submit 检查 ──
-		const submit = checkSubmit(
+		// ── 7. Progress 检查 ──
+		const progress = checkProgress(
 			scheduler.orderedJobs(),
 			options.schema,
-			submitRetries,
-			MAX_SUBMIT_RETRIES,
+			progressRetries,
+			MAX_PROGRESS_RETRIES,
 		);
-		if (submit.accepted) {
-			renderer.submitAccepted();
+		if (progress.accepted) {
+			renderer.progressAccepted();
 			renderer.roundEnd();
 			return {
-				result: submit.accepted.value as T,
+				result: progress.accepted.value as T,
 				report: null,
 				history: messages,
 				tools: toolkit.tools,
 			};
 		}
-		if (submit.gaveUp) {
-			renderer.submitRejected(
-				submitRetries + 1,
-				MAX_SUBMIT_RETRIES,
-				`giving up after ${submitRetries + 1} attempts`,
+		if (progress.gaveUp) {
+			renderer.progressRejected(
+				progressRetries + 1,
+				MAX_PROGRESS_RETRIES,
+				`giving up after ${progressRetries + 1} attempts`,
 			);
 			renderer.roundEnd();
 			return {
 				result: null,
-				report: `Submit validation failed after ${MAX_SUBMIT_RETRIES} retries: ${submit.gaveUp.error}`,
+				report: `Progress validation failed after ${MAX_PROGRESS_RETRIES} retries: ${progress.gaveUp.error}`,
 				history: messages,
 				tools: toolkit.tools,
 			};
 		}
-		if (submit.rejected) {
-			submitRetries = submit.rejected.retries;
-			renderer.submitRejected(
-				submitRetries,
-				MAX_SUBMIT_RETRIES,
-				submit.rejected.error,
+		if (progress.rejected) {
+			progressRetries = progress.rejected.retries;
+			renderer.progressRejected(
+				progressRetries,
+				MAX_PROGRESS_RETRIES,
+				progress.rejected.error,
 			);
 			messages.push({
-				type: "submit:rejected",
-				error: submit.rejected.error,
-				attempt: submitRetries,
-				maxAttempts: MAX_SUBMIT_RETRIES,
+				type: "progress:rejected",
+				error: progress.rejected.error,
+				attempt: progressRetries,
+				maxAttempts: MAX_PROGRESS_RETRIES,
 			});
 		}
 		renderer.roundEnd();
@@ -416,29 +414,5 @@ function pushTokenUsage(
 ): void {
 	if (usage) {
 		messages.push({ type: "token_usage" as const, usage, finishReason });
-	}
-}
-
-// ── Reminders ──
-
-function injectReminders(
-	messages: DomainMessage[],
-	reminders: PendingReminder[],
-): void {
-	const due: PendingReminder[] = [];
-	const remaining: PendingReminder[] = [];
-	for (const r of reminders) {
-		r.roundsLeft--;
-		if (r.roundsLeft <= 0) due.push(r);
-		else remaining.push(r);
-	}
-	reminders.length = 0;
-	reminders.push(...remaining);
-	for (const r of due) {
-		messages.push({
-			type: "reminder:due",
-			content: r.content,
-			originalEstimate: r.originalEstimate,
-		});
 	}
 }
