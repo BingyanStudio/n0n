@@ -30,6 +30,7 @@ import {
 import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage, ProgressToolResult } from "@n0n/types";
 import { CodeRenderer } from "./code-renderer.ts";
+import { parseAndInjectSkills } from "./skill-inject.ts";
 import { buildContextFewshot } from "./context-fewshot.ts";
 import { playNotifySound } from "./notify-sound.ts";
 import { codeProgressConfig } from "./progress-config.ts";
@@ -62,12 +63,12 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 	}
 }
 
-function makeUserInput(content: string): DomainMessage {
+function makeUserInput(content: string, hint?: string | null): DomainMessage {
 	return {
 		type: "user_input",
 		content,
 		context: null,
-		hint: null,
+		hint: hint ?? null,
 	};
 }
 
@@ -384,7 +385,15 @@ export async function startCodeRepl(
 			// ── 将用户输入推入 history ──
 			// ── 停止心跳（agent 执行期间由 stream 自行刷新缓存） ──
 			keeper?.stop();
-			history.push(makeUserInput(userInput));
+			const skillResult = await parseAndInjectSkills(userInput);
+			if (skillResult.notFound.length > 0) {
+				writeln(
+					style.yellow("?") +
+						` skill 未找到: ${skillResult.notFound.join(", ")}`,
+				);
+			}
+			const finalText = skillResult.cleanedText || userInput;
+			history.push(makeUserInput(finalText, skillResult.hint));
 		}
 
 		// ── Agent 运行阶段：切换到 agent phase ──

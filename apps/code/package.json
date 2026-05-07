@@ -12,6 +12,7 @@
 		"@n0n/multiline-input": "workspace:*",
 		"@n0n/llm": "workspace:*",
 		"@n0n/shared": "workspace:*",
+		"@n0n/skill": "workspace:*",
 		"@n0n/types": "workspace:*",
 		"partial-json": "^0.1.7",
 		"zod": "^4.3.6"

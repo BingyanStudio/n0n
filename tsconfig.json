@@ -41,6 +41,9 @@
 			"@n0n/cli-ui": [
 				"./packages/cli-ui/src/index.ts"
 			],
+			"@n0n/skill": [
+				"./apps/n0n-skill/src/index.ts"
+			],
 		},
 		"jsx": "react-jsx",
 		"jsxImportSource": "react"
