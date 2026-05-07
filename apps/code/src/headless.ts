@@ -2,7 +2,7 @@
  * Headless 模式 — 单次执行后退出，用于 Harbor 评测等非交互场景
  *
  * 接收一条 instruction，驱动 agentLoop 执行到 completed 或超时，
- * 不等待用户输入，ask_user/request_assist 自动回复 "proceed with your best judgment"。
+ * 不等待用户输入，blocked 自动回复 "proceed with your best judgment"。
  *
  * 输出 JSON 结果到 stdout，日志输出到 stderr。
  */
@@ -15,10 +15,11 @@ import {
 } from "@n0n/core";
 import type { BaseWorkspacePaths } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
-import type { DomainMessage, SubmitToolResult } from "@n0n/types";
+import type { DomainMessage, ProgressToolResult } from "@n0n/types";
 import { buildContextFewshot } from "./context-fewshot.ts";
+import { codeProgressConfig } from "./progress-config.ts";
 import { getPrompt } from "./prompts/index.ts";
-import { type CodeResult, CodeResultSchema } from "./schema.ts";
+import { type CodeProgressResult, CodeProgressSchema } from "./schema.ts";
 
 export interface HeadlessOptions {
 	/** 任务指令 */
@@ -38,8 +39,8 @@ export interface HeadlessOptions {
 export interface HeadlessResult {
 	/** agent 是否成功完成 */
 	success: boolean;
-	/** agent 的 submit 结果 */
-	result: CodeResult | null;
+	/** agent 的 progress 结果 */
+	result: CodeProgressResult | null;
 	/** agent 的 report */
 	report: string | null;
 	/** 循环轮次 */
@@ -53,19 +54,18 @@ export interface HeadlessResult {
 function buildHeadlessHint(): string {
 	return [
 		"You are running in HEADLESS mode — there is no human to interact with.",
-		"You MUST complete the task autonomously. Do NOT submit `ask_user` or `request_assist`.",
+		"You MUST complete the task autonomously. Do NOT call progress with `blocked` status.",
 		"If uncertain, make your best judgment and proceed.",
 		"First, use `exec` to understand the codebase, then implement the fix, then verify.",
-		"Submit `completed` when done.",
+		"Call progress with `completed` status when done.",
 	].join("\n");
 }
 
 function injectUserResponse(history: DomainMessage[], response: string): void {
 	for (let i = history.length - 1; i >= 0; i--) {
 		const msg = history[i];
-		if (msg?.type === "tool_result" && "tool" in msg && msg.tool === "submit") {
-			// TS 无法通过 DomainMessage → type === "tool_result" → tool === "submit" 完成窄化
-			(msg as SubmitToolResult).userResponse = response;
+		if (msg?.type === "tool_result" && "tool" in msg && msg.tool === "progress") {
+			(msg as ProgressToolResult).userResponse = response;
 			return;
 		}
 	}
@@ -97,14 +97,14 @@ export async function runHeadless(
 	// 超时控制
 	const timer = setTimeout(() => abortController.abort(), timeoutMs);
 
-	// 构建 Toolkit — 含 CodeResultSchema，供 fewshot 和 agentLoop 共用
+	// 构建 Toolkit — 含 progress config，供 fewshot 和 agentLoop 共用
 	const runtime = getRuntime();
 	const toolsConfig = buildToolsConfig(runtime, {
 		workspace: paths.workspace,
 		tempDir: paths.temp,
 	});
 	const toolkit = await makeToolkit(
-		CodeResultSchema,
+		codeProgressConfig,
 		toolsConfig,
 		runtime.client.modelId,
 	);
@@ -127,14 +127,14 @@ export async function runHeadless(
 	];
 
 	let rounds = 0;
-	const MAX_NEED_INFO_RETRIES = 3;
-	let needInfoCount = 0;
+	const MAX_BLOCKED_RETRIES = 3;
+	let blockedCount = 0;
 
 	try {
 		while (true) {
-			const agentResult = await agentLoop<CodeResult>(history, {
+			const agentResult = await agentLoop<CodeProgressResult>(history, {
 				toolkit,
-				schema: CodeResultSchema,
+				schema: CodeProgressSchema,
 				maxIterations,
 				renderer,
 				confirmFn: async () => "y",
@@ -157,7 +157,7 @@ export async function runHeadless(
 				};
 			}
 
-			if (ir.type === "completed") {
+			if (ir.status === "completed") {
 				return {
 					success: true,
 					result: ir,
@@ -168,9 +168,15 @@ export async function runHeadless(
 				};
 			}
 
-			if (ir.type === "ask_user" || ir.type === "request_assist") {
-				needInfoCount++;
-				if (needInfoCount >= MAX_NEED_INFO_RETRIES) {
+			if (ir.status === "working") {
+				// working 状态：自动继续
+				injectUserResponse(history, "继续");
+				continue;
+			}
+
+			if (ir.status === "blocked") {
+				blockedCount++;
+				if (blockedCount >= MAX_BLOCKED_RETRIES) {
 					return {
 						success: false,
 						result: ir,
@@ -178,7 +184,7 @@ export async function runHeadless(
 							"Agent requested assistance too many times in headless mode",
 						rounds,
 						durationMs: Date.now() - startTime,
-						error: `Agent requested help ${needInfoCount} times in headless mode`,
+						error: `Agent requested help ${blockedCount} times in headless mode`,
 					};
 				}
 				// 自动回复，让 agent 继续

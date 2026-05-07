@@ -18,7 +18,8 @@ import { buildLLMConfigFromEnv, createLLMClient } from "@n0n/llm";
 import { parseWorkspaceArg } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage } from "@n0n/types";
-import { type FairyResponse, FairyResponseSchema } from "./schema.ts";
+import { type FairyProgressResult, FairyProgressSchema } from "./schema.ts";
+import { fairyProgressConfig } from "./progress-config.ts";
 import {
 	ensureFairyFiles,
 	type FairyPaths,
@@ -70,7 +71,7 @@ async function main(): Promise<void> {
 		tempDir: paths.temp,
 	});
 	const toolkit = await makeToolkit(
-		FairyResponseSchema,
+		fairyProgressConfig,
 		toolsConfig,
 		runtime.client.modelId,
 	);
@@ -117,13 +118,13 @@ async function main(): Promise<void> {
 		abortController = new AbortController();
 		agentRunning = true;
 
-		let agentResult: Awaited<ReturnType<typeof agentLoop<FairyResponse>>>;
+		let agentResult: Awaited<ReturnType<typeof agentLoop<FairyProgressResult>>>;
 		try {
-			agentResult = await agentLoop<FairyResponse>(viewMessages, {
+			agentResult = await agentLoop<FairyProgressResult>(viewMessages, {
 				toolkit,
 				maxIterations: 30,
 				renderer,
-				schema: FairyResponseSchema,
+				schema: FairyProgressSchema,
 				signal: abortController.signal,
 			});
 		} catch (err) {
@@ -155,7 +156,7 @@ async function main(): Promise<void> {
 			writeln(`${style.red("✗")} Agent 异常终止`);
 			if (agentResult.report) writeln(style.gray(`  ${agentResult.report}`));
 		} else {
-			writeln(agentResult.result.reply);
+			writeln(agentResult.result.content);
 		}
 
 		writeln();

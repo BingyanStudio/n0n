@@ -3,7 +3,7 @@
  *
  * 与 cli REPL 的区别：
  * - System prompt 为 code.md（代码 agent 而非 workflow builder）
- * - Submit schema 为 CodeResultSchema（completed/ask_user/request_assist）
+ * - Progress schema 为 CodeProgressSchema（completed/working/blocked）
  * - Context 注入项目结构和 git 状态，而非 workflow 列表
  */
 
@@ -28,13 +28,14 @@ import {
 	saveConversation,
 } from "@n0n/shared";
 import { makeToolkit } from "@n0n/tools";
-import type { DomainMessage, SubmitToolResult } from "@n0n/types";
+import type { DomainMessage, ProgressToolResult } from "@n0n/types";
 import { CodeRenderer } from "./code-renderer.ts";
 import { buildContextFewshot } from "./context-fewshot.ts";
 import { playNotifySound } from "./notify-sound.ts";
+import { codeProgressConfig } from "./progress-config.ts";
+import { formatProgressResult } from "./progress-formatter.ts";
 import { getPrompt } from "./prompts/index.ts";
-import { type CodeResult, CodeResultSchema } from "./schema.ts";
-import { formatSubmitResult } from "./submit-formatter.ts";
+import { type CodeProgressResult, CodeProgressSchema } from "./schema.ts";
 
 export interface CodeReplOptions {
 	initialInput?: string;
@@ -53,10 +54,9 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 			msg !== undefined &&
 			msg.type === "tool_result" &&
 			"tool" in msg &&
-			msg.tool === "submit"
+			msg.tool === "progress"
 		) {
-			// TS 无法通过 DomainMessage → type === "tool_result" → tool === "submit" 完成窄化
-			(msg as SubmitToolResult).userResponse = response;
+			(msg as ProgressToolResult).userResponse = response;
 			return;
 		}
 	}
@@ -143,14 +143,14 @@ export async function startCodeRepl(
 	// 基础系统提示词（稳定前缀，不含 agents.md 和环境信息）
 	const baseSystemPrompt = getPrompt(promptVersion);
 
-	// 构建 Toolkit — 含 CodeResultSchema，供 fewshot 和 agentLoop 共用
+	// 构建 Toolkit — 含 progress config，供 fewshot 和 agentLoop 共用
 	const runtime = getRuntime();
 	const toolsConfig = buildToolsConfig(runtime, {
 		workspace: paths.workspace,
 		tempDir: paths.temp,
 	});
 	const toolkit = await makeToolkit(
-		CodeResultSchema,
+		codeProgressConfig,
 		toolsConfig,
 		runtime.client.modelId,
 	);
@@ -159,9 +159,9 @@ export async function startCodeRepl(
 		paths.workspace,
 		paths.temp,
 	);
-	// submit 结果文件编号（进程级，不随 renderer 生命周期绑定）
-	const submitSessionId = randomBytes(2).toString("hex");
-	let submitSeq = 0;
+	// progress 结果文件编号（进程级，不随 renderer 生命周期绑定）
+	const progressSessionId = randomBytes(2).toString("hex");
+	let progressSeq = 0;
 	// renderer 选择也基于 canInteract：管道环境用 PlainRenderer（无光标控制）
 	const canInteract =
 		typeof process.stdin.setRawMode === "function";
@@ -330,6 +330,8 @@ export async function startCodeRepl(
 		];
 	}
 
+	let autoResume = false;
+
 	while (true) {
 		if (userInput === null) {
 			break;
@@ -374,10 +376,16 @@ export async function startCodeRepl(
 			continue;
 		}
 
-		// ── 将用户输入推入 history ──
-		// ── 停止心跳（agent 执行期间由 stream 自行刷新缓存） ──
-		keeper?.stop();
-		history.push(makeUserInput(userInput));
+		// ── working 自动继续：跳过推入用户输入 ──
+		if (autoResume) {
+			autoResume = false;
+			keeper?.stop();
+		} else {
+			// ── 将用户输入推入 history ──
+			// ── 停止心跳（agent 执行期间由 stream 自行刷新缓存） ──
+			keeper?.stop();
+			history.push(makeUserInput(userInput));
+		}
 
 		// ── Agent 运行阶段：切换到 agent phase ──
 		if (stdin) {
@@ -385,11 +393,11 @@ export async function startCodeRepl(
 			stdin.phase = "agent";
 		}
 
-		let agentResult: Awaited<ReturnType<typeof agentLoop<CodeResult>>>;
+		let agentResult: Awaited<ReturnType<typeof agentLoop<CodeProgressResult>>>;
 		try {
-			agentResult = await agentLoop<CodeResult>(history, {
+			agentResult = await agentLoop<CodeProgressResult>(history, {
 				toolkit,
-				schema: CodeResultSchema,
+				schema: CodeProgressSchema,
 				maxIterations: 100,
 				renderer,
 				confirmFn,
@@ -447,26 +455,26 @@ export async function startCodeRepl(
 			continue;
 		}
 
-		// 将已验证的 submit 结果写入编号文件 + 固定文件
-		submitSeq++;
-		const submitFilename = `submit-${submitSessionId}-${String(submitSeq).padStart(4, "0")}.md`;
-		const formatted = formatSubmitResult(ir);
+		// 将已验证的 progress 结果写入编号文件 + 固定文件
+		progressSeq++;
+		const progressFilename = `progress-${progressSessionId}-${String(progressSeq).padStart(4, "0")}.md`;
+		const formatted = formatProgressResult(ir);
 		try {
 			if (!existsSync(paths.temp)) mkdirSync(paths.temp, { recursive: true });
-			writeFileSync(resolve(paths.temp, submitFilename), formatted, "utf-8");
+			writeFileSync(resolve(paths.temp, progressFilename), formatted, "utf-8");
 			writeFileSync(
-				resolve(paths.temp, "submit-result.md"),
+				resolve(paths.temp, "progress-result.md"),
 				formatted,
 				"utf-8",
 			);
 		} catch {}
 
-		switch (ir.type) {
-			case "ask_user": {
-				writeln(`${style.yellow("?")} ${ir.question}`);
+		switch (ir.status) {
+			case "blocked": {
+				writeln(`${style.yellow("?")} ${ir.content}`);
 				writeln();
-				const askUserItems = parseDsl(ir.options);
-				for (const [i, item] of askUserItems.entries()) {
+				const blockItems = parseDsl(ir.content);
+				for (const [i, item] of blockItems.entries()) {
 					writeln(`  ${style.cyan(`${i + 1})`)} ${item.label}`);
 					if (item.detail) {
 						writeln(`     ${style.gray(item.detail)}`);
@@ -480,29 +488,16 @@ export async function startCodeRepl(
 				}
 				continue;
 			}
-			case "request_assist": {
-				writeln(`${style.yellow("🔧")} 请求协助: ${ir.content}`);
+			case "working": {
+				writeln(`${style.cyan("⏳")} 进行中: ${ir.content}`);
 				writeln();
-				const checklistItems = parseDsl(ir.checklist);
-				for (const [i, item] of checklistItems.entries()) {
-					writeln(`  ${style.cyan(`${i + 1})`)} ${item.label}`);
-					if (item.detail) {
-						writeln(`     ${style.gray(item.detail)}`);
-					}
-				}
-				writeln();
-				playNotifySound();
-				userInput = await promptUser();
-				if (userInput !== null) {
-					injectUserResponse(history, userInput);
-				}
+				// working 状态：不等用户输入，直接重新启动 agentLoop
+				injectUserResponse(history, "继续");
+				autoResume = true;
 				continue;
 			}
 			case "completed": {
-				writeln(`${style.green("✓")} 完成: ${ir.report}`);
-				if (ir.next_step) {
-					writeln(style.gray(`  后续: ${ir.next_step}`));
-				}
+				writeln(`${style.green("✓")} 完成: ${ir.content}`);
 				if (agentResult.report) {
 					writeln(style.gray(`  ${agentResult.report}`));
 				}
@@ -512,7 +507,7 @@ export async function startCodeRepl(
 				break;
 			}
 			default: {
-				const _exhaustive: never = ir;
+				const _exhaustive: never = ir.status;
 				break;
 			}
 		}

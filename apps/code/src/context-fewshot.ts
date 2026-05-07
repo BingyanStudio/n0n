@@ -20,8 +20,8 @@ import type { Toolkit } from "@n0n/tools";
 import type {
 	DomainMessage,
 	ExecToolCall,
-	SubmitToolCall,
-	SubmitToolResult,
+	ProgressToolCall,
+	ProgressToolResult,
 	ToolCallRecord,
 	ToolResult,
 	ToolStreamEvent,
@@ -292,14 +292,13 @@ function buildTurn2Assistant(_ctx: RuntimeCtx): DomainMessage {
 	};
 }
 
-function buildTurn3Submit(ctx: RuntimeCtx): DomainMessage {
-	const submitCall: SubmitToolCall = {
+function buildTurn3Progress(ctx: RuntimeCtx): DomainMessage {
+	const progressCall: ProgressToolCall = {
 		id: "boot_s",
-		tool: "submit" as const,
+		tool: "progress" as const,
 		args: {
-			type: "completed",
-			report: buildSubmitReport(ctx),
-			next_step: "等待指令。如有需要可随时查看上述环境信息。",
+			status: "completed",
+			content: buildSubmitReport(ctx),
 		},
 	};
 	return {
@@ -307,27 +306,26 @@ function buildTurn3Submit(ctx: RuntimeCtx): DomainMessage {
 		content: null,
 		reasoning: "确认完成，提交结果。",
 		reasoningSignature: null,
-		toolCalls: [submitCall],
+		toolCalls: [progressCall],
 	};
 }
 
-function buildSubmitResult(ctx: RuntimeCtx): DomainMessage {
-	const submitCall: SubmitToolCall = {
+function buildProgressResult(ctx: RuntimeCtx): DomainMessage {
+	const progressCall: ProgressToolCall = {
 		id: "boot_s",
-		tool: "submit" as const,
+		tool: "progress" as const,
 		args: {
-			type: "completed",
-			report: buildSubmitReport(ctx),
-			next_step: "等待指令。如有需要可随时查看上述环境信息。",
+			status: "completed",
+			content: buildSubmitReport(ctx),
 		},
 	};
 	return {
 		type: "tool_result",
-		tool: "submit" as const,
-		call: submitCall,
-		cleanedResult: submitCall.args,
+		tool: "progress" as const,
+		call: progressCall,
+		cleanedResult: progressCall.args,
 		userResponse: undefined,
-	} satisfies SubmitToolResult as DomainMessage;
+	} satisfies ProgressToolResult as DomainMessage;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -390,8 +388,8 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 
 	// ── Turn 3: 确认结果 → submit ──
 	// 教学：看到上一批执行结果后，通过 submit 提交（用户看不到 content）
-	{ _slot: "derived", build: buildTurn3Submit },
-	{ _slot: "derived", build: buildSubmitResult },
+	{ _slot: "derived", build: buildTurn3Progress },
+	{ _slot: "derived", build: buildProgressResult },
 ];
 
 // ════════════════════════════════════════════════════════════════
@@ -412,9 +410,8 @@ async function runExec(
 	const gen = (
 		entry.execute as (
 			tc: ToolCallRecord,
-			r: never[],
 		) => AsyncGenerator<ToolStreamEvent>
-	)(call, []);
+	)(call);
 	let result: ToolResult | undefined;
 	for await (const event of gen) {
 		if (event.type === "tool_result") result = event;
