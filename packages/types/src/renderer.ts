@@ -14,7 +14,7 @@
  *   roundEnd
  */
 
-import type { DomainMessage, ToolCallRecord, ToolExecOutcome, TokenUsageMessage } from "./domain.ts";
+import type { DomainMessage, ToolCallRecord, ToolExecOutcome } from "./domain.ts";
 
 /** 单轮 LLM 调用的 token 用量统计 */
 export interface RoundTokenUsage {
@@ -93,11 +93,11 @@ export interface Renderer
 	/** LLM 纯文本回复（非流式回退） */
 	textResponse(content: string, idleCount: number): void;
 
-	/** submit 被接受 */
-	submitAccepted(): void;
+	/** progress 被接受 */
+	progressAccepted(): void;
 
-	/** submit 被拒绝 */
-	submitRejected(attempt: number, maxAttempts: number, error: string): void;
+	/** progress 被拒绝 */
+	progressRejected(attempt: number, maxAttempts: number, error: string): void;
 
 	/** agent 终止 */
 	agentTerminated(reason: string): void;

@@ -38,16 +38,10 @@ export const EditArgsSchema = z.object({
 });
 export type EditArgs = z.infer<typeof EditArgsSchema>;
 
-// ── reminder ──
+// ── progress ──
 
-export const ReminderArgsSchema = z.object({
+export const ProgressArgsSchema = z.object({
+	status: z.string(),
 	content: z.string(),
-	estimate: z.number().optional(),
 });
-export type ReminderArgs = z.infer<typeof ReminderArgsSchema>;
-
-// ── submit ──
-
-/** submit 参数不约束具体结构，由各场景的 schema 在后验证阶段校验 */
-export const SubmitArgsSchema = z.record(z.string(), z.unknown());
-export type SubmitArgs = z.infer<typeof SubmitArgsSchema>;
+export type ProgressArgs = z.infer<typeof ProgressArgsSchema>;
