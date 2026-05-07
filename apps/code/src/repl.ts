@@ -162,10 +162,13 @@ export async function startCodeRepl(
 	// submit 结果文件编号（进程级，不随 renderer 生命周期绑定）
 	const submitSessionId = randomBytes(2).toString("hex");
 	let submitSeq = 0;
-	const renderer = isTTY ? new CodeRenderer(paths) : new PlainRenderer();
+	// renderer 选择也基于 canInteract：管道环境用 PlainRenderer（无光标控制）
+	const canInteract =
+		typeof process.stdin.setRawMode === "function";
+	const renderer = canInteract ? new CodeRenderer(paths) : new PlainRenderer();
 
 	// ── stdin 控制器（仅 TTY 模式） ──
-	const stdin = isTTY ? createStdinController() : null;
+	const stdin = canInteract ? createStdinController() : null;
 
 	// ── 心跳保活（仅 Anthropic 等支持 prompt caching 的 provider） ──
 	const client = runtime.client;

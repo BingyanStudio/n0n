@@ -17,12 +17,19 @@ import type { BaseWorkspacePaths } from "@n0n/shared";
 import type { ToolCallRecord } from "@n0n/types";
 import { parse as parsePartialJSON } from "partial-json";
 
+/** 流式预览模式 — 基于字段到达顺序 */
+type PreviewMode = "unknown" | "path-first" | "content-first";
+
 /** 单个 write 工具调用的流式预览状态 */
 interface WritePreview {
 	/** 累积的 JSON 参数字符串 */
 	args: string;
-	/** 解析出的目标文件路径（content key 出现后锁定，避免 partial-json 截断值） */
+	/** 解析出的目标文件路径。path-first 模式下，path 值在 content 出现前持续更新，content 出现后锁定；content-first 模式下始终为 null */
 	targetPath: string | null;
+	/** 字段到达顺序判定 */
+	mode: PreviewMode;
+	/** content-first 模式下使用的临时预览路径 */
+	tempPreviewPath: string | null;
 	/** 上一次写入的 content 长度（用于去重，避免内容未变时重复写入） */
 	lastContentLength: number;
 	/** 上一次写入时间戳（用于节流） */
@@ -46,6 +53,8 @@ export class CodeRenderer extends RichRenderer {
 			this.previews.set(index, {
 				args: "",
 				targetPath: null,
+				mode: "unknown",
+				tempPreviewPath: null,
 				lastContentLength: -1,
 				lastWriteTime: 0,
 			});
@@ -58,7 +67,7 @@ export class CodeRenderer extends RichRenderer {
 		const preview = this.previews.get(index);
 		if (preview) {
 			preview.args += chunk;
-			this.flushPreview(preview, false);
+			this.flushPreview(index, preview, false);
 		}
 	}
 
@@ -74,8 +83,8 @@ export class CodeRenderer extends RichRenderer {
 
 	override streamEnd(): void {
 		// 安全网：清理所有未完成的预览（如流被截断）
-		for (const preview of this.previews.values()) {
-			this.flushPreview(preview, true);
+		for (const [index, preview] of this.previews.entries()) {
+			this.flushPreview(index, preview, true);
 		}
 		this.previews.clear();
 		super.streamEnd();
@@ -92,7 +101,7 @@ export class CodeRenderer extends RichRenderer {
 	 * 从累积的 partial JSON 中提取 path/content，写入目标文件。
 	 * @param force 是否强制写入（跳过节流，用于 streamEnd/argEnd）
 	 */
-	private flushPreview(preview: WritePreview, force: boolean): void {
+	private flushPreview(index: number, preview: WritePreview, force: boolean): void {
 		const now = Date.now();
 		if (!force && now - preview.lastWriteTime < THROTTLE_MS) return;
 
@@ -107,26 +116,49 @@ export class CodeRenderer extends RichRenderer {
 		}
 		if (!parsed) return;
 
-		// 提取 path — 仅当 content key 已出现时才锁定
-		// partial-json 会为未闭合的字符串值补全引号，导致 path 值可能是截断的
-		if (
-			!preview.targetPath &&
-			typeof parsed.path === "string" &&
-			parsed.path &&
-			"content" in parsed
-		) {
-			// （如 {"path": "ts 被解析为 path:"ts"，实际应为 "tsconfig.json"）
-			// 当 content key 出现时，说明 path 值已完整传输，此时锁定是安全的
-			preview.targetPath = this.resolvePath(parsed.path);
+		const hasPath = typeof parsed.path === "string" && parsed.path.length > 0;
+		const hasContent = typeof parsed.content === "string";
+
+		// 首次信号判定 mode
+		if (preview.mode === "unknown") {
+			if (hasPath && !hasContent) {
+				// path 先到 — path-first，但 targetPath 会在后续持续更新
+				preview.mode = "path-first";
+			} else if (hasContent && !hasPath) {
+				// content 先到 — 使用临时预览路径，永不锁定 path
+				preview.mode = "content-first";
+				preview.tempPreviewPath = resolve(
+					this.paths.temp,
+					"write-stream-previews",
+					`write-stream-preview-${index}`,
+				);
+			} else if (hasPath && hasContent) {
+				// 同时出现 — path 应已完整，直接锁定
+				preview.mode = "path-first";
+				preview.targetPath = this.resolvePath(parsed.path as string);
+			}
+			// 两者都未出现 → 保持 unknown，等待更多数据
 		}
 
-		// 提取 content 并写入
-		if (preview.targetPath && typeof parsed.content === "string") {
-			// 去重：content 长度未变说明本次 chunk 未增加 content 部分
-			if (parsed.content.length !== preview.lastContentLength) {
-				preview.lastContentLength = parsed.content.length;
-				preview.lastWriteTime = now;
-				this.writeFile(preview.targetPath, parsed.content);
+		// path-first 模式下，content 未出现前持续更新 targetPath
+		if (preview.mode === "path-first" && hasPath && !hasContent) {
+			preview.targetPath = this.resolvePath(parsed.path as string);
+		}
+
+		// 写入路由
+		if (hasContent) {
+			if (preview.mode === "path-first" && preview.targetPath) {
+				if ((parsed.content as string).length !== preview.lastContentLength) {
+					preview.lastContentLength = (parsed.content as string).length;
+					preview.lastWriteTime = now;
+					this.writeFile(preview.targetPath, parsed.content as string);
+				}
+			} else if (preview.mode === "content-first" && preview.tempPreviewPath) {
+				if ((parsed.content as string).length !== preview.lastContentLength) {
+					preview.lastContentLength = (parsed.content as string).length;
+					preview.lastWriteTime = now;
+					this.writeFile(preview.tempPreviewPath, parsed.content as string);
+				}
 			}
 		}
 	}
