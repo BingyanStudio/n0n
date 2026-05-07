@@ -160,7 +160,7 @@ export async function startCodeRepl(
 		paths.temp,
 	);
 	// progress 结果文件编号（进程级，不随 renderer 生命周期绑定）
-	const progressSessionId = randomBytes(2).toString("hex");
+	const sessionDir = resolve(paths.temp, `session-${randomBytes(2).toString("hex")}`);
 	let progressSeq = 0;
 	// renderer 选择也基于 canInteract：管道环境用 PlainRenderer（无光标控制）
 	const canInteract =
@@ -454,18 +454,14 @@ export async function startCodeRepl(
 			continue;
 		}
 
-		// 将已验证的 progress 结果写入编号文件 + 固定文件
+		// 将 progress 结果写入 session 目录：编号文件 + current-progress.md
 		progressSeq++;
-		const progressFilename = `progress-${progressSessionId}-${String(progressSeq).padStart(4, "0")}.md`;
+		const progressFilename = `${String(progressSeq).padStart(4, "0")}-${ir.status}.md`;
 		const formatted = formatProgressResult(ir);
 		try {
-			if (!existsSync(paths.temp)) mkdirSync(paths.temp, { recursive: true });
-			writeFileSync(resolve(paths.temp, progressFilename), formatted, "utf-8");
-			writeFileSync(
-				resolve(paths.temp, "progress-result.md"),
-				formatted,
-				"utf-8",
-			);
+			if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
+			writeFileSync(resolve(sessionDir, progressFilename), formatted, "utf-8");
+			writeFileSync(resolve(sessionDir, "current-progress.md"), formatted, "utf-8");
 		} catch {}
 
 		switch (ir.status) {
