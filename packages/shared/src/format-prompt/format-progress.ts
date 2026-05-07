@@ -1,19 +1,19 @@
 /**
- * submit tool result 格式化 — 含 anti-few-shot 变体
+ * progress tool result 格式化 — 含 anti-few-shot 变体
  */
 
-import type { SubmitToolResult } from "@n0n/types";
+import type { ProgressToolResult } from "@n0n/types";
 import type { TagAdapter } from "./utils.ts";
 import { pick } from "./utils.ts";
 
 const successTemplates = [
 	"Submitted successfully.",
-	"Submission received.",
+	"Progress received.",
 	"Result submitted.",
 ];
 
-export function formatSubmitResult(
-	msg: SubmitToolResult,
+export function formatProgressResult(
+	msg: ProgressToolResult,
 	tags: TagAdapter,
 	msgIndex: number,
 ): string {
