@@ -14,7 +14,7 @@
  *   // ❌ 将提示词混入 DomainMessage
  *
  * 正例：
- *   messages.push({ type: "reminder:due", content: r.content });
+ *   messages.push({ type: "progress:rejected", error, attempt, maxAttempts });
  *   // ✅ adapter 层负责格式化为提示词
  */
 
@@ -78,8 +78,7 @@ export interface AssistantToolCallMessage {
 import type {
 	EditArgs,
 	ExecArgs,
-	ReminderArgs,
-	SubmitArgs,
+	ProgressArgs,
 	WriteArgs,
 } from "./tool-args.ts";
 
@@ -87,29 +86,35 @@ interface ToolCallBase {
 	id: string;
 }
 
-export type ExecToolCall = ToolCallBase & { tool: "exec"; args: ExecArgs };
-export type WriteToolCall = ToolCallBase & { tool: "write"; args: WriteArgs };
-export type EditToolCall = ToolCallBase & { tool: "edit"; args: EditArgs };
-export type ReminderToolCall = ToolCallBase & {
-	tool: "reminder";
-	args: ReminderArgs;
-};
-export type SubmitToolCall = ToolCallBase & {
-	tool: "submit";
-	args: SubmitArgs;
-};
+interface ToolMap {
+	exec: ExecArgs;
+	write: WriteArgs;
+	edit: EditArgs;
+	progress: ProgressArgs;
+}
 
 /**
  * 工具调用记录 — 判别联合，通过 tool 字段窄化 args 类型。
  * 参数类型来自 tool-args.ts 中的 Zod schema（z.infer），
  * 修改 schema 字段时 tsc 会在所有消费方报错。
  */
-export type ToolCallRecord =
-	| ExecToolCall
-	| WriteToolCall
-	| EditToolCall
-	| ReminderToolCall
-	| SubmitToolCall;
+export type ToolCallRecord = {
+	[K in keyof ToolMap]: ToolCallBase & {
+		tool: K; // 字面量类型："exec", "write"...
+		args: ToolMap[K]; // 对应的参数类型
+	};
+}[keyof ToolMap];
+
+// easy to use in ToolResultBase
+export type ToolCallRecordMap = {
+	[K in keyof ToolMap]: Extract<ToolCallRecord, { tool: K }>;
+};
+
+// export
+export type ExecToolCall = ToolCallRecordMap["exec"];
+export type WriteToolCall = ToolCallRecordMap["write"];
+export type EditToolCall = ToolCallRecordMap["edit"];
+export type ProgressToolCall = ToolCallRecordMap["progress"];
 
 /**
  * 截断恢复失败的不完整工具调用记录。
@@ -127,27 +132,23 @@ export interface PartialToolCallRecord {
 // call = LLM 原始调用参数；顶层字段 = 执行产出。
 // tool 字段与 call.tool 始终一致，用于判别联合窄化（TS 不支持嵌套属性窄化）。
 
-interface ToolResultBase {
+interface ToolResultBase<T extends keyof ToolMap> {
 	type: "tool_result";
-}
-
-/** exec 三态结果的公共字段 */
-interface ExecResultBase extends ToolResultBase {
-	tool: ExecToolCall["tool"];
-	call: ExecToolCall;
-	durationMs: number;
+	tool: T;
+	call: ToolCallRecordMap[T];
 }
 
 /** exec 正常完成，输出在阈值内 */
-interface ExecCompleted extends ExecResultBase {
+interface ExecCompleted extends ToolResultBase<"exec"> {
 	status: "completed";
 	exitCode: number;
 	stdout: string;
 	stderr: string;
+	durationMs: number;
 }
 
 /** exec 正常完成，输出超长被截断并写入文件 */
-interface ExecTruncated extends ExecResultBase {
+interface ExecTruncated extends ToolResultBase<"exec"> {
 	status: "truncated";
 	exitCode: number;
 	/** stdout 末尾截断内容 */
@@ -166,10 +167,11 @@ interface ExecTruncated extends ExecResultBase {
 	tailStartLine: number;
 	/** 被截断前半部分按 token 预算分块的行号范围，帮助模型精确分块读取 */
 	truncatedChunks: { startLine: number; endLine: number; tokens: number }[];
+	durationMs: number;
 }
 
 /**  exec 等待超限，进程转入后台继续执行  */
-interface ExecBackgrounded extends ExecResultBase {
+interface ExecBackgrounded extends ToolResultBase<"exec"> {
 	status: "backgrounded";
 	/** 后台进程 PID */
 	pid: number;
@@ -179,34 +181,29 @@ interface ExecBackgrounded extends ExecResultBase {
 	stdoutSoFar: string;
 	/** 超时前已捕获的 stderr */
 	stderrSoFar: string;
+	durationMs: number;
 }
 
 export type ExecToolResult = ExecCompleted | ExecTruncated | ExecBackgrounded;
 
-/** write 结果的公共字段 */
-interface WriteResultBase extends ToolResultBase {
-	tool: WriteToolCall["tool"];
-	call: WriteToolCall;
-}
-
 /** write 正常写入成功 */
-interface WriteCompleted extends WriteResultBase {
+interface WriteCompleted extends ToolResultBase<"write"> {
 	status: "completed";
 }
 
 /** write 写入失败 */
-interface WriteFailed extends WriteResultBase {
+interface WriteFailed extends ToolResultBase<"write"> {
 	status: "failed";
 	error: string;
 }
 
 /** write 从截断恢复后写入成功（内容不完整） */
-interface WriteRecovered extends WriteResultBase {
+interface WriteRecovered extends ToolResultBase<"write"> {
 	status: "recovered";
 }
 
 /** write 从截断恢复失败（参数无法解析） */
-interface WriteRecoverFailed extends WriteResultBase {
+interface WriteRecoverFailed extends ToolResultBase<"write"> {
 	status: "recover_failed";
 	error: string;
 }
@@ -217,8 +214,6 @@ export type WriteToolResult =
 	| WriteRecovered
 	| WriteRecoverFailed;
 
-
-
 /** 单个补丁操作 */
 export interface PatchOp {
 	/** 旧文本（将被替换掉的内容） */
@@ -227,10 +222,7 @@ export interface PatchOp {
 	newText: string;
 }
 
-
-export type EditToolResult = ToolResultBase & {
-	tool: EditToolCall["tool"]; // "edit"
-	call: EditToolCall;
+export type EditToolResult = ToolResultBase<"edit"> & {
 	patches: PatchOp[];
 	success: boolean;
 	error: string | null;
@@ -242,18 +234,10 @@ export type EditToolResult = ToolResultBase & {
 	durationMs: number;
 };
 
-export type ReminderToolResult = ToolResultBase & {
-	tool: ReminderToolCall["tool"]; // "reminder"
-	call: ReminderToolCall;
-	acknowledged: true;
-};
-
-export type SubmitToolResult = ToolResultBase & {
-	tool: SubmitToolCall["tool"]; // "submit"
-	call: SubmitToolCall;
-	/** submit 的结果值（等于 call.args，由 schema 后验证） */
+export type ProgressToolResult = ToolResultBase<"progress"> & {
+	/** progress 的结果值（等于 call.args，由 schema 后验证） */
 	cleanedResult: unknown;
-	/** 用户对 submit 结果的回应（由 REPL 注入，非模型生成） */
+	/** 用户对 progress 结果的回应（由 REPL 注入，非模型生成） */
 	userResponse?: string;
 };
 
@@ -261,8 +245,7 @@ export type ToolResult =
 	| ExecToolResult
 	| WriteToolResult
 	| EditToolResult
-	| ReminderToolResult
-	| SubmitToolResult;
+	| ProgressToolResult;
 
 /**
  * 工具执行结局 — scheduler 向消费者报告单个工具执行完成时的判别联合。
@@ -292,15 +275,6 @@ export interface IdleNudgeMessage {
 	type: "idle_nudge";
 	idleCount: number;
 	maxIdleRounds: number;
-}
-
-// ── 到期提醒 ──
-/** reminder 到期时注入的消息，adapter 负责生成具体提示词 */
-export interface ReminderDueMessage {
-	type: "reminder:due";
-	content: string;
-	/** 模型设置 reminder 时估算的原始轮数 */
-	originalEstimate: number;
 }
 
 // ── 工具错误类型（纯数据，不含提示词） ──
@@ -342,15 +316,6 @@ export interface ToolArgErrorMessage {
 	callId: string;
 	tool: string;
 	error: ToolError;
-}
-
-// ── 提交被拒 ──
-/** submit 校验失败时注入的消息，adapter 负责生成具体提示词 */
-export interface SubmitRejectedMessage {
-	type: "submit:rejected";
-	error: string;
-	attempt: number;
-	maxAttempts: number;
 }
 
 // ── 通用工具消息（内部子循环使用） ──
@@ -405,8 +370,6 @@ export type DomainMessage =
 	| ToolResult
 	| IdleNudgeMessage
 	| TurnFeedbackMessage
-	| ReminderDueMessage
-	| SubmitRejectedMessage
 	| ToolArgErrorMessage
 	| CacheBreakpointMessage
 	| TokenUsageMessage;

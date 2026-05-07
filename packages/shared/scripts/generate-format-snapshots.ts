@@ -238,23 +238,6 @@ const scenarios: Scenario[] = [
 			},
 		],
 	},
-	{
-		file: "reminder-result",
-		title: "reminder tool_result",
-		messages: [
-			{
-				type: "tool_result",
-				tool: "reminder",
-				call: {
-					id: "tc_7",
-					tool: "reminder",
-					args: { content: "Check test results", estimate: 3 },
-				},
-				acknowledged: true,
-			},
-		],
-	},
-
 	// ── special messages ──
 	{
 		file: "idle-nudge",
@@ -262,25 +245,18 @@ const scenarios: Scenario[] = [
 		messages: [{ type: "idle_nudge", idleCount: 2, maxIdleRounds: 5 }],
 	},
 	{
-		file: "reminder-due",
-		title: "reminder:due 消息",
+		file: "progress-result",
+		title: "progress tool_result",
 		messages: [
 			{
-				type: "reminder:due",
-				content: "Check test results\n- Step 1 done\n- Step 2 pending",
-				originalEstimate: 3,
-			},
-		],
-	},
-	{
-		file: "submit-rejected",
-		title: "submit:rejected 消息",
-		messages: [
-			{
-				type: "submit:rejected",
-				error: "Missing required field: summary",
-				attempt: 1,
-				maxAttempts: 4,
+				type: "tool_result",
+				tool: "progress",
+				call: {
+					id: "tc_7",
+					tool: "progress",
+					args: { status: "completed", content: "Task done" },
+				},
+				cleanedResult: { status: "completed", content: "Task done" },
 			},
 		],
 	},

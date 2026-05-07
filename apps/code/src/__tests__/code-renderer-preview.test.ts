@@ -10,8 +10,8 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { ToolCallRecord } from "@n0n/types";
 import { CodeRenderer } from "../code-renderer.ts";
-import type { CodeResult } from "../schema.ts";
-import { formatSubmitResult } from "../submit-formatter.ts";
+import type { CodeProgressResult } from "../schema.ts";
+import { formatProgressResult } from "../progress-formatter.ts";
 
 // ── 测试用临时目录 ──
 const TEST_WORKSPACE = join(import.meta.dir, ".tmp-preview-test");
@@ -179,46 +179,41 @@ describe("CodeRenderer 流式 write 预览", () => {
 	});
 });
 
-describe("formatSubmitResult 单元测试", () => {
-	test("completed 仅 report", () => {
-		const md = formatSubmitResult({
-			type: "completed",
-			report: "done",
-		} satisfies CodeResult);
+describe("formatProgressResult 单元测试", () => {
+	test("completed 仅 content", () => {
+		const md = formatProgressResult({
+			status: "completed",
+			content: "done",
+		} satisfies CodeProgressResult);
 		expect(md).toContain("# ✅ 任务完成");
 		expect(md).toContain("done");
-		expect(md).not.toContain("## 下一步");
 	});
 
-	test("completed 带 next_step", () => {
-		const md = formatSubmitResult({
-			type: "completed",
-			report: "done",
-			next_step: "review",
-		} satisfies CodeResult);
-		expect(md).toContain("## 下一步");
-		expect(md).toContain("review");
+	test("completed 完整 content", () => {
+		const md = formatProgressResult({
+			status: "completed",
+			content: "done",
+		} satisfies CodeProgressResult);
+		expect(md).toContain("done");
 	});
 
-	test("ask_user 完整选项", () => {
-		const md = formatSubmitResult({
-			type: "ask_user",
-			question: "选哪个？",
-			options: "## A\n影响A\n\n## B\n影响B",
-		} satisfies CodeResult);
+	test("blocked 完整 content", () => {
+		const md = formatProgressResult({
+			status: "blocked",
+			content: "选哪个？\n## A\n影响A\n\n## B\n影响B",
+		} satisfies CodeProgressResult);
 		expect(md).toContain("# ❓ 需要确认");
 		expect(md).toContain("选哪个？");
 		expect(md).toContain("## A");
 		expect(md).toContain("## B");
 	});
 
-	test("request_assist 完整检查列表", () => {
-		const md = formatSubmitResult({
-			type: "request_assist",
-			content: "需要帮助",
-			checklist: "## 检查项1\n详情1\n\n## 检查项2\n详情2",
-		} satisfies CodeResult);
-		expect(md).toContain("# 🔧 请求协助");
+	test("blocked 检查列表", () => {
+		const md = formatProgressResult({
+			status: "blocked",
+			content: "需要帮助\n## 检查项1\n详情1\n\n## 检查项2\n详情2",
+		} satisfies CodeProgressResult);
+		expect(md).toContain("# ❓ 需要确认");
 		expect(md).toContain("## 检查项1");
 		expect(md).toContain("## 检查项2");
 	});

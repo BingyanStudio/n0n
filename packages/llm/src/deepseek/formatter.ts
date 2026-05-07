@@ -14,8 +14,7 @@ export interface DeepSeekMessage {
 		| "user"
 		| "assistant"
 		| "tool"
-		| "developer"
-		| "latest_reminder";
+		| "developer";
 	content: string | null;
 	reasoning_content?: string | null;
 	tool_calls?: DeepSeekToolCall[];

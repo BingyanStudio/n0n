@@ -29,10 +29,7 @@ import { affectsSubsequent } from "./config.ts";
 import { formatEditResult } from "./format-edit.ts";
 import { formatExecResult } from "./format-exec.ts";
 import { formatIdleNudge } from "./format-idle-nudge.ts";
-import { formatReminderResult } from "./format-reminder.ts";
-import { formatReminderDue } from "./format-reminder-due.ts";
-import { formatSubmitResult } from "./format-submit.ts";
-import { formatSubmitRejected } from "./format-submit-rejected.ts";
+import { formatProgressResult } from "./format-progress.ts";
 import { formatToolArgError } from "./format-tool-arg-error.ts";
 import { formatTurnFeedback } from "./format-turn-feedback.ts";
 import { formatWriteResult } from "./format-write.ts";
@@ -51,10 +48,8 @@ function toolResultToContent(
 			return formatWriteResult(msg, tags, msgIndex);
 		case "edit":
 			return formatEditResult(msg, tags, msgIndex);
-		case "reminder":
-			return formatReminderResult(msg, tags, msgIndex);
-		case "submit":
-			return formatSubmitResult(msg, tags, msgIndex);
+		case "progress":
+			return formatProgressResult(msg, tags, msgIndex);
 	}
 }
 
@@ -170,19 +165,6 @@ export function formatPrompt(
 				});
 				break;
 
-			case "reminder:due":
-				result.push({
-					role: "user",
-					content: formatReminderDue(msg, tags, i),
-				});
-				break;
-
-			case "submit:rejected":
-				result.push({
-					role: "user",
-					content: formatSubmitRejected(msg, tags, i),
-				});
-				break;
 
 			case "user_input":
 				result.push({

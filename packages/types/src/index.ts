@@ -25,7 +25,6 @@ export type * from "./tool-args.ts";
 export {
 	EditArgsSchema,
 	ExecArgsSchema,
-	ReminderArgsSchema,
-	SubmitArgsSchema,
+	ProgressArgsSchema,
 	WriteArgsSchema,
 } from "./tool-args.ts";

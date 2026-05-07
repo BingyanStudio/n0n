@@ -3,7 +3,6 @@
  */
 
 import {
-	type PendingReminder,
 	REGISTERED_TOOLS,
 	type ToolEntry,
 } from "@n0n/tools";
@@ -54,7 +53,6 @@ export function isValidToolCall(tc: ToolCallRecord): boolean {
 
 export async function* executeToolStream(
 	tc: ToolCallRecord,
-	reminders: PendingReminder[],
 	confirmFn?: (question: string) => Promise<string>,
 	getEntry?: GetToolEntry,
 ): AsyncGenerator<ToolStreamEvent> {
@@ -72,9 +70,9 @@ export async function* executeToolStream(
 
 	try {
 		if (entry.stream) {
-			yield* entry.execute(tc, reminders, confirmFn);
+			yield* entry.execute(tc, confirmFn);
 		} else {
-			yield await entry.execute(tc, reminders, confirmFn);
+			yield await entry.execute(tc, confirmFn);
 		}
 	} catch (err) {
 		if (err instanceof ZodError) {

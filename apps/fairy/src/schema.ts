@@ -1,13 +1,15 @@
 /**
- * Fairy submit schema — 角色回复
+ * Fairy progress schema — 角色回复
  *
- * fairy 的 submit 只有一种类型：作为角色的回复。
- * 不区分 chat/completed/error，因为 fairy 始终以角色身份回应。
+ * fairy 的 progress 只有一种 status：reply。
+ * content 即角色的回复内容。
  */
 
 import { z } from "zod";
-export const FairyResponseSchema = z.object({
-	reply: z.string().describe("角色的回复内容"),
+
+export const FairyProgressSchema = z.object({
+	status: z.literal("reply"),
+	content: z.string(),
 });
 
-export type FairyResponse = z.infer<typeof FairyResponseSchema>;
+export type FairyProgressResult = z.infer<typeof FairyProgressSchema>;

@@ -25,8 +25,8 @@ export function mockEditTC(id: string, path: string): ToolCallRecord {
 	return { id, tool: "edit", args: { path, intent: "test" } } as ToolCallRecord;
 }
 
-export function mockReminderTC(id: string): ToolCallRecord {
-	return { id, tool: "reminder", args: { content: "test" } } as ToolCallRecord;
+export function mockProgressTC(id: string): ToolCallRecord {
+	return { id, tool: "progress", args: { status: "completed", content: "test" } } as ToolCallRecord;
 }
 
 // ── Mock ToolResult 工厂 ──

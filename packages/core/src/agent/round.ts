@@ -5,7 +5,6 @@
  * 每个函数都是 input → output 的纯映射，无副作用。
  */
 
-import { deepParseJsonStrings } from "@n0n/shared";
 import type {
 	AssistantToolCallMessage,
 	DomainMessage,
@@ -87,56 +86,3 @@ export function collectJobMessages(
 	return msgs;
 }
 
-// ── Submit 检查 ──
-
-import type { ZodType } from "zod";
-import { toJSONSchema } from "zod";
-
-export interface SubmitCheckResult {
-	/** submit 校验通过的值 */
-	accepted?: { value: unknown };
-	/** submit 校验失败的错误 */
-	rejected?: { error: string; retries: number };
-	/** 已达最大重试次数 */
-	gaveUp?: { error: string };
-}
-
-export function checkSubmit<T>(
-	jobs: readonly PipelineJob[],
-	schema: ZodType<T> | undefined,
-	currentRetries: number,
-	maxRetries: number,
-): SubmitCheckResult {
-	for (const job of jobs) {
-		if (job.status !== "completed" || job.result.tool !== "submit") continue;
-
-		if (!schema) {
-			return { accepted: { value: job.result.cleanedResult } };
-		}
-
-		const cleaned = deepParseJsonStrings(job.result.cleanedResult);
-		const parsed = schema.safeParse(cleaned);
-		if (parsed.success) {
-			return { accepted: { value: parsed.data } };
-		}
-
-		const issues = parsed.error.issues
-			.map((i) => `  ${i.path.join(".")}: ${i.message}`)
-			.join("\n");
-		let fullSchema: string;
-		try {
-			fullSchema = JSON.stringify(toJSONSchema(schema), null, 2);
-		} catch {
-			fullSchema = "(schema serialization failed)";
-		}
-		const error = `Result does not match expected schema:\n${issues}\n\nFull expected schema:\n${fullSchema}`;
-
-		const retries = currentRetries + 1;
-		if (retries >= maxRetries) {
-			return { gaveUp: { error } };
-		}
-		return { rejected: { error, retries } };
-	}
-
-	return {}; // 没有 submit 调用
-}

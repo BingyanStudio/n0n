@@ -55,14 +55,8 @@ export class PlainRenderer implements Renderer {
 	toolExecChunk(_tcId: string, _tool: string, _chunk: string): void {}
 	toolExecEnd(_tcId: string, _outcome: ToolExecOutcome): void {}
 
-	submitAccepted(): void {
-		console.error("  [agent] submit accepted ✓");
-	}
-
-	submitRejected(attempt: number, maxAttempts: number, error: string): void {
-		console.error(
-			`  [agent] submit rejected (${attempt}/${maxAttempts}): ${error}`,
-		);
+	progressAccepted(): void {
+		console.error("  [agent] progress accepted ✓");
 	}
 
 	agentTerminated(reason: string): void {

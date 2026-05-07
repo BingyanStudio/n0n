@@ -5,8 +5,7 @@
  * - write: 文件创建/覆盖
  * - edit: 文件内容修改（影子编辑 — 意图驱动）
  * - exec: 脚本执行（script + runtime）
- * - reminder: 延迟提醒
- * - submit: 提交结果（动态生成）
+ * - progress: 报告进度/提交结果（动态生成）
  *
  * 每个工具使用 ToolDefinition 格式定义 + 自定义执行器绑定。
  * 工具参数通过 Zod schema 做运行时校验。
@@ -17,9 +16,7 @@ import type {
 	DomainMessage,
 	EditToolCall,
 	ExecToolCall,
-	ReminderToolCall,
-	SubmitArgs,
-	SubmitToolCall,
+	ProgressToolCall,
 	ToolCallRecord,
 	ToolDefinition,
 	ToolResult,
@@ -43,12 +40,10 @@ import {
 	execToolStream,
 } from "./exec/index.ts";
 import {
-	type PendingReminder,
-	REMINDER_TOOL_DEFINITION,
-	ReminderArgsSchema,
-	reminderTool,
-} from "./reminder.ts";
-import { makeSubmitToolDefinition, submitTool } from "./submit.ts";
+	type ProgressStatusConfig,
+	makeProgressTool,
+	progressTool,
+} from "./progress.ts";
 import {
 	makeWriteRecover,
 	WRITE_TOOL_DEFINITION,
@@ -60,13 +55,11 @@ import {
 
 type StreamExecutor = (
 	tc: ToolCallRecord,
-	reminders: PendingReminder[],
 	confirmFn?: (question: string) => Promise<string>,
 ) => AsyncGenerator<ToolStreamEvent>;
 
 type SyncExecutor = (
 	tc: ToolCallRecord,
-	reminders: PendingReminder[],
 	confirmFn?: (question: string) => Promise<string>,
 ) => Promise<ToolResult> | ToolResult;
 
@@ -113,7 +106,7 @@ const pathExclusiveCanStart: CanStartFn = (self, active) => {
 };
 
 /**
- * 构建基础工具注册表（不含 submit）。
+ * 构建基础工具注册表（不含 progress）。
  * 接受完整的 ToolsConfig（含 security/agent/workspace/tempDir/editorClient）。
  */
 function buildBaseRegistry(
@@ -136,7 +129,7 @@ function buildBaseRegistry(
 		exec: {
 			definition: EXEC_TOOL_DEFINITION,
 			stream: true,
-			execute: (tc, _reminders, confirmFn) => {
+			execute: (tc, confirmFn) => {
 				const call: ExecToolCall = {
 					id: tc.id,
 					tool: "exec" as const,
@@ -172,19 +165,6 @@ function buildBaseRegistry(
 				return editToolStream(call, resolvedWorkspace, editBackend);
 			},
 		},
-		reminder: {
-			definition: REMINDER_TOOL_DEFINITION,
-			stream: false,
-			canStart: () => true,
-			execute: (tc, reminders) => {
-				const call: ReminderToolCall = {
-					id: tc.id,
-					tool: "reminder" as const,
-					args: ReminderArgsSchema.parse(tc.args),
-				};
-				return reminderTool(call, reminders);
-			},
-		},
 	};
 }
 
@@ -200,42 +180,35 @@ export const REGISTERED_TOOLS = new Set([
 	"exec",
 	"write",
 	"edit",
-	"reminder",
-	"submit",
+	"progress",
 ]);
 
 /**
- * 构建完整的工具集（含 submit）。
+ * 构建完整的工具集（含 progress）。
  * 异步：首次调用会探测系统可用 runtime（~1-2s），后续调用使用缓存。
  *
- * @param schema 可选的 Zod schema，用于约束 submit 的参数结构。
+ * @param progressConfig progress 工具的状态配置列表。
  * @param toolsConfig 工具配置，包含 workspace、tempDir、security、editorClient 等。
  * @param model LLM 模型名称，用于选择 XML tag 风格（可选）。
  */
 export async function makeToolkit(
-	schema: ZodType | undefined,
+	progressConfig: ProgressStatusConfig[],
 	toolsConfig: ToolsConfig,
 	_model?: string,
 ): Promise<Toolkit> {
 	await detectEnv();
-	const submitEntry: ToolEntry = {
-		definition: makeSubmitToolDefinition(schema),
+	const progressEntry: ToolEntry = {
+		definition: makeProgressTool(progressConfig),
 		stream: false,
 		canStart: () => true,
 		execute: (tc) => {
-			const call: SubmitToolCall = {
-				id: tc.id,
-				tool: "submit" as const,
-				// tc 来自通用 execute 回调，tool 字段未窄化
-				args: tc.args as SubmitArgs,
-			};
-			return submitTool(call);
+			return progressTool(tc as ProgressToolCall);
 		},
 	};
 
 	const registry: Record<string, ToolEntry> = {
 		...buildBaseRegistry(toolsConfig),
-		submit: submitEntry,
+		progress: progressEntry,
 	};
 
 	// 从注册表构建 ToolDefinition 列表
@@ -258,5 +231,5 @@ export type {
 	UserPathEntry,
 } from "./env.ts";
 export { detectEnv, getCachedEnv } from "./env.ts";
-export type { PendingReminder } from "./reminder.ts";
-export { DefaultSubmitSchema } from "./submit.ts";
+export type { ProgressStatusConfig } from "./progress.ts";
+

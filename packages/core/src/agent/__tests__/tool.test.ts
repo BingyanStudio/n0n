@@ -19,7 +19,7 @@ async function collectStream(
 	getEntry?: GetToolEntry,
 ) {
 	const events: unknown[] = [];
-	for await (const e of executeToolStream(tc, [], undefined, getEntry)) {
+	for await (const e of executeToolStream(tc, undefined, getEntry)) {
 		events.push(e);
 	}
 	return events;

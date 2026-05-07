@@ -252,7 +252,7 @@ describe("parseStream", () => {
 			expect(ready).toHaveLength(1);
 			// @ts-expect-error — 运行时工具名不受判别联合约束
 			expect(ready[0]!.tc.tool).toBe("read");
-			expect(ready[0]!.tc.args).toEqual({});
+			expect(ready[0]!.tc.args as any).toEqual({});
 		});
 
 		it("未知工具 + tool_ready → readyTools 中包含该工具", async () => {
@@ -272,7 +272,7 @@ describe("parseStream", () => {
 			const toolCall = done.result.readyTools.values().next().value!;
 			// @ts-expect-error — 运行时工具名不受判别联合约束
 			expect(toolCall.tool).toBe("unknownTool");
-			expect(toolCall.args).toEqual({});
+			expect(toolCall.args as any).toEqual({});
 		});
 	});
 
