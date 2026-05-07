@@ -13,7 +13,7 @@ import type { DomainMessage, ToolDefinition } from "@n0n/types";
 import { resolve } from "node:path";
 
 import codePromptText from "../apps/code/src/prompts/code.md" with { type: "text" };
-import { CodeResultSchema } from "../apps/code/src/schema.ts";
+import { codeProgressConfig } from "../apps/code/src/progress-config.ts";
 import { buildContextFewshot } from "../apps/code/src/context-fewshot.ts";
 
 // ── 参数 ──
@@ -42,7 +42,7 @@ const toolsConfig = {
 	editorClient: { modelId: "", tagStyle: "default" as const, tags: createTagAdapter("default"), async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); }, async ping() { return { ok: true as const }; } },
 };
 
-const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, modelId);
+const toolkit = await makeToolkit(codeProgressConfig, toolsConfig, modelId);
 const toolDefinitions: ToolDefinition[] = toolkit.tools;
 
 // ── 构建 messages（模拟首轮请求） ──

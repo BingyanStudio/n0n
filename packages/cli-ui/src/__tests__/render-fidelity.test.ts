@@ -89,11 +89,11 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 		renderer.roundStart(1, 10, 3);
 
-		// 含中文的 submit 工具参数
+		// 含中文的 progress 工具参数
 		const json =
-			'{"type":"completed","summary":"已完成 PR #61 的清理：1. 关闭 PR #61，附带说明关闭原因（核心功能已被 PR #75/#76 覆盖，分支严重过时）2. 删除远程分支"}';
+			'{"status":"completed","content":"已完成 PR #61 的清理：1. 关闭 PR #61，附带说明关闭原因（核心功能已被 PR #75/#76 覆盖，分支严重过时）2. 删除远程分支"}';
 		const chunks = randomChunks(json, 123);
-		renderer.toolCallArgStart(0, "submit");
+		renderer.toolCallArgStart(0, "progress");
 		for (const chunk of chunks) {
 			renderer.toolCallArgChunk(0, chunk);
 		}
@@ -101,15 +101,15 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 		renderer.toolExecStart("call_1", {
 			id: "call_1",
-			tool: "submit",
+			tool: "progress",
 			args: JSON.parse(json),
 		});
 		renderer.toolExecEnd("call_1", {
 			status: "completed",
 			result: {
 				type: "tool_result" as const,
-				tool: "submit",
-				call: { id: "call_1", tool: "submit", args: JSON.parse(json) },
+				tool: "progress",
+				call: { id: "call_1", tool: "progress", args: JSON.parse(json) },
 				cleanedResult: null,
 			},
 		});
@@ -124,7 +124,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 		// 不应有重复的工具头
 		const toolHeaders = cleanLines.filter((l) =>
-			l.trimStart().startsWith("▸ submit"),
+			l.trimStart().startsWith("▸ progress"),
 		);
 		expect(toolHeaders.length).toBe(1);
 	});
@@ -230,7 +230,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 		const json = '{"summary":"关闭并清理远程分支和本地引用完成所有操作"}';
 		const chunks = randomChunks(json, 77);
-		renderer.toolCallArgStart(0, "submit");
+		renderer.toolCallArgStart(0, "progress");
 		for (const chunk of chunks) {
 			renderer.toolCallArgChunk(0, chunk);
 		}
@@ -238,15 +238,15 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 
 		renderer.toolExecStart("call_1", {
 			id: "call_1",
-			tool: "submit",
+			tool: "progress",
 			args: JSON.parse(json),
 		});
 		renderer.toolExecEnd("call_1", {
 			status: "completed",
 			result: {
 				type: "tool_result" as const,
-				tool: "submit",
-				call: { id: "call_1", tool: "submit", args: JSON.parse(json) },
+				tool: "progress",
+				call: { id: "call_1", tool: "progress", args: JSON.parse(json) },
 				cleanedResult: null,
 			},
 		});
@@ -260,7 +260,7 @@ describe("RichRenderer 虚拟终端保真测试", () => {
 		}
 
 		// 应有结果行
-		const hasResult = cleanLines.some((l) => l.includes("submit"));
+		const hasResult = cleanLines.some((l) => l.includes("progress"));
 		expect(hasResult).toBe(true);
 	});
 });

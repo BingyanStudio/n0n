@@ -146,27 +146,6 @@ describe("injectDirectives A 类 directive 位置", () => {
 		expect(emptyUsers).toHaveLength(0);
 	});
 
-	it("reminder:due → latest_reminder", () => {
-		const result = pipeline([
-			{ type: "system", content: "You are helpful." },
-			{ type: "user_input", content: "问题", context: null, hint: null },
-			{
-				type: "assistant_text",
-				content: "回复",
-				reasoning: null,
-				reasoningSignature: null,
-			},
-			{
-				type: "reminder:due",
-				content: "检查结果",
-				originalEstimate: 3,
-			},
-		]);
-
-		const lrMsgs = messagesOfRole(result, "latest_reminder");
-		expect(lrMsgs).toHaveLength(1);
-		expect(lrMsgs[0]!.content).toContain("检查结果");
-	});
 });
 
 describe("injectDirectives C 类 directive（嵌在 tool result 中）", () => {

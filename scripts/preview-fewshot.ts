@@ -18,7 +18,7 @@ import type { DomainMessage, PromptMessage, ToolDefinition } from "@n0n/types";
 
 import codePromptText from "../apps/code/src/prompts/code.md" with { type: "text" };
 import { buildContextFewshot } from "../apps/code/src/context-fewshot.ts";
-import { CodeResultSchema } from "../apps/code/src/schema.ts";
+import { codeProgressConfig } from "../apps/code/src/progress-config.ts";
 
 // ── CLI 参数 ──
 
@@ -47,7 +47,7 @@ const toolsConfig = {
 	editorClient: { modelId: "", tagStyle: "default" as const, tags: createTagAdapter("default"), async *stream() { throw new Error("unused"); }, async complete() { throw new Error("unused"); }, async ping() { return { ok: true as const }; } },
 };
 
-const toolkit = await makeToolkit(CodeResultSchema, toolsConfig, modelId);
+const toolkit = await makeToolkit(codeProgressConfig, toolsConfig, modelId);
 const toolDefs: ToolDefinition[] = toolkit.tools;
 
 // ── 组装完整 DomainMessage 序列（与 repl.ts 首轮一致） ──

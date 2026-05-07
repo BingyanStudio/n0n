@@ -13,10 +13,10 @@ import type { DeepSeekMessage } from "./formatter.ts";
 
 /**
  * 控制性 tag — wrapTag 时拦截这些 tag 的内容，
- * 从消息正文中剥离，后续转为 developer / latest_reminder 消息。
+ * 从消息正文中剥离，后续转为 developer 消息。
  *
  * A 类（整条消息都是控制性内容）：
- *   system_warning, submit_rejected, turn_feedback, reminder
+ *   system_warning, progress_rejected, turn_feedback
  * B 类（嵌在 user_input 中的控制性片段）：
  *   hint
  * C 类（嵌在 tool result 中的辅助提示）：
@@ -25,9 +25,8 @@ import type { DeepSeekMessage } from "./formatter.ts";
 export const DIRECTIVE_TAGS = new Set([
 	"hint",
 	"system_warning",
-	"submit_rejected",
+	"progress_rejected",
 	"turn_feedback",
-	"reminder",
 	"edit_feedback",
 	"diagnostic_hint",
 	"output_hint",
@@ -87,7 +86,7 @@ export class DeepSeekCollectingAdapter implements TagAdapter {
  * - 找到最后一个 assistant 消息 G
  * - G 及其之前的占位符：从 content 中移除，directive 丢弃（历史 directive 已过时）
  * - G 之后的占位符：从 content 中移除，directive 收集起来
- * - 收集到的 directive 统一追加到序列末尾作为 developer/latest_reminder 消息
+ * - 收集到的 directive 统一追加到序列末尾作为 developer 消息
  *
  * 这样做确保 developer 消息不会插入 assistant(tool_calls)→tool(result) 之间，
  * 避免 DeepSeek API "insufficient tool messages following tool_calls" 错误。
@@ -143,7 +142,7 @@ export function injectDirectives(
 	// 末尾追加收集到的 directive
 	for (const d of collected) {
 		result.push({
-			role: d.tag === "reminder" ? "latest_reminder" : "developer",
+			role: "developer",
 			content: d.content,
 		});
 	}

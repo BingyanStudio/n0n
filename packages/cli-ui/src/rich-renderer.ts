@@ -325,16 +325,16 @@ export class RichRenderer implements Renderer {
 		);
 	}
 
-	submitAccepted(): void {
+	progressAccepted(): void {
 		writeln();
 		writeln(
-			`${style.bgGreen(style.bold(" ✔ DONE "))} ${style.green("submit accepted")}`,
+			`${style.bgGreen(style.bold(" ✔ DONE "))} ${style.green("progress accepted")}`,
 		);
 	}
 
-	submitRejected(attempt: number, maxAttempts: number, error: string): void {
+	progressRejected(attempt: number, maxAttempts: number, error: string): void {
 		writeln(
-			`${style.red("✗")} submit rejected (${attempt}/${maxAttempts}): ${style.gray(error)}`,
+			`${style.red("✗")} progress rejected (${attempt}/${maxAttempts}): ${style.gray(error)}`,
 		);
 	}
 
@@ -440,13 +440,8 @@ export class RichRenderer implements Renderer {
 						.join(" ") || style.gray("(no changes)");
 				return `${style.dim("◂")} ${style.cyan("edit")} ${path} ${duration} ${rounds} ${lineStats} ${style.green("✓")}`;
 			}
-			case "reminder": {
-				const chars = result.call.args.content.length;
-				const estTk = estimateTokens(result.call.args.content);
-				return `${style.dim("◂")} ${style.cyan("reminder")} ${style.gray(`(est. ${result.call.args.estimate} rounds)`)} ${style.gray(`${chars} chars`)} ${style.dim(`~${estTk} tok`)}`;
-			}
-			case "submit": {
-				return `${style.dim("◂")} ${style.cyan("submit")}`;
+			case "progress": {
+				return `${style.dim("◂")} ${style.cyan("progress")} ${style.gray(`[${result.call.args.status}]`)}`;
 			}
 			default: {
 				console.warn("[RichRenderer] unknown tool result:", result);
