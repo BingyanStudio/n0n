@@ -13,7 +13,7 @@
  *   n0n --help / -h        — 显示帮助信息
  *   n0n --resume <file>    — 从对话日志文件恢复对话
  *   n0n --save-every-loop  — 每轮 agentLoop 结束后自动保存对话
- *   n0n --v <version>      — 切换提示词版本（如 --v 0.1 使用 code-v0.1.md）
+
  */
 
 import { version } from "../package.json";
@@ -37,7 +37,7 @@ if (args.includes("--help") || args.includes("-h")) {
   n0n --workspace <dir>   显式指定 workspace 目录
   n0n --resume <file>     从对话日志文件恢复对话
   n0n --save-every-loop   每轮自动保存对话到 n0n-conversation-latest.json
-  n0n --v <version>       切换提示词版本（如 --v 0.1）
+
   n0n -v, --version       显示版本号
   n0n -h, --help          显示帮助信息
 
@@ -57,11 +57,9 @@ REPL 命令:
 	process.exit(0);
 }
 
-// ── 解析 --resume、--save-every-loop、--v ──
+// ── 解析 --resume、--save-every-loop ──
 let resumeFile: string | undefined;
 let saveEveryLoop = false;
-let promptVersion: string | undefined;
-
 const resumeIdx = args.indexOf("--resume");
 if (resumeIdx !== -1) {
 	resumeFile = args[resumeIdx + 1];
@@ -78,21 +76,10 @@ if (args.includes("--save-every-loop")) {
 	args.splice(args.indexOf("--save-every-loop"), 1);
 }
 
-const vIdx = args.indexOf("--v");
-if (vIdx !== -1) {
-	promptVersion = args[vIdx + 1];
-	if (!promptVersion) {
-		console.error("错误：--v 需要指定版本号（如 --v 0.1）");
-		process.exit(1);
-	}
-	args.splice(vIdx, 2);
-}
-
 // 将解析结果挂载到全局，供 index.ts 读取
 (globalThis as Record<string, unknown>).__n0n_cli_opts = {
 	resumeFile,
 	saveEveryLoop,
-	promptVersion,
 	filteredArgs: [...args],
 };
 

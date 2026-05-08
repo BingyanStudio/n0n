@@ -42,8 +42,6 @@ export interface CodeReplOptions {
 	initialInput?: string;
 	resumeFile?: string;
 	saveEveryLoop?: boolean;
-	/** 提示词版本，如 "0.1" 对应 code-v0.1.md；不传则使用默认 code.md */
-	promptVersion?: string;
 }
 
 type CodeWorkspacePaths = BaseWorkspacePaths;
@@ -138,11 +136,10 @@ export async function startCodeRepl(
 		initialInput,
 		resumeFile,
 		saveEveryLoop = false,
-		promptVersion,
 	} = options;
 
 	// 基础系统提示词（稳定前缀，不含 agents.md 和环境信息）
-	const baseSystemPrompt = getPrompt(promptVersion);
+	const baseSystemPrompt = getPrompt();
 
 	// 构建 Toolkit — 含 progress config，供 fewshot 和 agentLoop 共用
 	const runtime = getRuntime();
