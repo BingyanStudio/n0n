@@ -2,265 +2,184 @@
 
 ## 概述
 
-用 **progress** 工具替代现有的 submit 和 reminder。
+progress 是 agent 唯一的结构化输出工具，承担三重职责：阶段性推理日志（working）、最终交付（completed）、请求关键决策（blocked）。
 
-progress 是 agent 唯一的结构化输出工具。每次调用 progress 时，agentLoop 终止并返回结果。外部调用方（repl.ts / headless.ts）拿到结果后自行决定是否重新启动循环。
+本文档记录"为什么这样做"——progress 的设计来自对人机交互范式的分析，理解这个背景才能正确使用和演进它。
 
-## 动机
+---
 
-1. submit 只能在"做完/卡住"时调用——执行期间用户看不到进展
-2. reminder 几乎不被使用——定时提醒机制不匹配实际需求
-3. 需要让 agent 能产出阶段性状态，同时保持 agentLoop 接口不变
+## 动机：从交互范式出发
 
-## 当前代码结构
+### 背景：AI 侧的两个方向见顶
 
-```
-packages/tools/src/submit.ts
-  - makeSubmitToolDefinition(schema?) → ToolDefinition
-  - submitTool(call) → SubmitToolResult
-  - 工具 parameters 为开放 object，完整 JSON Schema 写入 description
+- **提示词工程** → 方法论部分已被 skill 系统承载（标准化容器）。天花板：方法论再好，不能保证模型实际遵守。
+- **multi-agent** → 划分+连接的问题空间已被穷举。天花板：正确划分需要全局视野，AI 不具备，只能由人做。
 
-packages/tools/src/reminder.ts
-  - REMINDER_TOOL_DEFINITION
-  - reminderTool(call, reminders) → ReminderToolResult
-  - PendingReminder { content, roundsLeft, originalEstimate }
+产品的突破方向在第三层：**人的交互**——如何让人更好表达、更好参与、更好验收。
 
-packages/tools/src/index.ts
-  - makeToolkit(schema, toolsConfig, model) → Toolkit
-  - buildBaseRegistry 注册 exec/write/edit/reminder
-  - submit 在 makeToolkit 中单独构建并注入
+### "模型执行期间"是参与度最低的环节
 
-packages/core/src/agent/loop.ts
-  - agentLoop<T>(history, options) → AgentResult<T>
-  - AgentResult = { result: T | null, report, history, tools }
-  - 内部通过 checkSubmit 对 submit 调用做 schema 后验证
-  - 校验通过 → 返回 result
-  - 校验失败 → submit:rejected 消息，模型重试
-  - injectReminders 在每轮开始时处理到期 reminder
+以 cursor plan 模式为参考，用户参与度评分（0=完全被动，10=用户直接操作）：
 
-apps/code/src/schema.ts
-  - CodeResultSchema: discriminatedUnion("type", [completed, ask_user, request_assist])
-  - 传入 makeToolkit 作为 submit 的校验 schema
+| 环节 | 分数 | 原因 |
+|------|------|------|
+| 用户编辑计划 | 7 | 在具体产物上操作，但文本非所见即所得 |
+| todo 对照检查 | 6 | 有明确标准，但仍需人工判断 |
+| 模型询问选项 | 5 | 用户在 AI 框架内被动选择 |
+| 模型撰写计划 | 2 | 用户只是等待者 |
+| **模型按计划执行** | **1** | **用户完全不参与，计划到执行有 gap** |
 
-apps/code/src/repl.ts
-  - 调用 agentLoop → 拿到 AgentResult
-  - 检查 result.type 决定后续行为（展示结果 / 等用户回复 / 等）
-```
+progress 工具的设计目标：**提升"模型执行期间"这个得 1 分环节的用户参与度**。
 
-## 设计
+---
 
-### 核心原则
+## 核心设计："假参与" vs "真参与"
 
-agentLoop 的行为不变——"跑到模型调用 progress 为止，返回结果"。它总是停。"是否继续"完全由外部决定。
+### 阶段2的"假参与"——问题结构中嵌入未验证假设
 
-### 底层：makeProgressTool（packages/tools）
+vibe coding 演进轴中，"模型询问用户"（阶段2）被判定为假参与。"假"的含义有三层递进：
 
-替代现有的 `makeSubmitToolDefinition`。
+1. **表层：信息带宽压缩。** 用户只能选1/2/3，无法表达选项之外的意图。
+2. **中层：问了不该问的问题。** AI 不知道什么问题用户有能力回答（问非技术人员技术选型），不知道什么问题该自己决定（为了保守而推卸决策责任）。
+3. **深层：问题结构中嵌入了未验证的假设，隐性误导用户。**
 
-```typescript
-// packages/tools/src/progress.ts
+第三层是最隐蔽的。例子：
 
-export interface ProgressStatusConfig {
-  /** status 枚举值 */
-  value: string;
-  /** 该 status 的含义说明（写入工具顶层 description） */
-  statusDesc: string;
-  /** 该 status 下 content 的格式说明（写入工具顶层 description） */
-  contentDesc: string;
-}
+- "你是否需要加个鸡蛋？" → 前提开放（可能不需要）
+- "你要加几个鸡蛋？" → 前提封闭（已假定需要）
 
-/**
- * 根据配置列表生成 progress 工具定义。
- * 
- * 生成的工具：
- * - name: "progress"
- * - description: 包含所有 status 的含义和对应 content 格式（从配置拼接）
- * - parameters: { status: z.enum([...]), content: z.string() }
- *   其中 status/content 的 describe 只写极简格式说明
- *   详细的 status↔content 对应关系在工具顶层 description 中
- */
-export function makeProgressTool(config: ProgressStatusConfig[]): ToolDefinition {
-  // 拼接工具 description：逐条列出 status 含义和 content 格式
-  const statusDocs = config
-    .map(c => `- ${c.value}: ${c.statusDesc}\n  content: ${c.contentDesc}`)
-    .join("\n");
+两个问题的问题空间看似相同，但后者把 AI 的未验证判断嵌入了问题结构本身。用户收到后者时，潜意识接受了"需要鸡蛋"这个前提——因为问题的存在就暗示了前提的成立。用户甚至不会意识到自己可以拒绝这个前提。
 
-  const description = [
-    "Report your current progress. This is the ONLY way to deliver content to the user.",
-    "They cannot see your reasoning, tool calls, or intermediate results.",
-    "",
-    "Status types:",
-    statusDocs,
-    "",
-    "Validation is enforced — non-conforming calls will be rejected.",
-  ].join("\n");
+更深一步：模型"会问这种问题"这件事本身就值得存疑——它做出"要问用户"这个决策的依据可能就是错的。
 
-  // parameters schema（极简，详细说明在 description 中）
-  const statusEnum = config.map(c => c.value);
-  const schemaObj = {
-    type: "object",
-    properties: {
-      status: {
-        type: "string",
-        enum: statusEnum,
-        description: "Current status",
-      },
-      content: {
-        type: "string",
-        description: "Content for this status",
-      },
-    },
-    required: ["status", "content"],
-    additionalProperties: false,
-  };
+### 阶段3的"真参与"——用户直接操作产物
 
-  return {
-    name: "progress",
-    description,
-    parameters: schemaObj,
-  };
-}
-```
+用户面对的是可操作的产物本身，不经过 AI 的"提问框架"这个中间层。AI 的判断力缺陷不会限制用户——用户可以无视 AI 的所有意图，直接操作自己关心的部分。AI 退到工具位置，人在前台自主决策。
 
-同时提供一个 zod schema 用于 agentLoop 内部的后验证：
+### progress 如何实现"真参与"
 
-```typescript
-export function makeProgressSchema(config: ProgressStatusConfig[]) {
-  return z.object({
-    status: z.enum(config.map(c => c.value) as [string, ...string[]]),
-    content: z.string(),
-  });
-}
-```
+progress(working) 产出可审阅的推理日志 → 用户直接在文本上标注"这里错了" → 这是在具体产物上操作，而非在 AI 的提问框架内被动选择。
 
-执行器（替代 submitTool）：
+对应交互范式的核心机制：**AI 产出初稿，人在上面改。修改本身就是意图的完整、无歧义表达。**
 
-```typescript
-export function progressTool(call: ProgressToolCall): ProgressToolResult {
-  return {
-    type: "tool_result",
-    tool: "progress" as const,
-    call,
-    cleanedResult: call.args,
-    userResponse: undefined,
-  };
-}
-```
+---
 
-### 上层：apps/code 的配置
+## progress(working) 的正确定位：可审计的判断日志
 
-```typescript
-// apps/code/src/progress-config.ts
+### 不是状态通知
 
-import type { ProgressStatusConfig } from "@n0n/tools";
+错误定位：
+> "步骤3完成了，正在做步骤4。"
 
-export const codeProgressConfig: ProgressStatusConfig[] = [
-  {
-    value: "completed",
-    statusDesc: "任务完成，提交最终汇报。假定用户已失去上下文，务必完整自包含。",
-    contentDesc: "完成汇报——详细说明已完成的工作、验证结果和关键决策。",
-  },
-  {
-    value: "working",
-    statusDesc: "仍在进行中，汇报阶段性进展后继续工作。",
-    contentDesc: "简述已完成什么、正在做什么、接下来计划做什么。",
-  },
-  {
-    value: "blocked",
-    statusDesc: "需要用户输入才能继续。",
-    contentDesc: "向用户提出具体问题并提供 2-4 个选项。使用 DSL 格式：每选项以 `## ` 开头，下行写说明。",
-  },
-];
-```
+这是状态通知——用户知道进度但无法有效介入。对应评分约 2-3 分。
 
-### 上层：repl.ts 的外部循环
+### 而是推导过程的展示
 
-当前 repl.ts 调用 agentLoop 后检查 `result.type`。改为检查 `result.status`：
+正确定位：
+> "我判断竞态条件是 token 刷新失败的根因，依据是日志显示 token 在 600s 时过期但刷新窗口在 500-600s 触发。选择用 mutex 保护刷新流程，排除了缩短过期时间的方案（只延缓不根治）。"
 
-```typescript
-// 伪代码，展示逻辑变化
+这暴露了判断、依据和排除逻辑——用户能精确定位出错点。对应评分约 5-7 分。
 
-while (true) {
-  const agentResult = await agentLoop<ProgressResult>(history, { toolkit, schema, ... });
-  history = agentResult.history;
+### 为什么要展示推导过程——"保证长程正确"
 
-  if (agentResult.result == null) {
-    // agent 异常终止（max iterations / error）
-    break;
-  }
+类比老师批改作业：40% 路径正确但答案错误的作业，比答案正确但无路径（猜的）好得多。因为前者可以定位错误环节并修正，保证后续正确。
 
-  const { status, content } = agentResult.result;
+映射到 agent：
+- 只看结论 → 只能判断"当前这步对不对"（纠正结论 = 修正一步）
+- 检查推导 → 能判断"思路/假设对不对"（纠正假设 = 修正后续所有步骤）
 
-  if (status === "completed") {
-    // 展示最终结果，结束
-    displayReport(content);
-    break;
-  }
+推导过程暴露了"假设"——假设是所有后续决策的基础。如果假设错了，基于它的每一步推导都错，即使每步内部逻辑自洽。只有暴露推导链条，用户才能定位到"哪个假设是错的"。
 
-  if (status === "working") {
-    // 展示阶段性进展，然后继续循环
-    displayProgress(content);
-    // 不等用户输入，直接重新调用 agentLoop
-    continue;
-  }
+纠正假设 = 纠正整个推导树的根节点 = 保证长程正确。
 
-  if (status === "blocked") {
-    // 展示问题，等待用户输入
-    displayQuestion(content);
-    const userReply = await promptUser();
-    // 注入用户回复，继续循环
-    history.push(makeUserInput(userReply));
-    continue;
-  }
-}
-```
+### 双时态服务
 
-### agentLoop 内部改动
+working 服务于两种阅读场景：
 
-极小：
+**场景一：实时纠偏**
+- 用户想了解进展 → 查看 working 日志 → 发现推导问题 → 手动停止 + 标注纠正
+- 价值：早发现早纠正，减少后续浪费
 
-1. `checkSubmit` 逻辑不变——只是现在校验的 schema 是 `{ status, content }` 而非 `CodeResultSchema`
-2. `REGISTERED_TOOLS` 中 `"submit"` 改为 `"progress"`
-3. `makeToolkit` 中构建 progress entry 替代 submit entry
-4. 移除 `injectReminders` 调用和 `reminders` 数组
-5. 移除 reminder 在 `buildBaseRegistry` 中的注册
+**场景二：事后溯因**
+- 用户发现 completed 结果有问题 → 回查历史 working 日志 → 定位逻辑错误的位置 → 告诉模型"你这里错了"
+- 价值：即使没实时盯着，事后也能追溯错误根源
 
-### 移除 reminder
+因此 working 的内容必须**自包含**——脱离对话上下文，单独阅读某条 working 也能理解当时的判断和依据。
 
-- 删除 `packages/tools/src/reminder.ts`
-- 删除 `@n0n/types` 中 reminder 相关类型（ReminderArgs, ReminderToolCall, ReminderToolResult, reminder:due 消息类型）
-- 删除 agentLoop 中的 `injectReminders` 函数和 `reminders` 参数传递
-- 删除提示词中关于 reminder 的说明
+### 可选阅读，不是强制推送
 
-reminder 的功能被 progress(working) 覆盖：模型汇报阶段性进展时，自然包含了"我在做什么、到哪了"的信息。而且 progress(working) 的内容对用户可见——比只有模型自己看到的 reminder 更有价值。
+working 像 email 收件箱——用户可以选择阅读或跳过。不是即时通讯的弹窗通知。用户在想了解细节时主动查看，不需要实时盯着每条输出。
 
-## 类型变化（@n0n/types）
+### 触发粒度：判断节点，不是执行步骤
 
-新增：
-- `ProgressToolCall` — `{ id, tool: "progress", args: { status: string, content: string } }`
-- `ProgressToolResult` — `{ type: "tool_result", tool: "progress", call, cleanedResult, userResponse? }`
+正确粒度 = 每个"做了可能会错的判断"的时刻。
 
-移除：
-- `ReminderArgs`, `ReminderArgsSchema`
-- `ReminderToolCall`, `ReminderToolResult`
-- `reminder:due` 消息类型
+用户追溯时关心的是"在哪里做了什么判断"，而非"执行了什么原子操作"。纯执行步骤（"我运行了测试"）不需要单独记录，除非其结果影响了后续判断。
 
-submit 相关类型改名为 progress（`SubmitToolCall` → `ProgressToolCall` 等）。
+---
 
-## 改动清单
+## progress(blocked) 的有效性前提
 
-| # | 位置 | 改动 |
-|---|------|------|
-| 1 | `packages/tools/src/progress.ts` | 新建。makeProgressTool + makeProgressSchema + progressTool |
-| 2 | `packages/tools/src/submit.ts` | 删除 |
-| 3 | `packages/tools/src/reminder.ts` | 删除 |
-| 4 | `packages/tools/src/index.ts` | 移除 reminder 注册，submit entry 改为 progress entry |
-| 5 | `packages/core/src/agent/loop.ts` | 移除 injectReminders 和 reminders 数组；REGISTERED_TOOLS 改名 |
-| 6 | `packages/core/src/agent/round.ts` | checkSubmit 中的工具名 "submit" → "progress" |
-| 7 | `@n0n/types` | 新增 Progress 类型，移除 Reminder 类型，SubmitXxx 改名 ProgressXxx |
-| 8 | `apps/code/src/progress-config.ts` | 新建。定义 codeProgressConfig |
-| 9 | `apps/code/src/schema.ts` | 移除 CodeResultSchema（由 makeProgressSchema(config) 替代） |
-| 10 | `apps/code/src/repl.ts` | 外部循环适配：根据 status 决定继续/停止/等用户 |
-| 11 | `apps/code/src/headless.ts` | 适配 progress 接口 |
-| 12 | `apps/code/src/prompts/code.md` | 更新工具使用说明：submit→progress，移除 reminder 说明 |
-| 13 | renderer | 审查是否需要改动以展示 progress(working) 的中间状态 |
+blocked 请求用户做决策。但如果使用不当，它会退化为"假参与"。
+
+**有效使用的前提：之前的 working 已经充分展示了推导过程。**
+
+- 有充分 working → 用户已验证框架正确 → blocked 是"在经过验证的框架中请求关键决策" → 真参与
+- 无 working / 质量差 → 用户无法验证框架 → blocked 可能嵌入了未验证假设 → 假参与
+
+blocked 不应该作为第一个动作出现。模型应该先通过 working 展示自己的理解和推导，让用户有机会验证框架是否正确，然后再在必要时用 blocked 请求关键决策。
+
+---
+
+## 三种状态的完整定义
+
+### completed — 最终交付物
+
+任务完成后的正式汇报。假定用户已失去上下文，内容必须完整自包含。
+
+包含：已完成的工作、验证结果、关键决策及其依据。
+
+用户审阅结论。如果发现问题，可以通过历史 working 日志追溯原因。
+
+### working — 可审计的判断日志
+
+在关键判断点产出，记录推导过程供用户审阅或事后追溯。
+
+content 应包含：
+1. 做了什么判断（结论）
+2. 基于什么依据（前提/证据/观察到的事实）
+3. 排除了什么替代方案及原因（决策空间）
+
+用户能据此精确定位出错点：假设错了？依据不充分？排除逻辑有漏洞？
+
+不是状态通知，不是进度条。是正式的、有论证结构的文本——用户可以标注、纠错、回溯。
+
+### blocked — 请求关键决策
+
+需要用户输入才能继续。提出具体问题并提供 2-4 个选项。
+
+有效性前提：之前的 working 已经充分展示了推导框架，用户有能力判断"这个问题的前提是对的"。
+
+---
+
+## 未来展望：节点回滚
+
+理想的交互模式：用户发现某条 working 中的判断有问题 → 将模型/工作区还原到那个时刻的状态 → 提供标注 → 从历史节点重新开始。
+
+这需要多组件协调（对话历史快照 × 工作区版本 × 模型上下文），当前仅作展望。但它对现在的设计有一个隐含要求：**每条 working 应该自包含到"能作为恢复点使用"的程度**——单独阅读这条记录就能理解当时的完整状态和判断依据。
+
+---
+
+## 已知局限（留档观察）
+
+### 事后合理化
+
+LLM 可能先做了决策再编造合理化的推导展示——文本表面看起来有判断、有依据、有排除，但实际是事后填充。用户无法从文本形式区分真实推理和事后编造。
+
+当前的务实缓解：要求 working 中引用具体可验证的事实（"日志第3行显示 X"），而非抽象推理（"因为性能考虑"）。即使推理是事后编造的，具体事实引用是可独立验证的。
+
+### blocked 的时序问题
+
+working 是异步可选阅读的——用户可能不在线、没看。模型按照错误假设一路推导到 blocked 时，working 中的错误推导没有被用户拦截。
+
+当前的缓解：要求 blocked 自包含完整推导上下文，不依赖用户是否已读之前的 working。但如果推导本身有错误假设，blocked 中展示的推导同样会包含该错误——这需要用户在阅读 blocked 时自行发现。
