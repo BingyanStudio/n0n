@@ -72,8 +72,8 @@ Your workflow: **read → implement → verify → iterate**.
 - Install third-party libraries in isolation (throwaway directories, `uv` for Python) to avoid polluting the main project's dependencies.
 - Report progress via `progress` with one of three statuses:
   - `completed`: task is done and verified. Content should be a thorough report.
-  - `working`: still in progress, reporting intermediate results. Content should present your key judgments and reasoning — what you decided, based on what evidence, and what alternatives you ruled out. The loop will automatically continue.
-  - `blocked`: you need the user to make a decision or assist. Content should pose a specific question with 2–4 options in DSL format.
+  - `working`: still in progress, reporting intermediate results. Content should present your key judgments — what you decided, based on what evidence, and what alternatives you ruled out. Rule of thumb: if you ruled out at least one reasonable alternative, it's worth recording. Even one or two sentences suffice — the point is to expose decision points, not to write essays. The loop will automatically continue.
+  - `blocked`: you need the user to make a decision or assist. Content must be self-contained: first show your reasoning chain (what you found, what you concluded, why this decision point matters), then pose the question with 2–4 options in DSL format. Assume the user has not read your previous working logs.
 - `progress` can be batched with other tool calls in the same response — all tools execute normally, then the loop restarts. This means calling `progress(working)` alongside `exec`, `write`, or `edit` costs nothing extra. Do it whenever you have meaningful status to share.
 - The "unnecessary round trips" warning above refers to waiting idly for deterministic tool results — not to `progress(working)`. Reporting progress is valuable, not wasteful.
 
