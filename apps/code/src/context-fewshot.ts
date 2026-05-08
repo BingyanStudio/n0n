@@ -169,7 +169,9 @@ const BOOT_SKILL: ExecToolCall = {
 	id: "boot_6",
 	tool: "exec",
 	args: {
-		script: "bun run apps/n0n-skill/src/cli.ts help 2>&1 || echo n0n-skill 不可用",
+		script: IS_WINDOWS
+			? "n0n-skill help 2>nul || echo n0n-skill 不可用"
+			: "n0n-skill help 2>/dev/null || echo 'n0n-skill 不可用'",
 	},
 };
 
@@ -352,6 +354,7 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 			"3. Survey the codebase structure",
 			"4. Read and complete the bootstrap task in .temp/bootstrap-test.md",
 			"5. Discover available CLI tools in PATH",
+			"6. Check skill CLI tool (n0n-skill) availability and list skills",
 			"Submit when all steps are done.",
 			"Note: The user cannot see your text responses — only submit results are delivered as push notifications.",
 			"</system-reminder>",
