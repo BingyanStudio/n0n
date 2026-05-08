@@ -11,11 +11,13 @@
  */
 
 import codeDefault from "./code.md" with { type: "text" };
+import codeV01 from "./code-v0.1.md" with { type: "text" };
 import codeV02 from "./code-v0.2.md" with { type: "text" };
 
 /** 版本号 → 提示词文本。空字符串 key 为默认版本。 */
 export const prompts: Record<string, string> = {
 	"": codeDefault,
+	"0.1": codeV01,
 	"0.2": codeV02,
 };
 
