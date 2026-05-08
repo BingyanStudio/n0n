@@ -19,7 +19,7 @@ export const codeProgressConfig: ProgressStatusConfig[] = [
 	{
 		value: "working",
 		statusDesc: "仍在进行中，汇报阶段性进展后继续工作。",
-		contentDesc: "简述已完成什么、正在做什么、接下来计划做什么。",
+		contentDesc: "展示关键判断及其依据——做了什么判断、基于什么证据、排除了什么替代方案。供用户检查推导过程、定位假设偏差。",
 	},
 	{
 		value: "blocked",

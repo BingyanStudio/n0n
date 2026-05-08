@@ -208,7 +208,7 @@ const TURN2_PROGRESS: ProgressToolCall = {
 	tool: "progress" as const,
 	args: {
 		status: "working",
-		content: "Bootstrap 任务执行中：已创建 hello.ts 并修改状态为 DONE，正在运行验证和清理。接下来提交最终结果。",
+		content: "判断 bootstrap 任务可以一次性完成：write/edit 是确定性工具（必定成功），与 exec 同批发出不需要等待结果。选择先写文件再执行验证+清理，而非分步执行，因为各步骤无依赖关系。",
 	},
 };
 
