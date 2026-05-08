@@ -8,10 +8,11 @@
  * - ExecSlot      — 需要真实执行，结果替换此位置
  * - DerivedSlot   — 从运行时上下文派生
  *
- * 3-turn 教学流程：
+ * 4-turn 教学流程：
  * Turn 1: exec 推理（拆解任务）+ 5 个并行 exec 环境发现
- * Turn 2: exec 推理（规划步骤）+ write + edit + exec 执行任务
- * Turn 3: submit 提交结果
+ * Turn 2: exec 推理 + write + edit + exec + progress(working) 并行执行 — 教学：做事的同时汇报进展
+ * Turn 3: 系统自动注入"继续"后，模型看到所有结果
+ * Turn 4: progress(completed) 提交最终结果
  */
 
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
@@ -202,6 +203,15 @@ const TURN2_EXEC: ExecToolCall = {
 	},
 };
 
+const TURN2_PROGRESS: ProgressToolCall = {
+	id: "boot_p",
+	tool: "progress" as const,
+	args: {
+		status: "working",
+		content: "Bootstrap 任务执行中：已创建 hello.ts 并修改状态为 DONE，正在运行验证和清理。接下来提交最终结果。",
+	},
+};
+
 const PLAN_RESULT: DomainMessage = {
 	type: "tool_result",
 	tool: "exec" as const,
@@ -282,6 +292,14 @@ const EXEC_RESULT: DomainMessage = {
 	durationMs: 150,
 };
 
+const PROGRESS_WORKING_RESULT: DomainMessage = {
+	type: "tool_result",
+	tool: "progress" as const,
+	call: TURN2_PROGRESS,
+	cleanedResult: TURN2_PROGRESS.args,
+	userResponse: "继续",
+} satisfies ProgressToolResult as DomainMessage;
+
 // ── 派生消息构建器 ──
 
 function buildSubmitReport(ctx: RuntimeCtx): string {
@@ -298,7 +316,7 @@ function buildTurn2Assistant(_ctx: RuntimeCtx): DomainMessage {
 		content: null,
 		reasoning: "让我整理一下。",
 		reasoningSignature: null,
-		toolCalls: [BOOT_THINK, TURN2_WRITE, TURN2_EDIT, TURN2_EXEC],
+		toolCalls: [BOOT_THINK, TURN2_WRITE, TURN2_EDIT, TURN2_EXEC, TURN2_PROGRESS],
 	};
 }
 
@@ -398,9 +416,10 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 	WRITE_RESULT,
 	EDIT_RESULT,
 	EXEC_RESULT,
+	PROGRESS_WORKING_RESULT,
 
-	// ── Turn 3: 确认结果 → submit ──
-	// 教学：看到上一批执行结果后，通过 submit 提交（用户看不到 content）
+	// ── Turn 3: progress(working) 后系统注入"继续"，新一轮开始 ──
+	// 教学：模型看到上一批全部结果 + 用户的"继续"，然后通过 progress(completed) 提交最终结果
 	{ _slot: "derived", build: buildTurn3Progress },
 	{ _slot: "derived", build: buildProgressResult },
 ];

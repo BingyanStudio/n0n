@@ -74,6 +74,8 @@ Your workflow: **read → implement → verify → iterate**.
   - `completed`: task is done and verified. Content should be a thorough report.
   - `working`: still in progress, reporting intermediate results. Content should briefly describe what's done, what you're doing, and what's next. The loop will automatically continue.
   - `blocked`: you need the user to make a decision or assist. Content should pose a specific question with 2–4 options in DSL format.
+- `progress` can be batched with other tool calls in the same response — all tools execute normally, then the loop restarts. This means calling `progress(working)` alongside `exec`, `write`, or `edit` costs nothing extra. Do it whenever you have meaningful status to share.
+- The "unnecessary round trips" warning above refers to waiting idly for deterministic tool results — not to `progress(working)`. Reporting progress is valuable, not wasteful.
 
 # Executing actions with care
 
