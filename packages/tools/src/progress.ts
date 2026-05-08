@@ -39,7 +39,7 @@ export function makeProgressTool(config: ProgressStatusConfig[]): ToolDefinition
 
 	const description = [
 		"Report your current progress. This is the ONLY way to deliver content to the user.",
-		"They cannot see your reasoning, tool calls, or intermediate results.",
+		"They cannot see your reasoning, tool calls, or intermediate results.You must report your state by calling this tool. Keep the user posted.",
 		"",
 		"Status types:",
 		statusDocs,
