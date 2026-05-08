@@ -32,8 +32,6 @@ export interface HeadlessOptions {
 	timeoutMs?: number;
 	/** 额外的 system prompt 前缀 */
 	systemPromptPrefix?: string;
-	/** 提示词版本，如 "0.1" 对应 code-v0.1.md；不传则使用默认 code.md */
-	promptVersion?: string;
 }
 
 export interface HeadlessResult {
@@ -80,13 +78,12 @@ export async function runHeadless(
 		maxIterations = 100,
 		timeoutMs = 900_000, // 15 分钟默认
 		systemPromptPrefix,
-		promptVersion,
 	} = options;
 
 	const startTime = Date.now();
 
 	// 构建 system prompt
-	const systemPrompt = getPrompt(promptVersion);
+	const systemPrompt = getPrompt();
 	const effectivePrompt = systemPromptPrefix
 		? `${systemPromptPrefix}\n\n${systemPrompt}`
 		: systemPrompt;

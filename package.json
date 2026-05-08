@@ -6,6 +6,7 @@
 	"scripts": {
 		"start:code": "bun run apps/code/src/cli.ts",
 		"start:fairy": "bun run apps/fairy/src/index.ts",
+		"start:skill": "bun run apps/n0n-skill/src/cli.ts",
 		"check": "turbo check",
 		"typecheck": "turbo typecheck",
 		"lint": "bunx biome check --write ."

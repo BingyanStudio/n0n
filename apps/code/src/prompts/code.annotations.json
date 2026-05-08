@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "source": "code.md",
+  "author_type": "human",
+  "annotations": [
+    {
+      "id": "ann_mowg7lso4gvo",
+      "anchor": {
+        "type": "text-range",
+        "start_text": "\nBootstrap 阶段会执行 `n0n-skill he",
+        "end_text": "）\n- 两者互补，skill 中的方法论不会覆盖此处的硬约束"
+      },
+      "content": "运作机制只需要用户知道即可，这个是给agent的提示词，应该告诉其是什么，何时用，如何用。并且提供强制指令：优先考虑相关的skill，然后再根据自己的经验。",
+      "created_at": "2026-05-08T05:02:12.504Z",
+      "updated_at": "2026-05-08T05:02:12.504Z",
+      "resolved": false,
+      "tags": []
+    },
+    {
+      "id": "ann_mowgcyxki1e8",
+      "anchor": {
+        "type": "text-range",
+        "start_text": "\n# Constraints",
+        "end_text": "\n# Constraints"
+      },
+      "content": "如何清晰的思考的部分被你完全删除了。它不应该作为需要被卸载的skill。\n\n这样，你做一个思维实验，列出10类用户常见的使用场景：\n- 讨论方案\n- 构建demo\n- 修复bug\n- review代码\n- 等等\n\n将其**显式**的写入一个文档。我来看看你对于常见任务/任务需要的原子化能力/所以应该常驻哪些方法论的理解是否存在偏差。",
+      "created_at": "2026-05-08T05:06:22.808Z",
+      "updated_at": "2026-05-08T05:06:22.808Z",
+      "resolved": false,
+      "tags": []
+    }
+  ]
+}

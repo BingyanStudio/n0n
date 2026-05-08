@@ -30,7 +30,7 @@ import {
 } from "../frontmatter.ts";
 import type { SkillContent, SkillMeta } from "./types.ts";
 
-export type { SkillContent, SkillMeta } from "./types.ts";
+export type { SkillContent, SkillMeta, SkillActivation } from "./types.ts";
 
 /**
  * 发现所有 skill：扫描 SKILL.md，只解析 frontmatter（轻量）
@@ -56,6 +56,24 @@ export async function discoverSkills(baseDir: string): Promise<SkillMeta[]> {
 	}
 
 	return skills;
+}
+
+/**
+ * 发现所有 skill 并覆盖合并多个目录（同名 skill，后出现的覆盖先出现的）
+ */
+export async function discoverSkillsMultiDir(
+	baseDirs: string[],
+): Promise<SkillMeta[]> {
+	const map = new Map<string, SkillMeta>();
+
+	for (const baseDir of baseDirs) {
+		const skills = await discoverSkills(baseDir);
+		for (const skill of skills) {
+			map.set(skill.name, skill);
+		}
+	}
+
+	return Array.from(map.values());
 }
 
 /**
@@ -149,6 +167,7 @@ const SkillFrontmatterSchema = z.object({
 	description: z.string(),
 	license: z.string().optional(),
 	compatibility: z.string().optional(),
+	activation: z.enum(["auto", "manual"]).default("auto"),
 });
 
 /**
@@ -178,6 +197,7 @@ function parseSkillMeta(content: string, filePath: string): SkillMeta | null {
 		description: data.description,
 		path: resolve(filePath),
 		dir,
+		activation: data.activation,
 	};
 
 	if (data.license) meta.license = data.license;

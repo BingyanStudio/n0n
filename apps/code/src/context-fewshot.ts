@@ -165,6 +165,16 @@ for (const dir of dirs) {
 	},
 };
 
+const BOOT_SKILL: ExecToolCall = {
+	id: "boot_6",
+	tool: "exec",
+	args: {
+		script: IS_WINDOWS
+			? "n0n-skill help 2>nul || echo n0n-skill 不可用"
+			: "n0n-skill help 2>/dev/null || echo 'n0n-skill 不可用'",
+	},
+};
+
 // ── Turn 2 静态调用 & 结果 ──
 
 const TURN2_WRITE: ToolCallRecord = {
@@ -344,6 +354,7 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 			"3. Survey the codebase structure",
 			"4. Read and complete the bootstrap task in .temp/bootstrap-test.md",
 			"5. Discover available CLI tools in PATH",
+			"6. Check skill CLI tool (n0n-skill) availability and list skills",
 			"Submit when all steps are done.",
 			"Note: The user cannot see your text responses — only submit results are delivered as push notifications.",
 			"</system-reminder>",
@@ -368,6 +379,7 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 			BOOT_AGENTS,
 			BOOT_CODE,
 			BOOT_TASK,
+			BOOT_SKILL,
 		],
 	},
 
@@ -377,6 +389,7 @@ const FEWSHOT_TEMPLATE: FewshotEntry[] = [
 	{ _slot: "exec", call: BOOT_AGENTS },
 	{ _slot: "exec", call: BOOT_CODE },
 	{ _slot: "exec", call: BOOT_TASK },
+	{ _slot: "exec", call: BOOT_SKILL },
 
 	// ── Turn 2: exec 推理 + 执行 bootstrap 任务 ──
 	{ _slot: "derived", build: buildTurn2Assistant },

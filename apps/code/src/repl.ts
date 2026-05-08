@@ -30,6 +30,7 @@ import {
 import { makeToolkit } from "@n0n/tools";
 import type { DomainMessage, ProgressToolResult } from "@n0n/types";
 import { CodeRenderer } from "./code-renderer.ts";
+import { parseAndInjectSkills } from "./skill-inject.ts";
 import { buildContextFewshot } from "./context-fewshot.ts";
 import { playNotifySound } from "./notify-sound.ts";
 import { codeProgressConfig } from "./progress-config.ts";
@@ -41,8 +42,6 @@ export interface CodeReplOptions {
 	initialInput?: string;
 	resumeFile?: string;
 	saveEveryLoop?: boolean;
-	/** 提示词版本，如 "0.1" 对应 code-v0.1.md；不传则使用默认 code.md */
-	promptVersion?: string;
 }
 
 type CodeWorkspacePaths = BaseWorkspacePaths;
@@ -62,12 +61,12 @@ function injectUserResponse(history: DomainMessage[], response: string): void {
 	}
 }
 
-function makeUserInput(content: string): DomainMessage {
+function makeUserInput(content: string, hint?: string | null): DomainMessage {
 	return {
 		type: "user_input",
 		content,
 		context: null,
-		hint: null,
+		hint: hint ?? null,
 	};
 }
 
@@ -137,11 +136,10 @@ export async function startCodeRepl(
 		initialInput,
 		resumeFile,
 		saveEveryLoop = false,
-		promptVersion,
 	} = options;
 
 	// 基础系统提示词（稳定前缀，不含 agents.md 和环境信息）
-	const baseSystemPrompt = getPrompt(promptVersion);
+	const baseSystemPrompt = getPrompt();
 
 	// 构建 Toolkit — 含 progress config，供 fewshot 和 agentLoop 共用
 	const runtime = getRuntime();
@@ -384,7 +382,15 @@ export async function startCodeRepl(
 			// ── 将用户输入推入 history ──
 			// ── 停止心跳（agent 执行期间由 stream 自行刷新缓存） ──
 			keeper?.stop();
-			history.push(makeUserInput(userInput));
+			const skillResult = await parseAndInjectSkills(userInput);
+			if (skillResult.notFound.length > 0) {
+				writeln(
+					style.yellow("?") +
+						` skill 未找到: ${skillResult.notFound.join(", ")}`,
+				);
+			}
+			const finalText = skillResult.cleanedText || userInput;
+			history.push(makeUserInput(finalText, skillResult.hint));
 		}
 
 		// ── Agent 运行阶段：切换到 agent phase ──

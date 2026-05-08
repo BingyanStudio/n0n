@@ -40,13 +40,14 @@ export {
 export { parseDsl } from "./parse-dsl.ts";
 export {
 	discoverSkills,
+	discoverSkillsMultiDir,
 	formatSkillContents,
 	formatSkillSummaries,
 	loadSkillContent,
 	loadSkillContents,
 } from "./skills/discovery.ts";
 // Skills
-export type { SkillContent, SkillMeta } from "./skills/types.ts";
+export type { SkillActivation, SkillContent, SkillMeta } from "./skills/types.ts";
 // Tags
 export {
 	adaptTagsFor,
