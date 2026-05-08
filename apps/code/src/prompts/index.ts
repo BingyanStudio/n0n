@@ -18,7 +18,7 @@ import codeV02 from "./code-v0.2.md" with { type: "text" };
 export const prompts: Record<string, string> = {
 	"": codeDefault,
 	"0.1": codeV01,
-	"0.2": codeV02,
+	"0.2": codeV02, // ai写的垃圾版本，基本算是失败的。
 };
 
 /** 列出所有可用版本 */
