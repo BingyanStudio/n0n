@@ -8,6 +8,12 @@
  * TagAdapter 注入：各 LLM Client 构造自己的 TagAdapter 实例传入，
  * 控制 XML tag 的风格。DeepSeek 可对特定 tag name 做特殊处理。
  *
+ * system-hint 剥离策略：
+ * 工具返回中包含 fact（客观数据）和 hint（系统操作建议）两部分。
+ * 启用剥离时，仅最新一轮（最后一个 assistant_tool_call 之后）的 tool_result
+ * 包含 <system-hint>；历史轮次只保留 fact，减少过时指令污染和 token 开销。
+ * 通过 N0N_STRIP_HINT=1 环境变量启用（默认启用，设为 0 可关闭用于对比测试）。
+ *
  * Anti-few-shot 设计动机（参考 Manus "Don't Get Few-Shotted"）：
  * LLM 是出色的模仿者，会复现上下文中的行为模式。当上下文充满结构
  * 相同的"行动-观测"对时，模型倾向于遵循该模式，即使它不再是最佳
@@ -33,14 +39,20 @@ import { formatProgressResult } from "./format-progress.ts";
 import { formatToolArgError } from "./format-tool-arg-error.ts";
 import { formatTurnFeedback } from "./format-turn-feedback.ts";
 import { formatWriteResult } from "./format-write.ts";
+import type { FormattedToolResult } from "./utils.ts";
+
+// ── 环境变量控制 hint 剥离开关 ──
+
+/** N0N_STRIP_HINT=0 关闭剥离（所有轮次都保留 hint），其他值或未设置则启用剥离 */
+const STRIP_HINT_ENABLED = process.env.N0N_STRIP_HINT !== "0";
 
 // ── tool result 分发 ──
 
-function toolResultToContent(
+function toolResultToStructured(
 	msg: ToolResult,
 	tags: TagAdapter,
 	msgIndex: number,
-): string {
+): FormattedToolResult {
 	switch (msg.tool) {
 		case "exec":
 			return formatExecResult(msg, tags, msgIndex);
@@ -88,6 +100,15 @@ function mergeConsecutiveSystem(messages: PromptMessage[]): PromptMessage[] {
 	return merged;
 }
 
+// ── 找最后一个 assistant_tool_call 的原始 index ──
+
+function findLastAssistantToolCallIndex(messages: DomainMessage[]): number {
+	for (let j = messages.length - 1; j >= 0; j--) {
+		if (messages[j]?.type === "assistant_tool_call") return j;
+	}
+	return -1;
+}
+
 // ── 主函数 ──
 
 /**
@@ -101,7 +122,12 @@ export function formatPrompt(
 	tags: TagAdapter,
 ): PromptMessage[] {
 	const result: PromptMessage[] = [];
+
+	// 预扫描：找到最后一个 assistant_tool_call 的原始 index，用于判断"最新轮"
+	const lastAtcIndex = findLastAssistantToolCallIndex(messages);
+
 	let i = 0;
+	let originalIndex = 0;
 	for (const msg of messages) {
 		if (!msg) continue;
 
@@ -149,14 +175,29 @@ export function formatPrompt(
 				break;
 			}
 
-			case "tool_result":
+			case "tool_result": {
+				const formatted = toolResultToStructured(msg, tags, i);
+				const isLatestRound = originalIndex > lastAtcIndex;
+				let content: string;
+
+				if (!STRIP_HINT_ENABLED || isLatestRound) {
+					// 剥离未启用 或 最新轮：包含 hint
+					content = formatted.hint
+						? `${formatted.fact}\n${tags.wrapTag("system-hint", formatted.hint)}`
+						: formatted.fact;
+				} else {
+					// 历史轮：只保留 fact
+					content = formatted.fact;
+				}
+
 				result.push({
 					role: "tool",
 					toolCallId: msg.call.id,
 					toolName: msg.call.tool,
-					content: toolResultToContent(msg, tags, i),
+					content,
 				});
 				break;
+			}
 
 			case "idle_nudge":
 				result.push({
@@ -236,6 +277,18 @@ export function formatPrompt(
 		// 变更index可能会导致其他消息格式化的时候格式化后的内容发生变化，从而影响提示词缓存。
 		if (affectsSubsequent(msg.type)) {
 			i++;
+		}
+		originalIndex++;
+	}
+
+	// ── 自动 cache breakpoint：标记最后一个含 toolCalls 的 assistant 消息 ──
+	if (STRIP_HINT_ENABLED) {
+		for (let j = result.length - 1; j >= 0; j--) {
+			const m = result[j];
+			if (m && m.role === "assistant" && m.toolCalls?.length) {
+				m.cacheBreakpoint = true;
+				break;
+			}
 		}
 	}
 

@@ -7,3 +7,13 @@
 
 export type { TagAdapter } from "@n0n/types";
 export { pick } from "./seed.ts";
+
+/**
+ * 工具结果的结构化格式化输出。
+ * fact: 客观事实（始终保留在历史中）
+ * hint: 系统提示（仅最新轮保留，历史轮次中剥离）
+ */
+export interface FormattedToolResult {
+  fact: string;
+  hint: string | null;
+}

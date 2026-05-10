@@ -176,7 +176,6 @@ describe("pick 多样性", () => {
 // ── formatPrompt 端到端稳定性 ──
 
 describe("formatPrompt 变体端到端", () => {
-	const model = "claude-sonnet-4-20250514";
 	const tags = createTagAdapter("default");
 
 	/** 构造一段典型对话：N 轮单工具 exec 调用 */
@@ -218,17 +217,119 @@ describe("formatPrompt 变体端到端", () => {
 		return msgs;
 	}
 
-	it("追加消息不改变已有消息的格式化结果（缓存安全）", () => {
+	it("追加消息不改变 cache breakpoint 之前的格式化结果（缓存安全）", () => {
 		const short = buildConversation(5);
 		const long = buildConversation(10);
 
 		const shortResult = formatPrompt(short, tags);
 		const longResult = formatPrompt(long, tags);
 
-		// 前 N 条 PromptMessage 应该完全相同
-		for (let i = 0; i < shortResult.length; i++) {
-			expect(longResult[i]).toEqual(shortResult[i]);
+		// 找 long 结果中的自动 cache breakpoint 位置
+		let bpIdx = -1;
+		for (let j = longResult.length - 1; j >= 0; j--) {
+			if (longResult[j]?.cacheBreakpoint && longResult[j]?.role === "assistant" && longResult[j]?.toolCalls?.length) {
+				bpIdx = j;
+				break;
+			}
 		}
+		expect(bpIdx).toBeGreaterThan(0);
+
+		// breakpoint 之前的所有消息（不含 breakpoint 自身，因为 short 中该消息的 bp 标记不同）
+		// 在 long 中，short 的最后一个 assistant_tool_call 不再是"最后一个"，所以它不再有 cacheBreakpoint。
+		// 但 breakpoint 之前的 content/role 应一致。
+		// 验证：short 中 cache breakpoint 之前的所有消息，其 content 和 role 在 long 中完全一致。
+		const shortBpIdx = shortResult.findIndex(
+			(m) => m.cacheBreakpoint && m.role === "assistant" && m.toolCalls?.length,
+		);
+
+		// short breakpoint 之前的消息在 long 中内容完全相同
+		for (let j = 0; j < shortBpIdx; j++) {
+			expect(longResult[j]?.content).toEqual(shortResult[j]?.content);
+			expect(longResult[j]?.role).toEqual(shortResult[j]?.role);
+		}
+	});
+
+	it("cache breakpoint 之前的 tool_result 不包含 system-hint（hint 已剥离）", () => {
+		// 构造一个含 diagnostic hint 的对话
+		const msgs: DomainMessage[] = [
+			{ type: "system", content: "You are helpful." },
+			{ type: "generic_user_text", content: "Run something." },
+			{
+				type: "assistant_tool_call",
+				content: null,
+				reasoning: null,
+				reasoningSignature: null,
+				toolCalls: [{ id: "tc_old", tool: "exec", args: { script: "npm run foo" } }],
+			},
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "completed",
+				call: { id: "tc_old", tool: "exec", args: { script: "npm run foo" } },
+				exitCode: 1,
+				stdout: "",
+				stderr: "Cannot find module 'foo'",
+				durationMs: 50,
+			} as DomainMessage,
+			// 新一轮
+			{
+				type: "assistant_tool_call",
+				content: null,
+				reasoning: null,
+				reasoningSignature: null,
+				toolCalls: [{ id: "tc_new", tool: "exec", args: { script: "echo hi" } }],
+			},
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "completed",
+				call: { id: "tc_new", tool: "exec", args: { script: "echo hi" } },
+				exitCode: 0,
+				stdout: "hi",
+				stderr: "",
+				durationMs: 10,
+			} as DomainMessage,
+		];
+
+		const result = formatPrompt(msgs, tags);
+		const toolResults = result.filter((m) => m.role === "tool");
+
+		// 第一个 tool_result（历史轮）不应含 system-hint
+		expect(toolResults[0]?.content).not.toContain("system-hint");
+		// 旧行为中本应有 diagnostic_hint，现在被剥离
+		expect(toolResults[0]?.content).not.toContain("Package/module not found");
+		expect(toolResults[0]?.content).not.toContain("Module resolution failed");
+		expect(toolResults[0]?.content).not.toContain("Cannot resolve package");
+	});
+
+	it("最新轮的 tool_result 包含 system-hint（当有 hint 时）", () => {
+		const msgs: DomainMessage[] = [
+			{ type: "system", content: "You are helpful." },
+			{ type: "generic_user_text", content: "Run something." },
+			{
+				type: "assistant_tool_call",
+				content: null,
+				reasoning: null,
+				reasoningSignature: null,
+				toolCalls: [{ id: "tc_1", tool: "exec", args: { script: "npm run foo" } }],
+			},
+			{
+				type: "tool_result",
+				tool: "exec",
+				status: "completed",
+				call: { id: "tc_1", tool: "exec", args: { script: "npm run foo" } },
+				exitCode: 1,
+				stdout: "",
+				stderr: "Cannot find module 'foo'",
+				durationMs: 50,
+			} as DomainMessage,
+		];
+
+		const result = formatPrompt(msgs, tags);
+		const toolResults = result.filter((m) => m.role === "tool");
+
+		// 最新轮（唯一一轮），应包含 system-hint
+		expect(toolResults[0]?.content).toContain("system-hint");
 	});
 
 	it("多轮 exec 结果的格式化不完全相同（anti-few-shot）", () => {
@@ -252,5 +353,17 @@ describe("formatPrompt 变体端到端", () => {
 			const again = formatPrompt(msgs, tags);
 			expect(again).toEqual(first);
 		}
+	});
+
+	it("自动 cache breakpoint 标记在最后一个含 toolCalls 的 assistant 上", () => {
+		const msgs = buildConversation(5);
+		const result = formatPrompt(msgs, tags);
+
+		const bpMessages = result.filter((m) => m.cacheBreakpoint && m.role === "assistant" && m.toolCalls?.length);
+		expect(bpMessages.length).toBeGreaterThanOrEqual(1);
+
+		// 最后一个有 bp 的 assistant 应该是最后一个 assistant with toolCalls
+		const lastAssistantWithTools = result.filter((m) => m.role === "assistant" && m.toolCalls?.length).pop();
+		expect(lastAssistantWithTools?.cacheBreakpoint).toBe(true);
 	});
 });

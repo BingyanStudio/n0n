@@ -12,6 +12,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DomainMessage, PromptMessage } from "@n0n/types";
 import { formatPrompt } from "../src/format-prompt/index.ts";
+import { createTagAdapter } from "../src/tags.ts";
 
 const MODEL = "claude-sonnet-4-20250514";
 const SNAPSHOT_DIR = join(import.meta.dir, "preview-output");
@@ -299,7 +300,7 @@ function formatResult(r: PromptMessage): string {
 
 let count = 0;
 for (const scenario of scenarios) {
-	const results = formatPrompt(scenario.messages, MODEL);
+	const results = formatPrompt(scenario.messages, createTagAdapter("default"));
 	const parts = [`# ${scenario.title}`, `<!-- model: ${MODEL} -->`, ""];
 	for (const r of results) {
 		parts.push("```", formatResult(r), "```", "");

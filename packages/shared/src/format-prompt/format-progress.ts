@@ -1,9 +1,11 @@
 /**
  * progress tool result 格式化 — 含 anti-few-shot 变体
+ *
+ * 返回 FormattedToolResult。progress 结果无 hint（纯 fact）。
  */
 
 import type { ProgressToolResult } from "@n0n/types";
-import type { TagAdapter } from "./utils.ts";
+import type { FormattedToolResult, TagAdapter } from "./utils.ts";
 import { pick } from "./utils.ts";
 
 const successTemplates = [
@@ -16,11 +18,11 @@ export function formatProgressResult(
 	msg: ProgressToolResult,
 	tags: TagAdapter,
 	msgIndex: number,
-): string {
+): FormattedToolResult {
 	const text = pick(successTemplates, msgIndex);
 	const parts = [tags.wrapTag("result", text)];
 	if (msg.userResponse) {
 		parts.push(tags.wrapTag("user_response", msg.userResponse));
 	}
-	return parts.join("\n");
+	return { fact: parts.join("\n"), hint: null };
 }

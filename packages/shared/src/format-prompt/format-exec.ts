@@ -3,10 +3,12 @@
  *
  * 多部分拼装（meta、stdout/stderr tag、hint 等）各自使用
  * msgIndex+N 偏移独立选择变体，组合爆炸产生远超单维度的多样性。
+ *
+ * 返回 FormattedToolResult：fact（客观数据）与 hint（系统操作建议）分离。
  */
 
 import type { ExecToolResult } from "@n0n/types";
-import type { TagAdapter } from "./utils.ts";
+import type { FormattedToolResult, TagAdapter } from "./utils.ts";
 import { pick } from "./utils.ts";
 
 const IS_WINDOWS = process.platform === "win32";
@@ -94,7 +96,7 @@ export function formatExecResult(
 	msg: ExecToolResult,
 	tags: TagAdapter,
 	msgIndex: number,
-): string {
+): FormattedToolResult {
 	const runtime = msg.call.args.runtime ?? "unknown";
 	const cwd = msg.call.args.cwd ?? ".";
 	// 每个 pick 点用不同偏移：meta=+0, stdoutTag=+1, stderrTag=+2, notice/hint=+3, diagnostic=+4
@@ -104,24 +106,23 @@ export function formatExecResult(
 	switch (msg.status) {
 		case "backgrounded": {
 			const metaFn = pick(backgroundedMetaTemplates, msgIndex);
-			const parts = [
+			const factParts = [
 				tags.wrapTag("exec_meta", metaFn(runtime, cwd, msg.durationMs)),
 			];
 
-			const noticeFn = pick(waitforNoticeTemplates, msgIndex + 3);
-			parts.push(
-				tags.wrapTag("waitfor_notice", noticeFn(msg.pid, msg.logFile)),
-			);
-
 			if (msg.stdoutSoFar)
-				parts.push(tags.wrapTag(stdoutTag, msg.stdoutSoFar));
+				factParts.push(tags.wrapTag(stdoutTag, msg.stdoutSoFar));
 			if (msg.stderrSoFar)
-				parts.push(tags.wrapTag(stderrTag, msg.stderrSoFar));
-			return parts.join("\n");
+				factParts.push(tags.wrapTag(stderrTag, msg.stderrSoFar));
+
+			const noticeFn = pick(waitforNoticeTemplates, msgIndex + 3);
+			const hint = noticeFn(msg.pid, msg.logFile);
+
+			return { fact: factParts.join("\n"), hint };
 		}
 		case "truncated": {
 			const metaFn = pick(truncatedMetaTemplates, msgIndex);
-			const parts = [
+			const factParts = [
 				tags.wrapTag(
 					"exec_meta",
 					metaFn(runtime, cwd, msg.exitCode, msg.durationMs, msg.outputFile),
@@ -129,59 +130,52 @@ export function formatExecResult(
 			];
 
 			if (msg.stdoutTail)
-				parts.push(
+				factParts.push(
 					tags.wrapTag(
 						stdoutTag,
 						`... (last ${msg.totalLines - msg.tailStartLine + 1} of ${msg.totalLines} lines)\n${msg.stdoutTail}`,
 					),
 				);
 			if (msg.stderrTail)
-				parts.push(
+				factParts.push(
 					tags.wrapTag(stderrTag, `... (truncated)\n${msg.stderrTail}`),
 				);
 
 			const hintFn = pick(truncatedHintTemplates, msgIndex + 3);
 			const chunkGuide = formatChunkGuide(msg.truncatedChunks, msg.outputFile);
-			parts.push(
-				tags.wrapTag(
-					"output_hint",
-					hintFn(msg.totalLines, msg.outputFile, chunkGuide),
-				),
-			);
-			return parts.join("\n");
+			const hint = hintFn(msg.totalLines, msg.outputFile, chunkGuide);
+
+			return { fact: factParts.join("\n"), hint };
 		}
 		case "completed": {
 			const metaFn = pick(metaTemplates, msgIndex);
-			const parts = [
+			const factParts = [
 				tags.wrapTag(
 					"exec_meta",
 					metaFn(runtime, cwd, msg.exitCode, msg.durationMs),
 				),
 			];
 
-			if (msg.stdout) parts.push(tags.wrapTag(stdoutTag, msg.stdout));
-			if (msg.stderr) parts.push(tags.wrapTag(stderrTag, msg.stderr));
+			if (msg.stdout) factParts.push(tags.wrapTag(stdoutTag, msg.stdout));
+			if (msg.stderr) factParts.push(tags.wrapTag(stderrTag, msg.stderr));
 
 			const combined = (msg.stdout || "") + (msg.stderr || "");
+			let hint: string | null = null;
 			if (
 				msg.exitCode !== 0 &&
 				/Cannot find package|Cannot find module|ERR_MODULE_NOT_FOUND|ModuleNotFoundError|No module named/i.test(
 					combined,
 				)
 			) {
-				parts.push(
-					tags.wrapTag(
-						"diagnostic_hint",
-						pick(diagnosticHintTemplates, msgIndex + 4),
-					),
-				);
+				hint = pick(diagnosticHintTemplates, msgIndex + 4);
 			}
-			return parts.join("\n");
+
+			return { fact: factParts.join("\n"), hint };
 		}
 		default: {
 			const _exhaustive: never = msg;
 			// biome-ignore lint/suspicious/noExplicitAny: exhaustive switch default
-			return `Unknown exec status: ${(msg as any).status}`;
+			return { fact: `Unknown exec status: ${(msg as any).status}`, hint: null };
 		}
 	}
 }

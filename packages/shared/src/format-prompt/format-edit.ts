@@ -1,9 +1,11 @@
 /**
  * edit tool result 格式化 — 含 anti-few-shot 变体
+ *
+ * 返回 FormattedToolResult：fact（客观数据）与 hint（Editor LLM 反馈）分离。
  */
 
 import type { EditToolResult, PatchOp } from "@n0n/types";
-import type { TagAdapter } from "./utils.ts";
+import type { FormattedToolResult, TagAdapter } from "./utils.ts";
 import { pick } from "./utils.ts";
 
 // ── 变体模板 ──
@@ -30,17 +32,17 @@ export function formatEditResult(
 	msg: EditToolResult,
 	tags: TagAdapter,
 	msgIndex: number,
-): string {
-	const parts: string[] = [];
+): FormattedToolResult {
 	if (msg.success) {
 		const prefix = pick(successPrefixTemplates, msgIndex);
 		const summary = `${prefix(msg.call.args.path)}\n${formatPatches(msg.patches)}`;
-		parts.push(tags.wrapTag("edit_result", summary));
-	} else {
-		parts.push(tags.wrapTag("error", `Edit failed: ${msg.error}`));
+		return {
+			fact: tags.wrapTag("edit_result", summary),
+			hint: msg.feedback ?? null,
+		};
 	}
-	if (msg.feedback) {
-		parts.push(tags.wrapTag("edit_feedback", msg.feedback));
-	}
-	return parts.join("\n");
+	return {
+		fact: tags.wrapTag("error", `Edit failed: ${msg.error}`),
+		hint: null,
+	};
 }
