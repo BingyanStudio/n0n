@@ -11,12 +11,14 @@
  */
 
 import codeDefault from "./code.md" with { type: "text" };
+import codeEmpty from "./code-empty.md" with { type: "text" };
 import codeV01 from "./code-v0.1.md" with { type: "text" };
 import codeV02 from "./code-v0.2.md" with { type: "text" };
 
 /** 版本号 → 提示词文本。空字符串 key 为默认版本。 */
 export const prompts: Record<string, string> = {
 	"": codeDefault,
+	"empty": codeEmpty, //一个尽可能空的版本，用于测试。
 	"0.1": codeV01,
 	"0.2": codeV02, // ai写的垃圾版本，基本算是失败的。
 };
